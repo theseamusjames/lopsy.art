@@ -23,6 +23,37 @@ body,
   --star-on: #f0c24a;
   --tile-bg: #161616;
   --viewer-bg: #111111;
+
+  /*
+   * Colours that meet WCAG 2.2 AA contrast on this app's surfaces (#111 to
+   * #404040): 4.5:1 for text, 3:1 for a button's edge against the page.
+   * Lopsy's accent (#4a9eff) is too light under white text, and its
+   * disabled grey is for disabled controls only.
+   */
+  --ph-primary-bg: #1f6fd6;
+  --ph-primary-bg-hover: #1d64d1;
+  --ph-primary-bg-active: #1a5fc9;
+  --ph-primary-text: #ffffff;
+  --ph-danger-bg: #c62828;
+  --ph-danger-bg-hover: #b91c1c;
+  --ph-danger-text: #ffffff;
+  /* Accent-coloured text, also on a selected or hovered row. */
+  --ph-accent-text: #6cb6ff;
+  /* Secondary text that must stay readable on every surface, hover and active rows included. */
+  --ph-text-muted: #adadad;
+  /* The focus ring: at least 3:1 against every surface. */
+  --ph-focus-ring: #6cb6ff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 body {
