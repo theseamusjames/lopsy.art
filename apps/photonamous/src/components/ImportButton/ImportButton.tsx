@@ -6,7 +6,7 @@ import { showErrorToast } from '../../app/toasts';
 import { useUi } from '../../app/store';
 import { canPickFolder } from '../../import/collect-files';
 import { Button } from '../Button/Button';
-import { useMenuKeys } from '../Menu/use-menu-keys';
+import { useMenuKeys } from '@lopsy/ui/a11y/use-menu-keys';
 import styles from './ImportButton.module.css';
 
 const ACCEPT = '.raf,.dng,.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp';

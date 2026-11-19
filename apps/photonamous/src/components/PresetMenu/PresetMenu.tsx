@@ -3,7 +3,7 @@ import { Wand2 } from 'lucide-react';
 import { usePresets } from '../../app/hooks';
 import { applyPreset } from '../../app/commands';
 import { Button } from '../Button/Button';
-import { useMenuKeys } from '../Menu/use-menu-keys';
+import { useMenuKeys } from '@lopsy/ui/a11y/use-menu-keys';
 import styles from './PresetMenu.module.css';
 
 interface PresetMenuProps {

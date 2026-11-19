@@ -5,7 +5,7 @@ import { isSettled, useExportProgress, useImportProgress, useOriginalsDownload, 
 import { useUi } from '../../app/store';
 import { formatBytes, plural } from '../../import/import-summary';
 import { describeDownload, describePreviewRefresh, describeSync, downloadAnnouncement, formatWhen, previewAnnouncement, syncAnnouncement } from './sync-words';
-import { useAnnouncement } from './use-announcement';
+import { useAnnouncement } from '@lopsy/ui/a11y/use-announcement';
 import { Button } from '../Button/Button';
 import { ExportShare } from '../ExportShare/ExportShare';
 import styles from './SyncPanel.module.css';

@@ -6,7 +6,8 @@
   "description": "The UI both apps share: design tokens, reset and fonts, the shared components and accessibility helpers. TypeScript and CSS Modules source, consumed directly.",
   "exports": {
     "./styles/*": "./src/styles/*",
-    "./Slider": "./src/Slider/Slider.tsx"
+    "./Slider": "./src/Slider/Slider.tsx",
+    "./a11y/*": "./src/a11y/*.ts"
   },
   "scripts": {
     "test": "vitest run",

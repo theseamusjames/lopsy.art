@@ -4,7 +4,7 @@ import { ClipboardCopy, ClipboardPaste, CopyPlus, Download, Maximize, Paintbrush
 import { parseItem, type ItemId } from '../../library/items';
 import { useUi } from '../../app/store';
 import { askDeleteTargets, makeShownVersion, newVersion, openEdit, openFocusedInLopsy, runCommand } from '../../app/commands';
-import { useMenuKeys } from '../Menu/use-menu-keys';
+import { useMenuKeys } from '@lopsy/ui/a11y/use-menu-keys';
 import styles from './TileMenu.module.css';
 
 interface TileMenuProps {

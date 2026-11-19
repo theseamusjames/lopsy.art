@@ -1,7 +1,7 @@
 import { useCallback, useId, useRef, useState, type ReactNode } from 'react';
 import { Check, MoreHorizontal } from 'lucide-react';
 import { IconButton } from '../IconButton/IconButton';
-import { useMenuKeys } from '../Menu/use-menu-keys';
+import { useMenuKeys } from '@lopsy/ui/a11y/use-menu-keys';
 import styles from './MoreMenu.module.css';
 
 export interface MoreMenuItem {

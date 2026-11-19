@@ -3,7 +3,7 @@ import { Pencil, Save, Trash2 } from 'lucide-react';
 import type { ExportPreset } from '@lopsy/photos-core/library/types';
 import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
-import { focusedElement } from '../Modal/focus-trap';
+import { focusedElement } from '@lopsy/ui/a11y/focus-trap';
 import styles from './ExportPresetBar.module.css';
 
 interface ExportPresetBarProps {

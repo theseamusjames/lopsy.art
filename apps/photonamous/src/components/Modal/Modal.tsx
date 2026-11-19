@@ -1,8 +1,8 @@
 import { useId, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { IconButton } from '../IconButton/IconButton';
-import { focusedElement, nextTabStop, returnFocus, tabStops } from './focus-trap';
-import { closeLayer, isTopLayer, isTopModal, openLayer, type Layer } from './layers';
+import { focusedElement, nextTabStop, returnFocus, tabStops } from '@lopsy/ui/a11y/focus-trap';
+import { closeLayer, isTopLayer, isTopModal, openLayer, type Layer } from '@lopsy/ui/a11y/layers';
 import styles from './Modal.module.css';
 
 interface ModalProps {

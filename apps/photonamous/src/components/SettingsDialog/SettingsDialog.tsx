@@ -11,7 +11,7 @@ import { formatBytes, plural } from '../../import/import-summary';
 import { Button } from '../Button/Button';
 import { CharacterKeysToggle } from '../CharacterKeysToggle/CharacterKeysToggle';
 import { Modal } from '../Modal/Modal';
-import { focusedElement } from '../Modal/focus-trap';
+import { focusedElement } from '@lopsy/ui/a11y/focus-trap';
 import { LeftoverAction } from '../LeftoverAction/LeftoverAction';
 import styles from './SettingsDialog.module.css';
 

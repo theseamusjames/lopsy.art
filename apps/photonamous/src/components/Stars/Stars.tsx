@@ -1,6 +1,6 @@
 import { Star } from 'lucide-react';
 import type { Rating } from '@lopsy/photos-core/library/types';
-import { handleRadioKeys, radioTabIndex } from '../RadioGroup/radio-keys';
+import { handleRadioKeys, radioTabIndex } from '@lopsy/ui/a11y/radio-keys';
 import styles from './Stars.module.css';
 
 interface StarsProps {
