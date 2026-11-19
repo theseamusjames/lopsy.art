@@ -97,6 +97,11 @@ afterEach(() => {
 });
 
 describe('adjust.list', () => {
+  it('settles before it reads', async () => {
+    const { adjustList } = await import('./adjust');
+    expect(adjustList.settles).toBe('before');
+  });
+
   it('lists the root group\'s default nodes when a raster layer is active, as the panel shows them', async () => {
     const result = (await runCommand('adjust.list')) as Result;
     expect(result.group).toBe(root().id);

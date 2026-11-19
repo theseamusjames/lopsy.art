@@ -88,6 +88,8 @@ export const adjustList = defineCommand({
   summary:
     'Lists a group\'s adjustment nodes in the order they apply, with each node\'s id, type, enabled flag and params, and whether the group\'s adjustments are on. Returns { group, enabled, nodes }.',
   surface: 'document',
+  settles: 'before',
+  check: requireDocument,
   params: { group: groupSpec },
   run({ group: ref }): AdjustmentsResult {
     return adjustments(resolveGroup(ref).id);

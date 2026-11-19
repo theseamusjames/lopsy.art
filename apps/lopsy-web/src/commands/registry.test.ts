@@ -247,6 +247,111 @@ describe('run: settle', () => {
   });
 });
 
+describe("run: settles 'before'", () => {
+  it('awaits settle before run starts and does not settle again', async () => {
+    const registry = createRegistry();
+    const events: string[] = [];
+    const settled = deferred();
+    registry.setSettle(async () => {
+      events.push('settle');
+      await settled.promise;
+    });
+    registry.define({
+      ...noop('view.render'),
+      settles: 'before',
+      run() {
+        events.push('run');
+        return 'pixels';
+      },
+    });
+    const pending = registry.run('view.render').then((value) => events.push(`resolved ${String(value)}`));
+    expect(events).toEqual(['settle']);
+    await flush();
+    expect(events).toEqual(['settle']);
+    settled.resolve();
+    await pending;
+    expect(events).toEqual(['settle', 'run', 'resolved pixels']);
+  });
+
+  it('rejects invalid params without awaiting settle', async () => {
+    const registry = createRegistry();
+    let settleCount = 0;
+    registry.setSettle(() => {
+      settleCount++;
+      return new Promise<void>(() => undefined);
+    });
+    registry.define({
+      ...noop('view.sample'),
+      settles: 'before',
+      params: { x: { type: 'number' } },
+    });
+    const error = await rejection(registry.run('view.sample', { x: 'left' }));
+    expect(error.code).toBe('invalid');
+    expect(settleCount).toBe(0);
+  });
+
+  it('runs check on the params before settling, and rejects at once when it throws', async () => {
+    const registry = createRegistry();
+    const events: string[] = [];
+    registry.setSettle(async () => {
+      events.push('settle');
+    });
+    registry.define({
+      ...noop('view.sample'),
+      settles: 'before',
+      params: { x: { type: 'number' } },
+      check({ x }) {
+        events.push(`check ${x}`);
+        if (x < 0) throw new CommandError('unavailable', 'No document is open');
+      },
+      run: () => {
+        events.push('run');
+      },
+    });
+    await registry.run('view.sample', { x: 1 });
+    expect(events).toEqual(['check 1', 'settle', 'run']);
+    events.length = 0;
+    const error = await rejection(registry.run('view.sample', { x: -1 }));
+    expect(error.message).toBe('No document is open');
+    expect(events).toEqual(['check -1']);
+  });
+
+  it('rejects with what run throws after settle', async () => {
+    const registry = createRegistry();
+    const events: string[] = [];
+    registry.setSettle(async () => {
+      events.push('settle');
+    });
+    registry.define({
+      ...noop('view.render'),
+      settles: 'before',
+      run() {
+        events.push('run');
+        throw new CommandError('unavailable', 'No document');
+      },
+    });
+    const error = await rejection(registry.run('view.render'));
+    expect(error.message).toBe('No document');
+    expect(events).toEqual(['settle', 'run']);
+  });
+
+  it('rejects when settle itself fails, without running', async () => {
+    const registry = createRegistry();
+    let hasRun = false;
+    registry.setSettle(() => Promise.reject(new CommandError('unavailable', 'Timed out')));
+    registry.define({
+      ...noop('view.render'),
+      settles: 'before',
+      run() {
+        hasRun = true;
+      },
+    });
+    const error = await rejection(registry.run('view.render'));
+    expect(error.message).toBe('Timed out');
+    expect(hasRun).toBe(false);
+  });
+});
+
 describe('runInvocation', () => {
   it('splits op from params', async () => {
     const registry = createRegistry();

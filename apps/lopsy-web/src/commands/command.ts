@@ -59,9 +59,17 @@ export interface CommandMeta {
   readonly surface: CommandSurface;
   enabled?(): boolean;
   checked?(): boolean;
-  /** False for commands that must not wait for the engine after they run. Defaults to true. */
-  readonly settles?: boolean;
+  /**
+   * When the registry waits for the engine. true (the default): after `run`, so
+   * the work happens in the caller's tick. false: never. 'before': once, after
+   * the params validate and before `run`, so `run` reads what earlier work
+   * left; only for commands that only read and are never bound to a user
+   * gesture, since `run` no longer starts in the caller's tick.
+   */
+  readonly settles?: CommandSettles;
 }
+
+export type CommandSettles = boolean | 'before';
 
 export interface Command<P = unknown, R = unknown> extends CommandMeta {
   readonly params: ParamSchema;
@@ -71,6 +79,12 @@ export interface Command<P = unknown, R = unknown> extends CommandMeta {
    * work inside the user's click, and keyboard undo must apply in the same tick as the key.
    */
   run(params: P): R | Promise<R>;
+  /**
+   * With settles 'before': runs synchronously on the validated params before the
+   * wait, so a call that cannot succeed (no document open, when the render loop
+   * the wait needs never starts) rejects at once instead of timing out.
+   */
+  check?(params: P): void;
 }
 
 const COMMAND_ID_PATTERN = /^[a-z][a-z0-9]*(\.[a-z0-9]+(-[a-z0-9]+)*)+$/;

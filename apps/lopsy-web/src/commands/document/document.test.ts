@@ -178,6 +178,10 @@ describe('doc.info', () => {
     renderFirstFrame();
   });
 
+  it('settles before it reads, so it never reports work still in flight', () => {
+    expect(docInfo.settles).toBe('before');
+  });
+
   it('throws unavailable when no document is open', () => {
     useEditorStore.setState({ documentReady: false });
     expect(() => docInfo.run({})).toThrowError(CommandError);

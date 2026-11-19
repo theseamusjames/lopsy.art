@@ -18,6 +18,8 @@ export interface CommandDefinition<S extends ParamSchema, R> extends CommandMeta
   readonly params: S;
   /** Same contract as Command.run: do the work before the first await. */
   run(params: InferParams<S>): R | Promise<R>;
+  /** Same contract as Command.check. */
+  check?(params: InferParams<S>): void;
 }
 
 export interface Invocation {
@@ -142,12 +144,21 @@ export function createRegistry(): Registry {
     return result;
   }
 
+  async function settleThenRun(command: Command, params: unknown): Promise<unknown> {
+    await settle();
+    return command.run(params);
+  }
+
   // Not async: command.run must start in the caller's tick, and errors must still reject.
   function run(id: string, rawParams?: unknown): Promise<unknown> {
     try {
       const command = commands.get(id);
       if (!command) throw notFound(String(id), [...commands.keys()]);
       const params = validateParams(id, command.params, rawParams);
+      if (command.settles === 'before') {
+        command.check?.(params);
+        return settleThenRun(command, params);
+      }
       return finish(command, command.run(params));
     } catch (error) {
       return Promise.reject(error);

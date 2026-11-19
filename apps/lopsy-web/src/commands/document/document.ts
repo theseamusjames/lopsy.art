@@ -55,7 +55,7 @@ function assertFitsDevice(width: number, height: number): void {
  * Document" history entry (useCanvasRendering.ts). Until then the document
  * has no history, and an undoable change made first would take its place.
  */
-async function baselineEntry(documentVersion: number): Promise<void> {
+export async function baselineEntry(documentVersion: number): Promise<void> {
   await waitForEditorState(
     (state) => state.documentVersion !== documentVersion || state.undoStack.length > 0,
     { timeoutMs: BASELINE_TIMEOUT_MS, waitingFor: 'the new document\'s first frame (its "New Document" history entry)' },
@@ -65,7 +65,7 @@ async function baselineEntry(documentVersion: number): Promise<void> {
   }
 }
 
-function newDocumentResult(): NewDocumentResult {
+export function newDocumentResult(): NewDocumentResult {
   const doc = useEditorStore.getState().document;
   return {
     width: doc.width,
@@ -187,6 +187,8 @@ export const docInfo = defineCommand({
   summary:
     'Describes the open document: name, size, colour mode, dpi, every layer (bottom to top, with ids), the selection, the undo and redo history labels, the foreground and background colours and the active tool.',
   surface: 'document',
+  settles: 'before',
+  check: requireDocument,
   params: {},
   run(): DocumentInfo {
     const doc = requireDocument();
