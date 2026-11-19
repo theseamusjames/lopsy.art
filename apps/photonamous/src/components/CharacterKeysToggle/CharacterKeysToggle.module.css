@@ -1,0 +1,27 @@
+.option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-height: 24px;
+  font-size: var(--font-size-md);
+  cursor: pointer;
+}
+
+.option input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  flex-shrink: 0;
+  accent-color: var(--ph-primary-bg);
+}
+
+.option input:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+}
+
+.hint {
+  display: block;
+  color: var(--ph-text-muted);
+  font-size: var(--font-size-sm);
+}

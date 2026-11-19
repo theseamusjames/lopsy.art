@@ -5,8 +5,12 @@ import { App } from './App';
 import { ErrorBoundary } from './components/ErrorBoundary/ErrorBoundary';
 import { GradeScreen } from './handoff/GradeScreen/GradeScreen';
 import { lopsyUrl } from './handoff/send-to-lopsy';
+import { installCharacterKeyGuard } from './shortcuts/character-keys';
 import { registerServiceWorker } from './sw/register';
 import './styles/index.css';
+
+// Ahead of every other key handler, so turning single-key shortcuts off covers all of them.
+installCharacterKeyGuard(window);
 
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('No #root element');
