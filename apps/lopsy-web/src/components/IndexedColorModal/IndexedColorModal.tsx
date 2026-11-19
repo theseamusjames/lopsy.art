@@ -1,9 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useEditorStore } from '../../app/editor-store';
 import styles from './IndexedColorModal.module.css';
-
-const MIN_COLORS = 2;
-const MAX_COLORS = 256;
+import { MAX_COLORS, MIN_COLORS } from './indexed-color-limits';
 
 interface IndexedColorModalProps {
   onClose: () => void;

@@ -9,10 +9,10 @@ import {
   uniformBorderWidths,
   type BorderCorners,
   type BorderPlacement,
-  type BorderPlan,
   type BorderWidths,
 } from '../../layers/border';
 import type { Color } from '../../types';
+import { describeBorderPlan } from './border-plan';
 import styles from './BorderModal.module.css';
 
 type BorderSides = 'symmetric' | 'asymmetric';
@@ -197,7 +197,7 @@ export function BorderModal({ onClose }: BorderModalProps) {
               </div>
             </fieldset>
             <p className={styles.info} aria-live="polite">
-              {describePlan(plan, widths, docWidth, docHeight)}
+              {describeBorderPlan(plan, widths, docWidth, docHeight)}
             </p>
           </div>
         </div>
@@ -208,21 +208,4 @@ export function BorderModal({ onClose }: BorderModalProps) {
       </div>
     </div>
   );
-}
-
-function describePlan(
-  plan: BorderPlan | null,
-  widths: BorderWidths,
-  docWidth: number,
-  docHeight: number,
-): string {
-  if (!plan) {
-    const hasWidth = widths.top + widths.right + widths.bottom + widths.left > 0;
-    return hasWidth
-      ? `Too large: the canvas can be at most ${getMaxDocumentSide()} px on a side.`
-      : 'Enter a border width.';
-  }
-  return plan.width === docWidth && plan.height === docHeight
-    ? `Canvas stays ${docWidth} × ${docHeight} px`
-    : `New size: ${plan.width} × ${plan.height} px`;
 }

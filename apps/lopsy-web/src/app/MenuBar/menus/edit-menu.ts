@@ -2,17 +2,11 @@ import { useEditorStore } from '../../editor-store';
 import { useUIStore } from '../../ui-store';
 import { fillSelection } from '../../fill-selection';
 import { pasteInternalClipboard } from '../../paste-or-open';
+import { cropToSelection } from '../../crop-to-selection';
 import { definePattern } from '../pattern-actions';
 import { defineBrush } from '../brush-actions';
 import type { FilterDialogId } from '../filter-actions';
 import type { MenuDef } from './types';
-
-export function cropToSelection(): void {
-  const state = useEditorStore.getState();
-  if (!state.selection.active || !state.selection.bounds) return;
-  state.cropCanvas(state.selection.bounds);
-  state.clearSelection();
-}
 
 export function createEditMenu(showFilterDialog: (id: FilterDialogId) => void): MenuDef {
   const hasSelection = useEditorStore.getState().selection.active;
