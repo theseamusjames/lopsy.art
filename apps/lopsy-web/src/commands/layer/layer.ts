@@ -1,9 +1,16 @@
 import { CommandError } from '../command';
 import { defineCommand } from '../registry';
 import { refusalError } from '../refusal';
-import { layerSummary, requireDocument, resolveLayer, type LayerSummary } from '../context';
+import {
+  activateIfOther,
+  layerRefSpec,
+  layerSummary,
+  requireDocument,
+  resolveLayer,
+  selectReplace,
+  type LayerSummary,
+} from '../context';
 import { useEditorStore } from '../../app/editor-store';
-import { useUIStore } from '../../app/ui-store';
 import { layerCreationRefusal } from '../../app/store/document-slice';
 import { mergeDownRefusal } from '../../app/store/actions/merge-down';
 import { computeDropLayer, type LayerDropTarget } from '../../app/store/actions/drop-layer';
@@ -14,12 +21,6 @@ import { findParentGroup, isAncestorOf, isGroupLayer } from '../../layers/group-
 import type { BlendMode, DocumentState, Layer } from '../../types';
 
 const ALL_BLEND_MODES = blendModeGroupsFor(true, true).flatMap((group) => group.modes);
-
-const layerRefSpec = {
-  type: 'string',
-  optional: true,
-  description: 'A layer id, or an exact layer name. Omitted means the active layer.',
-} as const;
 
 const requiredLayerRefSpec = { type: 'string', description: 'A layer id, or an exact layer name.' } as const;
 
@@ -84,16 +85,6 @@ function trimmedName(commandId: string, name: string): string {
 
 function optionalName(commandId: string, name: string | undefined): string | undefined {
   return name === undefined ? undefined : trimmedName(commandId, name);
-}
-
-/** What a plain click on a layer row does that a plain module can reach. */
-function selectReplace(id: string): void {
-  store().setActiveLayer(id);
-  useUIStore.getState().setMaskEditMode(false);
-}
-
-function activateIfOther(id: string): void {
-  if (activeLayerId() !== id) selectReplace(id);
 }
 
 function createdActiveLayer(): CreatedLayer {

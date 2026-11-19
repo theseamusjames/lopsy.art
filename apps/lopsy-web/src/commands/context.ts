@@ -1,5 +1,6 @@
 import { CommandError } from './command';
 import { useEditorStore, type EditorState } from '../app/editor-store';
+import { useUIStore } from '../app/ui-store';
 import { getEngine } from '../engine-wasm/engine-state';
 import type { Engine } from '../engine-wasm/wasm-bridge';
 import type { DocumentState, Layer } from '../types';
@@ -23,6 +24,12 @@ export function requireEngine(): Engine {
   return engine;
 }
 
+export const layerRefSpec = {
+  type: 'string',
+  optional: true,
+  description: 'A layer id, or an exact layer name. Omitted means the active layer.',
+} as const;
+
 /** A layer by id, or by exact name when no id matches; omitted means the active layer. */
 export function resolveLayer(ref?: string): Layer {
   const doc = requireDocument();
@@ -41,6 +48,17 @@ export function resolveLayer(ref?: string): Layer {
     throw new CommandError('invalid', `${byName.length} layers are named ${JSON.stringify(ref)}: pass one of their ids: ${candidates}`);
   }
   throw new CommandError('not-found', `No layer has the id or name ${JSON.stringify(ref)}.`);
+}
+
+/** What a plain click on a layer row does that a plain module can reach. */
+export function selectReplace(id: string): void {
+  useEditorStore.getState().setActiveLayer(id);
+  useUIStore.getState().setMaskEditMode(false);
+}
+
+/** A row click on `id` unless it is already the active layer, as commands that act on the active layer need. */
+export function activateIfOther(id: string): void {
+  if (useEditorStore.getState().document.activeLayerId !== id) selectReplace(id);
 }
 
 export interface LayerSummary {

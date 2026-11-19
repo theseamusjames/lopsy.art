@@ -162,10 +162,16 @@ export interface SnapshotLayer {
   x: number;
   y: number;
   hasMask: boolean;
+  /** Whether the mask applies; null when there is none. */
+  maskEnabled: boolean | null;
+  /** The layer's effects as the store holds them (colours 0-255, opacity 0-1). */
+  effects: unknown;
   /** Index (in `layers`) of the group that holds this layer; null for the root. */
   parent: number | null;
   /** Hash of the layer's pixels placed in the document; null for groups. */
   pixels: string | null;
+  /** Hash of the layer's mask as the GPU holds it (mask.data lags the GPU); null when there is none. */
+  mask: string | null;
 }
 
 export interface DocSnapshot {
@@ -185,7 +191,7 @@ export interface DocSnapshot {
   history: { undo: string[]; redo: string[] };
 }
 
-interface StructureLayer extends Omit<SnapshotLayer, 'pixels'> {
+interface StructureLayer extends Omit<SnapshotLayer, 'pixels' | 'mask'> {
   id: string;
 }
 
@@ -195,7 +201,8 @@ async function readStructure(page: Page): Promise<Structure> {
   return page.evaluate(() => {
     type L = {
       id: string; name: string; type: string; visible: boolean; locked: boolean; opacity: number;
-      blendMode: string; x: number; y: number; mask: unknown; children?: readonly string[];
+      blendMode: string; x: number; y: number; mask: { enabled: boolean } | null; effects: unknown;
+      children?: readonly string[];
     };
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
       getState: () => {
@@ -241,6 +248,8 @@ async function readStructure(page: Page): Promise<Structure> {
         x: l.x,
         y: l.y,
         hasMask: l.mask != null,
+        maskEnabled: l.mask ? l.mask.enabled : null,
+        effects: l.effects,
         parent: parentOf.get(l.id) ?? null,
       })),
       activeLayer: doc.activeLayerId === null ? null : (indexOf.get(doc.activeLayerId) ?? null),
@@ -272,9 +281,30 @@ export async function snapshot(page: Page): Promise<DocSnapshot> {
   const layers: SnapshotLayer[] = [];
   for (const { id, ...layer } of structure.layers) {
     const pixels = layer.type === 'group' ? null : await docPixelHash(page, id);
-    layers.push({ ...layer, pixels });
+    const mask = layer.hasMask ? await gpuMaskHash(page, id) : null;
+    layers.push({ ...layer, pixels, mask });
   }
   return { ...structure, layers };
+}
+
+/** Hash of a layer's GPU mask, read through the bridge as mask-data-sync reads it. */
+export async function gpuMaskHash(page: Page, layerId: string): Promise<string | null> {
+  return page.evaluate(async (id) => {
+    const w = window as unknown as {
+      __engineState?: { getEngine: () => unknown };
+      __wasmBridge?: { readMaskTexture: (engine: unknown, id: string) => Promise<Uint8Array | undefined> };
+    };
+    const engine = w.__engineState?.getEngine();
+    if (!engine || !w.__wasmBridge) throw new Error('the engine or __wasmBridge is not installed');
+    const bytes = await w.__wasmBridge.readMaskTexture(engine, id);
+    if (!bytes) return null;
+    let h = 0x811c9dc5;
+    for (let i = 0; i < bytes.length; i++) {
+      h ^= bytes[i]!;
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return `${bytes.length}:${h.toString(16).padStart(8, '0')}`;
+  }, layerId);
 }
 
 export interface CompareOptions {

@@ -5,6 +5,9 @@ import { settled } from './settled';
 import './document/document';
 import './history/history';
 import './layer/layer';
+import './layer/effects';
+import './layer/rasterize';
+import './mask/mask';
 
 setSettle(settled);
 
