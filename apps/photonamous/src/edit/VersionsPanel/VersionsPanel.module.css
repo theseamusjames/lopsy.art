@@ -96,13 +96,13 @@
 }
 
 .danger {
-  background: var(--ph-danger-bg);
-  border-color: var(--ph-danger-bg);
-  color: var(--ph-danger-text);
+  background: var(--color-danger-bg);
+  border-color: var(--color-danger-bg);
+  color: var(--color-danger-text);
 }
 
 .danger:hover:not(:disabled) {
-  background: var(--ph-danger-bg-hover);
+  background: var(--color-danger-bg-hover);
 }
 
 .form {

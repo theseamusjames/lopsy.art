@@ -12,7 +12,7 @@
   height: 18px;
   margin: 2px 0 0;
   flex-shrink: 0;
-  accent-color: var(--ph-primary-bg);
+  accent-color: var(--color-primary-bg);
 }
 
 .option input:focus-visible {

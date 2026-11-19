@@ -22,17 +22,10 @@ body,
 
   /*
    * Colours that meet WCAG 2.2 AA contrast on this app's surfaces (#111 to
-   * #404040): 4.5:1 for text, 3:1 for a button's edge against the page.
-   * Lopsy's accent (#4a9eff) is too light under white text, and its
-   * disabled grey is for disabled controls only.
+   * #404040): 4.5:1 for text, 3:1 for a control's edge or focus ring.
+   * Lopsy's disabled grey is for disabled controls only. Filled buttons
+   * take @lopsy/ui's --color-primary-* and --color-danger-*, as Lopsy's do.
    */
-  --ph-primary-bg: #1f6fd6;
-  --ph-primary-bg-hover: #1d64d1;
-  --ph-primary-bg-active: #1a5fc9;
-  --ph-primary-text: #ffffff;
-  --ph-danger-bg: #c62828;
-  --ph-danger-bg-hover: #b91c1c;
-  --ph-danger-text: #ffffff;
   /* Accent-coloured text, also on a selected or hovered row. */
   --ph-accent-text: #6cb6ff;
   /* Secondary text that must stay readable on every surface, hover and active rows included. */

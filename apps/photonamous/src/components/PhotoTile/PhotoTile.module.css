@@ -152,8 +152,8 @@
 
 .burst:hover,
 .burst[aria-expanded='true'] {
-  background: var(--ph-primary-bg);
-  color: var(--ph-primary-text);
+  background: var(--color-primary-bg);
+  color: var(--color-primary-text);
 }
 
 .burst:focus-visible {
@@ -162,8 +162,8 @@
 }
 
 .problem {
-  background: var(--ph-danger-bg);
-  color: var(--ph-danger-text);
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
 }
 
 .versionName {
@@ -171,6 +171,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  background: var(--ph-primary-bg);
-  color: var(--ph-primary-text);
+  background: var(--color-primary-bg);
+  color: var(--color-primary-text);
 }

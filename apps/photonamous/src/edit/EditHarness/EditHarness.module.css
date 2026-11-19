@@ -38,15 +38,15 @@
   align-items: center;
   height: 32px;
   padding: 0 var(--space-4);
-  background: var(--ph-primary-bg);
+  background: var(--color-primary-bg);
   border-radius: var(--radius-sm);
-  color: var(--ph-primary-text);
+  color: var(--color-primary-text);
   font-size: var(--font-size-sm);
   cursor: pointer;
 }
 
 .pick:hover {
-  background: var(--ph-primary-bg-hover);
+  background: var(--color-primary-bg-hover);
 }
 
 .fileInput {
