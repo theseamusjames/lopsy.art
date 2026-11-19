@@ -1,22 +1,15 @@
 import { useToolSettingsStore } from '../../tool-settings-store';
 import { useUIStore } from '../../ui-store';
 import { commitPerspectiveCrop } from '../../../tools/crop/perspective-crop-interaction';
+import { setCropMode } from '../../../tools/crop/crop-mode';
 import { AspectRatioControl } from './AspectRatioControl';
 import styles from '../OptionsBar.module.css';
 
 export function CropOptions() {
   const cropMode = useToolSettingsStore((s) => s.settings.crop.mode);
-  const setCropSetting = useToolSettingsStore((s) => s.setCropSetting);
   const perspectiveCropQuad = useUIStore((s) => s.perspectiveCropQuad);
   const setPerspectiveCropQuad = useUIStore((s) => s.setPerspectiveCropQuad);
   const setPerspectiveCropDragging = useUIStore((s) => s.setPerspectiveCropDragging);
-
-  function handleModeChange(mode: 'normal' | 'perspective') {
-    setCropSetting('mode', mode);
-    // Clear any active overlay when switching modes
-    setPerspectiveCropQuad(null);
-    setPerspectiveCropDragging(null);
-  }
 
   return (
     <>
@@ -25,7 +18,7 @@ export function CropOptions() {
         className={styles.select}
         aria-label="Crop mode"
         value={cropMode}
-        onChange={(e) => handleModeChange(e.target.value as 'normal' | 'perspective')}
+        onChange={(e) => setCropMode(e.target.value as 'normal' | 'perspective')}
       >
         <option value="normal">Normal</option>
         <option value="perspective">Perspective</option>
