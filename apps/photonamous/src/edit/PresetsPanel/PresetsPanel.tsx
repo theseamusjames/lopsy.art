@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { RECIPE_GROUPS, type Recipe, type RecipeGroupId } from '@lopsy/photos-core/library/recipe';
 import type { Preset, PresetId } from '@lopsy/photos-core/library/types';
@@ -19,9 +19,26 @@ export interface PresetsPanelProps {
   readonly onDelete?: (presetId: PresetId) => void;
 }
 
-/** Presets (spec 5.4): hover to preview, click to apply, save the current edit's groups as a new one. */
+/** Where focus goes once the list has re-rendered: a preset, or Save preset…. */
+type FocusTarget = { readonly kind: 'preset'; readonly id: PresetId } | { readonly kind: 'add' };
+
+/** Presets (spec 5.4): hover or focus to preview, click to apply, save the current edit's groups as a new one. */
 export function PresetsPanel({ presets, recipe, isDisabled, onApply, onPreview, onSave, onDelete }: PresetsPanelProps) {
   const [form, setForm] = useState<{ name: string; groups: ReadonlySet<RecipeGroupId> } | null>(null);
+  const [focusAfter, setFocusAfter] = useState<FocusTarget | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!focusAfter) return;
+    const selector = focusAfter.kind === 'add' ? '[data-preset-add]' : `[data-preset-id="${CSS.escape(focusAfter.id)}"]`;
+    rootRef.current?.querySelector<HTMLElement>(selector)?.focus();
+    setFocusAfter(null);
+  }, [focusAfter]);
+
+  const closeForm = () => {
+    setForm(null);
+    setFocusAfter({ kind: 'add' });
+  };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -29,18 +46,27 @@ export function PresetsPanel({ presets, recipe, isDisabled, onApply, onPreview, 
     const name = form.name.trim();
     if (!name || form.groups.size === 0) return;
     onSave(name, RECIPE_GROUPS.map((g) => g.id).filter((id) => form.groups.has(id)));
-    setForm(null);
+    closeForm();
+  };
+
+  const handleDelete = (index: number) => {
+    const preset = presets[index];
+    if (!preset || !onDelete) return;
+    const neighbour = presets[index + 1] ?? presets[index - 1];
+    onDelete(preset.id);
+    setFocusAfter(neighbour ? { kind: 'preset', id: neighbour.id } : { kind: 'add' });
   };
 
   return (
-    <div className={styles.presets}>
+    <div ref={rootRef} className={styles.presets}>
       <ul className={styles.list} aria-label="Presets" onPointerLeave={() => onPreview(null)}>
-        {presets.map((p) => (
+        {presets.map((p, i) => (
           <li key={p.id} className={styles.row}>
             <button
               type="button"
               className={styles.preset}
               disabled={isDisabled}
+              data-preset-id={p.id}
               onPointerEnter={() => onPreview(p)}
               onFocus={() => onPreview(p)}
               onBlur={() => onPreview(null)}
@@ -52,7 +78,7 @@ export function PresetsPanel({ presets, recipe, isDisabled, onApply, onPreview, 
               {p.name}
             </button>
             {onDelete && !p.builtIn && (
-              <button type="button" className={styles.icon} aria-label={`Delete preset ${p.name}`} disabled={isDisabled} onClick={() => onDelete(p.id)}>
+              <button type="button" className={styles.icon} aria-label={`Delete preset ${p.name}`} disabled={isDisabled} onClick={() => handleDelete(i)}>
                 <Trash2 size={13} aria-hidden />
               </button>
             )}
@@ -61,7 +87,16 @@ export function PresetsPanel({ presets, recipe, isDisabled, onApply, onPreview, 
       </ul>
       {onSave &&
         (form ? (
-          <form className={styles.form} onSubmit={handleSubmit} aria-label="Save preset">
+          <form
+            className={styles.form}
+            onSubmit={handleSubmit}
+            aria-label="Save preset"
+            onKeyDown={(e) => {
+              if (e.key !== 'Escape') return;
+              e.preventDefault();
+              closeForm();
+            }}
+          >
             <input
               className={styles.input}
               aria-label="Preset name"
@@ -89,7 +124,7 @@ export function PresetsPanel({ presets, recipe, isDisabled, onApply, onPreview, 
               ))}
             </fieldset>
             <div className={styles.actions}>
-              <button type="button" className={styles.small} onClick={() => setForm(null)}>
+              <button type="button" className={styles.small} onClick={closeForm}>
                 Cancel
               </button>
               <button type="submit" className={styles.small} disabled={!form.name.trim() || form.groups.size === 0}>
@@ -102,6 +137,7 @@ export function PresetsPanel({ presets, recipe, isDisabled, onApply, onPreview, 
             type="button"
             className={styles.add}
             disabled={isDisabled}
+            data-preset-add
             onClick={() => setForm({ name: '', groups: new Set(changedGroups(recipe)) })}
           >
             <Plus size={14} aria-hidden />
