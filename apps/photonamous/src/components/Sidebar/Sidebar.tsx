@@ -12,6 +12,11 @@ import { isHiddenPairHalf, sameCollection, sidebarCounts, type Collection } from
 import { IconButton } from '../IconButton/IconButton';
 import styles from './Sidebar.module.css';
 
+/** The date arrow's name says which year or month it opens or closes (Disclosure's optional label). */
+function disclosureLabel(what: string, open: boolean): { label: string } {
+  return { label: `${open ? 'Close' : 'Open'} ${what}` };
+}
+
 export function Sidebar() {
   const view = useLibraryView();
   const session = useSession();
@@ -49,19 +54,31 @@ export function Sidebar() {
   const [draft, setDraft] = useState('');
   const [dropTarget, setDropTarget] = useState<string | null>(null);
 
-  const item = (target: Collection, icon: ReactNode, label: string, count: number | undefined, extra?: ReactNode) => (
+  const item = (target: Collection, icon: ReactNode | null, label: string, count: number | undefined) => (
     <button
       type="button"
       className={styles.item}
       aria-current={sameCollection(target, collection) ? 'page' : undefined}
       onClick={() => setCollection(target)}
     >
-      <span className={styles.icon}>{icon}</span>
+      {icon !== null && <span className={styles.icon}>{icon}</span>}
       <span className={styles.label}>{label}</span>
-      {extra}
       {count !== undefined && <span className={styles.count}>{count.toLocaleString()}</span>}
     </button>
   );
+
+  /** A year or month: its arrow beside the row (not inside it), so each is a control of its own. */
+  const dateRow = (prefix: string, label: string, count: number, toggleName: string) => {
+    const open = openDates.has(prefix);
+    return (
+      <div className={styles.treeRow}>
+        <span className={styles.toggle}>
+          <Disclosure open={open} onToggle={() => toggleDate(prefix)} {...disclosureLabel(toggleName, open)} />
+        </span>
+        {item({ kind: 'date', prefix }, null, label, count)}
+      </div>
+    );
+  };
 
   const commit = () => {
     const name = draft.trim();
@@ -118,7 +135,9 @@ export function Sidebar() {
           />
         </div>
         {albums.length === 0 && editing !== 'new' && (
-          <p className={styles.empty}>Albums are groups you pick by hand. Drag photos onto one to add them.</p>
+          <p className={styles.empty}>
+            Albums are groups you pick by hand. Drag photos onto one, or tick it under In albums in the details panel.
+          </p>
         )}
         {albums.map((album) =>
           editing === album.id ? (
@@ -223,33 +242,33 @@ export function Sidebar() {
           <h2 className={styles.sectionTitle}>Dates</h2>
         </div>
         {dates.length === 0 && <p className={styles.empty}>No dates yet.</p>}
-        {dates.map((year) => (
-          <div key={year.year}>
-            {item(
-              { kind: 'date', prefix: year.year },
-              <Disclosure open={openDates.has(year.year)} onToggle={() => toggleDate(year.year)} />,
-              year.year,
-              year.count,
-            )}
-            {openDates.has(year.year) &&
-              year.months.map((month) => (
-                <div key={month.month} className={styles.nested}>
-                  {item(
-                    { kind: 'date', prefix: month.month },
-                    <Disclosure open={openDates.has(month.month)} onToggle={() => toggleDate(month.month)} />,
-                    datePrefixLabel(month.month).replace(/ \d{4}$/, ''),
-                    month.count,
-                  )}
-                  {openDates.has(month.month) &&
-                    month.days.map((day) => (
-                      <div key={day.day} className={styles.nested}>
-                        {item({ kind: 'date', prefix: day.day }, <CalendarDays size={14} />, datePrefixLabel(day.day), day.count)}
-                      </div>
+        {dates.length > 0 && (
+          <ul className={styles.tree}>
+            {dates.map((year) => (
+              <li key={year.year}>
+                {dateRow(year.year, year.year, year.count, year.year)}
+                {openDates.has(year.year) && (
+                  <ul className={styles.tree}>
+                    {year.months.map((month) => (
+                      <li key={month.month} className={styles.nested}>
+                        {dateRow(month.month, datePrefixLabel(month.month).replace(/ \d{4}$/, ''), month.count, datePrefixLabel(month.month))}
+                        {openDates.has(month.month) && (
+                          <ul className={styles.tree}>
+                            {month.days.map((day) => (
+                              <li key={day.day} className={styles.nested}>
+                                {item({ kind: 'date', prefix: day.day }, <CalendarDays size={14} />, datePrefixLabel(day.day), day.count)}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </li>
                     ))}
-                </div>
-              ))}
-          </div>
-        ))}
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className={styles.section}>
@@ -267,7 +286,7 @@ export function Sidebar() {
           </div>
         ))}
         {imports.length > 6 && (
-          <button type="button" className={styles.more} onClick={() => setShowAllImports((v) => !v)}>
+          <button type="button" className={styles.more} aria-expanded={showAllImports} onClick={() => setShowAllImports((v) => !v)}>
             {showAllImports ? 'Show fewer' : `Show all ${imports.length}`}
           </button>
         )}

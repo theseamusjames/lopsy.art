@@ -7,8 +7,7 @@
   overflow: hidden;
   cursor: default;
   user-select: none;
-  outline: 2px solid transparent;
-  outline-offset: -2px;
+  outline: none;
 }
 
 .tile:hover {
@@ -16,16 +15,35 @@
 }
 
 .tile[aria-selected='true'] {
-  outline-color: var(--color-accent);
   background: var(--color-accent-subtle);
+  box-shadow: inset 0 0 0 2px var(--color-accent);
 }
 
+/* The photo the keys act on, wherever keyboard focus is. */
 .tile[data-focused='true'] {
   box-shadow: inset 0 0 0 4px var(--color-bg-primary), inset 0 0 0 5px var(--color-text-secondary);
 }
 
 .tile[aria-selected='true'][data-focused='true'] {
   box-shadow: inset 0 0 0 4px var(--color-accent);
+}
+
+/* Outside the tile, so it shows on a selected one too; the row's padding and gap leave room for it. */
+.tile:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  .tile[aria-selected='true'] {
+    outline: 3px solid Highlight;
+    outline-offset: -3px;
+  }
+
+  .tile:focus-visible {
+    outline: 2px solid CanvasText;
+    outline-offset: 2px;
+  }
 }
 
 .frame {
@@ -113,21 +131,39 @@
   letter-spacing: 0.3px;
 }
 
+.rating {
+  display: inline-flex;
+}
+
 .burst {
+  position: relative;
   border: none;
   pointer-events: auto;
   cursor: pointer;
   font-family: var(--font-ui);
 }
 
+/* The pill stays small; what it takes a press on is 24 px tall. */
+.burst::after {
+  content: '';
+  position: absolute;
+  inset: -4px -2px;
+}
+
 .burst:hover,
 .burst[aria-expanded='true'] {
-  background: var(--color-accent);
+  background: var(--ph-primary-bg);
+  color: var(--ph-primary-text);
+}
+
+.burst:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
 }
 
 .problem {
-  background: var(--color-error);
-  color: #fff;
+  background: var(--ph-danger-bg);
+  color: var(--ph-danger-text);
 }
 
 .versionName {
@@ -135,5 +171,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  background: var(--color-accent);
+  background: var(--ph-primary-bg);
+  color: var(--ph-primary-text);
 }

@@ -1,8 +1,6 @@
 import { useMemo } from 'react';
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, Columns2, ClipboardCopy, ClipboardPaste, CopyPlus, Info, Layers, Maximize, Paintbrush, ScanEye, Search, Trash2 } from 'lucide-react';
 import type { AssetId } from '@lopsy/photos-core/library/types';
-import { useLibraryView, useSavedSearches } from '../../app/hooks';
-import { datePrefixLabel } from '../../library/finding';
 import { THUMB_SIZE, useUi } from '../../app/store';
 import { newVersion, openCompare, openCull, openFocusedInLopsy, runCommand } from '../../app/commands';
 import { PresetMenu } from '../PresetMenu/PresetMenu';
@@ -14,6 +12,7 @@ import { isMac } from '../../app/hooks';
 import { SORT_DESCENDING, SORT_LABELS, sortDirectionLabel, type SortKey } from '../../library/asset-query';
 import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
+import { useCollectionTitle } from './collection-title';
 import styles from './GridToolbar.module.css';
 
 interface GridToolbarProps {
@@ -21,8 +20,7 @@ interface GridToolbarProps {
 }
 
 export function GridToolbar({ orderedIds }: GridToolbarProps) {
-  const view = useLibraryView();
-  const saved = useSavedSearches();
+  const title = useCollectionTitle();
   const groupBursts = useUi((s) => s.groupBursts);
   const setGroupBursts = useUi((s) => s.setGroupBursts);
   const collection = useUi((s) => s.collection);
@@ -43,32 +41,14 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
   // Photos, not tiles: an open stack's version tiles are versions of photos already counted.
   const photoCount = useMemo(() => itemAssets(orderedIds).length, [orderedIds]);
 
-  const title = useMemo(() => {
-    switch (collection.kind) {
-      case 'all':
-        return 'All photos';
-      case 'recent':
-        return 'Recent imports';
-      case 'set-aside':
-        return 'Set aside';
-      case 'album':
-        return view.albums.get(collection.albumId)?.name ?? 'Album';
-      case 'keyword':
-        return collection.keyword;
-      case 'date':
-        return datePrefixLabel(collection.prefix);
-      case 'import':
-        return 'Imported together';
-      case 'saved':
-        return saved.find((x) => x.id === collection.searchId)?.name ?? 'Saved search';
-    }
-  }, [collection, view, saved]);
-
   return (
     <div className={styles.toolbar}>
       <div className={styles.heading}>
-        <h1 className={styles.title}>{title}</h1>
-        <span className={styles.count}>
+        <h1 className={styles.title} tabIndex={-1}>
+          {title}
+        </h1>
+        {/* A status: the count is announced when a filter, a search or the selection changes it. */}
+        <span className={styles.count} role="status">
           {plural(photoCount, 'photo')}
           {selected > 0 && ` · ${selected.toLocaleString()} selected`}
         </span>
@@ -200,7 +180,13 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
               },
             ]}
           />
-          <IconButton label={`Details (${keyOf('toggle-info')})`} icon={<Info size={16} />} active={infoOpen} onClick={toggleInfo} />
+          <IconButton
+            label={`Details (${keyOf('toggle-info')})`}
+            icon={<Info size={16} />}
+            active={infoOpen}
+            aria-pressed={infoOpen}
+            onClick={toggleInfo}
+          />
         </span>
       </div>
     </div>

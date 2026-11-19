@@ -7,6 +7,7 @@ import { writeDraggedIds } from '../../app/drag';
 import { isEdited } from '../../library/asset-query';
 import { parseItem } from '../../library/items';
 import { isDefaultRecipe } from '@lopsy/photos-core/library/recipe';
+import { LABEL_NAMES } from '../LabelPicker/LabelPicker';
 import { Stars } from '../Stars/Stars';
 import styles from './PhotoTile.module.css';
 
@@ -18,13 +19,21 @@ const ORIGINAL_STATUS_WORDS = {
 
 interface PhotoTileProps {
   assetId: AssetId;
+  /** The tile's column in its row, from 1. */
+  column: number;
   selected: boolean;
   focused: boolean;
+  /** The grid's one tab stop: the focused photo, else the first in view. Its badges are reachable with Tab too. */
+  tabbable: boolean;
   onPick: (id: AssetId, e: MouseEvent) => void;
   onOpen: (id: AssetId) => void;
 }
 
-export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, focused, onPick, onOpen }: PhotoTileProps) {
+function stars(n: number): string {
+  return `${n} star${n === 1 ? '' : 's'}`;
+}
+
+export const PhotoTile = memo(function PhotoTile({ assetId: itemId, column, selected, focused, tabbable, onPick, onOpen }: PhotoTileProps) {
   const { assetId, versionId: ownVersionId } = parseItem(itemId);
   const view = useLibraryView();
   const counts = useVersionCounts();
@@ -43,14 +52,35 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
   const edited = isVersionTile ? !isDefaultRecipe(version.recipe) : isEdited(asset, view);
   const versions = counts.get(asset.id) ?? 1;
   const paired = partners.has(asset.id);
+  const dimmed = asset.setAside && !inSetAsideList;
+  const problem = asset.originalStatus !== undefined && asset.originalStatus !== 'ok' ? ORIGINAL_STATUS_WORDS[asset.originalStatus] : null;
+  const labelWords = asset.label ? `${LABEL_NAMES[asset.label]} label` : null;
+  const inner = tabbable ? 0 : -1;
+
+  // What a screen reader says when the tile gets focus; the marks and badges are in it, not only drawn.
+  const name = [
+    asset.title || asset.fileName,
+    isVersionTile ? version.name : null,
+    asset.rating > 0 ? stars(asset.rating) : null,
+    labelWords,
+    asset.setAside ? 'Set aside' : null,
+    edited ? 'Edited' : null,
+    paired ? 'RAW+JPEG' : null,
+    problem,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(', ');
 
   return (
     <div
       className={styles.tile}
       role="gridcell"
+      aria-colindex={column}
       aria-selected={selected}
+      aria-label={name}
+      tabIndex={inner}
       data-focused={focused}
-      data-aside={asset.setAside && !inSetAsideList}
+      data-aside={dimmed}
       data-asset-id={isVersionTile ? undefined : asset.id}
       data-version-id={isVersionTile ? version.id : undefined}
       data-item-id={itemId}
@@ -78,20 +108,27 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
       </div>
       <div className={styles.overlay}>
         <span className={styles.marks}>
-          {asset.label && <span className={styles.label} data-label={asset.label} aria-label={`${asset.label} label`} />}
-          {asset.rating > 0 && <Stars rating={asset.rating} size={11} />}
+          {asset.label && labelWords && (
+            <span className={styles.label} data-label={asset.label} role="img" aria-label={labelWords} title={labelWords} />
+          )}
+          {asset.rating > 0 && (
+            <span className={styles.rating} title={stars(asset.rating)}>
+              <Stars rating={asset.rating} size={11} />
+            </span>
+          )}
         </span>
         <span className={styles.badges}>
-          {asset.originalStatus !== undefined && asset.originalStatus !== 'ok' && (
+          {problem && (
             <span className={`${styles.badge} ${styles.problem}`} title="Check library in Settings for what to do">
               <TriangleAlert size={11} />
-              {ORIGINAL_STATUS_WORDS[asset.originalStatus]}
+              {problem}
             </span>
           )}
           {burst > 1 && (
             <button
               type="button"
               className={`${styles.badge} ${styles.burst}`}
+              tabIndex={inner}
               title={burstOpen ? 'Fold this burst back into one photo' : `A burst of ${burst} photos: show them all`}
               aria-label={`Burst of ${burst} photos`}
               aria-expanded={burstOpen}
@@ -105,6 +142,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
             <button
               type="button"
               className={`${styles.badge} ${styles.burst}`}
+              tabIndex={inner}
               title={
                 burstOpen
                   ? 'Fold the Lopsy documents back behind this photo'
@@ -133,6 +171,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
               <button
                 type="button"
                 className={`${styles.badge} ${styles.burst}`}
+                tabIndex={inner}
                 title={burstOpen ? 'Fold the versions back into one tile' : `${versions} versions: show them all`}
                 aria-label={`${versions} versions`}
                 aria-expanded={burstOpen}
@@ -144,7 +183,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
             )
           )}
           {edited && (
-            <span className={styles.badge} title="Edited">
+            <span className={styles.badge} role="img" aria-label="Edited" title="Edited">
               <SlidersHorizontal size={11} />
             </span>
           )}

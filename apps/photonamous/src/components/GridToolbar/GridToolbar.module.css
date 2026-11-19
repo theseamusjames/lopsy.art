@@ -10,9 +10,15 @@
 
 .heading {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--space-3);
+  gap: var(--space-1) var(--space-3);
   min-width: 0;
+}
+
+.title:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
 }
 
 .title {
@@ -62,6 +68,8 @@
 
 .search:focus-within {
   border-color: var(--color-accent);
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 1px;
 }
 
 .search input {
@@ -91,20 +99,38 @@
   font-size: var(--font-size-sm);
 }
 
+.sort select:focus-visible,
+.size input:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 1px;
+}
+
 .size {
   display: flex;
   align-items: center;
   gap: var(--space-2);
 }
 
+/* A 24 px tall control (2.5.8) drawing a 4 px track. */
 .size input {
   width: 80px;
+  height: 24px;
   -webkit-appearance: none;
   appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.size input::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: var(--radius-round);
   background: var(--color-bg-active);
-  cursor: pointer;
+}
+
+.size input::-moz-range-track {
+  height: 4px;
+  border-radius: var(--radius-round);
+  background: var(--color-bg-active);
 }
 
 .size input::-webkit-slider-thumb {
@@ -112,6 +138,7 @@
   appearance: none;
   width: 14px;
   height: 14px;
+  margin-top: -5px;
   border-radius: var(--radius-round);
   background: var(--color-text-primary);
   border: none;
@@ -130,4 +157,9 @@
   height: 20px;
   background: var(--color-border);
   margin: 0 var(--space-1);
+}
+
+/* Placeholders carry instructions: the browser's grey is 2.4:1 on the field. */
+.search input::placeholder {
+  color: var(--ph-text-muted);
 }

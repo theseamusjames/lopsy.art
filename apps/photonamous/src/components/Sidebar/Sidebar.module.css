@@ -57,13 +57,13 @@
 }
 
 .item:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--ph-focus-ring);
   outline-offset: -2px;
 }
 
 .item[aria-current='page'] {
   background: var(--color-accent-subtle);
-  color: var(--color-accent);
+  color: var(--ph-accent-text);
 }
 
 .icon {
@@ -72,8 +72,9 @@
   color: var(--color-text-secondary);
 }
 
-.item[aria-current='page'] .icon {
-  color: var(--color-accent);
+.item[aria-current='page'] .icon,
+.item[aria-current='page'] .count {
+  color: var(--ph-accent-text);
 }
 
 .label {
@@ -86,7 +87,7 @@
 
 .count {
   font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
+  color: var(--ph-text-muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -133,24 +134,83 @@
   outline: none;
 }
 
+.input:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 0;
+}
+
 .empty {
   padding: 0 var(--space-2) var(--space-2);
   font-size: var(--font-size-sm);
-  color: var(--color-text-disabled);
+  color: var(--ph-text-muted);
   line-height: 1.45;
+}
+
+.tree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  list-style: none;
 }
 
 .nested {
   padding-left: var(--space-3);
 }
 
+.treeRow {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+/* The arrow's slot: 24 px, where the other rows show their icon. */
+.toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: var(--space-1);
+  color: var(--ph-text-muted);
+}
+
+.treeRow .item {
+  padding-left: var(--space-1);
+}
+
 .more {
   align-self: flex-start;
-  margin: 0 var(--space-2);
+  min-height: 24px;
+  margin: 0 var(--space-1);
+  padding: 0 var(--space-1);
   border: none;
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--color-accent);
+  color: var(--ph-accent-text);
   font-family: var(--font-ui);
   font-size: var(--font-size-sm);
   cursor: pointer;
+}
+
+.more:hover {
+  background: var(--color-bg-hover);
+}
+
+.more:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: -2px;
+}
+
+@media (max-width: 760px) {
+  .sidebar {
+    max-height: 40vh;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+  }
+}
+
+/* Placeholders carry instructions: the browser's grey is 2.4:1 on the field. */
+.input::placeholder {
+  color: var(--ph-text-muted);
 }

@@ -72,6 +72,24 @@ export function moveFocus(
   return selectRange(base, orderedIds, id);
 }
 
+/**
+ * Moves focus to the photo at `index`: `select` selects only it, `extend`
+ * grows the range from the anchor, `keep` leaves the selection as it is.
+ */
+export function focusAt(
+  selection: Selection,
+  orderedIds: readonly string[],
+  index: number,
+  how: 'select' | 'extend' | 'keep',
+): Selection {
+  const id = orderedIds[index];
+  if (id === undefined) return selection;
+  if (how === 'select') return selectOne(id);
+  if (how === 'keep') return { ...selection, focus: id };
+  const base = selection.anchor === null ? { ...selection, anchor: selection.focus ?? id } : selection;
+  return selectRange(base, orderedIds, id);
+}
+
 /** Drops ids that are no longer shown (after a filter change or a delete). */
 export function pruneSelection(selection: Selection, visible: ReadonlySet<string>): Selection {
   let changed = false;

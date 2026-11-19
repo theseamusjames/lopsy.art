@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Cloud, CloudOff, Download, Keyboard, LoaderCircle, LogOut, Settings, TriangleAlert, CloudCheck } from 'lucide-react';
 import { getBackend } from '../../app/backend-registry';
 import { showToast } from '../../app/toasts';
@@ -25,6 +25,19 @@ export function Header() {
   const [leaving, setLeaving] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const closePopover = useCallback(() => openDialog(null), [openDialog]);
+  const syncButton = useRef<HTMLButtonElement>(null);
+  const helpAnchor = useRef<HTMLDivElement>(null);
+
+  // A popover closed with focus inside it (Escape, or its content went away): focus goes back to its button.
+  const lastDialog = useRef(dialog);
+  useEffect(() => {
+    const was = lastDialog.current;
+    lastDialog.current = dialog;
+    if (was === dialog || (was !== 'sync' && was !== 'help')) return;
+    const active = document.activeElement;
+    if (active !== null && active !== document.body) return;
+    (was === 'sync' ? syncButton.current : helpAnchor.current?.querySelector('button'))?.focus();
+  }, [dialog]);
 
   if (!connection) return null;
   const exportCount = selectionSize > 0 ? selectionSize : focus !== null ? 1 : 0;
@@ -64,10 +77,12 @@ export function Header() {
       <div className={styles.actions}>
         <div className={styles.anchor}>
           <button
+            ref={syncButton}
             type="button"
             className={styles.sync}
             data-state={status.state}
             onClick={() => openDialog(dialog === 'sync' ? null : 'sync')}
+            aria-haspopup="dialog"
             aria-expanded={dialog === 'sync'}
             title={describeSync(status)}
           >
@@ -85,6 +100,7 @@ export function Header() {
 
         {status.state === 'error' && status.error === LOCK_LOST_MESSAGE && (
           <span className={styles.lost} role="alert">
+            <TriangleAlert size={14} className={styles.lostIcon} />
             Opened in another tab
             <Button size="sm" variant="primary" onClick={() => location.reload()}>
               Reload to work here
@@ -113,14 +129,20 @@ export function Header() {
           title={exportCount === 0 ? 'Select photos to export them' : undefined}
         >
           <Download size={14} />
-          Export{exportCount > 0 ? ` ${exportCount.toLocaleString()}` : ''}
+          <span>
+            Export{exportCount > 0 ? ` ${exportCount.toLocaleString()}` : ''}
+            {exportCount > 0 && <span className={styles.visuallyHidden}>{exportCount === 1 ? ' photo' : ' photos'}</span>}
+          </span>
         </Button>
 
-        <div className={styles.anchor}>
+        <div className={styles.anchor} ref={helpAnchor}>
           <IconButton
             label="Keyboard shortcuts"
             icon={<Keyboard size={16} />}
             active={dialog === 'help'}
+            aria-pressed={undefined}
+            aria-haspopup="dialog"
+            aria-expanded={dialog === 'help'}
             onClick={() => openDialog(dialog === 'help' ? null : 'help')}
           />
           {dialog === 'help' && (
@@ -133,6 +155,9 @@ export function Header() {
           label="Settings"
           icon={<Settings size={16} />}
           active={dialog === 'settings'}
+          aria-pressed={undefined}
+          aria-haspopup="dialog"
+          aria-expanded={dialog === 'settings'}
           onClick={() => openDialog('settings')}
         />
         <IconButton

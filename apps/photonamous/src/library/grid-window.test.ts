@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { anchorScroll, gridGeometry, scrollToReveal, visibleRange } from './grid-window';
+import { anchorScroll, gridGeometry, renderedRows, scrollToReveal, visibleRange } from './grid-window';
 
 describe('gridGeometry', () => {
   it('fits as many columns as the target size allows and stretches tiles', () => {
@@ -71,5 +71,28 @@ describe('anchorScroll', () => {
     const b = gridGeometry({ width: 1000, targetSize: 200, gap: 0, itemCount: 1000 });
     // Row 10 of a starts with item 100, which is row 20 of b (5 columns).
     expect(anchorScroll(a, b, 1000)).toBe(20 * b.rowHeight);
+  });
+});
+
+describe('renderedRows', () => {
+  const g = gridGeometry({ width: 1000, targetSize: 100, gap: 0, itemCount: 1000 });
+  const range = visibleRange(g, 1000, 1000, 500, 2);
+
+  it('is the rows in range when the focused photo is among them', () => {
+    expect(renderedRows(g, range, 95)).toEqual([8, 9, 10, 11, 12, 13, 14, 15, 16, 17]);
+    expect(renderedRows(g, range, -1)).toEqual([8, 9, 10, 11, 12, 13, 14, 15, 16, 17]);
+  });
+
+  it('keeps the focused photo\'s row, in order, when the grid scrolls away from it', () => {
+    expect(renderedRows(g, range, 3)).toEqual([0, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]);
+    expect(renderedRows(g, range, 999)).toEqual([8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 99]);
+  });
+
+  it('renders only the focused row before the viewport is measured', () => {
+    expect(renderedRows(g, visibleRange(g, 1000, 0, 0), 42)).toEqual([4]);
+  });
+
+  it('ignores an index past the end', () => {
+    expect(renderedRows(g, range, 5000)).toEqual([8, 9, 10, 11, 12, 13, 14, 15, 16, 17]);
   });
 });

@@ -16,7 +16,7 @@ test('import into a new album with keywords; duplicates are named before import'
     { name: 'beach.jpg', mimeType: 'image/jpeg', buffer: first },
     { name: 'dunes.jpg', mimeType: 'image/jpeg', buffer: second },
   ]);
-  await page.getByRole('combobox', { name: 'Album for the import' }).selectOption('new');
+  await page.getByRole('combobox', { name: 'Add to album' }).selectOption('new');
   await page.getByRole('textbox', { name: 'New album name' }).fill('Coast');
   await page.getByRole('textbox', { name: 'Keywords for the import' }).fill('sea, summer');
   await page.getByRole('button', { name: 'Import 2 photos' }).click();
