@@ -218,7 +218,7 @@ test.describe('the command API', () => {
     expect(all.map((c) => c.id)).toEqual([
       'adjust.add', 'adjust.list', 'adjust.remove', 'adjust.reorder', 'adjust.set', 'adjust.set-enabled', 'adjust.set-node-enabled',
       'color.reset', 'color.set', 'color.swap',
-      'doc.info', 'doc.new',
+      'doc.color-mode', 'doc.info', 'doc.new',
       'filter.add-noise', 'filter.bloom', 'filter.box-blur', 'filter.brightness-contrast', 'filter.cel-shading',
       'filter.chromatic-aberration', 'filter.clouds', 'filter.color-lut', 'filter.desaturate', 'filter.emboss',
       'filter.fibers', 'filter.find-edges', 'filter.gaussian-blur', 'filter.halftone', 'filter.hue-saturation',
@@ -227,6 +227,8 @@ test.describe('the command API', () => {
       'filter.smoke', 'filter.solarize', 'filter.sunburst', 'filter.surface-blur', 'filter.texture',
       'filter.threshold', 'filter.unsharp-mask', 'filter.voronoi',
       'history.redo', 'history.undo',
+      'image.auto', 'image.border', 'image.canvas-size', 'image.crop', 'image.crop-to-selection', 'image.flip-layer', 'image.rotate',
+      'image.size',
       'layer.add', 'layer.add-group', 'layer.duplicate', 'layer.effects', 'layer.flatten', 'layer.group', 'layer.merge-down',
       'layer.rasterize', 'layer.rasterize-style', 'layer.remove', 'layer.remove-selected', 'layer.reorder', 'layer.select', 'layer.set',
       'mask.add', 'mask.edit', 'mask.remove', 'mask.set-enabled', 'mask.to-selection',

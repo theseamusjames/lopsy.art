@@ -14,6 +14,8 @@ import './color/color';
 import './tool/tool';
 import './adjust/adjust';
 import './filter/filter';
+import './image/image';
+import './document/color-mode';
 
 setSettle(settled);
 
