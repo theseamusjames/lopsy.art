@@ -28,6 +28,17 @@ export function isSafeUrl(url: string): boolean {
   return SAFE_URL.test(url) && !/^\s*javascript:/i.test(url);
 }
 
+/**
+ * A link target: no whitespace, and parentheses only as balanced pairs, one
+ * level deep. Wikimedia Commons file names often hold `(…)`, so a plain
+ * `[^)]+` would end the link at the first `)` inside the URL (#1803).
+ */
+export const LINK_URL_PATTERN = String.raw`(?:[^()\s]|\([^()\s]*\))+`;
+
+const INLINE_LINK = new RegExp(String.raw`\[([^\]]+)\]\((${LINK_URL_PATTERN})\)`, 'g');
+/** As `INLINE_LINK`, but lenient about spaces, for the plain-text version. */
+const INLINE_LINK_TEXT = /\[([^\]]+)\]\((?:[^()]|\([^()]*\))+\)/g;
+
 function renderLink(text: string, url: string): string {
   if (!isSafeUrl(url)) return text;
   const isExternal = /^https?:\/\//i.test(url) && !url.startsWith('https://lopsy.art');
@@ -46,7 +57,7 @@ export function renderInline(markdown: string): string {
     .replace(/\[\[([^\]]+)\]\]/g, (_, keys: string) =>
       keys.split('+').map((key) => `<kbd>${key.trim()}</kbd>`).join('+'),
     )
-    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, text: string, url: string) => renderLink(text, url))
+    .replace(INLINE_LINK, (_, text: string, url: string) => renderLink(text, url))
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[^*\w])\*(?!\s)(.+?)\*(?!\w)/g, '$1<em>$2</em>')
     .replace(/\uE000(\d+)\uE000/g, (_, index: string) => codeSpans[Number(index)] ?? '');
@@ -135,7 +146,7 @@ export function stripMarkdown(markdown: string): string {
   return markdown
     .replace(/`([^`]+)`/g, '$1')
     .replace(/\[\[([^\]]+)\]\]/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(INLINE_LINK_TEXT, '$1')
     .replace(/\*\*(.+?)\*\*/g, '$1')
     .replace(/\*(.+?)\*/g, '$1')
     .replace(/^\s*([-*]|\d+\.|>)\s+/gm, '')

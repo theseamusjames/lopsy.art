@@ -1,6 +1,7 @@
 //! Text layers: font decoding, shaping, the glyph atlas, and rendering.
 
 pub mod glyph_atlas;
+pub mod glyph_raster;
 pub mod text_gpu;
 pub mod ligature_split;
 pub mod vertical_forms;
