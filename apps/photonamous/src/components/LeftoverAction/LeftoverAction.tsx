@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { FileId } from '@lopsy/photos-core/storage/types';
 import { getBackend } from '../../app/backend-registry';
 import { useSession } from '../../app/hooks';
-import { showToast } from '../../app/toasts';
+import { showErrorToast, showToast } from '../../app/toasts';
 import { plural } from '../../import/import-summary';
 import { Button } from '../Button/Button';
 
@@ -25,7 +25,7 @@ export function LeftoverAction({ leftovers, disabled = false, onDone }: Leftover
       const moved = await getBackend().trashLeftovers(session, leftovers);
       showToast(`Moved ${plural(moved, 'original')} of deleted photos to the trash.`);
     } catch (e) {
-      showToast(e instanceof Error ? e.message : String(e));
+      showErrorToast(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
       onDone();

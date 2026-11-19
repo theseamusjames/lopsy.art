@@ -2,7 +2,7 @@ import { useCallback, useId, useRef, useState, type ChangeEvent } from 'react';
 import { ChevronDown, Cloud, FolderOpen, Images, Upload } from 'lucide-react';
 import { getBackend } from '../../app/backend-registry';
 import { loadDriveAddMode } from '../../app/device-settings';
-import { showToast } from '../../app/toasts';
+import { showErrorToast } from '../../app/toasts';
 import { useUi } from '../../app/store';
 import { canPickFolder } from '../../import/collect-files';
 import { Button } from '../Button/Button';
@@ -94,7 +94,7 @@ export function ImportButton({ variant = 'primary' }: { variant?: 'primary' | 's
                     .then((job) => {
                       if (job) useUi.getState().setImportJob(job);
                     })
-                    .catch((error: unknown) => showToast(`Adding from Google Drive failed: ${error instanceof Error ? error.message : String(error)}`));
+                    .catch((error: unknown) => showErrorToast(`Adding from Google Drive failed: ${error instanceof Error ? error.message : String(error)}`));
                 }}
               >
                 <Cloud size={16} />
