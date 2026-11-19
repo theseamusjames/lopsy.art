@@ -16,7 +16,6 @@ import { useToolSettingsStore } from './tool-settings-store';
 
 import { clearJsPixelData } from './store/clear-js-pixel-data';
 import { deferCacheLayerSnapshot } from './store/history-slice';
-import { clearPendingStroke } from './interactions/pending-stroke';
 import { scheduleMaskDataRefresh } from './mask-data-sync';
 import { syncLayerAfterFullSize } from './sync-layer-after-full-size';
 import type {
@@ -89,22 +88,6 @@ interface SmoothResumePoint {
 /** Screen-space travel after a hold-to-smooth that counts as "still drawing". */
 const SMOOTH_RESUME_THRESHOLD_PX = 3;
 
-/** Finalize a deferred stroke from a previous mouseup. */
-function finalizePendingStroke(ref: React.MutableRefObject<{ layerId: string } | null>): void {
-  const pending = ref.current;
-  if (!pending) return;
-  ref.current = null;
-  clearPendingStroke();
-
-  const engine = getEngine();
-  if (!engine) return;
-
-  endStroke(engine, pending.layerId);
-
-  clearJsPixelData(pending.layerId);
-  useEditorStore.getState().notifyRender();
-}
-
 /**
  * Pre-tool down guards run in priority order on mousedown — the first
  * one to return a non-null state claims the gesture and the dispatcher
@@ -132,7 +115,6 @@ export function useCanvasInteraction(
   const stampSourceRef = useRef<Point | null>(null);
   const stampOffsetRef = useRef<Point | null>(null);
   const lastPaintPointRef = useRef<LastPaintPoint | null>(null);
-  const pendingStrokeRef = useRef<{ layerId: string } | null>(null);
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holdFrameRef = useRef<number | null>(null);
   const moveSeqRef = useRef(0);
@@ -245,68 +227,45 @@ export function useCanvasInteraction(
 
       let expandedLayer = activeLayer;
       let layerPos: Point = { x: canvasPos.x - activeLayer.x, y: canvasPos.y - activeLayer.y };
-      let strokeContinuation = false;
 
       if (useGpu) {
         // GPU path: no JS pixel data needed. The engine handles the
         // layer texture directly — no expand, no upload, no round-trip.
         // This preserves 16-bit float precision throughout.
 
-        // Finalize any pending brush stroke so it's baked into the layer
-        // texture before another GPU tool (e.g. shape) snapshots it.
-        if (!isPaintTool) {
-          finalizePendingStroke(pendingStrokeRef);
-        }
-
         if (isPaintTool) {
-          const isShift = e.shiftKey && lastPaintPointRef.current?.layerId === activeLayerId;
-          if (isShift) {
-            strokeContinuation = true;
+          const currentState = useEditorStore.getState();
+          syncDocumentSize(engine, currentState.document.width, currentState.document.height);
+          flushLayerSync(currentState);
+          syncSelection(engine, currentState.selection);
+          // Dodge/Burn, Sponge, Clone Stamp and Healing push their own
+          // correctly-labeled history entry from their own down-handler
+          // (or, for a clone/healing source-set click, correctly push
+          // nothing since no pixels changed). Pushing a generic entry
+          // here too would double up as a phantom 'Eraser' row on top
+          // of the tool's real one (#887).
+          if (!SELF_HISTORY_PAINT_TOOLS.has(activeTool)) {
+            const toolLabel = activeTool === 'brush'
+              ? 'Brush'
+              : activeTool === 'pencil'
+                ? 'Pencil'
+                : activeTool === 'spray'
+                  ? 'Spray'
+                  : 'Eraser';
+            useEditorStore.getState().pushHistory(toolLabel);
           }
-          {
-            const canContinueStroke = strokeContinuation && pendingStrokeRef.current?.layerId === activeLayerId;
-            if (!canContinueStroke) {
-              finalizePendingStroke(pendingStrokeRef);
-            }
-            const currentState = useEditorStore.getState();
-            syncDocumentSize(engine, currentState.document.width, currentState.document.height);
-            flushLayerSync(currentState);
-            syncSelection(engine, currentState.selection);
-            if (!canContinueStroke) {
-              // Dodge/Burn, Sponge, Clone Stamp and Healing push their own
-              // correctly-labeled history entry from their own down-handler
-              // (or, for a clone/healing source-set click, correctly push
-              // nothing since no pixels changed). Pushing a generic entry
-              // here too would double up as a phantom 'Eraser' row on top
-              // of the tool's real one (#887).
-              if (!SELF_HISTORY_PAINT_TOOLS.has(activeTool)) {
-                const toolLabel = activeTool === 'brush'
-                  ? 'Brush'
-                  : activeTool === 'pencil'
-                    ? 'Pencil'
-                    : activeTool === 'spray'
-                      ? 'Spray'
-                      : 'Eraser';
-                useEditorStore.getState().pushHistory(toolLabel);
-              }
-              beginStroke(engine, activeLayerId);
-            }
+          beginStroke(engine, activeLayerId);
 
-            // beginStroke calls ensure_layer_full_size on the WASM side,
-            // which expands a cropped layer texture to the union of the
-            // document area and the existing content area (preserving
-            // offscreen content). Sync the JS store to match.
-            const synced = syncLayerAfterFullSize(engine, activeLayerId);
-            if (synced) {
-              expandedLayer = synced;
-              layerPos = { x: canvasPos.x - expandedLayer.x, y: canvasPos.y - expandedLayer.y };
-            }
+          // beginStroke calls ensure_layer_full_size on the WASM side,
+          // which expands a cropped layer texture to the union of the
+          // document area and the existing content area (preserving
+          // offscreen content). Sync the JS store to match.
+          const synced = syncLayerAfterFullSize(engine, activeLayerId);
+          if (synced) {
+            expandedLayer = synced;
+            layerPos = { x: canvasPos.x - expandedLayer.x, y: canvasPos.y - expandedLayer.y };
           }
         }
-      } else {
-        // Finalize any pending GPU stroke so the layer texture includes it
-        // before we read pixel data back for non-GPU tools (e.g. move).
-        finalizePendingStroke(pendingStrokeRef);
       }
       const ctx = buildContext(e, canvasPos, layerPos, activeLayerId, expandedLayer);
       if (useGpu) {
