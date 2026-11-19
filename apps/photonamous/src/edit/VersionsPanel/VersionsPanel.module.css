@@ -22,6 +22,7 @@
 .version {
   flex: 1;
   min-width: 0;
+  min-height: 24px;
   overflow: hidden;
   padding: var(--space-1) var(--space-2);
   background: transparent;
@@ -50,8 +51,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   background: transparent;
   border: none;
@@ -67,7 +68,7 @@
 
 .danger,
 .small {
-  height: 22px;
+  height: 24px;
   padding: 0 var(--space-2);
   background: transparent;
   border: 1px solid var(--color-border);
