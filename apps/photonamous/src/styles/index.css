@@ -36,13 +36,13 @@ body,
   /* Accent-coloured text, also on a selected or hovered row. */
   --ph-accent-text: #6cb6ff;
   /* Secondary text that must stay readable on every surface, hover and active rows included. */
-  --ph-text-muted: #adadad;
+  --ph-text-muted: var(--color-text-muted);
   /* The focus ring: at least 3:1 against every surface. */
-  --ph-focus-ring: #6cb6ff;
+  --ph-focus-ring: var(--color-focus-ring);
   /* Error text (Lopsy's --color-error is 4.2:1 on a dialog): 4.5:1 on every surface. */
   --ph-error-text: #ff8a80;
-  /* The edge of a control with no text of its own (a text box, an empty star, a slider's track): 3:1 on every surface. */
-  --ph-control-edge: #8f8f8f;
+  /* The edge of a control with no text of its own (a text box, an empty star): 3:1 on every surface. */
+  --ph-control-edge: var(--color-control-edge);
 }
 
 @media (prefers-reduced-motion: reduce) {

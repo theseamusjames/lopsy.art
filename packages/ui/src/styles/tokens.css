@@ -24,6 +24,8 @@
   --color-text-primary: #e0e0e0;
   --color-text-secondary: #a0a0a0;
   --color-text-disabled: #606060;
+  /* Secondary text that stays 4.5:1 on every surface, hover and active rows included. */
+  --color-text-muted: #adadad;
 
   --color-accent: #4a9eff;
   --color-accent-hover: #5aafff;
