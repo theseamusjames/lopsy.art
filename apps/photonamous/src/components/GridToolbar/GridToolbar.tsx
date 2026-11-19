@@ -183,8 +183,7 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
           <IconButton
             label={`Details (${keyOf('toggle-info')})`}
             icon={<Info size={16} />}
-            active={infoOpen}
-            aria-pressed={infoOpen}
+            pressed={infoOpen}
             onClick={toggleInfo}
           />
         </span>

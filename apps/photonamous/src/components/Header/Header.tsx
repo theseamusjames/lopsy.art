@@ -140,7 +140,6 @@ export function Header() {
             label="Keyboard shortcuts"
             icon={<Keyboard size={16} />}
             active={dialog === 'help'}
-            aria-pressed={undefined}
             aria-haspopup="dialog"
             aria-expanded={dialog === 'help'}
             onClick={() => openDialog(dialog === 'help' ? null : 'help')}
@@ -155,7 +154,6 @@ export function Header() {
           label="Settings"
           icon={<Settings size={16} />}
           active={dialog === 'settings'}
-          aria-pressed={undefined}
           aria-haspopup="dialog"
           aria-expanded={dialog === 'settings'}
           onClick={() => openDialog('settings')}

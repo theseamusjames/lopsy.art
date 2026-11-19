@@ -140,12 +140,14 @@ test('the date tree opens by keyboard, its arrow beside the row rather than insi
   await page.keyboard.press('Shift+Tab');
   const arrow = page.locator(':focus');
   await expect(arrow).toHaveAttribute('aria-expanded', 'false');
-  await expect(arrow).toHaveAccessibleName(/^Open/);
+  // Named for the year it opens, once: "Open 2026".
+  await expect(arrow).toHaveAccessibleName(/^Open \d{4}$/);
   expect(await arrow.evaluate((el) => el.parentElement?.closest('button, [role="button"]') ?? null)).toBeNull();
   expect(await year.evaluate((el) => el.querySelector('button, [role="button"], [tabindex]'))).toBeNull();
 
   await page.keyboard.press('Enter');
   await expect(arrow).toHaveAttribute('aria-expanded', 'true');
+  await expect(arrow).toHaveAccessibleName(/^Close \d{4}$/);
   await expect(months.first()).toBeVisible();
   await page.keyboard.press(' ');
   await expect(arrow).toHaveAttribute('aria-expanded', 'false');

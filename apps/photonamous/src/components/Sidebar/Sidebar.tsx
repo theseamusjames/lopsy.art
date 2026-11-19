@@ -12,11 +12,6 @@ import { isHiddenPairHalf, sameCollection, sidebarCounts, type Collection } from
 import { IconButton } from '../IconButton/IconButton';
 import styles from './Sidebar.module.css';
 
-/** The date arrow's name says which year or month it opens or closes (Disclosure's optional label). */
-function disclosureLabel(what: string, open: boolean): { label: string } {
-  return { label: `${open ? 'Close' : 'Open'} ${what}` };
-}
-
 export function Sidebar() {
   const view = useLibraryView();
   const session = useSession();
@@ -73,7 +68,7 @@ export function Sidebar() {
     return (
       <div className={styles.treeRow}>
         <span className={styles.toggle}>
-          <Disclosure open={open} onToggle={() => toggleDate(prefix)} {...disclosureLabel(toggleName, open)} />
+          <Disclosure open={open} onToggle={() => toggleDate(prefix)} label={toggleName} />
         </span>
         {item({ kind: 'date', prefix }, null, label, count)}
       </div>
