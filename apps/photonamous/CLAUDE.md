@@ -2,10 +2,10 @@
 
 A photo library and RAW editor that keeps originals in the user's Google
 Drive (or a local folder) and renders edits with the Lopsy engine. This is
-a proof of concept of `docs/lopsy-photos-spec.md`; read the spec before
+a proof of concept of `docs/photonamous-spec.md`; read the spec before
 changing the design. The repository's map and the rules that apply
 everywhere are in the root `CLAUDE.md`. Running, Google setup, deploying
-and testing: `docs/lopsy-photos-setup.md`. What the app does today, feature
+and testing: `docs/photonamous-setup.md`. What the app does today, feature
 by feature: `FEATURES.md` (current behaviour only; keep it up to date when
 you change what users see).
 
@@ -13,7 +13,7 @@ you change what users see).
 
 | Path | What |
 |---|---|
-| `apps/lopsy-photos/` | The app: React, TypeScript, Vite |
+| `apps/photonamous/` | The app: React, TypeScript, Vite |
 | `packages/photos-core/` | Storage adapters, the library database, import, export, caches, search, XMP. Plain TypeScript, no React; its tests run in Node |
 | `packages/photos-core/README.md` | The maintainer's guide: module map, on-storage format, invariants, undo, untrusted input, testing |
 | `packages/photos-core/src/storage/types.ts` | The storage contract every backend implements |

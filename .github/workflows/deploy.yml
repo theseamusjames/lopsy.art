@@ -31,7 +31,7 @@ jobs:
       # sets the repository variable DEPLOY_PHOTOS to 'true' (Settings >
       # Secrets and variables > Actions > Variables). Until then this job
       # builds and publishes Lopsy exactly as before, and production does
-      # not change. See docs/lopsy-photos-spec.md, 6.3.
+      # not change. See docs/photonamous-spec.md, 6.3.
       - name: Build Lopsy
         if: vars.DEPLOY_PHOTOS != 'true'
         run: npm run build

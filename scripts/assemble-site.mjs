@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Assembles the lopsy.art site (docs/lopsy-photos-spec.md, 6.2 and 6.3):
+ * Assembles the lopsy.art site (docs/photonamous-spec.md, 6.2 and 6.3):
  * Lopsy at `/` from apps/lopsy-web/dist and Lopsy Photos at `/photos/`
- * from apps/lopsy-photos/dist (built with PHOTOS_BASE=/photos/), into a
+ * from apps/photonamous/dist (built with PHOTOS_BASE=/photos/), into a
  * root dist/ that Cloudflare Pages publishes.
  *
  * Photos' own _redirects and _headers (written for serving it at `/` on its
@@ -27,7 +27,7 @@ const outArg = process.argv.indexOf('--out');
 const out = resolve(root, outArg >= 0 ? process.argv[outArg + 1] : 'dist');
 const photosOnly = process.argv.includes('--photos-only');
 const lopsyDist = join(root, 'apps/lopsy-web/dist');
-const photosDist = join(root, 'apps/lopsy-photos/dist');
+const photosDist = join(root, 'apps/photonamous/dist');
 const PHOTOS_PATH = '/photos';
 
 function fail(message) {
@@ -40,10 +40,10 @@ function requireDist(dir, how) {
 }
 
 if (!photosOnly) requireDist(lopsyDist, 'npm run build');
-requireDist(photosDist, 'PHOTOS_BASE=/photos/ npm run build -w lopsy-photos');
+requireDist(photosDist, 'PHOTOS_BASE=/photos/ npm run build -w photonamous');
 const photosIndex = readFileSync(join(photosDist, 'index.html'), 'utf8');
 if (!photosIndex.includes(`${PHOTOS_PATH}/assets/`)) {
-  fail(`apps/lopsy-photos/dist was not built for ${PHOTOS_PATH}/ (its index.html does not load ${PHOTOS_PATH}/assets/). Rebuild with PHOTOS_BASE=/photos/.`);
+  fail(`apps/photonamous/dist was not built for ${PHOTOS_PATH}/ (its index.html does not load ${PHOTOS_PATH}/assets/). Rebuild with PHOTOS_BASE=/photos/.`);
 }
 if (!photosOnly && existsSync(join(lopsyDist, PHOTOS_PATH.slice(1)))) fail(`apps/lopsy-web/dist already has a ${PHOTOS_PATH}/ folder`);
 

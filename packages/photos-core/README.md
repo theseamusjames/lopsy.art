@@ -5,9 +5,9 @@ database, import, export, caches, search and XMP. It is plain TypeScript
 with no React, and it runs in the browser. Its unit tests run in Node.
 
 This is a maintainer's guide. The design is in
-[the spec](../../docs/lopsy-photos-spec.md), and this file links to the spec
+[the spec](../../docs/photonamous-spec.md), and this file links to the spec
 instead of repeating it. The app's rules are in
-[`apps/lopsy-photos/CLAUDE.md`](../../apps/lopsy-photos/CLAUDE.md).
+[`apps/photonamous/CLAUDE.md`](../../apps/photonamous/CLAUDE.md).
 
 ## Module map
 
@@ -15,10 +15,10 @@ instead of repeating it. The app's rules are in
 |---|---|
 | `storage/` | `StorageAdapter` (`types.ts`), the only door to files. Adapters: Google Drive (`google-drive/`), a local folder (OPFS or a picked folder) and memory. Shared contract tests are in `adapter-contract.ts`. |
 | `auth/` | Where Drive gets its token: the Google Identity Services client, or a fixed token in tests. |
-| `library/` | The synced database ([spec 6.6](../../docs/lopsy-photos-spec.md#66-the-library-database)). `session.ts` holds `openLibrary` and `LibrarySession`, which is the only way to change the library. `sync.ts` holds the sync engine. Data model: `types.ts`. Edit recipe: `recipe.ts`. |
-| `import/` | The import job ([6.8](../../docs/lopsy-photos-spec.md#68-import-and-upload)): hashing, EXIF/TIFF/RAF inspection, previews, RAW+JPEG pairs, staging, resume, and adding from storage. |
-| `export/` | The export job ([6.11](../../docs/lopsy-photos-spec.md#611-export)), export settings and presets, the EXIF writer, file names and zip. Rendering is injected. |
-| `cache/` | Originals and previews on the device ([6.7](../../docs/lopsy-photos-spec.md#67-storage-on-the-device)): OPFS blob caches, checked downloads, and Keep originals. |
+| `library/` | The synced database ([spec 6.6](../../docs/photonamous-spec.md#66-the-library-database)). `session.ts` holds `openLibrary` and `LibrarySession`, which is the only way to change the library. `sync.ts` holds the sync engine. Data model: `types.ts`. Edit recipe: `recipe.ts`. |
+| `import/` | The import job ([6.8](../../docs/photonamous-spec.md#68-import-and-upload)): hashing, EXIF/TIFF/RAF inspection, previews, RAW+JPEG pairs, staging, resume, and adding from storage. |
+| `export/` | The export job ([6.11](../../docs/photonamous-spec.md#611-export)), export settings and presets, the EXIF writer, file names and zip. Rendering is injected. |
+| `cache/` | Originals and previews on the device ([6.7](../../docs/photonamous-spec.md#67-storage-on-the-device)): OPFS blob caches, checked downloads, and Keep originals. |
 | `search/` | Saved-search rules, text search, facets, dates and bursts over a `LibraryView`. |
 | `xmp/` | Reading and writing XMP sidecars, including the Lightroom `crs:` edit mapping (`crs-mapping.ts`, a commented table). |
 
@@ -98,13 +98,13 @@ library (`lock.ts`) allows one writer per device.
 - **Durable before destructive.** Await `whenDurable()` before anything
   that cannot be undone. It resolves once every command so far is saved on
   this device, and rejects if that save failed.
-  - Trashing originals waits on it (`apps/lopsy-photos/src/app/real/trash-assets.ts`).
+  - Trashing originals waits on it (`apps/photonamous/src/app/real/trash-assets.ts`).
   - So does deleting an import's staged copy.
 - **Commands are written in full.** A user's command is written even when
   the local value already matches, so it beats an older remote change that
   has not arrived yet. Internal writes (previews, repair marks) drop
   no-ops instead (`emit`'s `internal` flag).
-- **Recipe leaves and hashing** (`recipe.ts`, [spec 7](../../docs/lopsy-photos-spec.md#7-data-model)).
+- **Recipe leaves and hashing** (`recipe.ts`, [spec 7](../../docs/photonamous-spec.md#7-data-model)).
   - Each control is one leaf. A curve, a crop and an area's geometry are
     each one object leaf.
   - `recipeFromPaths` validates and clamps every leaf, using `RECIPE_RANGES`
@@ -144,7 +144,7 @@ library (`lock.ts`) allows one writer per device.
 ## Undo
 
 Both kinds of undo write the earlier values as new ops and never remove
-history ([spec 6.6](../../docs/lopsy-photos-spec.md#66-the-library-database)).
+history ([spec 6.6](../../docs/photonamous-spec.md#66-the-library-database)).
 
 - **Recipe history** works per version, across devices (`undo`, `redo`,
   `history`).
@@ -229,4 +229,4 @@ npm run test:photos                      # this package, then the app
   across a reload, and two devices syncing on the fake Drive.
   `e2e/browser.spec.ts` drives it.
 - **Benchmarks.** `library/scale.bench.test.ts` and `search/bench.test.ts`
-  hold the 50,000-photo budgets of [spec 11](../../docs/lopsy-photos-spec.md#11-performance-budgets).
+  hold the 50,000-photo budgets of [spec 11](../../docs/photonamous-spec.md#11-performance-budgets).

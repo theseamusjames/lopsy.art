@@ -329,7 +329,7 @@ describe('reopen flow', () => {
     const outcome = saveToPhotos({ photosUrl: PHOTOS, connection: accepted.connection, payload: Promise.resolve(savePayload()), window: lopsy });
     expect(lopsy.opened).toHaveLength(1);
     const reopened = lopsy.opened[0]!;
-    expect(reopened.target).toBe('lopsy-photos');
+    expect(reopened.target).toBe('photonamous');
     expect(reopened.url).toBe(`${PHOTOS}?receive=${accepted.connection.id}`);
 
     const saves: ReceivedSave[] = [];

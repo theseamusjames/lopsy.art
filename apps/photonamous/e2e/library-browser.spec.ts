@@ -63,7 +63,7 @@ test('This browser: import, rate, edit, reload, delete', async ({ page }) => {
   await page.getByRole('button', { name: 'Done' }).click();
   const exported = await page.evaluate(async () => {
     const root = await navigator.storage.getDirectory();
-    const dir = await (await (await (await root.getDirectoryHandle('lopsy-photos')).getDirectoryHandle('Lopsy Photos')).getDirectoryHandle('Exports')).getDirectoryHandle('E2E');
+    const dir = await (await (await (await root.getDirectoryHandle('photonamous')).getDirectoryHandle('Lopsy Photos')).getDirectoryHandle('Exports')).getDirectoryHandle('E2E');
     const names: string[] = [];
     for await (const name of (dir as unknown as { keys(): AsyncIterable<string> }).keys()) names.push(name);
     return names;

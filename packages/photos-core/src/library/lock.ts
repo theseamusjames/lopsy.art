@@ -19,7 +19,7 @@ export interface LibraryLock {
 }
 
 export function libraryLockName(libraryId: string): string {
-  return `lopsy-photos:${libraryId}`;
+  return `photonamous:${libraryId}`;
 }
 
 /** Thrown by `openLibrary` when another tab has the library open. */

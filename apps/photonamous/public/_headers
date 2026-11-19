@@ -1,4 +1,4 @@
-# Lopsy Photos on Cloudflare Pages (docs/lopsy-photos-spec.md, 6.3).
+# Lopsy Photos on Cloudflare Pages (docs/photonamous-spec.md, 6.3).
 # Paths are relative to the app: scripts/assemble-site.mjs moves them under
 # /photos/ for lopsy.art; on its own domain they apply as written.
 #
@@ -11,7 +11,7 @@
 # - font-src: fonts the Picker's loader may add to the page.
 # Checked on 2026-11-18 against the hosts gsi/client references and the
 # CSP example in Google Workspace's drive-picker-element README
-# (docs/lopsy-photos-setup.md, section 3).
+# (docs/photonamous-setup.md, section 3).
 # - style-src 'unsafe-inline': the Google Picker and sign-in insert inline
 #   styles into the page; the app itself uses only its stylesheet.
 # - worker-src 'self': the offline shell's service worker (sw.js at the app's

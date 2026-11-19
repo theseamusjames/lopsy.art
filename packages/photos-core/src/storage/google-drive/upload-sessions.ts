@@ -59,7 +59,7 @@ export class IndexedDbUploadSessionStore implements UploadSessionStore {
   private db: Promise<IDBDatabase> | null = null;
   private static readonly STORE = 'sessions';
 
-  constructor(private readonly databaseName: string = 'lopsy-photos-upload-sessions') {}
+  constructor(private readonly databaseName: string = 'photonamous-upload-sessions') {}
 
   async get(key: string): Promise<UploadSessionRecord | null> {
     const value = await this.run('readonly', (store) => store.get(key));

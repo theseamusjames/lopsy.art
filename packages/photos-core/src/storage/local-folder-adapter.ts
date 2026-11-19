@@ -500,7 +500,7 @@ export class LocalFolderAdapter implements StorageAdapter {
 /** The library in the browser's private file system (OPFS), in its own subfolder. */
 export async function openBrowserStorage(): Promise<LocalFolderAdapter> {
   const opfs = await navigator.storage.getDirectory();
-  const folder = await opfs.getDirectoryHandle('lopsy-photos', { create: true });
+  const folder = await opfs.getDirectoryHandle('photonamous', { create: true });
   return LocalFolderAdapter.open(folder, {
     kind: 'browser',
     label: 'This browser',

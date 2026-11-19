@@ -7,7 +7,7 @@
  * caches Drive content: originals and previews have their own OPFS caches.
  */
 
-export const CACHE_PREFIX = 'lopsy-photos-shell-';
+export const CACHE_PREFIX = 'photonamous-shell-';
 
 /** What the build writes into the worker: its version, the files to precache (absolute paths) and their SHA-256. */
 export interface PrecacheManifest {
@@ -80,4 +80,4 @@ export function mayRequestUpdate(
 }
 
 /** The message the page sends to let a waiting worker take over. */
-export const SKIP_WAITING_MESSAGE = 'lopsy-photos:skip-waiting';
+export const SKIP_WAITING_MESSAGE = 'photonamous:skip-waiting';

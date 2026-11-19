@@ -43,7 +43,7 @@ describe('one writer per device', () => {
     await fresh.syncNow();
     expect(fresh.getView().settings.get('a')).toBe(1);
     expect(fresh.getSyncStatus().state).toBe('idle');
-    expect(lock.isHeld(`lopsy-photos:${fresh.libraryId}`)).toBe(true);
+    expect(lock.isHeld(`photonamous:${fresh.libraryId}`)).toBe(true);
   });
 });
 

@@ -5,7 +5,7 @@
  * click, each visit.
  */
 
-const DB_NAME = 'lopsy-photos-folders';
+const DB_NAME = 'photonamous-folders';
 const STORE = 'handles';
 const KEY = 'last';
 

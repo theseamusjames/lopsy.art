@@ -57,7 +57,7 @@ test('a cached file that another script on the origin changed is not served', as
   // What a script injected anywhere on the origin could do: replace the app's code in the shell cache.
   const script = await page.evaluate(async () => {
     const src = new URL(document.querySelector<HTMLScriptElement>('script[type="module"]')?.src ?? '').pathname;
-    const name = (await caches.keys()).find((key) => key.startsWith('lopsy-photos-shell-')) ?? '';
+    const name = (await caches.keys()).find((key) => key.startsWith('photonamous-shell-')) ?? '';
     const cache = await caches.open(name);
     await cache.put(src, new Response('window.__evil = true;', { headers: { 'Content-Type': 'text/javascript' } }));
     return { src, name };

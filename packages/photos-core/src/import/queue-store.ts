@@ -125,7 +125,7 @@ function done(tx: IDBTransaction): Promise<void> {
 export class IndexedDbImportQueueStore implements ImportQueueStore {
   private constructor(private readonly db: IDBDatabase) {}
 
-  static async open(name = 'lopsy-photos-import-queue'): Promise<IndexedDbImportQueueStore> {
+  static async open(name = 'photonamous-import-queue'): Promise<IndexedDbImportQueueStore> {
     const req = indexedDB.open(name, 1);
     req.onupgradeneeded = () => {
       const store = req.result.createObjectStore(STORE, { keyPath: 'id' });

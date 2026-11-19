@@ -6,7 +6,7 @@
  * others. Everything above this interface (the library database, import,
  * export, previews) is written against it alone, so the whole app runs on
  * any of them: Drive in production, a local folder when running without a
- * Google account, memory in unit tests. See docs/lopsy-photos-spec.md, 6.5.
+ * Google account, memory in unit tests. See docs/photonamous-spec.md, 6.5.
  *
  * The shape follows Drive's model because Drive is the most constrained
  * backend: files and folders have opaque IDs, a file can be found by its

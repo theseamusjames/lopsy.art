@@ -16,7 +16,7 @@ test('Check library marks a missing original', async ({ page }) => {
 
   // Behind the app's back: lost.jpg disappears from the folder and from the storage index.
   const removed = await page.evaluate(async () => {
-    const root = await (await navigator.storage.getDirectory()).getDirectoryHandle('lopsy-photos');
+    const root = await (await navigator.storage.getDirectory()).getDirectoryHandle('photonamous');
     const indexHandle = await root.getFileHandle('.lopsy-storage.json');
     const index = JSON.parse(await (await indexHandle.getFile()).text()) as {
       entries: { id: string; name: string; properties: Record<string, string> }[];

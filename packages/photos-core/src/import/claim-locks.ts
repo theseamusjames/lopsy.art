@@ -18,7 +18,7 @@ export interface ImportLocks {
 }
 
 export function importLockName(jobId: string): string {
-  return `lopsy-photos-import:${jobId}`;
+  return `photonamous-import:${jobId}`;
 }
 
 /** The Web Locks API, through the library lock's handling of it. */

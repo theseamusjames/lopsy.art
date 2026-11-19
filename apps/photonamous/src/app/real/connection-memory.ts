@@ -23,7 +23,7 @@ export interface ReconnectOffer {
   readonly automatic: boolean;
 }
 
-export const LAST_CONNECTION_KEY = 'lopsy-photos.last-connection';
+export const LAST_CONNECTION_KEY = 'photonamous.last-connection';
 
 const KINDS: ReadonlySet<string> = new Set<StorageChoice>(['google-drive', 'browser', 'local-folder']);
 
@@ -68,14 +68,14 @@ function slug(text: string): string {
   return text.trim().replace(/[^\p{L}\p{N}@._-]+/gu, '_') || '_';
 }
 
-/** The IndexedDB database holding one storage's library state: `lopsy-photos:<kind>:<account id or folder name>`. */
+/** The IndexedDB database holding one storage's library state: `photonamous:<kind>:<account id or folder name>`. */
 export function libraryStoreName(kind: StorageChoice, owner: string): string {
-  return `lopsy-photos:${kind}:${slug(owner)}`;
+  return `photonamous:${kind}:${slug(owner)}`;
 }
 
 /** Drive's resumable upload sessions, one database per Google account. */
 export function uploadSessionStoreName(accountId: string): string {
-  return `lopsy-photos-uploads:${slug(accountId)}`;
+  return `photonamous-uploads:${slug(accountId)}`;
 }
 
 /** A short description of this device for the library's device list: "Chrome on macOS". */

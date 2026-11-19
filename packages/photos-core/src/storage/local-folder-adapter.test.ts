@@ -14,7 +14,7 @@ function open(handle: FakeDirectoryHandle, changePageSize?: number): Promise<Loc
 runAdapterContract('LocalFolderAdapter (local folder)', () => open(new FakeDirectoryHandle('Pictures')));
 runAdapterContract('LocalFolderAdapter (paged changes)', () => open(new FakeDirectoryHandle('Pictures'), 2));
 runAdapterContract('LocalFolderAdapter (browser)', () =>
-  LocalFolderAdapter.open(new FakeDirectoryHandle('lopsy-photos'), {
+  LocalFolderAdapter.open(new FakeDirectoryHandle('photonamous'), {
     kind: 'browser',
     label: 'This browser',
     estimate: async () => ({ usage: 0, quota: 1e9 }),
@@ -131,7 +131,7 @@ describe('LocalFolderAdapter', () => {
   });
 
   it('reports the browser quota and refuses writes past it', async () => {
-    const adapter = await LocalFolderAdapter.open(new FakeDirectoryHandle('lopsy-photos'), {
+    const adapter = await LocalFolderAdapter.open(new FakeDirectoryHandle('photonamous'), {
       kind: 'browser',
       label: 'This browser',
       estimate: async () => ({ usage: 95, quota: 100 }),

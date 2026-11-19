@@ -69,7 +69,7 @@ export class OpfsStagingStore implements StagingStore {
   private constructor(private readonly dir: FileSystemDirectoryHandle) {}
 
   /**
-   * Opens `lopsy-photos-staging/<libraryId>/`; null when OPFS or writable
+   * Opens `photonamous-staging/<libraryId>/`; null when OPFS or writable
    * files are unavailable (Safari outside a worker has no createWritable),
    * in which case imports run unstaged.
    */
@@ -77,7 +77,7 @@ export class OpfsStagingStore implements StagingStore {
     try {
       if (typeof navigator === 'undefined' || !navigator.storage?.getDirectory) return null;
       const root = await navigator.storage.getDirectory();
-      const base = await root.getDirectoryHandle('lopsy-photos-staging', { create: true });
+      const base = await root.getDirectoryHandle('photonamous-staging', { create: true });
       const dir = await base.getDirectoryHandle(checkKey(libraryId.replace(/[^A-Za-z0-9._-]/g, '_')), { create: true });
       const probe = await dir.getFileHandle('.probe', { create: true });
       if (typeof (probe as { createWritable?: unknown }).createWritable !== 'function') return null;

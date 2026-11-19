@@ -46,7 +46,7 @@ Appendix A. Re-check them before building on them.
 | Topic | Decision | Why |
 |---|---|---|
 | Where it runs | A static app on Cloudflare Pages, built from this monorepo. It starts at `lopsy.art/photos/` and may move to its own domain. | Serving it needs no server code. The two apps share no browser storage, so either URL works (6.3). |
-| Code | `apps/lopsy-photos/`, with shared code moved into `packages/`: the engine bridge, the UI kit, the handoff protocol, and the Drive and library code | Matches the migration plan's direction (an engine with several consumers). Each app keeps its own rules and tests. |
+| Code | `apps/photonamous/`, with shared code moved into `packages/`: the engine bridge, the UI kit, the handoff protocol, and the Drive and library code | Matches the migration plan's direction (an engine with several consumers). Each app keeps its own rules and tests. |
 | Sign-in | Google Identity Services, token model, entirely in the browser | No server. Tokens last about an hour and there is no refresh token. The app works around this (6.4); an optional stateless sign-in helper removes it (open question 2). |
 | Drive access | The `drive.file` scope only | Google's recommended, non-sensitive Drive scope. No restricted-scope review or yearly security assessment. The app sees only files it created or the user picked. |
 | Drive layout | `Lopsy Photos/` holding `Originals/`, `Lopsy documents/`, `Exports/` and `Library data/` | The user can see and understand it; nothing is hidden in app-only storage. |
@@ -453,7 +453,7 @@ the product.
 ```
 apps/
   lopsy-web/        Lopsy. Gains the handoff and Save to Lopsy Photos (section 9)
-  lopsy-photos/     this app: React, TypeScript, Vite; base '/photos/', or '/' on its own domain
+  photonamous/     this app: React, TypeScript, Vite; base '/photos/', or '/' on its own domain
 packages/
   engine-web/       the two wasm builds, the typed bridge, renderer choice and
                     the decode worker pools, moved from apps/lopsy-web/src/engine-wasm/
@@ -487,7 +487,7 @@ engine/             gains develop/, metadata, and the decode split (section 8)
 - the pixel-data policy: thumbnails are shown as encoded images in
   `<img>`, and any pixel work goes through the engine.
 
-Phase 0 writes `apps/lopsy-photos/CLAUDE.md` and adds the app to the map
+Phase 0 writes `apps/photonamous/CLAUDE.md` and adds the app to the map
 in the root `CLAUDE.md`.
 
 **Why a separate app**, not a second page in `lopsy-web`'s Vite config:
@@ -750,7 +750,7 @@ Snapshots keep the last 200 steps per version and fold older ones away.
 - Migrations run forward only.
 
 **On the device.**
-- One IndexedDB database per account, `lopsy-photos:<sub>`, mirrors the
+- One IndexedDB database per account, `photonamous:<sub>`, mirrors the
   merged state.
 - Object stores: assets, versions, albums, searches, presets, export
   presets, outbox, sync state (the snapshot in use, the last sequence
@@ -1378,11 +1378,11 @@ Nothing user-visible ships in this phase.
 **Repository.**
 - Move the engine bridge and UI kit into `packages/`. Make no behaviour
   change; the Lopsy e2e suite and the bundle budget must hold.
-- Scaffold `apps/lopsy-photos`, `packages/photos-core` and
+- Scaffold `apps/photonamous`, `packages/photos-core` and
   `packages/handoff`.
 - Add the site assembly, the deploy change, the `_redirects` and
   `_headers` entries, and the CI jobs.
-- Write `apps/lopsy-photos/CLAUDE.md` and update the root map.
+- Write `apps/photonamous/CLAUDE.md` and update the root map.
 
 **Test tooling.** The fake Drive, and the sign-in and Picker stubs.
 
@@ -1557,7 +1557,7 @@ Each question has a recommendation; the decision is the owner's.
 
 ## 15. Setup checklist
 
-The step-by-step version for the proof of concept is `lopsy-photos-setup.md`.
+The step-by-step version for the proof of concept is `photonamous-setup.md`.
 
 **Google Cloud** (Phase 0):
 - [ ] A project for Lopsy Photos, with the Drive API and Google Picker
@@ -1618,8 +1618,8 @@ A proof of concept of this spec was built on 2026-11-18, on the branch
 reviewed by independent agents (data integrity, security, UX, and a final
 correctness pass). This appendix says what exists, where it departs from
 the design above, and what was and wasn't verified. How to run, test and
-deploy it: `docs/lopsy-photos-setup.md`. What the app does, feature by
-feature: `apps/lopsy-photos/FEATURES.md`. How the library database works:
+deploy it: `docs/photonamous-setup.md`. What the app does, feature by
+feature: `apps/photonamous/FEATURES.md`. How the library database works:
 `packages/photos-core/README.md`. The develop chain in the engine:
 `engine/src/develop/mod.rs`.
 
@@ -1684,7 +1684,7 @@ feature: `apps/lopsy-photos/FEATURES.md`. How the library database works:
 
 ### Verified, and not
 
-- **Tests on the final branch:** `docs/lopsy-photos-setup.md` §5 says how
+- **Tests on the final branch:** `docs/photonamous-setup.md` §5 says how
   to run each suite.
   Unit tests cover photos-core, the app and the handoff package; e2e
   suites cover the app (including real RAFs from

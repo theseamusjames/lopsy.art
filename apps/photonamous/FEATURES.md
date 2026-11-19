@@ -2,8 +2,8 @@
 
 What Lopsy Photos does today, as the code and its e2e specs show it.
 Current behaviour only; bugs live in GitHub issues. The design behind it
-is `docs/lopsy-photos-spec.md`; running and setup are in
-`docs/lopsy-photos-setup.md`.
+is `docs/photonamous-spec.md`; running and setup are in
+`docs/photonamous-setup.md`.
 
 ## Storage and sign-in
 

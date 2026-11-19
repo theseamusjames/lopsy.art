@@ -93,7 +93,7 @@ export const harness = {
 
   async resetOpfs(): Promise<void> {
     const root = await navigator.storage.getDirectory();
-    for (const name of ['lopsy-photos', 'cache-test']) await root.removeEntry(name, { recursive: true }).catch(() => undefined);
+    for (const name of ['photonamous', 'cache-test']) await root.removeEntry(name, { recursive: true }).catch(() => undefined);
   },
 
   async opfsCreate(): Promise<{ rootId: string; folderId: string; fileId: string; trashedId: string; cursor: string; changed: string[]; kind: string }> {
@@ -133,7 +133,7 @@ export const harness = {
     const children = (await adapter.listChildren(folderId)).map((child) => child.name);
     const trashed = (await adapter.getFile(trashedId))?.trashed ?? null;
     const found = (await adapter.findByProperty('lp.role', 'original')).length;
-    const dir = await (await (await navigator.storage.getDirectory()).getDirectoryHandle('lopsy-photos')).getDirectoryHandle('Lopsy Photos');
+    const dir = await (await (await navigator.storage.getDirectory()).getDirectoryHandle('photonamous')).getDirectoryHandle('Lopsy Photos');
     const raw = await (await dir.getFileHandle('DSCF1.RAF')).getFile();
     return { text, range, children, trashed, found, onDisk: [raw.name, await raw.text()] };
   },

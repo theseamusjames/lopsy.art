@@ -62,7 +62,7 @@ describe('grade a layer', () => {
   it('opens Photos at ?grade= in its own tab and hands over the layer, transferred', async () => {
     const pixels = blob16();
     const { opened, layer, lopsy } = await startGrade(pixels);
-    expect(opened.target).toMatch(/^lopsy-photos-grade-/);
+    expect(opened.target).toMatch(/^photonamous-grade-/);
     expect(opened.url).toMatch(/^https:\/\/photos\.example\/\?grade=/);
     expect(layer).toMatchObject({ name: 'Sky', width: 4, height: 2 });
     expect(new Uint8Array(layer.pixels)[39]).toBe(7);

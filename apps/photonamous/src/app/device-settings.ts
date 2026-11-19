@@ -4,7 +4,7 @@ import { parseKeepOriginals, type KeepOriginals } from '@lopsy/photos-core/cache
 
 export type DriveAddMode = 'move' | 'leave';
 
-export const KEEP_ORIGINALS_KEY = 'lopsy-photos.keep-originals';
+export const KEEP_ORIGINALS_KEY = 'photonamous.keep-originals';
 
 export function loadKeepOriginals(): KeepOriginals {
   try {
@@ -22,7 +22,7 @@ export function saveKeepOriginals(mode: KeepOriginals): void {
   }
 }
 
-export const DRIVE_ADD_KEY = 'lopsy-photos.drive-add';
+export const DRIVE_ADD_KEY = 'photonamous.drive-add';
 
 /** Files added from Drive move into Originals/ unless the user chose to leave them where they are. */
 export function parseDriveAddMode(raw: string | null): DriveAddMode {

@@ -120,7 +120,7 @@ gpu/shaders/
 `src/develop/mod.rs` is the map: the stage order (RAW develop, noise
 reduction, local contrast and haze, image adjustments, colour mixer, areas,
 sharpening, finish, then the screen-only views), where each pass lives, the
-JS API, and the deviations from `docs/lopsy-photos-spec.md` 6.10. Rules:
+JS API, and the deviations from `docs/photonamous-spec.md` 6.10. Rules:
 
 - Every stage is off (`None`) by default, and then the composite is
   byte-identical to Lopsy's. Keep it that way.

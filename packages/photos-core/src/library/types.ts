@@ -1,6 +1,6 @@
 /**
  * The library's data model and the API the UI uses. The design is in
- * docs/lopsy-photos-spec.md, 6.6 and 7.
+ * docs/photonamous-spec.md, 6.6 and 7.
  *
  * Storage model: every entity (asset, version, album, setting) is a bag of
  * last-writer-wins fields plus last-writer-wins set memberships. Every

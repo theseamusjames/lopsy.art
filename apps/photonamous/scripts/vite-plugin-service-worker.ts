@@ -40,7 +40,7 @@ function filesUnder(dir: string): string[] {
 export function serviceWorkerPlugin(): Plugin {
   let config: ResolvedConfig;
   return {
-    name: 'lopsy-photos-service-worker',
+    name: 'photonamous-service-worker',
     apply: 'build',
     enforce: 'post',
     configResolved(resolved) {

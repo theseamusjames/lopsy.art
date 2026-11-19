@@ -45,10 +45,10 @@ describe('reconnectOffer', () => {
 
 describe('storage names', () => {
   it('names one database per storage and owner', () => {
-    expect(libraryStoreName('google-drive', '1234567890')).toBe('lopsy-photos:google-drive:1234567890');
-    expect(libraryStoreName('local-folder', 'My Photos/2026')).toBe('lopsy-photos:local-folder:My_Photos_2026');
-    expect(libraryStoreName('browser', 'opfs')).toBe('lopsy-photos:browser:opfs');
-    expect(uploadSessionStoreName('42')).toBe('lopsy-photos-uploads:42');
+    expect(libraryStoreName('google-drive', '1234567890')).toBe('photonamous:google-drive:1234567890');
+    expect(libraryStoreName('local-folder', 'My Photos/2026')).toBe('photonamous:local-folder:My_Photos_2026');
+    expect(libraryStoreName('browser', 'opfs')).toBe('photonamous:browser:opfs');
+    expect(uploadSessionStoreName('42')).toBe('photonamous-uploads:42');
   });
 });
 

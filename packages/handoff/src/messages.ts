@@ -37,7 +37,7 @@ export const RECEIVE_PARAM = 'receive';
 /** Query parameter Lopsy adds to Photos' URL to grade one layer. */
 export const GRADE_PARAM = 'grade';
 /** Window name Lopsy opens Photos under to grade a layer. */
-export const GRADE_WINDOW_NAME = 'lopsy-photos-grade';
+export const GRADE_WINDOW_NAME = 'photonamous-grade';
 /** Largest side of a layer sent to be graded. */
 export const MAX_GRADE_SIDE = 65536;
 /** Largest recipe, as JSON, a graded layer may carry. */
@@ -46,7 +46,7 @@ export const MAX_RECIPE_JSON = 64 * 1024;
 /** Window name Photos opens Lopsy under, so an open Lopsy tab is reused. */
 export const LOPSY_WINDOW_NAME = 'lopsy-editor';
 /** Window name Lopsy opens Photos under. */
-export const PHOTOS_WINDOW_NAME = 'lopsy-photos';
+export const PHOTOS_WINDOW_NAME = 'photonamous';
 
 /** How long Lopsy waits for a pong before reopening Photos; short enough that the click still allows a popup. */
 export const PING_TIMEOUT_MS = 1500;

@@ -18,7 +18,7 @@ export const DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 export const GOOGLE_SCOPES = `openid email profile ${DRIVE_FILE_SCOPE}`;
 const REFRESH_MARGIN_MS = 5 * 60 * 1000;
 const MIN_VALIDITY_MS = 60 * 1000;
-const LOGIN_HINT_KEY = 'lopsy-photos.google-email';
+const LOGIN_HINT_KEY = 'photonamous.google-email';
 
 interface TokenResponse {
   readonly access_token?: string;

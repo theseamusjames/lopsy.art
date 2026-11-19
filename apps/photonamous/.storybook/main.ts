@@ -14,7 +14,7 @@ const config: StorybookConfig = {
   // The app's service worker has no place in Storybook.
   viteFinal: (vite) => ({
     ...vite,
-    plugins: (vite.plugins ?? []).flat().filter((p) => !(p && typeof p === 'object' && 'name' in p && p.name === 'lopsy-photos-service-worker')),
+    plugins: (vite.plugins ?? []).flat().filter((p) => !(p && typeof p === 'object' && 'name' in p && p.name === 'photonamous-service-worker')),
   }),
 };
 

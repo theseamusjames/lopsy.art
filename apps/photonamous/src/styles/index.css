@@ -1,6 +1,6 @@
 /*
  * Lopsy Photos shares Lopsy's design tokens, reset and fonts. They move to
- * packages/ui in Phase 0 of docs/lopsy-photos-spec.md; until then they are
+ * packages/ui in Phase 0 of docs/photonamous-spec.md; until then they are
  * read from lopsy-web.
  */
 @import '../../../lopsy-web/src/styles/fonts.css';

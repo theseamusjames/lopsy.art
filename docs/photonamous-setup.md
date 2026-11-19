@@ -1,8 +1,8 @@
 # Lopsy Photos: setup
 
 How to run, test and ship the Lopsy Photos proof of concept. The design is
-in `lopsy-photos-spec.md`; the app's rules are in
-`apps/lopsy-photos/CLAUDE.md`. Every command runs from the repository root
+in `photonamous-spec.md`; the app's rules are in
+`apps/photonamous/CLAUDE.md`. Every command runs from the repository root
 unless it says otherwise.
 
 ## 1. Run it locally, without a Google account
@@ -34,12 +34,12 @@ from `lopsy.art`):
 
 | What | Where |
 |---|---|
-| Files, "This browser" | OPFS folder `lopsy-photos/` |
-| Library state and outbox | IndexedDB `lopsy-photos:<kind>:<account or folder name>` |
-| The picked folder's handle | IndexedDB `lopsy-photos-folders` |
-| Drive upload sessions | IndexedDB `lopsy-photos-uploads:<account>` |
+| Files, "This browser" | OPFS folder `photonamous/` |
+| Library state and outbox | IndexedDB `photonamous:<kind>:<account or folder name>` |
+| The picked folder's handle | IndexedDB `photonamous-folders` |
+| Drive upload sessions | IndexedDB `photonamous-uploads:<account>` |
 | Downloaded originals and previews (Drive) | OPFS `<Google account id>/originals/`, `…/previews/` |
-| Last storage used, last Google email | localStorage `lopsy-photos.last-connection`, `lopsy-photos.google-email` |
+| Last storage used, last Google email | localStorage `photonamous.last-connection`, `photonamous.google-email` |
 
 **To wipe it:** DevTools > Application > Storage > **Clear site data**,
 with the page open at `http://localhost:5174`. Files in a picked folder
@@ -63,7 +63,7 @@ when `DEPLOY_PHOTOS` is `true`) sets it to `/photos/`. Put it in
 
 | Variable | In | Unset | Site build |
 |---|---|---|---|
-| `VITE_LOPSY_URL` | `apps/lopsy-photos/.env.local` | `http://localhost:5173/` in dev, `/` in a build | `/` |
+| `VITE_LOPSY_URL` | `apps/photonamous/.env.local` | `http://localhost:5173/` in dev, `/` in a build | `/` |
 | `VITE_PHOTOS_URL` | `apps/lopsy-web/.env.local` | no handoff | `/photos/` |
 
 Both directions run over this channel: Edit in Lopsy and Save to Lopsy
@@ -71,7 +71,7 @@ Photos, and Lopsy's Grade in Lopsy Photos, which opens Photos at
 `?grade=<id>` straight into the Edit view on one layer (no library needed).
 
 Only the configured URL's origin is trusted for handoff messages. The
-round-trip e2e (`apps/lopsy-photos/e2e/roundtrip.config.ts`) starts both
+round-trip e2e (`apps/photonamous/e2e/roundtrip.config.ts`) starts both
 dev servers with each other's URL set.
 
 ## 3. Google Cloud setup
@@ -114,8 +114,8 @@ userinfo endpoint for the account.
    - API restrictions: **Google Picker API** and **Google Drive API**.
 6. **App ID.** The **project number** (Dashboard, or IAM & Admin >
    Settings). It is the Picker's app ID.
-7. **Local settings.** Copy `apps/lopsy-photos/env.example` to
-   `apps/lopsy-photos/.env.local` (git ignores it) and fill in:
+7. **Local settings.** Copy `apps/photonamous/env.example` to
+   `apps/photonamous/.env.local` (git ignores it) and fill in:
 
    ```bash
    VITE_GOOGLE_CLIENT_ID=<client ID>.apps.googleusercontent.com
@@ -256,7 +256,7 @@ These need a real account, in a real browser, before Phase 1
 
 - **S1, uploads and CSP.** That the browser can read the resumable upload's
   `Location` header under CORS, and that chunks resume after a reload.
-  That the CSP in `apps/lopsy-photos/public/_headers` lets sign-in, the
+  That the CSP in `apps/photonamous/public/_headers` lets sign-in, the
   Picker and the Drive API through on lopsy.art: watch the console for
   CSP errors. Its `style-src 'unsafe-inline'` is there on the assumption
   that the Picker and the sign-in UI insert inline styles; drop it if

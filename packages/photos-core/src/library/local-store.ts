@@ -174,7 +174,7 @@ function completed(tx: IDBTransaction): Promise<void> {
 }
 
 /**
- * Browser persistence: one IndexedDB database per account (`lopsy-photos:<sub>`)
+ * Browser persistence: one IndexedDB database per account (`photonamous:<sub>`)
  * holding any number of libraries, keyed by library ID.
  */
 export class IndexedDbLocalStore implements LocalStore {

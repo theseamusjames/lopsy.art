@@ -13,7 +13,7 @@ const repoRoot = resolve(__dirname, '../..');
  *
  * The engine is the wasm package `npm run wasm:build` writes into
  * lopsy-web (`@lopsy/engine-pkg`). Moving it to packages/engine-web is
- * Phase 0 work in docs/lopsy-photos-spec.md; until then this app reads it
+ * Phase 0 work in docs/photonamous-spec.md; until then this app reads it
  * from there.
  */
 /** `photos`, `/photos` and `/photos/` all mean `/photos/`: Vite needs both slashes for asset URLs. */

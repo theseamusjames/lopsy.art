@@ -43,13 +43,13 @@ test('WebLocksLibraryLock reports busy and lets a second tab take over', async (
   const second = await context.newPage();
   await open(first);
   await open(second);
-  expect(await call(first, 'acquireLock', 'lopsy-photos:lib', false)).toBe('granted');
-  expect(await call(second, 'acquireLock', 'lopsy-photos:lib', false)).toBe('busy');
-  expect(await call(second, 'acquireLock', 'lopsy-photos:lib', true)).toBe('granted');
-  await expect.poll(() => call(first, 'lockLost', 'lopsy-photos:lib')).toBe(true);
-  expect(await call(second, 'lockLost', 'lopsy-photos:lib')).toBe(false);
-  await call(second, 'releaseLock', 'lopsy-photos:lib');
-  expect(await call(first, 'acquireLock', 'lopsy-photos:lib', false)).toBe('granted');
+  expect(await call(first, 'acquireLock', 'photonamous:lib', false)).toBe('granted');
+  expect(await call(second, 'acquireLock', 'photonamous:lib', false)).toBe('busy');
+  expect(await call(second, 'acquireLock', 'photonamous:lib', true)).toBe('granted');
+  await expect.poll(() => call(first, 'lockLost', 'photonamous:lib')).toBe(true);
+  expect(await call(second, 'lockLost', 'photonamous:lib')).toBe(false);
+  await call(second, 'releaseLock', 'photonamous:lib');
+  expect(await call(first, 'acquireLock', 'photonamous:lib', false)).toBe('granted');
 });
 
 test('LocalFolderAdapter works on real OPFS and persists across a reload', async ({ page }) => {

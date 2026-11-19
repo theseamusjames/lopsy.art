@@ -19,7 +19,7 @@ import { showToast } from '../app/toasts';
  * worker and the page share a chunk, and the worker must bundle alone
  * (sw-logic.test.ts checks the two match).
  */
-export const SKIP_WAITING = 'lopsy-photos:skip-waiting';
+export const SKIP_WAITING = 'photonamous:skip-waiting';
 
 export const UPDATE_MESSAGE = 'New version ready';
 
