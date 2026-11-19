@@ -34,6 +34,7 @@ import './layer/move';
 import './gesture/gesture';
 import './layer/nudge';
 import './text/text';
+import './layer/transform';
 
 setSettle(settled);
 

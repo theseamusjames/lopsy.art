@@ -234,6 +234,7 @@ test.describe('the command API', () => {
       'image.size',
       'layer.add', 'layer.add-group', 'layer.add-image', 'layer.duplicate', 'layer.effects', 'layer.flatten', 'layer.group', 'layer.merge-down',
       'layer.move', 'layer.nudge', 'layer.rasterize', 'layer.rasterize-style', 'layer.remove', 'layer.remove-selected', 'layer.reorder', 'layer.select', 'layer.set',
+      'layer.transform',
       'mask.add', 'mask.clear', 'mask.edit', 'mask.remove', 'mask.set-enabled', 'mask.to-selection',
       'paint.bucket', 'paint.clear', 'paint.fill', 'paint.gradient', 'paint.shape', 'paint.stroke',
       'path.add', 'path.exclude', 'path.intersect', 'path.list', 'path.remove', 'path.rename', 'path.select', 'path.stroke',
