@@ -1,7 +1,8 @@
 import type { ButtonHTMLAttributes, KeyboardEvent, Ref } from 'react';
 import styles from './Button.module.css';
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
+/** `link` reads as a link (accent text, underlined on hover) with no padding at its sides, for an action that goes somewhere. */
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'link';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
