@@ -3,7 +3,7 @@
  * browser while it is open, and where focus goes when it opens and closes.
  */
 
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 
 /** The page title while a photo is open in the Edit view. */
 export function editPageTitle(fileName: string): string {
@@ -52,4 +52,25 @@ export function useFocusReturn(isOpen: boolean, target: RefObject<HTMLElement | 
     }
     wasOpen.current = isOpen;
   }, [isOpen, target]);
+}
+
+/**
+ * While `isOn` disables the view's controls (Before), the browser takes
+ * focus off a disabled one, a moment later, and leaves it on the page.
+ * The control focused as it began gets focus back when it ends, unless
+ * focus has gone somewhere else since.
+ */
+export function useFocusKept(isOn: boolean): void {
+  const kept = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (isOn) {
+      const active = document.activeElement;
+      kept.current = active instanceof HTMLElement && active !== document.body ? active : null;
+      return;
+    }
+    const element = kept.current;
+    kept.current = null;
+    const active = document.activeElement;
+    if (element?.isConnected && (!active || active === document.body)) element.focus();
+  }, [isOn]);
 }

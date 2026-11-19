@@ -323,3 +323,16 @@ test('on a tall photo the crop bar moves out from over the focused bottom edge',
   await page.keyboard.press('Shift+Tab');
   await expect.poll(() => isUncovered('Top edge')).toBe(true);
 });
+
+test('holding \\ for Before gives focus back to the control it disabled', async ({ page }) => {
+  await openPhoto(page);
+  const auto = page.getByRole('button', { name: 'Auto Tone' });
+  await auto.focus();
+  await page.keyboard.down('\\');
+  await expect(auto).toBeDisabled();
+  // Long enough for the browser to take focus off the disabled button.
+  await page.waitForTimeout(300);
+  await page.keyboard.up('\\');
+  await expect(auto).toBeEnabled();
+  await expect(auto).toBeFocused();
+});

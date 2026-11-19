@@ -57,7 +57,7 @@ import { usePixelReadout } from './use-pixel-readout';
 import { useClippingWarningOnEngine } from '../clipping-warning';
 import { useGrainSeed } from '../grain-seed';
 import { useAltDragViews } from '../alt-drag-views';
-import { editPageTitle, useDocumentTitle, useFocusOnOpen, useFocusReturn } from '../edit-page';
+import { editPageTitle, useDocumentTitle, useFocusKept, useFocusOnOpen, useFocusReturn } from '../edit-page';
 import styles from './EditView.module.css';
 
 export interface EditViewProps {
@@ -199,6 +199,7 @@ export function EditView({
   const isReady = status.kind === 'ready';
   const canEdit = isReady;
   const isBefore = isBeforeToggled || isBeforeHeld;
+  useFocusKept(isBefore);
 
   const savedRecipe = committed?.base === version.recipe ? applyChanges(version.recipe, committed.changes) : version.recipe;
   const shownRecipe = useMemo(() => (draft ? applyChanges(savedRecipe, draft) : savedRecipe), [savedRecipe, draft]);
