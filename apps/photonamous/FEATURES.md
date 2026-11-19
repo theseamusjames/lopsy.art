@@ -255,9 +255,14 @@ another photo.
   export of a photo.
 - **Local contrast** (Large details, Small details, Haze) and **Sharpness
   & noise**.
-- Every group has a **Reset**; each slider has a typed value field, and
-  double-clicking a slider resets it. Each change is one history step
-  named after it ("Exposure +0.50").
+- Every group has a **Reset**. The sliders are Lopsy's: the name on the
+  left, the track, then a value field that takes a typed number (↑ and ↓
+  step it). Clicking the track moves the value to that point, and dragging
+  follows the pointer; the arrow keys step it, Page Up and Page Down by a
+  tenth of its range, Home and End go to its ends. Double-clicking the
+  name resets it (on the track, the first click of the two also moves it
+  there, a step of its own). Each change is one history step named after
+  it ("Exposure +0.50"); a click or key that changes nothing makes none.
 - **Crop** tool: drag the frame; **Aspect** Free, Original, 1 : 1,
   4 : 5, 3 : 2 or 16 : 9, made landscape or portrait; Reset, Done (Enter)
   or Cancel (Escape). The crop follows rotation and flips.

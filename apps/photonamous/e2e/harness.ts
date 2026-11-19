@@ -213,10 +213,8 @@ export async function imageStats(page: Page, source: BlobSource): Promise<ImageS
 
 /** Raises Exposure from the keyboard by `tenths` tenths of a stop, as one held key (one history step). */
 export async function raiseExposure(page: Page, tenths: number): Promise<void> {
-  const slider = page.getByRole('slider', { name: 'Exposure' });
-  await slider.focus();
-  await page.keyboard.down('Shift');
-  for (let i = 0; i < tenths; i++) await slider.dispatchEvent('keydown', { key: 'ArrowRight', shiftKey: true });
-  await page.keyboard.up('Shift');
-  await slider.dispatchEvent('keyup', { key: 'ArrowRight' });
+  await page.getByRole('slider', { name: 'Exposure' }).focus();
+  // Each press steps 0.01; a held key repeats.
+  for (let i = 0; i < tenths * 10; i++) await page.keyboard.down('ArrowRight');
+  await page.keyboard.up('ArrowRight');
 }

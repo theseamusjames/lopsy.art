@@ -57,6 +57,19 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
 }
 
+const SLIDER_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']);
+
+/**
+ * Whether a key press belongs to the focused control rather than to the
+ * view: typing in a text field, or a key that moves a slider. A slider is
+ * an input but takes no other keys, so ⌘Z, Escape or J pressed on one are
+ * still the view's.
+ */
+export function isFieldKey(key: string, target: EventTarget | null): boolean {
+  if (typeof HTMLInputElement !== 'undefined' && target instanceof HTMLInputElement && target.type === 'range') return SLIDER_KEYS.has(key);
+  return isTypingTarget(target);
+}
+
 export interface PreviewState {
   readonly thumbHash: string | null;
   readonly screenHash: string | null;

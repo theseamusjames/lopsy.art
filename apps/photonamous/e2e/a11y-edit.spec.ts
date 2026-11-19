@@ -172,7 +172,7 @@ test('a radial area is added, shaped and renamed by keyboard', async ({ page }) 
   const centreX = shape.getByRole('slider', { name: 'Center X' });
   await expect(centreX).toHaveAttribute('aria-valuetext', '50 %');
   await centreX.focus();
-  await holdKey(page, 'ArrowRight', 1, 'Shift');
+  await holdKey(page, 'ArrowRight', 10);
   await expect(centreX).toHaveAttribute('aria-valuetext', '60 %');
   await shape.getByRole('slider', { name: 'Width' }).focus();
   await page.keyboard.press('ArrowLeft');

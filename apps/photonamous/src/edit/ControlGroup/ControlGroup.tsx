@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { RotateCcw } from 'lucide-react';
 import type { Recipe } from '@lopsy/photos-core/library/recipe';
-import { Slider, type SliderDisplay } from '../../components/Slider/Slider';
+import { EditSlider, type SliderReadout } from '../EditSlider/EditSlider';
 import { defaultAt, isGroupDefault, numberAt, rangeOf, type ControlDef, type GroupDef } from '../edit-controls';
 import styles from './ControlGroup.module.css';
 
@@ -20,7 +20,7 @@ export interface ControlGroupProps {
   /** The Auto button's text, when it does something else ('Level'). */
   readonly autoLabel?: string;
   /** Readouts in other units, by control path (Temperature in Kelvin for RAW). */
-  readonly displays?: Readonly<Record<string, SliderDisplay>>;
+  readonly displays?: Readonly<Record<string, SliderReadout>>;
   /** Why the controls are disabled, shown under the heading. */
   readonly note?: string;
   /** Rows shown under the heading, above the sliders (White balance's mode and picker). */
@@ -68,7 +68,7 @@ export function ControlGroup({ group, recipe, isDisabled, onChange, onCommit, on
         {group.controls.map((control) => {
           const range = rangeOf(control.path);
           return (
-            <Slider
+            <EditSlider
               key={control.path}
               label={control.label}
               value={numberAt(recipe, control.path)}
@@ -76,10 +76,10 @@ export function ControlGroup({ group, recipe, isDisabled, onChange, onCommit, on
               max={range.max}
               step={range.step}
               defaultValue={defaultAt(control.path)}
-              isDisabled={isDisabled}
+              disabled={isDisabled}
               onChange={(v) => onChange(control, v)}
               onCommit={(v) => onCommit(control, v)}
-              {...(displays?.[control.path] ? { display: displays[control.path] } : {})}
+              {...displays?.[control.path]}
               {...(control.unit ? { unit: control.unit } : {})}
             />
           );

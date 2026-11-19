@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Circle, FlipVertical, Pencil, Plus, Trash2 } from 'lucide-react';
 import { MAX_AREAS, liveAreas, type Area, type AreaKind, type LinearGeometry, type RadialGeometry, type Recipe } from '@lopsy/photos-core/library/recipe';
-import { Slider, type SliderDisplay } from '../../components/Slider/Slider';
 import type { AreaFrame } from '../../engine/areas';
 import { AREA_SLIDERS, areaLabel } from '../area-edit';
 import { formatShape, parseShape, shapeControls, shapeValue, withShapeValue, type AreaShapeControl, type DocSize, type ShapeUnit } from '../area-shape';
 import { defaultAt, numberAt, rangeOf, type ControlDef } from '../edit-controls';
+import { EditSlider, type SliderReadout } from '../EditSlider/EditSlider';
 import styles from './AreasPanel.module.css';
 
 export interface AreasPanelProps {
@@ -31,7 +31,7 @@ export interface AreasPanelProps {
 /** Where focus goes once a rename or a delete has re-rendered the list. */
 type FocusTarget = { readonly kind: 'area'; readonly id: string } | { readonly kind: 'add' };
 
-const DISPLAYS: Readonly<Record<ShapeUnit, SliderDisplay>> = {
+const READOUTS: Readonly<Record<ShapeUnit, SliderReadout>> = {
   percent: { format: (v) => formatShape(v, 'percent'), parse: parseShape },
   degrees: { format: (v) => formatShape(v, 'degrees'), parse: parseShape },
 };
@@ -88,7 +88,7 @@ export function AreasPanel({
   const slider = (control: ControlDef) => {
     const range = rangeOf(control.path);
     return (
-      <Slider
+      <EditSlider
         key={control.path}
         label={control.label}
         value={numberAt(recipe, control.path)}
@@ -96,7 +96,7 @@ export function AreasPanel({
         max={range.max}
         step={range.step}
         defaultValue={defaultAt(control.path)}
-        isDisabled={isDisabled}
+        disabled={isDisabled}
         onChange={(v) => onChange(control, v)}
         onCommit={(v) => onCommit(control, v)}
       />
@@ -104,7 +104,7 @@ export function AreasPanel({
   };
 
   const shapeSlider = (area: Area, frame: AreaFrame, doc: DocSize, control: AreaShapeControl) => (
-    <Slider
+    <EditSlider
       key={control.key}
       label={control.label}
       value={shapeValue(area, frame, doc, control.key)}
@@ -112,8 +112,8 @@ export function AreasPanel({
       max={control.max}
       step={control.step}
       defaultValue={control.defaultValue}
-      isDisabled={isDisabled}
-      display={DISPLAYS[control.unit]}
+      disabled={isDisabled}
+      {...READOUTS[control.unit]}
       onChange={(v) => onShapeChange?.(area.id, withShapeValue(area, frame, doc, control.key, v))}
       onCommit={(v) => onShapeCommit?.(area.id, withShapeValue(area, frame, doc, control.key, v), control.historyLabel)}
     />

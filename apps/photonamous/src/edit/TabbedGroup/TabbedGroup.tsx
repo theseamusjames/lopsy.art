@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import type { Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Json } from '@lopsy/photos-core/library/types';
-import { Slider } from '../../components/Slider/Slider';
+import { EditSlider } from '../EditSlider/EditSlider';
 import { defaultAt, numberAt, rangeOf, resetChangesFor, type ControlDef, type TabDef } from '../edit-controls';
 import { useTabs } from '../tabs';
 import styles from './TabbedGroup.module.css';
@@ -35,7 +35,7 @@ export function TabbedGroup({ title, tabs, sharedControls = [], recipe, isDisabl
   const slider = (control: ControlDef) => {
     const range = rangeOf(control.path);
     return (
-      <Slider
+      <EditSlider
         key={control.path}
         label={control.label}
         value={numberAt(recipe, control.path)}
@@ -43,7 +43,7 @@ export function TabbedGroup({ title, tabs, sharedControls = [], recipe, isDisabl
         max={range.max}
         step={range.step}
         defaultValue={defaultAt(control.path)}
-        isDisabled={isDisabled}
+        disabled={isDisabled}
         onChange={(v) => onChange(control, v)}
         onCommit={(v) => onCommit(control, v)}
         {...(control.unit ? { unit: control.unit } : {})}
