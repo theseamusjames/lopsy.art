@@ -178,7 +178,7 @@ export const GESTURE_IDLE: CanvasGesture = { kind: 'idle' };
  * a template for handlers that need to return a fresh state with a single
  * gesture variant slotted in. Exported so pre-tool down handlers can
  * construct their own state — see PRE_TOOL_DOWN_GUARDS in
- * useCanvasInteraction.ts.
+ * interactions/gesture-session.ts.
  */
 export const INITIAL_INTERACTION_STATE: InteractionState = {
   drawing: false,
@@ -295,8 +295,6 @@ export interface InteractionContext {
   clientY: number;
   /** Click count (MouseEvent.detail); 2 for a double-click. */
   clickDetail?: number;
-  screenToCanvas?: (sx: number, sy: number) => Point;
-  containerRef?: MutableRefObject<HTMLDivElement | null>;
   stateRef: MutableRefObject<InteractionState>;
   floatingSelectionRef: MutableRefObject<FloatingSelection | null>;
   persistentTransformRef: MutableRefObject<PersistentTransform | null>;
