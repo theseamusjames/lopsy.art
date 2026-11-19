@@ -35,27 +35,6 @@
   outline-offset: -2px;
 }
 
-/* Hidden until it has keyboard focus, then over the header's start. */
-.skip {
-  position: absolute;
-  top: var(--space-2);
-  left: var(--space-2);
-  z-index: var(--z-tooltip);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
-  background: var(--ph-primary-bg);
-  color: var(--ph-primary-text);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-ui);
-  text-decoration: none;
-}
-
-.skip:focus-visible {
-  outline: 2px solid var(--ph-focus-ring);
-  outline-offset: 2px;
-}
-
-.skip:not(:focus),
 .visuallyHidden {
   position: absolute;
   width: 1px;

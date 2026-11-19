@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLibraryView, useOrderedIds } from '../../app/hooks';
 import { useUi } from '../../app/store';
 import { copyEdits, copySource, createNamedVersion, runCommand, suggestedVersionName } from '../../app/commands';
@@ -43,7 +43,6 @@ export function LibraryScreen() {
   const title = useCollectionTitle();
   const ordered = useRef(orderedIds);
   ordered.current = orderedIds;
-  const main = useRef<HTMLElement>(null);
   const layout = useRef<HTMLDivElement>(null);
   const [announcement, setAnnouncement] = useState('');
 
@@ -84,20 +83,6 @@ export function LibraryScreen() {
     else if (mode === 'cull') setAnnouncement('');
   }, [mode]);
 
-  /** Skip to photos: the grid's tab stop, else the viewer, else the grid's heading, else the first control there. */
-  const skipToPhotos = (e: MouseEvent<HTMLAnchorElement>) => {
-    const el = main.current;
-    if (!el) return;
-    e.preventDefault();
-    const target =
-      el.querySelector<HTMLElement>('[role="gridcell"][tabindex="0"]') ??
-      el.querySelector<HTMLElement>('[role="region"][tabindex="-1"]') ??
-      el.querySelector<HTMLElement>('h1[tabindex="-1"]') ??
-      el.querySelector<HTMLElement>('button:not(:disabled), a[href], input, select');
-    if (target) return target.focus();
-    el.tabIndex = -1;
-    el.focus();
-  };
 
   // Drop selected ids that are no longer shown; leave a viewer with nothing to show.
   useEffect(() => {
@@ -168,12 +153,9 @@ export function LibraryScreen() {
   return (
     <div className={styles.screen}>
       <div ref={layout} className={styles.layout} data-info={infoOpen}>
-        <a className={styles.skip} href="#library-main" onClick={skipToPhotos}>
-          Skip to photos
-        </a>
         <Header />
         <Sidebar />
-        <main id="library-main" ref={main} className={styles.main}>
+        <main className={styles.main}>
           {libraryEmpty && <h1 className={styles.visuallyHidden}>{title}</h1>}
           {mode === 'compare' ? (
             <CompareView orderedIds={orderedIds} />

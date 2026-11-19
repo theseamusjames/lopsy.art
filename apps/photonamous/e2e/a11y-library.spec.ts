@@ -6,7 +6,7 @@ import { generatedJpeg, importFiles } from './library';
  * the grid is one tab stop whose keys move focus and the selection; Single
  * view, Compare, Cull, the Edit view, dialogs and the photo actions menu
  * (opened from the keyboard, outside the grid) give focus back to the tile
- * they came from; focus survives filters and scrolling; the skip link; the
+ * they came from; focus survives filters and scrolling; landmarks; the
  * sidebar's date tree; one h1 and a page title naming each view; and the
  * library reflowing to 320 px.
  */
@@ -154,20 +154,20 @@ test('the date tree opens by keyboard, its arrow beside the row rather than insi
   await expect(months).toHaveCount(0);
 });
 
-test('the skip link, one h1 per view, and a page title that names the view', async ({ page }) => {
+test('landmarks, one h1 per view, and a page title that names the view', async ({ page }) => {
   test.setTimeout(180_000);
   await openLibraryWithPhotos(page);
   await expect(page).toHaveTitle('All photos – Photonamous');
   await expect(page.locator('h1')).toHaveCount(1);
 
-  // After a reload the library reopens by itself without taking focus: the first Tab is the skip link.
+  // Landmarks and headings let keyboard and screen reader users move past the header and sidebar (2.4.1).
   await page.reload();
   await expect(page.getByRole('gridcell')).toHaveCount(NAMES.length, { timeout: 30_000 });
-  await page.keyboard.press('Tab');
-  const skip = page.getByRole('link', { name: 'Skip to photos' });
-  await expect(skip).toBeFocused();
-  expect((await skip.boundingBox())?.width ?? 0).toBeGreaterThan(40);
-  await page.keyboard.press('Enter');
+  await expect(page.getByRole('banner')).toHaveCount(1);
+  await expect(page.getByRole('navigation', { name: 'Library' })).toBeVisible();
+  await expect(page.getByRole('main')).toHaveCount(1);
+  await expect(page.getByRole('link', { name: 'Skip to photos' })).toHaveCount(0);
+  await page.locator('[role="gridcell"][tabindex="0"]').focus();
   expect(await focusedRole(page)).toBe('gridcell');
   const first = await focusedTitle(page);
 

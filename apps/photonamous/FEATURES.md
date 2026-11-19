@@ -376,7 +376,8 @@ best-practice rules at each step; the `a11y-*.spec.ts` and
   presses. Shortcuts with Ctrl or ⌘, the arrow keys, Space, Enter and
   Escape keep working, and text fields get every key. The choice is kept
   on this device.
-- **The library by keyboard.** "Skip to photos" is the first Tab stop,
+- **The library by keyboard.** The header, the Library navigation and the
+  photos are landmarks with headings, which screen readers jump between,
   and the page title names the view ("All photos – Photonamous"). Enter,
   Space and the arrow keys act on the focused button, checkbox or slider;
   the library's shortcuts take them only on a photo.
