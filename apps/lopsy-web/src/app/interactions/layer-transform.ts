@@ -43,7 +43,7 @@ import { useEditorStore } from '../editor-store';
 import { useUIStore } from '../ui-store';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { reconcileLayerBoundsWithEngine } from '../reconcile-layer-bounds';
-import { notifyInfo } from '../notifications-store';
+import { announceRefusal, type Refusal } from '../../commands/refusal';
 
 /**
  * Transforming several selected layers at once with the Move tool's handles.
@@ -131,11 +131,16 @@ export function getLayerTransformBox(): TransformState | null {
  * distortion (`isDistorting`). See `textRefusalForLayerTransform`.
  */
 export function refuseTextInLayerTransform(isDistorting: boolean): boolean {
-  const layers = useEditorStore.getState().document.layers;
-  const refusal = textRefusalForLayerTransform(layers, currentLayerTransformTargets(), isDistorting);
+  const refusal = textInLayerTransformRefusal(isDistorting);
   if (!refusal) return false;
-  notifyInfo(refusal);
+  announceRefusal(refusal);
   return true;
+}
+
+export function textInLayerTransformRefusal(isDistorting: boolean): Refusal | null {
+  const layers = useEditorStore.getState().document.layers;
+  const reason = textRefusalForLayerTransform(layers, currentLayerTransformTargets(), isDistorting);
+  return reason ? { reason, notice: 'info' } : null;
 }
 
 /** Whether the engine holds a session for exactly the layers a transform would move now. */

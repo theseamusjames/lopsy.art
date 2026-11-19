@@ -17,7 +17,8 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
 
 const { useUIStore } = await import('../ui-store');
 const { useEditorStore } = await import('../editor-store');
-const { isMaskEditSelectionMove } = await import('./mask-edit-move-guard');
+const { isMaskEditSelectionMove, maskEditSelectionMoveRefusal, refuseMaskEditSelectionMove } = await import('./mask-edit-move-guard');
+const { useNotificationsStore } = await import('../notifications-store');
 const { EMPTY_SELECTION } = await import('../store/types');
 
 function setSelectionActive(isActive: boolean): void {
@@ -53,5 +54,40 @@ describe('isMaskEditSelectionMove (#1407)', () => {
   it('is false for other tools', () => {
     useUIStore.setState({ activeTool: 'brush' });
     expect(isMaskEditSelectionMove()).toBe(false);
+  });
+});
+
+describe('maskEditSelectionMoveRefusal', () => {
+  const HINT = 'Leave mask edit mode to move or transform a selection.';
+
+  function toasts(): Array<[string, string]> {
+    return useNotificationsStore.getState().notifications.map((n) => [n.level, n.message]);
+  }
+
+  beforeEach(() => {
+    useUIStore.setState({ activeTool: 'move', maskMode: 'layerMask' });
+    setSelectionActive(true);
+    useNotificationsStore.setState({ notifications: [] });
+  });
+
+  it('pins the hint for a mask-edit selection move, without side effects', () => {
+    expect(maskEditSelectionMoveRefusal()).toEqual({ reason: HINT, notice: 'info' });
+    expect(toasts()).toEqual([]);
+  });
+
+  it('null when the move is allowed', () => {
+    setSelectionActive(false);
+    expect(maskEditSelectionMoveRefusal()).toBeNull();
+  });
+
+  it('refuseMaskEditSelectionMove returns true and toasts the hint once', () => {
+    expect(refuseMaskEditSelectionMove()).toBe(true);
+    expect(toasts()).toEqual([['info', HINT]]);
+  });
+
+  it('refuseMaskEditSelectionMove returns false silently when allowed', () => {
+    useUIStore.setState({ maskMode: 'off' });
+    expect(refuseMaskEditSelectionMove()).toBe(false);
+    expect(toasts()).toEqual([]);
   });
 });

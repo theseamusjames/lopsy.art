@@ -45,7 +45,7 @@ import { computeConvertColorMode, layersWithPixels, paletteFromBytes, paletteToB
 import { colorModeLabel, convertColorToDocMode } from '../../utils/color-mode';
 import { getColorModeCapabilities } from '../../utils/color-mode-capabilities';
 import { runInOrder } from '../../utils/run-in-order';
-import { notifyInfo } from '../notifications-store';
+import { announceRefusal, type Refusal } from '../../commands/refusal';
 import { convertLayerToGrayscale, quantizeCompositeToPalette, applyPaletteToLayer, convertLayerToLab, convertLayerFromLab, bakeCmykGamut } from '../../engine-wasm/wasm-bridge';
 import { useToolSettingsStore } from '../tool-settings-store';
 import { computeAlignLayer } from './actions/align-layer';
@@ -225,20 +225,30 @@ function syncPixelDataToGpu(
 }
 
 /**
- * Indexed documents are a single flattened, palette-constrained surface
- * (Photoshop parity), so every layer-creating action is refused while that
- * mode is active. Returns true when the action may proceed.
- */
-/**
  * A conversion reads the document's mode, reads layers back and then sets
  * the mode. A WebGPU readback answers frames later, so a second conversion
  * picked meanwhile would still see the old mode: it waits for the first.
  */
 const convertColorModesInOrder = runInOrder();
 
+/**
+ * Indexed documents are a single flattened, palette-constrained surface
+ * (Photoshop parity), so every layer-creating action is refused while that
+ * mode is active. Null when the action may proceed.
+ */
+export function layerCreationRefusal(doc: { readonly colorMode: DocumentColorMode }): Refusal | null {
+  if (getColorModeCapabilities(doc.colorMode).canAddLayers) return null;
+  return {
+    reason: `${colorModeLabel(doc.colorMode)} mode does not support layers. Convert to RGB first.`,
+    notice: 'info',
+  };
+}
+
+/** Returns true when the action may proceed; otherwise toasts why not. */
 function allowLayerCreation(doc: { readonly colorMode: DocumentColorMode }): boolean {
-  if (getColorModeCapabilities(doc.colorMode).canAddLayers) return true;
-  notifyInfo(`${colorModeLabel(doc.colorMode)} mode does not support layers. Convert to RGB first.`);
+  const refusal = layerCreationRefusal(doc);
+  if (!refusal) return true;
+  announceRefusal(refusal);
   return false;
 }
 

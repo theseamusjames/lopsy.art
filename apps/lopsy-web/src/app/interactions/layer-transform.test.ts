@@ -69,9 +69,12 @@ import {
   beginLayerTransformSessionWhenMeasured,
   forgetLayerTransform,
   getLayerTransformBox,
+  refuseTextInLayerTransform,
   renderLayerTransform,
   resetLayerTransformCache,
+  textInLayerTransformRefusal,
 } from './layer-transform';
+import { useNotificationsStore } from '../notifications-store';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -219,5 +222,46 @@ describe('renderLayerTransform', () => {
     bridge.state.isLive = false;
     renderLayerTransform({ ...box, rotation: 1 });
     expect(bridge.compositeLayerTransformAffine).not.toHaveBeenCalled();
+  });
+});
+
+describe('textInLayerTransformRefusal', () => {
+  const PATH_REASON = 'Rasterize text on a path before transforming it with other layers.';
+  const DISTORT_REASON = 'Rasterize the text layers before distorting them with other layers.';
+
+  function text(id: string, pathId?: string) {
+    return { id, type: 'text', locked: false, x: 0, y: 0, text: 'Hi', ...(pathId ? { pathId } : {}) };
+  }
+
+  function toasts(): Array<[string, string]> {
+    return useNotificationsStore.getState().notifications.map((n) => [n.level, n.message]);
+  }
+
+  beforeEach(() => {
+    useNotificationsStore.setState({ notifications: [] });
+  });
+
+  it('null for raster layers, and refuse returns false silently', () => {
+    expect(textInLayerTransformRefusal(true)).toBeNull();
+    expect(refuseTextInLayerTransform(true)).toBe(false);
+    expect(toasts()).toEqual([]);
+  });
+
+  it('pins the distort refusal, and refuse toasts it once', () => {
+    editor.document.layers = [raster('a'), text('t')];
+    editor.document.selectedLayerIds = ['a', 't'];
+    expect(textInLayerTransformRefusal(false)).toBeNull();
+    expect(textInLayerTransformRefusal(true)).toEqual({ reason: DISTORT_REASON, notice: 'info' });
+    expect(toasts()).toEqual([]);
+    expect(refuseTextInLayerTransform(true)).toBe(true);
+    expect(toasts()).toEqual([['info', DISTORT_REASON]]);
+  });
+
+  it('pins the text-on-path refusal', () => {
+    editor.document.layers = [raster('a'), text('t', 'path-1')];
+    editor.document.selectedLayerIds = ['a', 't'];
+    expect(textInLayerTransformRefusal(false)).toEqual({ reason: PATH_REASON, notice: 'info' });
+    expect(refuseTextInLayerTransform(false)).toBe(true);
+    expect(toasts()).toEqual([['info', PATH_REASON]]);
   });
 });
