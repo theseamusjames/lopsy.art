@@ -57,16 +57,20 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, column, sele
   const labelWords = asset.label ? `${LABEL_NAMES[asset.label]} label` : null;
   const inner = tabbable ? 0 : -1;
 
-  // What a screen reader says when the tile gets focus; the marks and badges are in it, not only drawn.
+  // What a screen reader says when the tile gets focus. It reads the tile's visible text in the order it is drawn (the
+  // picture's name, the label, the stars, then each badge as its button names it), so what is heard and what speech
+  // input expects match what is shown (WCAG 2.5.3); what is not drawn as text comes last.
   const name = [
     asset.title || asset.fileName,
-    isVersionTile ? version.name : null,
-    asset.rating > 0 ? stars(asset.rating) : null,
     labelWords,
-    asset.setAside ? 'Set aside' : null,
-    edited ? 'Edited' : null,
-    paired ? 'RAW+JPEG' : null,
+    asset.rating > 0 ? stars(asset.rating) : null,
     problem,
+    burst > 1 ? `Burst of ${burst} photos` : null,
+    documents > 0 ? `${documents} Lopsy document${documents === 1 ? '' : 's'}` : null,
+    paired ? 'RAW+JPEG' : null,
+    isVersionTile ? version.name : versions > 1 ? `${versions} versions` : null,
+    edited ? 'Edited' : null,
+    asset.setAside ? 'Set aside' : null,
   ]
     .filter((part): part is string => part !== null)
     .join(', ');
