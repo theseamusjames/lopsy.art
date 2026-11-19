@@ -57,3 +57,22 @@ export const NarrowSliderRange: Story = {
   },
   render: (args) => <StatefulSlider {...args} />,
 };
+
+export const Disabled: Story = {
+  args: { value: 40, label: 'Opacity', suffix: '%', disabled: true },
+  render: (args) => <StatefulSlider {...args} />,
+};
+
+function signed(value: number): string {
+  return `${value > 0 ? '+' : value < 0 ? '−' : ''}${Math.abs(value).toFixed(2)}`;
+}
+
+function parseSigned(text: string): number | null {
+  const n = Number(text.trim().replace('−', '-').replace(',', '.'));
+  return text.trim() === '' || !Number.isFinite(n) ? null : n;
+}
+
+export const Formatted: Story = {
+  args: { value: 0.5, min: -5, max: 5, step: 0.01, label: 'Exposure', unit: 'EV', format: signed, parse: parseSigned, defaultValue: 0 },
+  render: (args) => <StatefulSlider {...args} />,
+};

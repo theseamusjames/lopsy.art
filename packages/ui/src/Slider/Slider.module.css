@@ -75,3 +75,20 @@
   color: var(--color-text-secondary);
   padding-right: var(--space-1);
 }
+
+.container[data-disabled] .slider,
+.container[data-disabled] .valueWrapper {
+  opacity: 0.4;
+}
+
+.slider:disabled {
+  cursor: default;
+}
+
+.slider:disabled::-webkit-slider-thumb {
+  cursor: default;
+}
+
+.slider:disabled::-moz-range-thumb {
+  cursor: default;
+}
