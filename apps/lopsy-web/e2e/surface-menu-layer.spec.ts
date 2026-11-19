@@ -4,7 +4,7 @@
  * These specs pin what each item does (history label, toast, dialog,
  * resulting document) so the move onto the command registry can be checked
  * against them. Behaviour that looks wrong is pinned as-is and says so.
- * Disagreement ids (D6, D7, D8, D9) refer to the surface inventory.
+ * Disagreement ids (D6, D7, D8, D9) refer to docs/ui-surface-differences.md.
  */
 import { test, expect, type Page } from './fixtures';
 import { getPixelAt } from './helpers';

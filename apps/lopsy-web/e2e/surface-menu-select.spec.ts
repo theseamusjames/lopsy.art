@@ -4,7 +4,7 @@
  * These specs pin what each item does (history label, toast, dialog,
  * selection and transform state) so the move onto the command registry can
  * be checked against them. Behaviour that looks wrong is pinned as-is and
- * says so. Disagreement ids (D1, D21, D22) refer to the surface inventory.
+ * says so. Disagreement ids (D1, D21, D22) refer to docs/ui-surface-differences.md.
  */
 import { test, expect, type Page } from './fixtures';
 import { getPixelAt, setForegroundColor } from './helpers';

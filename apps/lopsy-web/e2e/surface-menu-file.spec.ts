@@ -5,8 +5,8 @@
  * dialog or file chooser it opens, the download it starts and what is in it,
  * the document it leaves behind and its history) so the move onto the
  * command registry can be checked against them. Behaviour that looks wrong is
- * pinned as-is and says so. Disagreement ids (D14, D15, D16) refer to the
- * surface inventory.
+ * pinned as-is and says so. Disagreement ids (D14, D15, D16) refer to
+ * docs/ui-surface-differences.md.
  *
  * The system file dialog itself cannot be driven headlessly; the specs answer
  * Playwright's `filechooser` event instead, which is where the app's

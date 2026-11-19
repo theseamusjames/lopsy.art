@@ -181,6 +181,34 @@ store or the commands. Specs under `e2e/api/` test the command API
 
 API specs run on the chromium project only.
 
+### Characterization specs (`e2e/surface-*.spec.ts`)
+
+These are UI specs that pin what each menu item, key handler and
+Layers-panel control does: its history label, toast, dialog, selection,
+layers and pixels, and when it is disabled or ignored. Behaviour that
+looks wrong is pinned as it is, with a comment saying so. They are the
+reference for changes to the surfaces: a change that alters one of these
+behaviours on purpose updates the spec in the same change.
+
+- Their helpers are in `e2e/surface-helpers.ts` (menus, state snapshots,
+  common setups) and `e2e/surface-helpers-keys.ts`, `-file.ts` and
+  `-filters.ts`; each file's header lists what it offers. They drive the UI
+  or only read state.
+- A test named `D<n>: ...` pins one side of an operation that two surfaces
+  do differently. The numbers are the entries of
+  [`docs/ui-surface-differences.md`](../docs/ui-surface-differences.md);
+  keep the two in step.
+- Press shifted letters in upper case: `ControlOrMeta+Shift+Z`, not
+  `ControlOrMeta+Shift+z`. Playwright delivers the lowercase letter as
+  `e.key`, and a handler that matches `e.key` alone takes it for the
+  unshifted shortcut (`ControlOrMeta+Shift+e` runs Merge Down).
+- The system clipboard is shared by every Playwright worker. A test that
+  needs it empty, or needs what it wrote to still be there at the paste,
+  fails when another worker copies in between. Put known content there
+  and check what the paste event carries (`pasteOverText` in
+  `e2e/surface-helpers-keys.ts`), or assert only on the internal
+  clipboard.
+
 ## Screenshots are the source of truth
 
 **Always write tests by screenshot first, assertion second.** The

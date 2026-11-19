@@ -4,8 +4,9 @@
  * These specs pin what each item does (zoom and pan, the UI flag it flips,
  * its checkmark, and that it pushes no history) so the move onto the command
  * registry can be checked against them. Behaviour that looks wrong is pinned
- * as-is and says so. Disagreement ids (D10, D11, D12) refer to the surface
- * inventory; the key side of each lives with the keyboard specs.
+ * as-is and says so. Disagreement ids (D10, D11, D12) refer to
+ * docs/ui-surface-differences.md; the key side of each lives with the
+ * keyboard specs.
  *
  * The menu has no aria-checked: a checked item shows a "✓" in an
  * aria-hidden slot, which `menuCheckmark` reads.

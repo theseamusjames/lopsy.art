@@ -7,7 +7,7 @@
  * so the move onto the command registry can be checked against them. Setups
  * mirror the menu specs so the differences show. Behaviour that looks wrong
  * is pinned as-is and says so. Disagreement ids (D1, D4, D5, D10-D12, D19,
- * D20, D22-D26) refer to the surface inventory.
+ * D20, D22-D26) refer to docs/ui-surface-differences.md.
  */
 import { test, expect, type Page } from './fixtures';
 import { docToScreen, getPixelAt, setForegroundColor } from './helpers';

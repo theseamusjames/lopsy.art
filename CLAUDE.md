@@ -23,6 +23,8 @@ What you may be looking for:
   (published at `/SKILL.md`).
 - **How to write e2e tests**: `apps/lopsy-web/e2e/GUIDE.md`. Read it before
   writing one.
+- **The command registry the menus, keys and panels run through**: the
+  "Commands" section of `apps/lopsy-web/CLAUDE.md`.
 - **What HDR support exists and what it would take to finish**:
   `apps/lopsy-web/docs/hdr-support.md`.
 - **The engine migration (WebGL to a pass layer to wgpu) and this layout**:

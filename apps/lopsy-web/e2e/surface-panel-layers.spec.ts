@@ -6,8 +6,8 @@
  * order, active and selected layers, mask edit mode, effects drawer) so the
  * move onto the command registry can be checked against them. Setups mirror
  * the Layer menu spec so the differences show. Behaviour that looks wrong is
- * pinned as-is and says so. Disagreement ids (D4, D6, D7, D8) refer to the
- * surface inventory.
+ * pinned as-is and says so. Disagreement ids (D4, D6, D7, D8) refer to
+ * docs/ui-surface-differences.md.
  */
 import { test, expect, type Page } from './fixtures';
 import { getPixelAt } from './helpers';

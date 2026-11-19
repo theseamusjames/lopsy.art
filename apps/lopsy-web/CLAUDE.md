@@ -19,6 +19,9 @@ Read `SPEC.md` for the full product specification.
   history). Bugs live in GitHub issues; fix history lives in commits and PRs.
 - `docs/hdr-support.md` — what HDR the app has (rendering) and what full
   HDR support would need from the engine (editing).
+- `docs/ui-surface-differences.md` — operations reachable from more than
+  one surface (menu, key, panel, dialog) that do not do the same thing
+  there; the `D<n>` ids in the `e2e/surface-*` specs point into it.
 - `../../docs/pixel-data-debt.md` — authoritative tracker for places where
   pixel buffers still live on the JS side, with the migration plan
   for each.
@@ -40,6 +43,11 @@ src/
   app/              # App shell, layout, routing (single page)
     store/          # Zustand slices: document, history, selection, UI
       actions/      # Store actions: align-layer, flatten-image, move-layer, etc.
+    interactions/
+      gesture-session.ts  # Canvas pointer down/move/up state machine, shared by
+                          # the canvas hook and the gesture commands
+  commands/         # Command registry and the commands, one directory per
+                    # family (layer/, filter/, ui/, ...); see Commands below
   components/       # Reusable UI components (Button, Slider, etc.)
     ComponentName/
       ComponentName.tsx
@@ -168,6 +176,93 @@ code. A small set of pre-rule files still violate this
 (path/boolean-ops.ts, text/render-text-on-path.ts, brush/preset-io.ts)
 and are tracked for cleanup — new code must not extend the list.
 
+## Commands (`src/commands/`)
+
+A command is a named operation with validated params:
+`defineCommand({ id, summary, surface, params, run })` in a family's
+module registers it with the registry (`registry.ts`). Each has a
+`surface`. `document` commands are what API callers are offered
+(`describeCommands('document')`): they take explicit params and return a
+result. `ui` commands (`src/commands/ui/`, ids `ui.*`) do what a menu item
+does that is not a document edit (open a dialog, toggle a view setting,
+zoom, prompt, download, open a file picker), so a menu can bind them.
+
+**The UI starts commands; it does not call the stores.** Every menu item
+(`commandItem` in `src/app/MenuBar/menus/`), every global key handler
+(`src/app/shortcuts/key-bindings.ts`, through `runKeyCommand`), the
+dialogs' Apply buttons where a command is exactly what the dialog does,
+and the Layers panel toolbar buttons call `invokeFromUi(id, params)`.
+`menus.test.ts` (in `src/app/MenuBar/menus/`) requires every menu leaf to
+name a registered command, and a `document` command only where it runs
+what the item does. `src/app/shortcuts/key-bindings.test.ts` requires every
+key handler to be bound to a command or exempt with a reason. A new menu
+item, key or toolbar button gets a command (or a key exemption in that
+table), never a direct store call.
+
+**`run` does its work before its first `await`.** `window.confirm`, a
+file-input click, `window.open` and system-clipboard writes only work
+inside the user's click, and a key's undo must apply in the key's tick,
+so the registry starts `run` synchronously in the caller's tick (`start`
+is deliberately not `async`). After `run`, the registry waits for the
+engine to settle (`settled.ts`: everything rendered, no readback
+outstanding) unless `settles` says otherwise: `false` for commands that
+never touch the document (zoom, view toggles), `'before'` for read-only
+commands that must see what earlier commands left. A `'before'` command
+starts after a wait, so it must never be bound to a user gesture, and it
+gives a `check` that rejects at once when the wait could never end (no
+document open).
+
+**Wrap, never re-implement.** A command calls the same function the UI
+calls, so the two cannot drift; when that function lives in a component
+or hook, it moves to a plain module first. Where that function does work even
+when there is nothing to do (Undo finalizes a pending stroke, Select >
+Inverse commits a live Move float, Merge Down flushes layer data), the
+command calls it first and refuses afterwards; a refusal checked first
+would skip that work.
+
+**Refusals.** A command refuses by throwing a `CommandError`. A guard that
+can refuse returns a `Refusal` (`refusal.ts`: the reason and the `notice`
+the UI shows, `'info'`, `'error'` or `null` for silent);
+`refusalError(refusal)` turns it into the error. `invokeFromUi` toasts a
+`CommandError` as its `notice` asks and swallows it; anything else is a
+bug and propagates. The user sees exactly one toast: when the wrapped
+function has already toasted, the command throws with `notice` null;
+when the command refuses before calling it, it carries the notice the
+UI's own refusal had.
+
+**Ambient state.** Tool options and colours are set by their own commands
+(`tool.set`, `color.set`, `tool.select`) and read by the commands that
+paint, fill and select, as the options bar and Color panel are read by
+the tools. Do not add per-call overrides of them.
+
+**Gestures.** Commands that drive a tool (`paint.stroke`, `tool.gesture`,
+`layer.move`, the selection tools) go through `runGesture`
+(`src/commands/gesture/run-gesture.ts`), which feeds
+`gestureDown`/`gestureMove`/`gestureUp` in
+`src/app/interactions/gesture-session.ts`, the same dispatcher the canvas
+pointer uses. Never call a tool's handlers directly.
+
+**Imports.** Command modules import stores and plain modules, never
+React components or hooks: they must run with no UI mounted.
+
+### Adding a command
+
+1. Define it in its family's module (`src/commands/<family>/<family>.ts`,
+   or a new file in that directory). The id is dotted lowercase,
+   `family.name` with hyphenated words (`filter.gaussian-blur`); the
+   registry rejects anything else. `params` is a schema of `ParamSpec`s
+   (`params.ts`: number, string, boolean, color, point, array, object,
+   record); the registry validates calls against it, and `run` receives
+   the typed result. The `summary` is one sentence an agent reads: say
+   which UI surface it matches, its history label and what it returns.
+2. A new module is imported for its side effect in
+   `src/commands/index.ts`, and the id goes in the full id list that
+   `e2e/api/document.spec.ts` checks.
+3. Tests: a unit test beside the module; an API spec in `e2e/api/` that
+   fails if the command does nothing, and one per refusal; and, where a
+   UI surface does the same operation, a comparison spec
+   (`compareUiAndApi`). `e2e/GUIDE.md` describes all three.
+
 ## Components
 
 - One component per directory. Directory name matches component name (PascalCase).
@@ -192,6 +287,13 @@ and are tracked for cleanup — new code must not extend the list.
   components (BrushModal, CanvasSizeModal, ModalHost, etc.) predate this
   rule and are tracked for backfill — see the GitHub issue for the list.
 - IMPORTANT: e2e tests should always test the UI, not manipulate the zustand stores directly. When we make UI changes, we update the test for the new UI. This is critical to making sure the UI works as the user would experience it.
+- Specs under `e2e/api/` are the one exception: they test the command
+  API, and are the only specs that may call it (`window.__lopsyCommands`,
+  through `e2e/api/harness.ts`). Every other spec drives the UI.
+- The `e2e/surface-*.spec.ts` characterization specs pin what each menu
+  item, key handler and Layers-panel control does. When you change one of
+  those behaviours on purpose, update its spec in the same change, and
+  `docs/ui-surface-differences.md` if the change touches an entry there.
 
 ## Commands
 
