@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Paintbrush } from 'lucide-react';
 import type { Asset, AssetId, Json, PresetId, PreviewRef, VersionId } from '@lopsy/photos-core/library/types';
 import type { Recipe, RecipeGroupId } from '@lopsy/photos-core/library/recipe';
 import type { FilmstripItem } from '../../edit/Filmstrip/Filmstrip';
@@ -9,12 +10,13 @@ import { loadPreviewUrl, peekPreviewUrl } from '../preview-cache';
 import { useUi } from '../store';
 import { useOrderedIds, usePresets, usePreviewUrl } from '../hooks';
 import { EditView } from '../../edit/EditView/EditView';
+import { EditNotice } from '../../edit/EditNotice/EditNotice';
 import { getBackend } from '../backend-registry';
 import { useLibraryView, useSession } from '../hooks';
+import { openInLopsy } from '../lopsy-handoff';
 import { showErrorToast, showToast } from '../toasts';
 import { formatBytes } from '../../import/import-summary';
 import { downloadBlob } from '../download';
-import { Button } from '../../components/Button/Button';
 import styles from './EditSlot.module.css';
 
 export interface EditSlotProps {
@@ -50,8 +52,8 @@ export function EditSlot({ assetId, versionId, onClose }: EditSlotProps) {
   const storedPreviewUrl = usePreviewUrl(version?.screen ?? null, 'screen');
   const abort = useRef<AbortController | null>(null);
 
-  // Keep the original in the device cache while it is open here.
-  const pinned = asset ?? null;
+  // Keep the original in the device cache while it is open here (a Lopsy document never is).
+  const pinned = asset && asset.kind !== 'document' ? asset : null;
   useEffect(() => {
     if (!pinned) return;
     return getBackend().pinOriginal(session, pinned);
@@ -142,13 +144,27 @@ export function EditSlot({ assetId, versionId, onClose }: EditSlotProps) {
   }, [session, versionId, copiedEdits]);
 
   if (!asset || !version || asset.deleted || version.deleted) {
+    return <EditNotice heading="This photo is no longer in the library" documentTitle="Not in the library – Photonamous" onClose={onClose} />;
+  }
+
+  // Nothing opens a Lopsy document here (openEdit sends it to Lopsy, the filmstrip leaves it out); a stale request says so.
+  if (asset.kind === 'document') {
     return (
-      <div className={styles.slot} role="region" aria-label="Edit">
-        <p className={styles.message}>This photo is no longer in the library.</p>
-        <Button variant="primary" onClick={onClose}>
-          Back to the library
-        </Button>
-      </div>
+      <EditNotice
+        heading={asset.fileName}
+        documentTitle={`${asset.fileName} – Lopsy document – Photonamous`}
+        onClose={onClose}
+        action={{
+          label: 'Open in Lopsy',
+          icon: <Paintbrush size={14} />,
+          onClick: () => {
+            openInLopsy(session, asset.id);
+            onClose();
+          },
+        }}
+      >
+        This is a Lopsy document. It opens in Lopsy, not in the Edit view.
+      </EditNotice>
     );
   }
 
@@ -221,8 +237,8 @@ function thumbKey(ref: PreviewRef): string {
 
 /**
  * The grid's tiles for the filmstrip: its photos and their versions' own
- * tiles (library/filmstrip.ts); the open one, and thumbnails loaded
- * around it.
+ * tiles, without Lopsy documents (library/filmstrip.ts); the open one, and
+ * thumbnails loaded around it.
  */
 function useFilmstrip(orderedIds: readonly ItemId[], open: PhotoVersion): { items: FilmstripItem[]; currentId: ItemId } {
   const session = useSession();

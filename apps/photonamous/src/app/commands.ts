@@ -289,13 +289,22 @@ export function toggleLabel(label: ColorLabel, orderedIds: readonly AssetId[], i
   setLabel(all ? null : label, orderedIds, ids);
 }
 
+/**
+ * Edit (Enter, Single view's and the tile menu's Edit): the focused tile's
+ * version in the Edit view. A Lopsy document opens in Lopsy instead, which
+ * edits it; the Edit view cannot. Call it from the click or key press, so
+ * the browser lets Lopsy's tab open.
+ */
 export function openEdit(): void {
   const id = focusedItem();
   if (id === null) return;
-  const view = session().getView();
+  const s = session();
+  const view = s.getView();
   const { assetId } = parseItem(id);
+  const asset = view.assets.get(assetId);
   const versionId = itemVersionId(id, view);
-  if (!view.assets.get(assetId) || versionId === null) return;
+  if (!asset || versionId === null) return;
+  if (asset.kind === 'document') return openInLopsy(s, assetId);
   useUi.getState().setEditing({ assetId, versionId });
 }
 

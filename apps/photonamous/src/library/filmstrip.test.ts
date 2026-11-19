@@ -19,19 +19,27 @@ const version = (id: string, assetId: string, name: string, extra: Partial<Versi
   ...extra,
 });
 
+// A Lopsy document made from photo a, with a version of its own.
+const doc = makeAsset('doc', { kind: 'document', fileName: 'a.lopsy', format: 'lopsy', source: { assetId: 'a', versionId: 'v-a', recipeHash: 'h' } });
 const view = makeView(
-  [makeAsset('a'), makeAsset('b'), makeAsset('trashed', { deleted: true })],
+  [makeAsset('a'), makeAsset('b'), doc, makeAsset('trashed', { deleted: true })],
   [],
   [
     version('v2', 'a', 'Version 2', { thumb: thumb('thumb-v2') }),
     version('v3', 'a', 'Bright'),
     version('gone', 'a', 'Version 4', { deleted: true }),
+    version('dv2', 'doc', 'Version 2'),
   ],
 );
 const A2 = versionItemId('a', 'v2');
 const A3 = versionItemId('a', 'v3');
 
 describe('the Edit view’s filmstrip', () => {
+  it('leaves Lopsy documents out, their version tiles too', () => {
+    const ids = ['a', 'doc', versionItemId('doc', 'dv2'), 'b'];
+    expect(filmstripEntries(ids, view).map((e) => e.id)).toEqual(['a', 'b']);
+  });
+
   it('shows a photo’s open versions as their own tiles: named, with their own thumbnail, opening that version', () => {
     // The grid with a's stack open: a, then its other live versions.
     const ids = openVersions(['a', 'b'], view, new Set(['a']));
@@ -49,9 +57,11 @@ describe('the Edit view’s filmstrip', () => {
     expect(filmstripEntries(ids, view).map((e) => e.id)).toEqual(['a']);
   });
 
-  it('opens what a tile shows', () => {
+  it('opens what a tile shows, and never a document', () => {
     expect(editTargetOf(view, 'a')).toEqual({ assetId: 'a', versionId: 'v-a' });
     expect(editTargetOf(view, A2)).toEqual({ assetId: 'a', versionId: 'v2' });
+    expect(editTargetOf(view, 'doc')).toBeNull();
+    expect(editTargetOf(view, versionItemId('doc', 'dv2'))).toBeNull();
     expect(editTargetOf(view, 'missing')).toBeNull();
     // A version of another photo is not this photo's.
     expect(editTargetOf(view, versionItemId('b', 'v2'))).toBeNull();

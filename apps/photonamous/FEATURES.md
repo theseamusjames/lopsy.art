@@ -73,6 +73,7 @@ is `docs/photonamous-spec.md`; running and setup are in
 - **Photo actions** (a tile's right-click menu): Look at it large, Edit,
   New version, Show this version for the photo (on a version's tile),
   Edit in Lopsy, Copy edits…, Paste edits, Export…, Move to the trash….
+  A Lopsy document's menu has no Edit: it is edited in Lopsy.
 - **Drag** photos onto an album in the sidebar to add them; dragging a
   version's own tile adds just that version, which the album then shows
   as its own tile.
@@ -186,11 +187,17 @@ is `docs/photonamous-spec.md`; running and setup are in
 ## Edit view
 
 Opened with Enter (in the grid, Single view or Cull) or **Edit** in Single
-view; double-clicking a tile opens Single view, not Edit. One photo, a
-left column, the image and a panel of groups; edits are saved to the
-version as they are made, and previews are rendered when the edit settles
-(never during a slider drag), on leaving, and before the filmstrip opens
-another photo.
+view and the tile menu; double-clicking a tile opens Single view, not
+Edit. One photo, a left column, the image and a panel of groups; edits
+are saved to the version as they are made, and previews are rendered when
+the edit settles (never during a slider drag), on leaving, and before the
+filmstrip opens another photo.
+
+Lopsy documents are edited in Lopsy, never here: Enter on one opens it in
+Lopsy instead (as Edit in Lopsy does), and the filmstrip and ← → go past
+them. Should the Edit view be asked for one all the same, it names the
+document, says it opens in Lopsy, and offers **Open in Lopsy** and **Back
+to the library**.
 
 - **Loading and working size.** RAF decodes on a pool of workers into the
   engine's RAW develop stage; DNG through the engine's decoder; 16-bit PNG
@@ -208,6 +215,7 @@ another photo.
   moves between them, in the grid's order: a photo whose stack is open in
   the grid shows each version as a tile of its own (named "<file>
   (<version>)", with that version's preview), which opens that version.
+  Lopsy documents are left out.
 - **Toolbar.** Library (back), Undo / Redo (⌘Z, ⇧⌘Z or ⌘Y), Rotate left,
   Rotate right, Flip, Flip vertical, **Crop**, **Areas**, **Before** (or
   hold `\`), **Split** (before and after side by side, with a divider to
@@ -315,8 +323,9 @@ Photonamous and Lopsy talk over `window.postMessage` (`packages/handoff`); Lopsy
 never talks to Google. Lopsy's side is in `apps/lopsy-web/FEATURES.md`
 (Photonamous Round Trip).
 
-- **Edit in Lopsy** (grid toolbar, tile menu, Single view, Edit view):
-  opens Lopsy in its tab (`lopsy-editor`) from the click. A photo goes as
+- **Edit in Lopsy** (grid toolbar, tile menu, Single view, Edit view; on a
+  Lopsy document, Enter too): opens Lopsy in its tab (`lopsy-editor`)
+  from the click or key press. A photo goes as
   its developed full-size 16-bit PNG with its source (library, asset,
   version, recipe hash) and a camera summary; a Lopsy document goes as its
   `.lopsy` with the file's current revision (read until stable).
@@ -432,7 +441,9 @@ best-practice rules at each step; the `a11y-*.spec.ts` and
   politely and once.
 - **Edit view.** The photo is the page's main content with its file name
   as the heading, and the page title is "<file> – Edit – Photonamous".
-  Opening it focuses the heading and closing it gives focus back.
+  Opening it focuses the heading and closing it gives focus back. Asked
+  for a Lopsy document, it shows the document's name as a focused heading
+  instead, and Escape goes back as it does from the Edit view.
   Screen readers hear when the photo is ready, export progress, and what
   Undo or Redo did; errors also show on screen with Dismiss.
   - *Crop*: each edge is a slider. The arrow keys move the focused edge,
@@ -468,7 +479,7 @@ Shown in the app with `?`. The one-key shortcuts below (digits, letters,
 | ← → ↑ ↓ | Move between photos (↑ ↓ in the grid) |
 | Shift+← → | Grow the selection |
 | ⌘A / ⌘D | Select all shown / none |
-| Enter | Edit the photo |
+| Enter | Edit the photo (a Lopsy document opens in Lopsy) |
 | Space | One photo large, and back |
 | C | Compare the selected photos |
 | F | Sort through full screen |

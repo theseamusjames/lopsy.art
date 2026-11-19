@@ -8,6 +8,7 @@ import { versionItemId } from '../../library/items';
 import { setBackend } from '../backend-registry';
 import { FakeBackend } from '../fake/fake-backend';
 import { FakeSession } from '../fake/fake-session';
+import { openInLopsy } from '../lopsy-handoff';
 import { useUi } from '../store';
 import { EditSlot } from './EditSlot';
 
@@ -19,6 +20,7 @@ vi.mock('../../edit/EditView/EditView', () => ({
     return <div data-testid="edit-view" />;
   },
 }));
+vi.mock('../lopsy-handoff', () => ({ openInLopsy: vi.fn() }));
 vi.mock('../preview-cache', () => ({ peekPreviewUrl: () => undefined, loadPreviewUrl: () => new Promise<string>(() => undefined) }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -50,6 +52,12 @@ const photo = (fileName: string, day: number): NewAsset => ({
   mimeType: 'image/jpeg',
   importedAt: `2026-01-0${day}T00:00:00Z`,
 });
+const lopsyDocument = (fileName: string, day: number): NewAsset => ({
+  ...photo(fileName, day),
+  kind: 'document',
+  format: 'lopsy',
+  mimeType: 'application/x-lopsy',
+});
 
 let session: FakeSession;
 let root: Root | null = null;
@@ -79,15 +87,17 @@ afterEach(async () => {
   document.body.innerHTML = '';
   act(() => useUi.getState().setConnection(null));
   onClose.mockClear();
+  vi.mocked(openInLopsy).mockClear();
   await session.close();
 });
 
 describe('the Edit view’s filmstrip', () => {
-  it('shows a photo’s open versions as their own tiles', () => {
+  it('leaves Lopsy documents out and shows a photo’s open versions as their own tiles', () => {
     const a = session.addAsset(photo('a.jpg', 3));
+    const poster = session.addAsset(lopsyDocument('poster.lopsy', 2));
     const b = session.addAsset(photo('b.jpg', 1));
     const second = session.createVersion(a.assetId, 'Version 2');
-    // The photo's stack is open in the grid: a, its Version 2, b.
+    // The photo's stack is open in the grid: a, its Version 2, the document, b.
     act(() => useUi.getState().toggleBurst(a.assetId));
     show(a.assetId, a.versionId);
 
@@ -97,6 +107,7 @@ describe('the Edit view’s filmstrip', () => {
       [versionItemId(a.assetId, second), 'a.jpg (Version 2)'],
       [b.assetId, 'b.jpg'],
     ]);
+    expect(strip?.items.some((i) => i.id === poster.assetId)).toBe(false);
     expect(strip?.currentId).toBe(a.assetId);
 
     // A version's tile opens that version, and is the one marked while it is open.
@@ -105,5 +116,51 @@ describe('the Edit view’s filmstrip', () => {
     show(a.assetId, second);
     expect(rendered.props?.filmstrip?.currentId).toBe(versionItemId(a.assetId, second));
   });
+
+  it('never opens a document, even when asked for one by id', () => {
+    const a = session.addAsset(photo('a.jpg', 3));
+    const poster = session.addAsset(lopsyDocument('poster.lopsy', 2));
+    session.addAsset(photo('b.jpg', 1));
+    show(a.assetId, a.versionId);
+    act(() => rendered.props?.filmstrip?.onOpen(poster.assetId));
+    expect(useUi.getState().editing).toBeNull();
+  });
 });
 
+describe('a Lopsy document asked for in the Edit view', () => {
+  function showPoster(): AssetId {
+    const poster = session.addAsset(lopsyDocument('DSCF8534 (1).lopsy', 2));
+    show(poster.assetId, poster.versionId);
+    return poster.assetId;
+  }
+
+  it('says what it is instead of opening the Edit view, with focus on its name', () => {
+    showPoster();
+    expect(host.querySelector('[data-testid="edit-view"]')).toBeNull();
+    expect(rendered.props).toBeNull();
+    const heading = host.querySelector('h1');
+    expect(heading?.textContent).toBe('DSCF8534 (1).lopsy');
+    expect(document.activeElement).toBe(heading);
+    expect(host.textContent).toContain('This is a Lopsy document. It opens in Lopsy, not in the Edit view.');
+    expect(document.title).toBe('DSCF8534 (1).lopsy – Lopsy document – Photonamous');
+  });
+
+  it('opens it in Lopsy from the click, and goes back to the library', () => {
+    const id = showPoster();
+    const open = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Open in Lopsy');
+    act(() => open?.click());
+    expect(openInLopsy).toHaveBeenCalledWith(session, id);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('goes back with its button or Escape', () => {
+    showPoster();
+    const back = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Back to the library');
+    act(() => back?.click());
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    });
+    expect(onClose).toHaveBeenCalledTimes(2);
+    expect(openInLopsy).not.toHaveBeenCalled();
+  });
+});
