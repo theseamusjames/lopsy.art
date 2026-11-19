@@ -199,7 +199,8 @@ another photo.
 - **Left column**: **Presets** (apply one, or **Save preset…** from this
   edit, choosing its groups), **Versions** (switch, rename, **New
   version**) and **History** (every step; clicking one goes back to it).
-  The column folds away. A **filmstrip** of the photos around this one
+  The column folds away with the button at its bottom left, which stays
+  there while it is folded. A **filmstrip** of the photos around this one
   moves between them.
 - **Toolbar.** Library (back), Undo / Redo (⌘Z, ⇧⌘Z or ⌘Y), Rotate left,
   Rotate right, Flip, Flip vertical, **Crop**, **Areas**, **Before** (or

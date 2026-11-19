@@ -1,22 +1,38 @@
+/* The sections scroll; the fold button stays at the bottom left, open or folded. */
 .column {
   width: 220px;
   flex-shrink: 0;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   background: var(--color-bg-secondary);
   border-right: 1px solid var(--color-border-subtle);
 }
 
 .collapsed {
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
   padding: var(--space-2) var(--space-1);
   background: var(--color-bg-secondary);
   border-right: 1px solid var(--color-border-subtle);
 }
 
-.columnHeader {
+.sections {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.footer {
   display: flex;
-  justify-content: flex-end;
-  padding: var(--space-1) var(--space-2) 0;
+  justify-content: flex-start;
+}
+
+.column .footer {
+  padding: var(--space-1) var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .iconButton {

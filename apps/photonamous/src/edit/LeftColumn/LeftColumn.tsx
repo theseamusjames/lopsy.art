@@ -15,8 +15,8 @@ export interface LeftColumnProps {
 /**
  * The Edit view's left column (spec 5.4): Presets, Versions and History,
  * each a heading whose button folds its section, and the column folds
- * too. The column's fold button is the same element either way, so it
- * keeps focus.
+ * too, with a button at its bottom left. That button is the same element
+ * either way, so it keeps focus.
  */
 export function LeftColumn({ sections }: LeftColumnProps) {
   const [isOpen, setIsOpen] = useState(true);
@@ -34,7 +34,36 @@ export function LeftColumn({ sections }: LeftColumnProps) {
 
   return (
     <aside className={isOpen ? styles.column : styles.collapsed} aria-label="Presets, versions and history">
-      <div className={isOpen ? styles.columnHeader : undefined}>
+      {isOpen && (
+        <div className={styles.sections}>
+          {sections.map((section) => {
+            const isSectionOpen = !closed.has(section.id);
+            const headerId = `${baseId}-${section.id}-header`;
+            const bodyId = `${baseId}-${section.id}-body`;
+            return (
+              <section key={section.id} className={styles.section} aria-labelledby={headerId}>
+                <h2 className={styles.heading}>
+                  <button
+                    type="button"
+                    id={headerId}
+                    className={styles.sectionHeader}
+                    aria-expanded={isSectionOpen}
+                    aria-controls={bodyId}
+                    onClick={() => toggle(section.id)}
+                  >
+                    {isSectionOpen ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
+                    <span>{section.title}</span>
+                  </button>
+                </h2>
+                <div id={bodyId} className={styles.sectionBody} hidden={!isSectionOpen}>
+                  {section.content}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
+      <div className={styles.footer}>
         <button
           type="button"
           className={styles.iconButton}
@@ -45,32 +74,6 @@ export function LeftColumn({ sections }: LeftColumnProps) {
           {isOpen ? <PanelLeftClose size={16} aria-hidden /> : <PanelLeftOpen size={16} aria-hidden />}
         </button>
       </div>
-      {isOpen &&
-        sections.map((section) => {
-          const isSectionOpen = !closed.has(section.id);
-          const headerId = `${baseId}-${section.id}-header`;
-          const bodyId = `${baseId}-${section.id}-body`;
-          return (
-            <section key={section.id} className={styles.section} aria-labelledby={headerId}>
-              <h2 className={styles.heading}>
-                <button
-                  type="button"
-                  id={headerId}
-                  className={styles.sectionHeader}
-                  aria-expanded={isSectionOpen}
-                  aria-controls={bodyId}
-                  onClick={() => toggle(section.id)}
-                >
-                  {isSectionOpen ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
-                  <span>{section.title}</span>
-                </button>
-              </h2>
-              <div id={bodyId} className={styles.sectionBody} hidden={!isSectionOpen}>
-                {section.content}
-              </div>
-            </section>
-          );
-        })}
     </aside>
   );
 }
