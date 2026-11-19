@@ -29,9 +29,9 @@ import { canvasPixelRatio } from './app/rendering/display-pixel-ratio';
 import { contextOptions } from './engine/color-space';
 import { layerBackupStats, setLayerBackupMaxBytesForTest } from './app/gpu-layer-backup';
 import type { LayerBackupStats } from './app/layer-backup-runner';
-import './styles/fonts.css';
-import './styles/tokens.css';
-import './styles/reset.css';
+import '@lopsy/ui/styles/fonts.css';
+import '@lopsy/ui/styles/tokens.css';
+import '@lopsy/ui/styles/reset.css';
 
 // Dev-only debug hooks exposed on `window` for e2e tests.
 type ReadPixelsResult = { width: number; height: number; pixels: number[] } | null;

@@ -1,11 +1,7 @@
-/*
- * Photonamous shares Lopsy's design tokens, reset and fonts. They move to
- * packages/ui in Phase 0 of docs/photonamous-spec.md; until then they are
- * read from lopsy-web.
- */
-@import '../../../lopsy-web/src/styles/fonts.css';
-@import '../../../lopsy-web/src/styles/reset.css';
-@import '../../../lopsy-web/src/styles/tokens.css';
+/* Photonamous shares Lopsy's design tokens, reset and fonts (packages/ui). */
+@import '@lopsy/ui/styles/fonts.css';
+@import '@lopsy/ui/styles/reset.css';
+@import '@lopsy/ui/styles/tokens.css';
 
 html,
 body,
