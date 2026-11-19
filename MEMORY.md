@@ -726,3 +726,16 @@ Lopsy's configs need a wrapper config that sets
 `launchOptions.executablePath` and `--project=chromium`. Seeded or
 many-scenario Vitest tests need an explicit timeout: Vitest's 5 s default
 fails them on a loaded machine.
+
+## Photonamous accessibility: browser facts that bit
+- Chromium fires `focusout` on a focused element when it is removed from
+  the DOM, so "close on focus out" code also runs on re-renders that
+  replace the focused node.
+- `inert` does not apply through an element with `display: contents`; put
+  it on a real box.
+- Input placeholders render #757575 unless styled, which fails 4.5:1 on
+  Photonamous' dark surfaces: give them `--ph-text-muted`.
+- Setting `inert` on the page behind a dialog in the same render as
+  React StrictMode's double effect sends the dialog's returned focus to
+  the wrong place; Photonamous applies it a frame later.
+

@@ -1634,6 +1634,7 @@ feature: `apps/photonamous/FEATURES.md`. How the library database works:
 | 5.7, 6.7 Devices and offline | The library opens offline from IndexedDB, and a service worker loads the app shell offline. Keep originals: Recent, All or None. Previews re-render in the background after presets, pastes, synced edits and new versions. Sync panel, storage meter, device cache. |
 | 6.6 Library database | Per-device journals of last-writer-wins fields stamped with hybrid logical clocks, snapshots, roll-up, the Drive change feed, a Web Locks single writer per device, durable-before-destructive ordering, and merging of duplicate library roots. A 50,000-photo library opens cold in about 2 s. |
 | 6.3 Hosting | Its own Pages project, `photonamous`, for `photonamous.com`, with its own CSP; Lopsy hands off to it there. Deployed only when the repository variable `DEPLOY_PHOTONAMOUS` is `true`. CI runs Photonamous' typecheck, lint and unit tests. |
+| Accessibility | WCAG 2.2 AA: AA contrast tokens, 24 px targets, a visible focus ring, every function by keyboard (crop edges, curve points and areas included, with fields or sliders instead of dragging), focus that moves into dialogs and menus and back, live announcements, page titles, a skip link, a reflowing library, and a setting that turns single-key shortcuts off. `e2e/accessibility.spec.ts` runs axe-core on every view; keyboard specs cover each area. |
 
 ### Where it departs from the design
 
@@ -1688,7 +1689,7 @@ feature: `apps/photonamous/FEATURES.md`. How the library database works:
   suites cover the app (including real RAFs from
   `LOPSY_RAF_SAMPLES`), photos-core in a browser, the Lopsy round trip,
   Lopsy's handoff and grade, and the production build as Pages serves it,
-  offline start included. All
+  offline start included, and an axe-core accessibility scan of every view. All
   eight sample RAFs decode, and the engine's Rust tests run on them.
 - **Not verified against Google.** Sign-in, the Picker, uploads, the
   change feed and share links ran against the fake Drive and stubbed

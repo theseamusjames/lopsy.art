@@ -269,6 +269,7 @@ npm run test -w @lopsy/handoff               # the handoff protocol
 npm run test:e2e -w @lopsy/photos-core       # photos-core's browser-only classes in Chromium (Vite harness)
 npm run test:e2e:photos                      # the app in Chromium; *.drive.spec.ts run against the fake Drive
 npm run test:e2e:site                        # the production build as Pages serves it: headers, deep links, offline start, Edit in Lopsy
+cd apps/photonamous && A11Y_REPORT=/tmp/a11y.json npx playwright test e2e/accessibility.spec.ts   # axe-core (WCAG 2.2 AA) on every view; the JSON lists any violation
 cd apps/lopsy-web && npx playwright test e2e/photos-handoff.spec.ts --project=chromium   # Lopsy's side of the handoff
 ```
 

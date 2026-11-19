@@ -376,6 +376,27 @@ best-practice rules at each step; the `a11y-*.spec.ts` and
   presses. Shortcuts with Ctrl or ⌘, the arrow keys, Space, Enter and
   Escape keep working, and text fields get every key. The choice is kept
   on this device.
+- **The library by keyboard.** "Skip to photos" is the first Tab stop,
+  and the page title names the view ("All photos – Photonamous"). Enter,
+  Space and the arrow keys act on the focused button, checkbox or slider;
+  the library's shortcuts take them only on a photo.
+  - The photo grid is one Tab stop. The arrow keys move and select; Shift
+    extends the selection, Ctrl or ⌘ moves without selecting, and Ctrl or
+    ⌘ with Space adds or removes a photo. Home and End go to the first
+    and last photo, Page Up and Page Down a screen at a time, and Shift+F10
+    or the Menu key opens the photo's menu. Escape clears the selection
+    and keeps your place.
+  - Focus returns to the photo you were on after Single view, Compare,
+    Cull, Edit, a dialog or the menu, and stays on a photo when photos are
+    deleted, set aside or filtered out.
+  - The large photo in Single view and Cull zooms from the keyboard (Enter
+    or Space; the arrow keys pan, Escape fits), and in Compare Left and
+    Right choose the marked photo.
+  - Screen readers hear the photo count as filters and selections change,
+    the photo and its position in Single view and Cull, import milestones
+    (failures at once), and leaving full screen.
+  - Below 760 px wide, or at 200 % zoom, the library is one scrolling
+    column: header, sidebar, grid, details.
 - **Dialogs.** Tab and Shift+Tab stay inside the open dialog; Escape
   closes only the topmost dialog or popover, and focus goes back where it
   was. Delete opens on Keep, Settings on its first heading.

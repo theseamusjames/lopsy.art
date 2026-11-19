@@ -47,6 +47,21 @@ for this app's sake.
 - **Tests never talk to Google.** Unit tests use the memory adapter or
   the fake Drive in `packages/photos-core`. E2E tests use the local
   adapter in the browser.
+- **Accessibility: WCAG 2.2 AA.** `e2e/accessibility.spec.ts` runs
+  axe-core on every view and must pass; add the states a new view or
+  dialog brings to it. What it can't see is a rule too:
+  - every function works from the keyboard, and anything done by dragging
+    also has a field, slider or button (crop edges, curve points and areas
+    show how);
+  - text uses the `--ph-*` tokens in `src/styles/index.css` (4.5:1), not
+    `--color-text-disabled`, and every control is at least 24 × 24 px;
+  - every focusable element shows the `--ph-focus-ring` ring; never set
+    `outline: none` without one;
+  - dialogs use `Modal`, menus `use-menu-keys`, radio groups `radio-keys`,
+    toggles `IconButton`'s `pressed`; status and errors go through
+    `showToast` / `showErrorToast` or a live region, not colour alone;
+  - new single-character shortcuts go in `src/shortcuts/registry.ts`, so
+    the help lists them and Settings > Keyboard can turn them off.
 
 ## Storybook
 
