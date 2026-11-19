@@ -83,6 +83,12 @@ Sometimes you'll need example images to test image editing, particularly when wo
 - Never try to create RAW image for testing. You need real sample images because the file formats vary significantly.
 - For other images, you can use https://placecats.com/1920/1080 where 1920 and 1080 are values you can adjust to get a photo in those dimensions.
 
+## Visual design
+
+- Never mark state with a coloured bar along an element's edge (a left
+  border or inset stripe): use a small accent dot beside the label.
+  `MEMORY.md` has the details.
+
 ## Dependencies
 
 - Minimize dependencies. Before adding a package, consider if it can be done in < 50 lines of code.

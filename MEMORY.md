@@ -739,3 +739,12 @@ fails them on a loaded machine.
   React StrictMode's double effect sends the dialog's returned focus to
   the wrong place; Photonamous applies it a frame later.
 
+## UI preference: no coloured edge bars
+The owner doesn't want a coloured bar along an element's edge (a left
+border or an inset box-shadow stripe) to mark state, in either app or the
+sites. Mark the current or selected item with a small accent-blue dot
+beside its label instead (Photonamous' History, Versions and Areas lists
+reserve a 6 px dot slot on every row so labels line up), and a toast's
+kind with a dot in its colour. Callouts get a tinted background, not a
+stripe.
+
