@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FULL_RECT, MIN_CROP } from '../engine/crop';
-import { EDGE_LARGE_STEP, EDGE_STEP, cropAfterEdgeKey, cropWithField, edgeKeyDelta, edgePosition, edgeValueText } from './crop-keys';
+import { EDGE_LARGE_STEP, EDGE_STEP, cropAfterEdgeKey, cropWithField, edgeKeyDelta, edgePosition, edgeValueText, isBarOnTop } from './crop-keys';
 
 const RECT = { x: 0.2, y: 0.1, width: 0.5, height: 0.6 };
 const SIZE = { width: 4000, height: 3000 };
@@ -88,5 +88,21 @@ describe('cropWithField', () => {
 
   it('leaves the crop alone for something that is not a number', () => {
     expect(cropWithField(RECT, 'width', Number.NaN, SIZE, null)).toBe(RECT);
+  });
+});
+
+describe('isBarOnTop', () => {
+  it('stays at the bottom while the crop keeps clear of it', () => {
+    expect(isBarOnTop({ top: 100, bottom: 500 }, 760, 110, false)).toBe(false);
+    expect(isBarOnTop({ top: 100, bottom: 500 }, 760, 110, true)).toBe(false);
+  });
+
+  it('moves to the top when it would hide the bottom edge and the top is clear', () => {
+    expect(isBarOnTop({ top: 200, bottom: 700 }, 760, 110, false)).toBe(true);
+  });
+
+  it('covers the edge not in use when the crop fills the stage', () => {
+    expect(isBarOnTop({ top: 24, bottom: 736 }, 760, 110, false)).toBe(false);
+    expect(isBarOnTop({ top: 24, bottom: 736 }, 760, 110, true)).toBe(true);
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { Check, RectangleHorizontal, RectangleVertical, RotateCcw, X } from 'lucide-react';
 import {
   ASPECT_PRESETS,
@@ -11,7 +11,7 @@ import {
   type CropHandle,
   type Rect,
 } from '../../engine/crop';
-import { CROP_EDGES, cropAfterEdgeKey, cropWithField, edgePosition, edgeValueText, type CropEdge, type CropField, type PixelSize } from '../crop-keys';
+import { BAR_CLEARANCE, CROP_EDGES, cropAfterEdgeKey, cropWithField, edgePosition, edgeValueText, isBarOnTop, type CropEdge, type CropField, type PixelSize } from '../crop-keys';
 import styles from './CropTool.module.css';
 
 export interface CropToolProps {
@@ -48,8 +48,9 @@ interface Drag {
 /**
  * The crop overlay: a rectangle with a thirds grid over the whole framed
  * image, moved by dragging inside it and resized by its handles, with
- * aspect presets and the crop in pixels in a bar below. Each edge is also
- * a slider for the keyboard. Enter or Done commits, Esc cancels.
+ * aspect presets and the crop in pixels in a bar below (above, when it
+ * would hide the crop's bottom edge). Each edge is also a slider for the
+ * keyboard. Enter or Done commits, Esc cancels.
  */
 export function CropTool({ imageBox, imageSize, rect, onChange, onDone, onCancel }: CropToolProps) {
   const imageAspect = imageSize.height > 0 ? imageSize.width / imageSize.height : 1;
@@ -57,13 +58,35 @@ export function CropTool({ imageBox, imageSize, rect, onChange, onDone, onCancel
   const [isPortrait, setIsPortrait] = useState(imageAspect < 1);
   const [activeHandle, setActiveHandle] = useState<CropHandle | null>(null);
   const [field, setField] = useState<{ readonly id: CropField; readonly text: string } | null>(null);
+  const [focusedEdge, setFocusedEdge] = useState<CropEdge | null>(null);
+  const [heights, setHeights] = useState({ stage: 0, bar: 0 });
   const drag = useRef<Drag | null>(null);
   const firstEdge = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
   const hintId = useId();
   const ratio = aspectRatio(aspect, imageAspect, isPortrait);
 
   useEffect(() => {
     firstEdge.current?.focus();
+  }, []);
+
+  // The bar's place depends on how tall it and the stage are, measured before the first paint and on resizes.
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    const bar = barRef.current;
+    if (!root || !bar) return;
+    const measure = () => {
+      const stage = root.clientHeight;
+      const height = bar.offsetHeight;
+      setHeights((h) => (h.stage === stage && h.bar === height ? h : { stage, bar: height }));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(root);
+    observer.observe(bar);
+    return () => observer.disconnect();
   }, []);
 
   const keys = useRef({ onDone, onCancel });
@@ -144,9 +167,18 @@ export function CropTool({ imageBox, imageSize, rect, onChange, onDone, onCancel
   };
 
   const pixels = cropPixels(rect, imageSize.width, imageSize.height);
+  const isBottomInUse = focusedEdge === 's' || activeHandle === 's' || activeHandle === 'se' || activeHandle === 'sw';
+  const isBarAtTop =
+    heights.stage > 0 &&
+    isBarOnTop(
+      { top: imageBox.top + rect.y * imageBox.height, bottom: imageBox.top + (rect.y + rect.height) * imageBox.height },
+      heights.stage,
+      heights.bar + BAR_CLEARANCE,
+      isBottomInUse,
+    );
 
   return (
-    <div className={styles.cropTool} role="group" aria-label="Crop" data-testid="crop-tool">
+    <div ref={rootRef} className={styles.cropTool} role="group" aria-label="Crop" data-testid="crop-tool">
       <div className={styles.rect} style={box} onPointerDown={handlePointerDown('move')} {...pointerHandlers} data-testid="crop-rect">
         <div className={styles.thirds} />
         {CORNERS.map((h) => (
@@ -178,6 +210,8 @@ export function CropTool({ imageBox, imageSize, rect, onChange, onDone, onCancel
             aria-describedby={hintId}
             onPointerDown={handlePointerDown(edge)}
             onKeyDown={handleEdgeKey(edge)}
+            onFocus={() => setFocusedEdge(edge)}
+            onBlur={() => setFocusedEdge(null)}
             {...pointerHandlers}
           />
         ))}
@@ -185,7 +219,7 @@ export function CropTool({ imageBox, imageSize, rect, onChange, onDone, onCancel
       <p id={hintId} className={styles.srOnly}>
         Arrow keys move the edge, Shift for bigger steps. Enter applies the crop, Escape cancels it.
       </p>
-      <div className={styles.bar} role="group" aria-label="Crop options">
+      <div ref={barRef} className={styles.bar} role="group" aria-label="Crop options" data-place={isBarAtTop ? 'top' : 'bottom'}>
         <div className={styles.row}>
           <select
             className={styles.select}

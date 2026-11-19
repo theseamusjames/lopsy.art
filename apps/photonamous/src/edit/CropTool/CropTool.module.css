@@ -83,6 +83,11 @@
   pointer-events: auto;
 }
 
+.bar[data-place='top'] {
+  top: var(--space-3);
+  bottom: auto;
+}
+
 .row {
   display: flex;
   flex-wrap: wrap;

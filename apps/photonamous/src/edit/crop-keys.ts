@@ -139,3 +139,21 @@ export function cropWithField(rect: Rect, field: CropField, pixels: number, size
     }
   }
 }
+
+/** How far in from the stage's top and bottom the options bar reaches, beyond its own height: its margin and half a handle. */
+export const BAR_CLEARANCE = 24;
+
+/**
+ * Whether the crop's options bar goes at the top of the stage instead of
+ * the bottom, so it never hides the edge in use (WCAG 2.4.11): when it
+ * would cover the crop's bottom edge and not its top one, or would cover
+ * both and the bottom edge is the one focused or dragged. `top` and
+ * `bottom` are the crop's edges in stage pixels; `reach` is how far in
+ * the bar covers from either side.
+ */
+export function isBarOnTop(crop: { readonly top: number; readonly bottom: number }, stageHeight: number, reach: number, isBottomInUse: boolean): boolean {
+  const coversBottom = crop.bottom > stageHeight - reach;
+  const coversTop = crop.top < reach;
+  if (!coversBottom) return false;
+  return !coversTop || isBottomInUse;
+}

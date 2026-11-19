@@ -300,3 +300,26 @@ test('the Grade screen has its own title and heading', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1, name: 'Grade in Photonamous' })).toBeFocused();
   await expect(page.getByRole('main').getByRole('alert')).toHaveText(/Nothing to grade/);
 });
+
+test('on a tall photo the crop bar moves out from over the focused bottom edge', async ({ page }) => {
+  await openHarness(page);
+  await openGeneratedImage(page, 600, 1200);
+  await waitForReady(page);
+  await page.keyboard.press('r');
+  const crop = page.getByRole('group', { name: 'Crop', exact: true });
+  const isUncovered = (name: string) =>
+    crop.getByRole('slider', { name }).evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) === el;
+    });
+  await expect(crop.getByRole('slider', { name: 'Top edge' })).toBeFocused();
+  expect(await isUncovered('Top edge')).toBe(true);
+  // The photo fills the stage's height: the bar covers one edge, never the focused one.
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await expect(crop.getByRole('slider', { name: 'Bottom edge' })).toBeFocused();
+  await expect.poll(() => isUncovered('Bottom edge')).toBe(true);
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Shift+Tab');
+  await expect.poll(() => isUncovered('Top edge')).toBe(true);
+});
