@@ -4,6 +4,7 @@ import { settled } from './settled';
 // Command families are imported here for their side effect of registering their commands.
 import './document/document';
 import './history/history';
+import './layer/layer';
 
 setSettle(settled);
 
