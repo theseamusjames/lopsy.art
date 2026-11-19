@@ -4,6 +4,7 @@ import { useUIStore } from './ui-store';
 import { useToolSettingsStore } from './tool-settings-store';
 import { initEngine, getEngine, getEngineCanvas, destroyEngine, markWgpuDeviceLost, GPU_LOST_EVENT } from '../engine-wasm/engine-state';
 import { describeError, notifyError } from './notifications-store';
+import { loopStarted, loopStopped, notifyLoopPass } from './rendering/frame-clock';
 import {
   syncDocumentSize,
   syncBackgroundColor,
@@ -468,11 +469,13 @@ export function useCanvasRendering(
         hasBaselineSnapshot = false;
       }
 
+      let didRender = false;
       if (dirtyRef.current && engineReadyRef.current) {
         dirtyRef.current = false;
         const overlay = overlayCanvasRef.current;
         const container = containerRef.current;
         if (overlay && container) {
+          didRender = true;
           try {
             renderFrame(overlay, container, antPhaseRef, prevActiveLayerRef, croppedLayerIdsRef.current);
           } catch (e) {
@@ -499,13 +502,16 @@ export function useCanvasRendering(
         }
       }
 
+      notifyLoopPass(didRender);
       antAnimId = requestAnimationFrame(loop);
     };
 
+    loopStarted();
     antAnimId = requestAnimationFrame(loop);
     return () => {
       running = false;
       cancelAnimationFrame(antAnimId);
+      loopStopped();
     };
   }, [canvasRef, containerRef, overlayCanvasRef]);
 }

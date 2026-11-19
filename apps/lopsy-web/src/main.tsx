@@ -28,6 +28,9 @@ import { prefetchFontPreviewsBlob } from './utils/font-loader';
 import { canvasPixelRatio } from './app/rendering/display-pixel-ratio';
 import { contextOptions } from './engine/color-space';
 import { layerBackupStats, setLayerBackupMaxBytesForTest } from './app/gpu-layer-backup';
+import { describeCommands, runInvocation, runInvocations } from './commands';
+import type { CommandSurface } from './commands/command';
+import type { CommandDescription } from './commands/registry';
 import type { LayerBackupStats } from './app/layer-backup-runner';
 import './styles/fonts.css';
 import './styles/tokens.css';
@@ -68,6 +71,10 @@ declare global {
     __loadProject?: (file: File) => Promise<void>;
     __importRafFile?: (data: Uint8Array, name: string) => Promise<void>;
     __exportDocAsJpg?: (longEdge: number, quality: number) => Promise<{ width: number; height: number; b64: string } | null>;
+    __lopsyCommands?: {
+      describe: (surface?: CommandSurface) => CommandDescription[];
+      run: (invocation: unknown) => Promise<unknown>;
+    };
   }
 }
 
@@ -119,6 +126,10 @@ if (import.meta.env.DEV) {
   window.__pixelData = pixelDataManager;
   window.__parkedReadbacks = parkedReadbackCount;
   window.__engineStarted = engineStarted;
+  window.__lopsyCommands = {
+    describe: (surface) => describeCommands(surface),
+    run: (invocation) => (Array.isArray(invocation) ? runInvocations(invocation) : runInvocation(invocation)),
+  };
   // Read composited pixels from the WebGL canvas by triggering a render
   // inside requestAnimationFrame and reading before buffer swap.
   // Returns screen-sized pixels (includes workspace background).
