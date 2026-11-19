@@ -10,9 +10,9 @@ one for the directory you are changing before you change it.
 | Path | What it is | Rules |
 |---|---|---|
 | `apps/lopsy-web/` | The web app: React, TypeScript, Vite. `src/`, `e2e/`, `public/`, the build and test configs, and the site's `tutorials/` and `blog/` | `apps/lopsy-web/CLAUDE.md` |
-| `apps/photonamous/` | Lopsy Photos, a photo library and RAW editor on the engine (proof of concept of `docs/photonamous-spec.md`) | `apps/photonamous/CLAUDE.md` |
-| `packages/photos-core/` | Lopsy Photos' storage adapters (Google Drive, local folder, memory), library database and import; plain TypeScript | `apps/photonamous/CLAUDE.md` |
-| `packages/handoff/` | The postMessage protocol between Lopsy and Lopsy Photos (Edit in Lopsy, Save and Add to Lopsy Photos, Grade in Lopsy Photos); plain TypeScript used by both apps | `apps/photonamous/CLAUDE.md` |
+| `apps/photonamous/` | Photonamous, a photo library and RAW editor on the engine (proof of concept of `docs/photonamous-spec.md`) | `apps/photonamous/CLAUDE.md` |
+| `packages/photos-core/` | Photonamous' storage adapters (Google Drive, local folder, memory), library database and import; plain TypeScript | `apps/photonamous/CLAUDE.md` |
+| `packages/handoff/` | The postMessage protocol between Lopsy and Photonamous (Edit in Lopsy, Save and Add to Photonamous, Grade in Photonamous); plain TypeScript used by both apps | `apps/photonamous/CLAUDE.md` |
 | `engine/` | The Rust rendering engine: the engine crate at its top, `core/`, `shaderc/`, and the hosts that embed it (`hosts/wasm` for the browser, `hosts/cli` for the command line) | `engine/CLAUDE.md` |
 | `docs/` | Documents about the repository as a whole | — |
 | `.github/`, `.githooks/` | CI, deploy and the pre-push hook | — |
@@ -30,7 +30,7 @@ What you may be looking for:
   `apps/lopsy-web/docs/hdr-support.md`.
 - **The engine migration (WebGL to a pass layer to wgpu) and this layout**:
   `docs/engine-migration-plan.md`.
-- **The spec for Lopsy Photos**, a photo library and RAW editor that
+- **The spec for Photonamous**, a photo library and RAW editor that
   stores originals in the user's Google Drive and hands off to Lopsy:
   `docs/photonamous-spec.md`. Its proof of concept: what it does,
   `apps/photonamous/FEATURES.md`; how to run, test and deploy it,

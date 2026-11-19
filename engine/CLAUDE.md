@@ -109,13 +109,13 @@ gpu/shaders/
     invert.wgsl, hue_sat.wgsl, sharpen.wgsl, noise.wgsl, posterize.wgsl, threshold.wgsl
   gradient/
     gradient_linear.wgsl, gradient_radial.wgsl
-  develop/                # Lopsy Photos' develop chain (src/develop/mod.rs lists them)
+  develop/                # Photonamous' develop chain (src/develop/mod.rs lists them)
     raw_develop.wgsl      # RAW stage: linear camera RGB → sRGB
     noise_reduce.wgsl, local_contrast.wgsl, detail_sharpen.wgsl, blur_axis.wgsl
     color_mixer.wgsl, areas.wgsl, finish.wgsl, clip_warning.wgsl
 ```
 
-### The Photos develop chain
+### The Photonamous develop chain
 
 `src/develop/mod.rs` is the map: the stage order (RAW develop, noise
 reduction, local contrast and haze, image adjustments, colour mixer, areas,

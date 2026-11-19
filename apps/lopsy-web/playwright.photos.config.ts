@@ -2,7 +2,7 @@ import { defineConfig } from '@playwright/test';
 import base from './playwright.config';
 
 /**
- * The Lopsy Photos handoff specs (e2e/photos-handoff.spec.ts) need a build
+ * The Photonamous handoff specs (e2e/photos-handoff.spec.ts) need a build
  * that ships Photos: Lopsy offers the handoff only when VITE_PHOTOS_URL is
  * set. They run here against a dev server started with it, on the port next
  * to the main suite's so both can run at once.

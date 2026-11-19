@@ -51,7 +51,7 @@ test('the app starts offline and keeps working', async ({ page, context }) => {
 
 test('a cached file that another script on the origin changed is not served', async ({ page, context }) => {
   await page.goto('/photos/');
-  await expect(page.getByRole('heading', { name: 'Lopsy Photos' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Photonamous' })).toBeVisible();
   await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
 
   // What a script injected anywhere on the origin could do: replace the app's code in the shell cache.
@@ -69,7 +69,7 @@ test('a cached file that another script on the origin changed is not served', as
   await cdp.send('ServiceWorker.stopAllWorkers');
 
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Lopsy Photos' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Photonamous' })).toBeVisible();
   expect(await page.evaluate(() => Reflect.get(window, '__evil'))).toBeUndefined();
   const cached = await page.evaluate(async ({ src, name }) => (await (await caches.open(name)).match(src))?.text() ?? '', script);
   expect(cached).not.toContain('__evil');

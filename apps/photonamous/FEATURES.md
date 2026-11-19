@@ -1,6 +1,6 @@
-# Lopsy Photos feature catalog
+# Photonamous feature catalog
 
-What Lopsy Photos does today, as the code and its e2e specs show it.
+What Photonamous does today, as the code and its e2e specs show it.
 Current behaviour only; bugs live in GitHub issues. The design behind it
 is `docs/photonamous-spec.md`; running and setup are in
 `docs/photonamous-setup.md`.
@@ -30,7 +30,7 @@ is `docs/photonamous-spec.md`; running and setup are in
   library; Settings chooses whether they are moved into `Originals/` or
   left where they are.
 - **Close this library** (header) goes back to the start screen.
-- **Layout in storage.** A `Lopsy Photos/` folder holds `Originals/`
+- **Layout in storage.** A `Photonamous/` folder holds `Originals/`
   (filed by capture year and month), `Lopsy documents/`, `Exports/` and
   `Library data/` (the journal, snapshots, previews and device records).
   Originals are never modified or permanently deleted.
@@ -299,26 +299,26 @@ another photo.
 
 ## Lopsy round trips
 
-Photos and Lopsy talk over `window.postMessage` (`packages/handoff`); Lopsy
+Photonamous and Lopsy talk over `window.postMessage` (`packages/handoff`); Lopsy
 never talks to Google. Lopsy's side is in `apps/lopsy-web/FEATURES.md`
-(Lopsy Photos Round Trip).
+(Photonamous Round Trip).
 
 - **Edit in Lopsy** (grid toolbar, tile menu, Single view, Edit view):
   opens Lopsy in its tab (`lopsy-editor`) from the click. A photo goes as
   its developed full-size 16-bit PNG with its source (library, asset,
   version, recipe hash) and a camera summary; a Lopsy document goes as its
   `.lopsy` with the file's current revision (read until stable).
-- **Save to Lopsy Photos** (in Lopsy): the `.lopsy` and a flattened 16-bit
+- **Save to Photonamous** (in Lopsy): the `.lopsy` and a flattened 16-bit
   PNG come back and are stored in `Lopsy documents/` as a document
   asset, stacked behind the photo it was made from, with previews. Saving
   again updates the same document in place; if it changed elsewhere since
   Lopsy opened it, the save becomes a copy ("<name> 2"). A toast reports
   each save.
-- **Add to Lopsy Photos** (Lopsy's File menu) and saves from a Lopsy tab
-  whose Photos tab is gone open Photos at `?receive=<id>`, which stores
+- **Add to Photonamous** (Lopsy's File menu) and saves from a Lopsy tab
+  whose Photonamous tab is gone open Photonamous at `?receive=<id>`, which stores
   the save and says so in a toast.
-- **Grade in Lopsy Photos** (Lopsy's Layer menu and layer right-click
-  menu): opens Photos at `?grade=<id>`, straight into the Edit view on
+- **Grade in Photonamous** (Lopsy's Layer menu and layer right-click
+  menu): opens Photonamous at `?grade=<id>`, straight into the Edit view on
   that layer with no library or start screen. The layer arrives at
   16 bits with its transparency, and is edited with the non-RAW pipeline.
   Each grade has a tab of its own. **Done** sends the full-size 16-bit PNG
@@ -343,7 +343,7 @@ never talks to Google. Lopsy's side is in `apps/lopsy-web/FEATURES.md`
   it over, and the first says so and stops writing.
 - **Offline.** In production builds a service worker keeps the app
   shell, so the app starts without a connection; changes wait in the
-  device's queue and are saved when storage is reachable again. Photos
+  device's queue and are saved when storage is reachable again. Photonamous
   whose originals are kept on the device can be edited offline.
 - **Settings**:
   - *This device*: its name, as other devices see it.

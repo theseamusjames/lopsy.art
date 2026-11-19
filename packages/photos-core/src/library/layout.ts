@@ -33,7 +33,7 @@ export const ROLES = {
 } as const;
 
 export const FOLDER_NAMES = {
-  library: 'Lopsy Photos',
+  library: 'Photonamous',
   originals: 'Originals',
   documents: 'Lopsy documents',
   exports: 'Exports',
@@ -44,20 +44,20 @@ export const FOLDER_NAMES = {
   devices: 'devices',
 } as const;
 
-export const README_TEXT = `Lopsy Photos library
+export const README_TEXT = `Photonamous library
 
-This folder holds a photo library made by Lopsy Photos.
+This folder holds a photo library made by Photonamous.
 
-- Originals/ holds your photos exactly as they were imported. Lopsy Photos
+- Originals/ holds your photos exactly as they were imported. Photonamous
   never changes or deletes them.
 - Lopsy documents/ holds photos opened in Lopsy, as .lopsy files.
 - Exports/ holds the files you exported.
 - Library data/ is the library's database: edits, ratings, albums and
   previews. Do not edit, move or delete anything in it.
 
-Files you add to this folder outside Lopsy Photos (through Google Drive's
+Files you add to this folder outside Photonamous (through Google Drive's
 website or its desktop app) are not seen by the app. To add them, use
-"Add from Google Drive" in Lopsy Photos.
+"Add from Google Drive" in Photonamous.
 `;
 
 export interface LibraryManifest {

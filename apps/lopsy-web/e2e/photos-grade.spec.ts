@@ -1,5 +1,5 @@
 /**
- * Grade in Lopsy Photos, Lopsy's side (spec 6.12, "Grade a layer").
+ * Grade in Photonamous, Lopsy's side (spec 6.12, "Grade a layer").
  *
  * A stand-in Photos page is served with `context.route` at the Photos URL
  * this build is configured with (playwright.photos.config.ts). It plays the
@@ -105,7 +105,7 @@ async function layerState(page: Page, id: string): Promise<{ gradeRecipe?: unkno
   }, id);
 }
 
-test.describe('Grade in Lopsy Photos', () => {
+test.describe('Grade in Photonamous', () => {
   test('grading a layer replaces its pixels as one undoable step and keeps the recipe', async ({ page, context, baseURL }) => {
     await serveGradePage(context, new URL(baseURL!).origin, 'done');
     await page.goto('/');
@@ -117,13 +117,13 @@ test.describe('Grade in Lopsy Photos', () => {
 
     // The Layer menu offers it too.
     await page.locator('nav[aria-label="Application menu"]').getByRole('button', { name: 'Layer', exact: true }).click();
-    await expect(page.getByRole('menuitem', { name: 'Grade in Lopsy Photos…' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Grade in Photonamous…' })).toBeVisible();
     await page.keyboard.press('Escape');
 
     await page.locator(`[data-layer-id="${bgId}"]`).click({ button: 'right' });
     const [photos] = await Promise.all([
       context.waitForEvent('page'),
-      page.getByRole('menuitem', { name: 'Grade in Lopsy Photos…' }).click(),
+      page.getByRole('menuitem', { name: 'Grade in Photonamous…' }).click(),
     ]);
     await photos.waitForURL(/grade=/);
     await expect.poll(() => photos.evaluate(() => (window as unknown as { __received: unknown }).__received)).not.toBeNull();
@@ -134,7 +134,7 @@ test.describe('Grade in Lopsy Photos', () => {
     await expect.poll(() => getPixelAt(page, 10, 10, bgId), { timeout: 30_000 }).toMatchObject({ r: 255, g: 0, b: 0 });
     const after = await layerState(page, bgId);
     expect(after.undo).toBe(before.undo + 1);
-    expect(after.label).toBe('Grade in Lopsy Photos');
+    expect(after.label).toBe('Grade in Photonamous');
     expect(after.gradeRecipe).toEqual({ tone: { exposure: 0.5 } });
     await page.screenshot({ path: 'e2e/screenshots/photos-grade-done.png' });
 
@@ -156,7 +156,7 @@ test.describe('Grade in Lopsy Photos', () => {
     await page.locator(`[data-layer-id="${bgId}"]`).click({ button: 'right' });
     const [photos] = await Promise.all([
       context.waitForEvent('page'),
-      page.getByRole('menuitem', { name: 'Grade in Lopsy Photos…' }).click(),
+      page.getByRole('menuitem', { name: 'Grade in Photonamous…' }).click(),
     ]);
     await expect.poll(() => photos.evaluate(() => (window as unknown as { __received: unknown }).__received)).not.toBeNull();
     await page.waitForTimeout(1000);
@@ -209,14 +209,14 @@ async function gradeFromContextMenu(
   await page.locator(`[data-layer-id="${id}"]`).click({ button: 'right' });
   const [photos] = await Promise.all([
     context.waitForEvent('page'),
-    page.getByRole('menuitem', { name: 'Grade in Lopsy Photos…' }).click(),
+    page.getByRole('menuitem', { name: 'Grade in Photonamous…' }).click(),
   ]);
   await expect.poll(() => photos.evaluate(() => (window as unknown as { __received: unknown }).__received)).not.toBeNull();
   const received = await photos.evaluate(() => (window as unknown as { __received: Record<string, number | string> }).__received);
   return { received, photos };
 }
 
-test.describe('Grade in Lopsy Photos, offset layers', () => {
+test.describe('Grade in Photonamous, offset layers', () => {
   test('an offset layer, and one past the canvas, go over whole and come back at the same size and place', async ({ page, context, baseURL }) => {
     await serveGradePage(context, new URL(baseURL!).origin, 'done');
     await page.goto('/');
@@ -230,7 +230,7 @@ test.describe('Grade in Lopsy Photos, offset layers', () => {
 
     const first = await gradeFromContextMenu(page, context, id);
     expect(first.received).toMatchObject({ width: before.width, height: before.height, fullW: before.width, fullH: before.height });
-    await expect.poll(() => layerState(page, id).then((s) => s.label)).toBe('Grade in Lopsy Photos');
+    await expect.poll(() => layerState(page, id).then((s) => s.label)).toBe('Grade in Photonamous');
     expect(await layerGeometry(page, id)).toEqual(before);
     // The graded (red) pixels sit where the block was.
     await expect.poll(() => getPixelAt(page, before.x + 2, before.y + 2, id)).toMatchObject({ r: 255, g: 0, b: 0 });
@@ -251,7 +251,7 @@ test.describe('Grade in Lopsy Photos, offset layers', () => {
   });
 });
 
-test.describe('Grade in Lopsy Photos, untrusted results', () => {
+test.describe('Grade in Photonamous, untrusted results', () => {
   test('a PNG claiming a huge size is refused before the engine decodes it', async ({ page, context, baseURL }) => {
     await serveGradePage(context, new URL(baseURL!).origin, 'huge');
     await page.goto('/');
@@ -260,7 +260,7 @@ test.describe('Grade in Lopsy Photos, untrusted results', () => {
     const bgId = await backgroundId(page);
     const before = await layerState(page, bgId);
     await gradeFromContextMenu(page, context, bgId);
-    await expect(page.getByText(/Couldn't grade in Lopsy Photos: the graded layer is 20000 × 20000, not 64 × 48/)).toBeVisible();
+    await expect(page.getByText(/Couldn't grade in Photonamous: the graded layer is 20000 × 20000, not 64 × 48/)).toBeVisible();
     // The engine is alive and the layer untouched.
     expect(await getPixelAt(page, 10, 10, bgId)).toMatchObject({ r: 255, g: 255, b: 255, a: 255 });
     expect(await layerState(page, bgId)).toEqual(before);

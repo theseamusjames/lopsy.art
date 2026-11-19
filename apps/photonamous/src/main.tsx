@@ -11,7 +11,7 @@ import './styles/index.css';
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('No #root element');
 
-// Grade in Lopsy Photos (spec 6.12): a page Lopsy opened with `?grade=<id>`
+// Grade in Photonamous (spec 6.12): a page Lopsy opened with `?grade=<id>`
 // is the Edit view on that one layer, before and without any library.
 const gradeId = readGradeId(window.location.search);
 

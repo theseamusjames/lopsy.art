@@ -1,5 +1,5 @@
 /**
- * The Lopsy Photos ⇄ Lopsy round trip with both apps running (spec 5.6,
+ * The Photonamous ⇄ Lopsy round trip with both apps running (spec 5.6,
  * 6.12). Run it with its own config, which starts both dev servers:
  *
  *   npx playwright test -c e2e/roundtrip.config.ts
@@ -89,8 +89,8 @@ async function editInLopsy(page: Page, context: BrowserContext, tile: Locator, n
     [editor] = await Promise.all([context.waitForEvent('page'), button.click()]);
   }
   await editor.waitForLoadState();
-  const bar = editor.getByRole('region', { name: 'Lopsy Photos' });
-  await expect(bar).toContainText(`From Lopsy Photos: ${name}`, { timeout: 120_000 });
+  const bar = editor.getByRole('region', { name: 'Photonamous' });
+  await expect(bar).toContainText(`From Photonamous: ${name}`, { timeout: 120_000 });
   return editor;
 }
 
@@ -100,9 +100,9 @@ async function invertInLopsy(lopsy: Page): Promise<void> {
 }
 
 async function saveToPhotos(lopsy: Page): Promise<void> {
-  const bar = lopsy.getByRole('region', { name: 'Lopsy Photos' });
-  await bar.getByRole('button', { name: 'Save to Lopsy Photos' }).click();
-  await expect(bar.getByRole('status')).toHaveText('Saved to Lopsy Photos', { timeout: 120_000 });
+  const bar = lopsy.getByRole('region', { name: 'Photonamous' });
+  await bar.getByRole('button', { name: 'Save to Photonamous' }).click();
+  await expect(bar.getByRole('status')).toHaveText('Saved to Photonamous', { timeout: 120_000 });
 }
 
 test('a photo goes to Lopsy and comes back as a document, then updates in place', async ({ page, context }) => {
@@ -186,7 +186,7 @@ test('a Lopsy layer is graded in Photos and comes back as one undoable step', as
   await page.locator(`[data-layer-id="${bgId}"]`).click({ button: 'right' });
   const [photos] = await Promise.all([
     context.waitForEvent('page'),
-    page.getByRole('menuitem', { name: 'Grade in Lopsy Photos…' }).click(),
+    page.getByRole('menuitem', { name: 'Grade in Photonamous…' }).click(),
   ]);
   await photos.waitForURL(/grade=/);
   await expect(photos.getByTestId('edit-view')).toHaveAttribute('data-status', 'ready', { timeout: 60_000 });
@@ -216,7 +216,7 @@ test('a Lopsy layer is graded in Photos and comes back as one undoable step', as
     const s = store.getState();
     return { label: s.undoStack.at(-1)?.label, exposure: s.document.layers.find((l) => l.id === id)?.gradeRecipe?.tone?.exposure };
   }, bgId);
-  expect(state).toEqual({ label: 'Grade in Lopsy Photos', exposure: -1 });
+  expect(state).toEqual({ label: 'Grade in Photonamous', exposure: -1 });
   await page.screenshot({ path: 'test-results/roundtrip-grade-lopsy.png' });
 
   await page.locator('[data-testid="canvas-container"]').click({ position: { x: 5, y: 5 } });

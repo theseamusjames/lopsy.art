@@ -1,5 +1,5 @@
 /*
- * Lopsy Photos shares Lopsy's design tokens, reset and fonts. They move to
+ * Photonamous shares Lopsy's design tokens, reset and fonts. They move to
  * packages/ui in Phase 0 of docs/photonamous-spec.md; until then they are
  * read from lopsy-web.
  */
@@ -13,7 +13,7 @@ body,
   height: 100%;
 }
 
-/* Lopsy Photos' own tokens: the five colour labels, stars and tile backing. */
+/* Photonamous' own tokens: the five colour labels, stars and tile backing. */
 :root {
   --label-red: #e5534b;
   --label-yellow: #e3b341;

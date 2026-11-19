@@ -41,7 +41,7 @@ export const COMMANDS: ReadonlySet<string> = new Set([
   'deleteExportPreset',
 ]);
 
-export const READ_ONLY_MESSAGE = 'This library was made by a newer version of Lopsy Photos, so it can only be looked at here.';
+export const READ_ONLY_MESSAGE = 'This library was made by a newer version of Photonamous, so it can only be looked at here.';
 
 /** The message to show for a refused command, or null when the error is something else. */
 export function refusalMessage(error: unknown): string | null {

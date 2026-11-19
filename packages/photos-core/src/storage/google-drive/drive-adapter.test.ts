@@ -57,7 +57,7 @@ describe('GoogleDriveAdapter', () => {
     const root = await adapter.getRoot();
     expect(adapter.kind).toBe('google-drive');
     expect(root).toMatchObject({ id: drive.rootId, parentId: null, isFolder: true, name: 'My Drive' });
-    const folder = await adapter.createFolder(root.id, 'Lopsy Photos', { 'lp.role': 'library' });
+    const folder = await adapter.createFolder(root.id, 'Photonamous', { 'lp.role': 'library' });
     expect(folder.revision).not.toBe('');
     expect(folder.sha256).toBeNull();
   });
@@ -224,7 +224,7 @@ describe('GoogleDriveAdapter', () => {
   it('adopts a file it did not create by moving it', async () => {
     const { adapter, drive } = setup();
     const root = await adapter.getRoot();
-    const library = await adapter.createFolder(root.id, 'Lopsy Photos');
+    const library = await adapter.createFolder(root.id, 'Photonamous');
     const picked = drive.seedFile({ name: 'IMG_1.JPG', mimeType: 'image/jpeg', content: new Uint8Array([1, 2, 3]) });
     const moved = await adapter.move(picked, library.id);
     expect(moved.parentId).toBe(library.id);

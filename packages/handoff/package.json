@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "The handoff protocol between Lopsy Photos and Lopsy: message types, validators and both ends of the postMessage handshake. Plain TypeScript, no React.",
+  "description": "The handoff protocol between Photonamous and Lopsy: message types, validators and both ends of the postMessage handshake. Plain TypeScript, no React.",
   "exports": {
     "./*": "./src/*.ts"
   },

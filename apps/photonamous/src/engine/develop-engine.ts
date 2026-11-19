@@ -1142,7 +1142,7 @@ class PhotoEngine implements DevelopEngine {
     this.view = view;
     if (!this.isFullResolution() && view.zoom * this.pixelScale >= FULL_RESOLUTION_ZOOM && this.loaded) {
       this.ensureFullResolution().catch((err: unknown) => {
-        if (!(err instanceof DecodeAbortedError)) console.warn('Lopsy Photos: the full-size image could not be loaded', err);
+        if (!(err instanceof DecodeAbortedError)) console.warn('Photonamous: the full-size image could not be loaded', err);
       });
     }
     this.pushViewport();

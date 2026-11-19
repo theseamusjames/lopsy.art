@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Assembles the lopsy.art site (docs/photonamous-spec.md, 6.2 and 6.3):
- * Lopsy at `/` from apps/lopsy-web/dist and Lopsy Photos at `/photos/`
+ * Lopsy at `/` from apps/lopsy-web/dist and Photonamous at `/photos/`
  * from apps/photonamous/dist (built with PHOTOS_BASE=/photos/), into a
  * root dist/ that Cloudflare Pages publishes.
  *
@@ -85,7 +85,7 @@ cpSync(photosDist, photosOut, {
 });
 
 const redirects = [
-  '# Lopsy Photos, first: Pages applies the first rule that matches.',
+  '# Photonamous, first: Pages applies the first rule that matches.',
   ...photosRedirects(readText(join(photosDist, '_redirects'))),
   '',
   '# Lopsy',
@@ -95,7 +95,7 @@ const redirects = [
 if (!/^\/photos\/\*\s+\/photos\/index\.html\s+200$/m.test(redirects)) fail('Photos _redirects did not give /photos/* /photos/index.html 200');
 writeFileSync(join(out, '_redirects'), redirects);
 
-const headers = [photosOnly ? '' : readText(join(lopsyDist, '_headers')).trimEnd(), '', '# Lopsy Photos', ...photosHeaders(readText(join(photosDist, '_headers')).trim()), ''].join('\n');
+const headers = [photosOnly ? '' : readText(join(lopsyDist, '_headers')).trimEnd(), '', '# Photonamous', ...photosHeaders(readText(join(photosDist, '_headers')).trim()), ''].join('\n');
 if (!headers.includes(`${PHOTOS_PATH}/*`)) fail('Photos _headers has no /* block');
 writeFileSync(join(out, '_headers'), headers);
 

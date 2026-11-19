@@ -58,7 +58,7 @@ export function StartScreen({ choices, offer, connecting, error, onChoose, onRec
   return (
     <main className={styles.screen}>
       <div className={styles.column}>
-        <h1 className={styles.brand}>Lopsy Photos</h1>
+        <h1 className={styles.brand}>Photonamous</h1>
         <p className={styles.lead}>
           Keep all your photos in one place, pick out the best ones and edit them, while the files you took stay
           exactly as they were.

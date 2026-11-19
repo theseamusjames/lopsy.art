@@ -28,20 +28,20 @@ describe('LocalFolderAdapter', () => {
     const root = await adapter.getRoot();
     expect(root.name).toBe('Pictures');
     expect(adapter.kind).toBe('local-folder');
-    const library = await adapter.createFolder(root.id, 'Lopsy Photos', { 'lp.role': 'library' });
+    const library = await adapter.createFolder(root.id, 'Photonamous', { 'lp.role': 'library' });
     const originals = await adapter.createFolder(library.id, 'Originals');
     const year = await adapter.createFolder(originals.id, '2026');
     const day = await adapter.createFolder(year.id, '2026-11-14');
     await adapter.createFile({ parentId: day.id, name: 'DSCF1234.RAF', mimeType: 'image/x-fuji-raf' }, new Blob(['raw']));
 
-    expect(await readPath(disk, 'Lopsy Photos/Originals/2026/2026-11-14/DSCF1234.RAF')).toBe('raw');
+    expect(await readPath(disk, 'Photonamous/Originals/2026/2026-11-14/DSCF1234.RAF')).toBe('raw');
     expect(await listPaths(disk)).toEqual([
       INDEX_FILE_NAME,
-      'Lopsy Photos/',
-      'Lopsy Photos/Originals/',
-      'Lopsy Photos/Originals/2026/',
-      'Lopsy Photos/Originals/2026/2026-11-14/',
-      'Lopsy Photos/Originals/2026/2026-11-14/DSCF1234.RAF',
+      'Photonamous/',
+      'Photonamous/Originals/',
+      'Photonamous/Originals/2026/',
+      'Photonamous/Originals/2026/2026-11-14/',
+      'Photonamous/Originals/2026/2026-11-14/DSCF1234.RAF',
     ]);
   });
 
@@ -161,19 +161,19 @@ describe('LocalFolderAdapter on a folder with files it does not know', () => {
 
   it('never overwrites files or folders already on disk', async () => {
     const disk = new FakeDirectoryHandle('Pictures');
-    const existing = await disk.getDirectoryHandle('Lopsy Photos', { create: true });
+    const existing = await disk.getDirectoryHandle('Photonamous', { create: true });
     await writeText(existing, 'library.json', 'the real one');
     await writeText(disk, 'DSCF1234.JPG', 'real photo');
     const adapter = await open(disk);
     const root = await adapter.getRoot();
-    const library = await adapter.createFolder(root.id, 'Lopsy Photos');
+    const library = await adapter.createFolder(root.id, 'Photonamous');
     const photo = await adapter.createFile({ parentId: root.id, name: 'DSCF1234.JPG', mimeType: 'image/jpeg' }, new Blob(['imported']));
     expect(photo.name).toBe('DSCF1234.JPG');
     expect(await readPath(disk, 'DSCF1234.JPG')).toBe('real photo');
     expect(await readPath(disk, 'DSCF1234 (2).JPG')).toBe('imported');
     await adapter.createFile({ parentId: library.id, name: 'library.json', mimeType: 'application/json' }, new Blob(['ours']));
-    expect(await readPath(disk, 'Lopsy Photos/library.json')).toBe('the real one');
-    expect(await readPath(disk, 'Lopsy Photos (2)/library.json')).toBe('ours');
+    expect(await readPath(disk, 'Photonamous/library.json')).toBe('the real one');
+    expect(await readPath(disk, 'Photonamous (2)/library.json')).toBe('ours');
 
     const other = await adapter.createFolder(root.id, 'Other');
     await writeText(await disk.getDirectoryHandle('Other'), 'DSCF1234 (2).JPG', 'someone else');

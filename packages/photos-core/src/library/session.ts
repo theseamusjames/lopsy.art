@@ -91,7 +91,7 @@ export const DEFAULT_SNAPSHOT_EVERY = 5000;
 /** Thrown by commands on a library whose schema is newer than this app. */
 export class LibraryReadOnlyError extends Error {
   constructor() {
-    super('This library was updated by a newer version of Lopsy Photos. Reload to update before making changes.');
+    super('This library was updated by a newer version of Photonamous. Reload to update before making changes.');
     this.name = 'LibraryReadOnlyError';
   }
 }

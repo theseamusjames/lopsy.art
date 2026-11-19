@@ -22,7 +22,7 @@ export function chromiumExecutable(): string | undefined {
 }
 
 /**
- * E2E tests for Lopsy Photos, against the Vite dev server (5174, or
+ * E2E tests for Photonamous, against the Vite dev server (5174, or
  * VITE_PORT). The server is always started here and never adopted: a dev
  * server left running in another worktree would otherwise be tested in
  * this one's place.

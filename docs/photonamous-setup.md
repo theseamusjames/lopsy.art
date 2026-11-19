@@ -1,6 +1,6 @@
-# Lopsy Photos: setup
+# Photonamous: setup
 
-How to run, test and ship the Lopsy Photos proof of concept. The design is
+How to run, test and ship the Photonamous proof of concept. The design is
 in `photonamous-spec.md`; the app's rules are in
 `apps/photonamous/CLAUDE.md`. Every command runs from the repository root
 unless it says otherwise.
@@ -23,7 +23,7 @@ storage:
   visible on disk.
 - **A folder on this computer**: a folder you pick (Chromium browsers
   only). It fills with real files laid out like the Drive library:
-  `Lopsy Photos/Originals/2026/2026-11-14/…`, plus a hidden
+  `Photonamous/Originals/2026/2026-11-14/…`, plus a hidden
   `.lopsy-storage.json` index and a `.lopsy-trash/` folder.
 
 `http://localhost:5174/?backend=fake` runs the UI on an in-memory library
@@ -46,17 +46,17 @@ with the page open at `http://localhost:5174`. Files in a picked folder
 stay; delete the folder yourself. On lopsy.art, clearing site data also
 clears Lopsy's own data, because the two apps share that origin.
 
-## 2. Lopsy and Photos together (the handoff)
+## 2. Lopsy and Photonamous together (the handoff)
 
 ```bash
 VITE_PHOTOS_URL=http://localhost:5174/ npm run dev   # Lopsy, http://localhost:5173
-npm run dev:photos                                  # Photos, http://localhost:5174 (a second terminal)
+npm run dev:photos                                  # Photonamous, http://localhost:5174 (a second terminal)
 ```
 
-Lopsy talks to Photos only when its build names Photos' URL in
+Lopsy talks to Photonamous only when its build names Photonamous' URL in
 `VITE_PHOTOS_URL`. Without it (plain `npm run dev`, `npm run build`, and
-production while Photos is not deployed) Lopsy is exactly as before: File →
-Add to Lopsy Photos is hidden and `?photos-handoff=` is ignored. The site
+production while Photonamous is not deployed) Lopsy is exactly as before: File →
+Add to Photonamous is hidden and `?photos-handoff=` is ignored. The site
 build (`npm run build:site`, `build:site:noopt`, and the deploy workflow
 when `DEPLOY_PHOTOS` is `true`) sets it to `/photos/`. Put it in
 `apps/lopsy-web/.env.local` to keep it on in development.
@@ -67,7 +67,7 @@ when `DEPLOY_PHOTOS` is `true`) sets it to `/photos/`. Put it in
 | `VITE_PHOTOS_URL` | `apps/lopsy-web/.env.local` | no handoff | `/photos/` |
 
 Both directions run over this channel: Edit in Lopsy and Save to Lopsy
-Photos, and Lopsy's Grade in Lopsy Photos, which opens Photos at
+Photonamous, and Lopsy's Grade in Photonamous, which opens Photonamous at
 `?grade=<id>` straight into the Edit view on one layer (no library needed).
 
 Only the configured URL's origin is trusted for handoff messages. The
@@ -82,13 +82,13 @@ the Google Identity Services token model with the scopes
 userinfo endpoint for the account.
 
 1. **Project.** In the Google Cloud console, create a project (for example
-   "Lopsy Photos").
+   "Photonamous").
 2. **APIs.** APIs & Services > Library: enable **Google Drive API** and
    **Google Picker API**.
 3. **Consent screen.** APIs & Services > OAuth consent screen (Google Auth
    Platform):
    - User type **External**; app name, support email, developer contact.
-   - Authorized domain `lopsy.art` (and your own domain if Photos gets
+   - Authorized domain `lopsy.art` (and your own domain if Photonamous gets
      one).
    - Data access (scopes): `openid`, `.../auth/userinfo.email`,
      `.../auth/userinfo.profile`, `.../auth/drive.file`. All are
@@ -98,9 +98,9 @@ userinfo endpoint for the account.
      after seven days.
 4. **OAuth client.** Credentials > Create credentials > OAuth client ID,
    type **Web application**. Authorized JavaScript origins:
-   - `http://localhost:5174` (the Photos dev server)
+   - `http://localhost:5174` (the Photonamous dev server)
    - `https://lopsy.art`
-   - your own domain, if Photos is deployed on one.
+   - your own domain, if Photonamous is deployed on one.
 
    No redirect URIs: the token model uses a popup. Copy the **client ID**.
 5. **Picker API key.** Credentials > Create credentials > API key, then
@@ -124,7 +124,7 @@ userinfo endpoint for the account.
    ```
 
    Restart `npm run dev:photos`. The start screen now offers **Google
-   Drive** too. The library is created as `Lopsy Photos/` in your My Drive.
+   Drive** too. The library is created as `Photonamous/` in your My Drive.
 
 **Add from Google Drive** (the Picker) is offered when both
 `VITE_GOOGLE_API_KEY` and `VITE_GOOGLE_APP_ID` are set. The app ID is
@@ -181,7 +181,7 @@ in a link-shared folder are visible through the link.
 ## 4. Deploying on Cloudflare
 
 Production deploys run from `.github/workflows/deploy.yml` on every push to
-`main`, into the existing Pages project `lopsy-art`. Photos is included
+`main`, into the existing Pages project `lopsy-art`. Photonamous is included
 only when you switch it on:
 
 1. GitHub > the repository > Settings > Secrets and variables > Actions >
@@ -191,12 +191,12 @@ only when you switch it on:
    - `PHOTOS_GOOGLE_API_KEY` = the Picker API key
    - `PHOTOS_GOOGLE_APP_ID` = the project number
 
-   The Google ones are optional; without the client ID, Photos offers
+   The Google ones are optional; without the client ID, Photonamous offers
    local storage only. They are public identifiers, so they are
    variables, not secrets.
 2. Run the **Deploy to Cloudflare Pages** workflow (Actions > Run
    workflow), or push to `main`. It runs `npm run build:site`: Lopsy at
-   `/`, Photos at `https://lopsy.art/photos/`.
+   `/`, Photonamous at `https://lopsy.art/photos/`.
 3. Check `https://lopsy.art/` and `https://lopsy.art/photos/`.
 
 **Rollback:** set `DEPLOY_PHOTOS` to `false` (or delete it) and run the
@@ -221,7 +221,7 @@ npm run test -w @lopsy/handoff               # the handoff protocol
 npm run test:e2e -w @lopsy/photos-core       # photos-core's browser-only classes in Chromium (Vite harness)
 npm run test:e2e:photos                      # the app in Chromium; *.drive.spec.ts run against the fake Drive
 npm run test:e2e:site                        # smoke test of the assembled dist/ (build it first)
-npm run test:e2e:offline                     # Photos' production build started offline (builds, runs, cleans up)
+npm run test:e2e:offline                     # Photonamous' production build started offline (builds, runs, cleans up)
 cd apps/lopsy-web && npx playwright test e2e/photos-handoff.spec.ts --project=chromium   # Lopsy's side of the handoff
 ```
 
@@ -232,14 +232,14 @@ install chromium` has installed it. Where a different revision is
 preinstalled (some sandboxes and CI images):
 
 - photos-core's browser tests: `PW_CHROMIUM_PATH=<path to chrome or chrome-headless-shell>`.
-- The Photos app and site tests: `PLAYWRIGHT_CHROMIUM_EXECUTABLE=<path>`,
+- The Photonamous app and site tests: `PLAYWRIGHT_CHROMIUM_EXECUTABLE=<path>`,
   or `PLAYWRIGHT_BROWSERS_PATH=<dir>` when that directory has a
   `chromium_headless_shell` link.
 - Lopsy's tests have no fallback: point `PLAYWRIGHT_BROWSERS_PATH` at a
   directory where `chromium_headless_shell-<the revision Playwright
   asks for>` is a link to the installed one.
 
-**Ports.** The Photos e2e suite starts its own dev servers on 5174 and
+**Ports.** The Photonamous e2e suite starts its own dev servers on 5174 and
 5175 and fails if they are taken; `VITE_PORT=<port>` moves them (the
 second is `VITE_PORT + 1`). The site test uses 4180; `SITE_PORT` moves it.
 Lopsy's suite picks a port from the checkout's path.

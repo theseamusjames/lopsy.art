@@ -428,7 +428,7 @@ describe('in-place updates that the session does not take', () => {
 });
 
 describe('storeLopsySave without a source', () => {
-  it('files Add to Lopsy Photos as a new document with no source, next to existing names', async () => {
+  it('files Add to Photonamous as a new document with no source, next to existing names', async () => {
     await adapter.createFile({ parentId: session.layout.documentsId, name: 'Poster.lopsy', mimeType: 'application/x-lopsy' }, new Blob(['x']));
     const stored = await storeLopsySave(
       session,

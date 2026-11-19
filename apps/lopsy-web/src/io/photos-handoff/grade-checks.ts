@@ -1,4 +1,4 @@
-/** Pure checks for Grade in Lopsy Photos (grade-layer.ts). */
+/** Pure checks for Grade in Photonamous (grade-layer.ts). */
 
 import type { Layer } from '../../types/layers';
 

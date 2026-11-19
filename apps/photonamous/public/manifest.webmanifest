@@ -1,6 +1,6 @@
 {
-  "name": "Lopsy Photos",
-  "short_name": "Photos",
+  "name": "Photonamous",
+  "short_name": "Photonamous",
   "description": "A photo library and RAW editor that keeps your originals in your own storage",
   "start_url": "./",
   "scope": "./",

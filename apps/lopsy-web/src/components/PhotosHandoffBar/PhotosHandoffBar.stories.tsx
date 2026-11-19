@@ -26,5 +26,5 @@ export const Saved: Story = {
 };
 
 export const Failed: Story = {
-  args: { status: { kind: 'failed', reason: 'Lopsy Photos did not confirm the save in time.' } },
+  args: { status: { kind: 'failed', reason: 'Photonamous did not confirm the save in time.' } },
 };

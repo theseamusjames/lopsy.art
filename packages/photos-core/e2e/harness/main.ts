@@ -100,7 +100,7 @@ export const harness = {
     const adapter = await openBrowserStorage();
     const root = await adapter.getRoot();
     const cursor = await adapter.getChangeCursor();
-    const folder = await adapter.createFolder(root.id, 'Lopsy Photos', { 'lp.role': 'library' });
+    const folder = await adapter.createFolder(root.id, 'Photonamous', { 'lp.role': 'library' });
     const file = await adapter.createFile(
       { parentId: folder.id, name: 'DSCF1.RAF', mimeType: 'image/x-fuji-raf', properties: { 'lp.role': 'original' } },
       new Blob(['raw bytes']),
@@ -133,7 +133,7 @@ export const harness = {
     const children = (await adapter.listChildren(folderId)).map((child) => child.name);
     const trashed = (await adapter.getFile(trashedId))?.trashed ?? null;
     const found = (await adapter.findByProperty('lp.role', 'original')).length;
-    const dir = await (await (await navigator.storage.getDirectory()).getDirectoryHandle('photonamous')).getDirectoryHandle('Lopsy Photos');
+    const dir = await (await (await navigator.storage.getDirectory()).getDirectoryHandle('photonamous')).getDirectoryHandle('Photonamous');
     const raw = await (await dir.getFileHandle('DSCF1.RAF')).getFile();
     return { text, range, children, trashed, found, onDisk: [raw.name, await raw.text()] };
   },

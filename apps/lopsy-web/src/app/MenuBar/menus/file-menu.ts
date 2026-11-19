@@ -413,8 +413,8 @@ export const fileMenu: MenuDef = {
     { separator: true, label: '' },
     { label: 'Save Project', shortcut: '⌘S', action: () => { saveProject().catch((err) => notifyError(`Save failed: ${describeError(err)}`)); } },
     { label: 'Open Project...', action: () => openProjectFromDisk() },
-    // Only builds that ship Lopsy Photos (VITE_PHOTOS_URL) offer the handoff.
-    ...(isPhotosEnabled() ? [{ label: 'Add to Lopsy Photos', action: () => { void addDocumentToPhotos(); } }] : []),
+    // Only builds that ship Photonamous (VITE_PHOTOS_URL) offer the handoff.
+    ...(isPhotosEnabled() ? [{ label: 'Add to Photonamous', action: () => { void addDocumentToPhotos(); } }] : []),
     { separator: true, label: '' },
     { label: 'Export…', shortcut: '⌥⇧⌘E', action: () => openExportDialogFn?.() },
     { label: 'Quick Export PNG', shortcut: '⇧⌘E', action: () => exportCanvas('png') },

@@ -1,5 +1,5 @@
 /**
- * The messages Lopsy Photos and Lopsy exchange over `window.postMessage`
+ * The messages Photonamous and Lopsy exchange over `window.postMessage`
  * (spec 6.12). Every message carries `protocol: 1`; anything that arrives
  * is untrusted input and goes through the validator for its type before
  * either app acts on it.
@@ -143,7 +143,7 @@ export interface LopsySaveMessage {
   readonly lopsy: ArrayBuffer;
   /** The flattened composite as a 16-bit PNG. */
   readonly render: ArrayBuffer;
-  /** Absent for Add to Lopsy Photos: Photos files it as a new document. */
+  /** Absent for Add to Photonamous: Photos files it as a new document. */
   readonly source?: HandoffSource;
   readonly baseRevision?: string;
 }

@@ -183,7 +183,7 @@ export function EditHarness() {
           onEditInLopsy={(renderPng16) => {
             renderPng16()
               .then((png) => record.lopsyPngs.push(png))
-              .catch((err: unknown) => console.error('Lopsy Photos: Edit in Lopsy render failed', err));
+              .catch((err: unknown) => console.error('Photonamous: Edit in Lopsy render failed', err));
           }}
           onExport={(blob, fileName) => {
             record.exports.push({ blob, fileName });

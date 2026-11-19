@@ -8,7 +8,7 @@ import { serviceWorkerPlugin } from './scripts/vite-plugin-service-worker';
 const repoRoot = resolve(__dirname, '../..');
 
 /**
- * Lopsy Photos. Served at `/` in development and at PHOTOS_BASE in a
+ * Photonamous. Served at `/` in development and at PHOTOS_BASE in a
  * build (`/photos/` when it ships inside lopsy.art; `/` on its own domain).
  *
  * The engine is the wasm package `npm run wasm:build` writes into

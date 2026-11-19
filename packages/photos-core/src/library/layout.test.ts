@@ -12,7 +12,7 @@ describe('ensureLibrary', () => {
     const { layout, created, manifest } = await ensureLibrary(adapter, { now: () => Date.UTC(2026, 10, 18) });
     expect(created).toBe(true);
     const root = await adapter.getFile(layout.rootId);
-    expect(root?.name).toBe('Lopsy Photos');
+    expect(root?.name).toBe('Photonamous');
     expect(root?.properties).toEqual({ 'lp.lib': layout.libraryId, 'lp.role': 'library' });
 
     const top = await childrenByName(adapter, layout.rootId);
@@ -74,7 +74,7 @@ describe('ensureLibrary', () => {
     // Fail after the top folder exists.
     const partial = new TestAdapter();
     const rootId = (await partial.getRoot()).id;
-    await partial.createFolder(rootId, 'Lopsy Photos', { 'lp.lib': 'lib-1', 'lp.role': 'library' });
+    await partial.createFolder(rootId, 'Photonamous', { 'lp.lib': 'lib-1', 'lp.role': 'library' });
     const { layout, created } = await ensureLibrary(partial);
     expect(created).toBe(false);
     expect(layout.libraryId).toBe('lib-1');

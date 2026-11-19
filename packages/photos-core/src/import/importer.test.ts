@@ -60,7 +60,7 @@ const fakeRenderer: PreviewRenderer & { calls: { size: number; orientation: numb
 async function setup() {
   const adapter = new TestMemoryAdapter();
   const root = await adapter.getRoot();
-  const library = await adapter.createFolder(root.id, 'Lopsy Photos');
+  const library = await adapter.createFolder(root.id, 'Photonamous');
   const originals = await adapter.createFolder(library.id, 'Originals');
   const data = await adapter.createFolder(library.id, 'Library data');
   const previews = await adapter.createFolder(data.id, 'previews');
@@ -116,10 +116,10 @@ describe('startImport', () => {
     });
 
     const original = await adapter.getFile(first.fileId);
-    expect(await pathOf(adapter, first.fileId)).toBe('Lopsy Photos/Originals/2026/2026-11-14/DSCF0001.JPG');
+    expect(await pathOf(adapter, first.fileId)).toBe('Photonamous/Originals/2026/2026-11-14/DSCF0001.JPG');
     expect(original?.properties).toEqual({ 'lp.lib': 'lib-test', 'lp.role': 'original', 'lp.asset': first.id, 'lp.sha': first.sha256 });
     expect(await pathOf(adapter, view.assets.get(result.items[1]?.assetId ?? '')?.fileId ?? '')).toBe(
-      'Lopsy Photos/Originals/2026/2026-11-15/DSCF0002.JPG',
+      'Photonamous/Originals/2026/2026-11-15/DSCF0002.JPG',
     );
 
     const version = view.versions.get(first.primaryVersionId);

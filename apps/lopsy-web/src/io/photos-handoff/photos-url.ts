@@ -1,8 +1,8 @@
 /**
- * Where Lopsy Photos lives, for handoffs: `VITE_PHOTOS_URL`, set at build
+ * Where Photonamous lives, for handoffs: `VITE_PHOTOS_URL`, set at build
  * time by builds that ship Photos (the site build sets `/photos/`; in
  * development, set it to the Photos dev server, `http://localhost:5174/`).
- * Without it Lopsy has no Photos to talk to: File → Add to Lopsy Photos is
+ * Without it Lopsy has no Photos to talk to: File → Add to Photonamous is
  * hidden and `?photos-handoff=` is ignored, so Lopsy is exactly as it was.
  * Only this URL's origin is trusted (spec 6.12).
  */

@@ -55,7 +55,7 @@ export function usePreviews(
           previewed.current = { thumbHash: previews.recipeHash, screenHash: previews.recipeHash };
           callback(previews);
         } catch (err) {
-          console.warn('Lopsy Photos: previews could not be rendered', err);
+          console.warn('Photonamous: previews could not be rendered', err);
         }
       };
       const next = (job.current ?? Promise.resolve()).then(run);

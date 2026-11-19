@@ -1,5 +1,5 @@
 /**
- * The storage contract for a Lopsy Photos library.
+ * The storage contract for a Photonamous library.
  *
  * Google Drive is one implementation. A local folder (the browser's private
  * file system, or a folder the user picked) and an in-memory store are the

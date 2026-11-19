@@ -4,7 +4,7 @@ import { join, relative, sep } from 'node:path';
 import type { Plugin, ResolvedConfig } from 'vite';
 
 /**
- * Builds Lopsy Photos' service worker (src/sw/service-worker.ts) into
+ * Builds Photonamous' service worker (src/sw/service-worker.ts) into
  * `<base>sw.js`, a fixed name so its scope is the app's base, and writes
  * the precache manifest into it once the build is on disk: every file
  * written (the hashed JS and CSS, the engine's wasm, the public fonts,

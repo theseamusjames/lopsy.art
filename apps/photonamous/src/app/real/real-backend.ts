@@ -253,12 +253,12 @@ export class RealBackend implements PhotosBackend {
       case 'local-folder': {
         let handle = reconnect ? await loadFolderHandle() : null;
         if (handle && !(await ensureReadWrite(handle))) {
-          throw new Error(`Lopsy Photos needs permission to use the folder “${handle.name}”.`);
+          throw new Error(`Photonamous needs permission to use the folder “${handle.name}”.`);
         }
         if (!handle) {
           handle = await pickFolder();
           if (!handle) throw new ConnectCancelled();
-          if (!(await ensureReadWrite(handle))) throw new Error(`Lopsy Photos needs permission to change “${handle.name}”.`);
+          if (!(await ensureReadWrite(handle))) throw new Error(`Photonamous needs permission to change “${handle.name}”.`);
           await saveFolderHandle(handle).catch(() => undefined);
         }
         const adapter = await openPickedFolder(handle);
@@ -279,7 +279,7 @@ export class RealBackend implements PhotosBackend {
         } catch (error) {
           if (error instanceof AccountMismatchError) throw error;
           if (isStorageError(error) && error.code === 'auth') {
-            throw new Error('Google sign-in did not finish. Lopsy Photos needs access to the files it creates in your Drive.');
+            throw new Error('Google sign-in did not finish. Photonamous needs access to the files it creates in your Drive.');
           }
           throw error;
         }

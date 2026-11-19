@@ -50,7 +50,7 @@ class NoChecksumAdapter extends MemoryAdapter {
 
 async function setup(adapter: MemoryAdapter = new MemoryAdapter()) {
   const root = await adapter.getRoot();
-  const library = await adapter.createFolder(root.id, 'Lopsy Photos');
+  const library = await adapter.createFolder(root.id, 'Photonamous');
   const originals = await adapter.createFolder(library.id, 'Originals');
   const previews = await adapter.createFolder(library.id, 'previews');
   const elsewhere = await adapter.createFolder(root.id, 'Camera uploads');
@@ -86,8 +86,8 @@ describe('startImportFromStorage', () => {
       ['A.JPG', 'done'],
       ['B.JPG', 'done'],
     ]);
-    expect(await pathOf(a)).toBe('Lopsy Photos/Originals/2026/2026-11-14/A.JPG');
-    expect(await pathOf(b)).toBe('Lopsy Photos/Originals/2025/2025-01-02/B.JPG');
+    expect(await pathOf(a)).toBe('Photonamous/Originals/2026/2026-11-14/A.JPG');
+    expect(await pathOf(b)).toBe('Photonamous/Originals/2025/2025-01-02/B.JPG');
     const asset = session.getView().assets.get(result.items[0]?.assetId ?? '');
     expect(asset).toMatchObject({ fileId: a, fileName: 'A.JPG', format: 'jpeg', capturedAt: '2026-11-14T16:02:11' });
     expect((await adapter.getFile(a))?.properties).toEqual({

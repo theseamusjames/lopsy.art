@@ -1,4 +1,4 @@
-# Lopsy Photos — development rules
+# Photonamous — development rules
 
 A photo library and RAW editor that keeps originals in the user's Google
 Drive (or a local folder) and renders edits with the Lopsy engine. This is
@@ -69,22 +69,22 @@ npm run storybook:photos        # Storybook on port 6007
 npm run build-storybook:photos  # static build (storybook-static/; delete it after)
 npm run test:e2e:photos    # Playwright
 
-# The lopsy.art site: Lopsy at /, Photos at /photos/ (spec 6.3)
-npm run build:site         # engine + Lopsy, Photos with PHOTOS_BASE=/photos/, then scripts/assemble-site.mjs into dist/
+# The lopsy.art site: Lopsy at /, Photonamous at /photos/ (spec 6.3)
+npm run build:site         # engine + Lopsy, Photonamous with PHOTOS_BASE=/photos/, then scripts/assemble-site.mjs into dist/
 npm run build:site:noopt   # the same with wasm:build:noopt, where wasm-opt cannot be downloaded
 npm run assemble:site      # only the assembly, from both apps' existing dist/
 npm run serve:site         # dist/ the way Cloudflare Pages serves it (_redirects, _headers), port 4180
 npm run test:e2e:site      # Playwright smoke test of dist/ (playwright.site.config.ts)
-npm run test:e2e:offline   # builds Photos alone at /photos/, starts it offline (service worker), cleans up
+npm run test:e2e:offline   # builds Photonamous alone at /photos/, starts it offline (service worker), cleans up
 ```
 
 The service worker (`src/sw/`, emitted as `<base>sw.js` by
 `scripts/vite-plugin-service-worker.ts`) runs only in production builds.
 It precaches the app shell and never handles Google hosts or Drive content.
 
-Photos' `public/_redirects` and `public/_headers` are written for serving
+Photonamous' `public/_redirects` and `public/_headers` are written for serving
 it at `/` on its own domain; `assemble-site.mjs` moves them under
 `/photos/`. The Content-Security-Policy is there: a new Google host or
 script source goes in `public/_headers`, and `test:e2e:site` fails on
-any CSP violation. Production deploys Photos only when the repository
+any CSP violation. Production deploys Photonamous only when the repository
 variable `DEPLOY_PHOTOS` is `true` (`.github/workflows/deploy.yml`).

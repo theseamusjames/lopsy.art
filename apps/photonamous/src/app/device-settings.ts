@@ -58,7 +58,7 @@ export function describeHealth(report: {
   const n = (count: number, one: string, many: string) => `${count.toLocaleString('en-US')} ${count === 1 ? one : many}`;
   if (report.missing.length > 0) lines.push(`${n(report.missing.length, 'original is', 'originals are')} missing from storage.`);
   if (report.trashed.length > 0) lines.push(`${n(report.trashed.length, 'original is', 'originals are')} in the trash.`);
-  if (report.changed.length > 0) lines.push(`${n(report.changed.length, 'original has', 'originals have')} been changed outside Lopsy Photos.`);
+  if (report.changed.length > 0) lines.push(`${n(report.changed.length, 'original has', 'originals have')} been changed outside Photonamous.`);
   if (report.orphans.length > 0) lines.push(`${n(report.orphans.length, 'photo is', 'photos are')} in Originals but not in the library.`);
   const leftovers = report.leftovers?.length ?? 0;
   if (leftovers > 0) lines.push(`${n(leftovers, 'original of a deleted photo is', 'originals of deleted photos are')} still outside the trash.`);

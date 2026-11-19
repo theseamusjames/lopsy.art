@@ -33,7 +33,7 @@ function describe(err: unknown): string {
 }
 
 /**
- * Grade in Lopsy Photos (spec 6.12): the Edit view on one layer Lopsy sent,
+ * Grade in Photonamous (spec 6.12): the Edit view on one layer Lopsy sent,
  * with no library. Done sends the graded layer and its recipe back; Cancel
  * sends nothing.
  */
@@ -138,7 +138,7 @@ export function GradeScreen({ session, onFinished }: GradeScreenProps) {
           : phase.message;
   return (
     <main className={styles.message} data-testid="grade-screen" data-phase={phase.kind}>
-      <h1 className={styles.title}>Grade in Lopsy Photos</h1>
+      <h1 className={styles.title}>Grade in Photonamous</h1>
       <p className={phase.kind === 'failed' ? styles.error : styles.hint} role="status">
         {words}
       </p>

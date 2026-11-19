@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  /** Lopsy Photos' URL, for handoffs. Defaults to http://localhost:5174/ in dev and /photos/ in production. */
+  /** Photonamous' URL, for handoffs. Defaults to http://localhost:5174/ in dev and /photos/ in production. */
   readonly VITE_PHOTOS_URL?: string;
 }
 

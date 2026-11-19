@@ -2,7 +2,7 @@
   "name": "lopsy",
   "version": "0.1.0",
   "private": true,
-  "description": "Lopsy: a browser-based image editor (apps/lopsy-web), Lopsy Photos (apps/photonamous, proof of concept) and the engine they render with (engine)",
+  "description": "Lopsy: a browser-based image editor (apps/lopsy-web), Photonamous (apps/photonamous, proof of concept) and the engine they render with (engine)",
   "workspaces": [
     "apps/*",
     "packages/*"

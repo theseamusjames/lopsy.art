@@ -126,7 +126,7 @@ export function writeXmp(
   ];
   return [
     '<?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTczkc9d"?>',
-    '<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Lopsy Photos">',
+    '<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Photonamous">',
     ` <rdf:RDF xmlns:rdf="${NS.rdf}">`,
     `  <rdf:Description ${[...namespaces, ...attributes].join('\n    ')}>`,
     ...children,

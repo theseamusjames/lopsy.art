@@ -1,5 +1,5 @@
 /**
- * Grade in Lopsy Photos keeps a layer's transparency (spec 6.12, L5). A
+ * Grade in Photonamous keeps a layer's transparency (spec 6.12, L5). A
  * Lopsy layer arrives as the engine's 16-bit layer blob; this drives the
  * develop engine the Edit view uses on such a blob with partial alpha and
  * checks that every develop stage leaves alpha alone, and that with no

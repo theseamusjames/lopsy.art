@@ -34,12 +34,12 @@ export function createLayerMenu(): MenuDef {
         disabled: disableMergeDown,
       },
       { label: 'Flatten Image', action: () => void useEditorStore.getState().flattenImage() },
-      // Only builds that ship Lopsy Photos (VITE_PHOTOS_URL) offer the grade.
+      // Only builds that ship Photonamous (VITE_PHOTOS_URL) offer the grade.
       ...(isPhotosEnabled()
         ? [
             { separator: true, label: '' },
             {
-              label: 'Grade in Lopsy Photos\u2026',
+              label: 'Grade in Photonamous\u2026',
               action: () => void gradeLayerInPhotos(),
               disabled: !canGradeLayer(activeLayer),
             },

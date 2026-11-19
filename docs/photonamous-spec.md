@@ -1,11 +1,11 @@
-# Lopsy Photos: spec
+# Photonamous: spec
 
 Status: proposal, written 2026-11-18. A proof of concept was built the
 same day; Appendix B says what exists and where it departs from this
-design. "Lopsy Photos" and its URL are placeholders: the app may get its
+design. "Photonamous" and its URL are placeholders: the app may get its
 own name and domain, and nothing in the design depends on either.
 
-Lopsy Photos is a photo library and RAW editor that runs in the browser.
+Photonamous is a photo library and RAW editor that runs in the browser.
 It keeps every original in the user's own Google Drive and renders every
 edit with the Lopsy engine. It covers the workflow people use Lightroom
 for: bring photos in, sort out the keepers, develop RAW files without
@@ -49,11 +49,11 @@ Appendix A. Re-check them before building on them.
 | Code | `apps/photonamous/`, with shared code moved into `packages/`: the engine bridge, the UI kit, the handoff protocol, and the Drive and library code | Matches the migration plan's direction (an engine with several consumers). Each app keeps its own rules and tests. |
 | Sign-in | Google Identity Services, token model, entirely in the browser | No server. Tokens last about an hour and there is no refresh token. The app works around this (6.4); an optional stateless sign-in helper removes it (open question 2). |
 | Drive access | The `drive.file` scope only | Google's recommended, non-sensitive Drive scope. No restricted-scope review or yearly security assessment. The app sees only files it created or the user picked. |
-| Drive layout | `Lopsy Photos/` holding `Originals/`, `Lopsy documents/`, `Exports/` and `Library data/` | The user can see and understand it; nothing is hidden in app-only storage. |
+| Drive layout | `Photonamous/` holding `Originals/`, `Lopsy documents/`, `Exports/` and `Library data/` | The user can see and understand it; nothing is hidden in app-only storage. |
 | Database | An append-only change journal per device, plus snapshots, in `Library data/`; an IndexedDB mirror on each device | Drive has no transactions, locks or conditional writes. Files that only one device ever writes cannot conflict. |
 | Edits | Recipes (JSON parameters) rendered by the engine. Originals are never modified. | Non-destructive by construction. Recipes are small and merge field by field. |
 | Rendering | A new scene-referred develop pipeline in the engine (`engine/src/develop/`), shared by both apps and the CLI host | One engine, one look. It also starts Phase 7 of `docs/engine-migration-plan.md`. |
-| Handoff to Lopsy | `window.postMessage` between the two tabs. Photos sends the developed photo as 16-bit pixels. Lopsy sends back a `.lopsy` and a flattened 16-bit render, and Photos stores them in Drive. | Works the same whether or not the apps share an origin. Lopsy needs no Google sign-in and no Drive code, so it stays an app with no account. |
+| Handoff to Lopsy | `window.postMessage` between the two tabs. Photonamous sends the developed photo as 16-bit pixels. Lopsy sends back a `.lopsy` and a flattened 16-bit render, and Photonamous stores them in Drive. | Works the same whether or not the apps share an origin. Lopsy needs no Google sign-in and no Drive code, so it stays an app with no account. |
 | Formats at launch | RAF, DNG (CFA and Linear, including Apple ProRAW), JPEG, PNG, WebP | What the engine and browsers decode today. |
 
 ## 2. Principles
@@ -122,7 +122,7 @@ Appendix A. Re-check them before building on them.
 The engine and app already hold much of what this needs. The table says
 what each piece is and what it lacks for this app.
 
-| Need | In the repository | Missing for Lopsy Photos |
+| Need | In the repository | Missing for Photonamous |
 |---|---|---|
 | Fujifilm RAF decode | `engine/core/src/raf/`: X-Trans Markesteijn demosaic, Fujifilm 14-bit lossless decompression, CFA-phase detection, as-shot white balance. A worker pool renders row bands bit-identically (`apps/lopsy-web/src/io/raf-decode.ts`). | The decode bakes a final look and clamps it to 0..1: film-simulation saturation, a 1.3× exposure boost, highlight desaturation, base curve, sRGB gamma, capture sharpening. Develop needs it to stop at linear, unclamped camera RGB. Lossy and 12-bit compressed RAF are unsupported. |
 | DNG decode | `engine/core/src/dng/`: CFA and Linear DNG (Apple ProRAW), lossless JPEG, deflate, LinearizationTable, ForwardMatrix and ColorMatrix paths | Bilinear Bayer demosaic only. Opcode lists (lens correction data) are not applied. Only iPhone ProRAW has been tested. Lossy JPEG and JPEG XL DNGs are unsupported. Also clamps to 0..1. |
@@ -136,7 +136,7 @@ what each piece is and what it lacks for this app.
 | Thumbnails | `engine/src/document/thumbnail_gpu.rs`: box-filtered GPU thumbnails | Fine as is. |
 | UI components | `Slider`, `NumberInput`, `CurveEditor`, `ColorWheel`, `ColorPicker`, `ContextMenu`, `Toasts`, `ModalHost`, `Button`, `IconButton`, and the keyboard-shortcut customization system | Live inside `apps/lopsy-web/src`; need moving to a shared package. |
 | Command-line host | `engine/hosts/cli` runs the engine on a native GPU | No `develop` command yet. Golden-image tests will use one (10). |
-| Persistence | `localStorage` only. No IndexedDB, OPFS, Cache API or cookies anywhere in the app. | Photos needs IndexedDB and OPFS. Lopsy needs no new storage (6.12). |
+| Persistence | `localStorage` only. No IndexedDB, OPFS, Cache API or cookies anywhere in the app. | Photonamous needs IndexedDB and OPFS. Lopsy needs no new storage (6.12). |
 | Lopsy's project format | `.lopsy` v2: JSON manifest plus gzipped layer pixels | Stores 8 bits per channel, so a 16-bit round trip would lose precision. Needs v3 (L2). |
 | Cloud and accounts | None. Lopsy is "no account". | Everything in 6.4 to 6.8. |
 
@@ -157,7 +157,7 @@ app is that second app.
    Google Drive files you use with this app". If the user unticks Drive,
    the app explains why it needs it and offers to ask again.
 3. The app looks for an existing library: a folder this app created and
-   tagged as one (6.5). If there is none, it creates `Lopsy Photos` in My
+   tagged as one (6.5). If there is none, it creates `Photonamous` in My
    Drive with its four subfolders and a `README.txt`.
 4. The empty library shows one action: **Import photos**, with a hint
    about dropping a folder or a memory card on the window.
@@ -358,11 +358,11 @@ in the sync panel.
 - The photo arrives developed with the version's edits, at full
   resolution and in 16-bit. A first-time option sends the original with
   no edits.
-- Lopsy shows a bar: "From Lopsy Photos: DSCF1234". It holds **Save to
-  Lopsy Photos** and **Back to Photos**. While the bar is shown, ⌘S
-  means Save to Lopsy Photos.
+- Lopsy shows a bar: "From Photonamous: DSCF1234". It holds **Save to
+  Photonamous** and **Back to Photonamous**. While the bar is shown, ⌘S
+  means Save to Photonamous.
 - Saving sends a `.lopsy` file and a flattened 16-bit render back to
-  Photos, which stores them in `Lopsy documents/`. If the Photos tab was
+  Photonamous, which stores them in `Lopsy documents/`. If the Photonamous tab was
   closed, saving opens it again to receive them.
 - The result joins the source photo's stack as a document, and can be
   rated, put in albums and exported like any photo.
@@ -370,11 +370,11 @@ in the sync panel.
   render. Saving updates the same Drive file, and Drive keeps the earlier
   revisions.
 
-**From Lopsy, Add to Lopsy Photos** (File menu): Lopsy hands the
-document to Photos, which signs in if needed and adds it to the library.
+**From Lopsy, Add to Photonamous** (File menu): Lopsy hands the
+document to Photonamous, which signs in if needed and adds it to the library.
 
 **Grade a layer** (Phase 5):
-- From the Layers panel, Lopsy sends one raster layer to the Photos
+- From the Layers panel, Lopsy sends one raster layer to the Photonamous
   editor. The user grades it with the develop controls and clicks
   **Done**.
 - The layer comes back graded, as one history step.
@@ -413,7 +413,7 @@ The UI uses the middle column. The right column helps engineers map
 concepts to what other software calls them; those words do not appear in
 the product.
 
-| Concept | In Lopsy Photos | Often called elsewhere |
+| Concept | In Photonamous | Often called elsewhere |
 |---|---|---|
 | The parameters of a non-destructive edit | Edits (a "recipe" in code) | develop settings, sidecar |
 | A second edit of the same original | Version | virtual copy |
@@ -430,7 +430,7 @@ the product.
 ### 6.1 Overview
 
 ```
- Lopsy Photos tab                                     Lopsy tab
+ Photonamous tab                                     Lopsy tab
  (lopsy.art/photos/ or its own domain)                (lopsy.art)
  ┌────────────────────────────────────────┐          ┌──────────────────────────┐
  │ React UI: Library, Edit, Export        │          │ Lopsy editor             │
@@ -445,14 +445,14 @@ the product.
                      │ HTTPS (googleapis.com)
                      ▼
      Google Drive, the user's My Drive
-     Lopsy Photos/  Originals/  Lopsy documents/  Exports/  Library data/
+     Photonamous/  Originals/  Lopsy documents/  Exports/  Library data/
 ```
 
 ### 6.2 Code layout and build
 
 ```
 apps/
-  lopsy-web/        Lopsy. Gains the handoff and Save to Lopsy Photos (section 9)
+  lopsy-web/        Lopsy. Gains the handoff and Save to Photonamous (section 9)
   photonamous/     this app: React, TypeScript, Vite; base '/photos/', or '/' on its own domain
 packages/
   engine-web/       the two wasm builds, the typed bridge, renderer choice and
@@ -460,9 +460,9 @@ packages/
   ui/               tokens.css, reset.css, fonts, and the shared components (section 4)
   photos-core/      Google sign-in, the Drive client, the library database
                     (journal, snapshots, IndexedDB) and the import and upload
-                    queue. Plain TypeScript, no React. Used by Photos only.
+                    queue. Plain TypeScript, no React. Used by Photonamous only.
   handoff/          the message types and channel both apps use for handoffs
-                    (6.12). The only Photos code Lopsy imports.
+                    (6.12). The only Photonamous code Lopsy imports.
 engine/             gains develop/, metadata, and the decode split (section 8)
 ```
 
@@ -473,13 +473,13 @@ engine/             gains develop/, metadata, and the decode split (section 8)
 - `test`, `lint` and `typecheck` run in every workspace.
 - `build` builds the engine once, then both apps.
   - On the lopsy.art path, `scripts/assemble-site.mjs` then writes one
-    `dist/`, with Lopsy at `/` and Photos at `/photos/`.
+    `dist/`, with Lopsy at `/` and Photonamous at `/photos/`.
   - On its own domain, each app's `dist/` deploys separately (6.3).
 - The deploy job publishes the result.
-- PR CI gains Photos jobs (lint including the pixel-debt check,
+- PR CI gains Photonamous jobs (lint including the pixel-debt check,
   typecheck, unit tests, an e2e subset), and the pre-push hook runs them.
 
-**Rules.** Photos follows the same rules as `apps/lopsy-web/CLAUDE.md`:
+**Rules.** Photonamous follows the same rules as `apps/lopsy-web/CLAUDE.md`:
 - strict TypeScript, CSS Modules on the shared tokens, no new UI or CSS
   libraries;
 - pure logic modules with unit tests, and a Storybook story per
@@ -513,7 +513,7 @@ design does not depend on which:
 
 | | A path on lopsy.art (the starting point) | Its own domain |
 |---|---|---|
-| Pages project | The existing `lopsy-art`. The deploy publishes an assembled `dist/`, with Photos under `/photos/`. | A second project, published by the same deploy job |
+| Pages project | The existing `lopsy-art`. The deploy publishes an assembled `dist/`, with Photonamous under `/photos/`. | A second project, published by the same deploy job |
 | Routing | `_redirects` gains `/photos/* /photos/index.html 200` before the catch-all `/* /index.html 200`. Pages takes the first match, and static files win over rewrites, as they already do for Lopsy. | The app's own `_redirects`, with `/* /index.html 200` |
 | Google sign-in | `https://lopsy.art` is an authorized JavaScript origin | The new domain is an authorized JavaScript origin on the same OAuth client |
 | Handoff | `postMessage` between two windows on one origin | `postMessage` between two origins. Each app's build lists the other's origin. |
@@ -616,7 +616,7 @@ with the app from Drive). The consequences:
 **Layout.**
 
 ```
-Lopsy Photos/                          lp.role=library
+Photonamous/                          lp.role=library
 ├── README.txt                         what this folder is; don't edit Library data
 ├── Originals/                         lp.role=originals
 │   └── 2026/
@@ -732,7 +732,7 @@ That is a property test (10).
   conflict.
   - The Drive revision an editing session started from travels with the
     document (6.12).
-  - Before uploading a save, Photos compares it with the file's current
+  - Before uploading a save, Photonamous compares it with the file's current
     `headRevisionId`. If they differ, it saves a copy ("DSCF1234
     2.lopsy") and says so.
   - There is a small race window, because Drive has no conditional
@@ -1014,25 +1014,25 @@ transfer function) in the worker-hosted engine.
 
 ### 6.12 Handoff protocol
 
-The two apps talk only through `window.postMessage` between a Photos tab
+The two apps talk only through `window.postMessage` between a Photonamous tab
 and a Lopsy tab. The same code runs whether they share an origin or not.
-Lopsy never touches Google: Photos does every Drive read and write.
+Lopsy never touches Google: Photonamous does every Drive read and write.
 
 **The channel.**
-- Photos opens Lopsy from a click, so popup blockers allow it, with
+- Photonamous opens Lopsy from a click, so popup blockers allow it, with
   `window.open('<Lopsy URL>/?photos-handoff=<id>', 'lopsy-editor')`. The
   named target reuses an open Lopsy tab.
 - Lopsy sees the parameter and posts `{ type: 'lopsy:ready', id }` to
-  `window.opener`. Photos answers with the payload.
+  `window.opener`. Photonamous answers with the payload.
 - Origin checks:
   - neither side acts on a message whose `event.origin` is not on its
     build-time allowlist;
   - every `postMessage` names its target origin, never `*`.
 - Messages carry `protocol: 1` and are schema-checked. Their types live
-  in `packages/handoff/`, the only Photos code Lopsy imports.
+  in `packages/handoff/`, the only Photonamous code Lopsy imports.
 
-**Photos to Lopsy.**
-1. Photos renders the version at full resolution through its export path
+**Photonamous to Lopsy.**
+1. Photonamous renders the version at full resolution through its export path
    (6.11), as RGBA half-float pixels in the colour space chosen in the
    handoff options.
 2. It sends a header, then the pixels.
@@ -1049,29 +1049,29 @@ Lopsy never touches Google: Photos does every Drive read and write.
    the Drive revision they came from. Lopsy opens them as a project and
    returns that revision with the save (6.6).
 
-**Lopsy back to Photos.**
-1. **Save to Lopsy Photos** posts two transferred files to the Photos tab:
+**Lopsy back to Photonamous.**
+1. **Save to Photonamous** posts two transferred files to the Photonamous tab:
    - `.lopsy` v3: 16-bit, carrying the source block;
    - a flattened 16-bit PNG.
-2. Photos does the Drive side:
+2. Photonamous does the Drive side:
    - uploads both to `Lopsy documents/`;
    - journals the ops (`asset.add` with `kind: "document"`, or a new
      revision of an existing document);
    - renders a preview;
    - answers `{ type: 'photos:saved' }`, and Lopsy shows "Saved to Lopsy
-     Photos".
-3. If Lopsy has no Photos tab to talk to because the user closed it, Save
-   to Lopsy Photos opens one with `?receive=<id>`, and the same handshake
+     Photonamous".
+3. If Lopsy has no Photonamous tab to talk to because the user closed it, Save
+   to Photonamous opens one with `?receive=<id>`, and the same handshake
    runs the other way.
-4. The source block inside the `.lopsy` tells Photos where a document
-   belongs, so Photos keeps no record of handoffs in flight.
+4. The source block inside the `.lopsy` tells Photonamous where a document
+   belongs, so Photonamous keeps no record of handoffs in flight.
 
-**Add to Lopsy Photos** sends the document like a save, without a source
-block, and Photos files it as a new document.
+**Add to Photonamous** sends the document like a save, without a source
+block, and Photonamous files it as a new document.
 
 **Grade a layer** (Phase 5) runs the same channel the other way:
 1. Lopsy sends one layer's pixels.
-2. Photos opens its Edit view in layer mode.
+2. Photonamous opens its Edit view in layer mode.
 3. **Done** sends the graded pixels and the recipe back.
 4. Lopsy replaces the layer's pixels as one history step and stores the
    recipe on the layer.
@@ -1102,20 +1102,20 @@ buffer between processes; the handoff budget (11) includes that.
   text.
 - Handoff messages are accepted only from the other app's origin, sent
   only to it, and schema-checked (6.12).
-- While Photos is served from lopsy.art, Lopsy's code runs on the same
-  origin, so a script-injection bug in Lopsy could reach Photos' storage
-  and token. Moving Photos to its own domain removes that.
+- While Photonamous is served from lopsy.art, Lopsy's code runs on the same
+  origin, so a script-injection bug in Lopsy could reach Photonamous' storage
+  and token. Moving Photonamous to its own domain removes that.
   - The offline shell's CacheStorage is per origin too: a script in Lopsy
-    could write a cached Photos file. The service worker checks every
+    could write a cached Photonamous file. The service worker checks every
     cached file against the SHA-256 the build wrote into `sw.js` before
     serving it, and drops it on a mismatch. That stops a poisoned cache
     from outliving the bug, but not a script on the origin from reading
-    or changing Photos' IndexedDB, OPFS or a page while it runs; only
+    or changing Photonamous' IndexedDB, OPFS or a page while it runs; only
     its own domain does.
-  - Lopsy's own worker at `/` can control Photos' pages until Photos'
-    worker installs, so Photos decides updates from its own registration
+  - Lopsy's own worker at `/` can control Photonamous' pages until Photonamous'
+    worker installs, so Photonamous decides updates from its own registration
     and reloads only when the user chooses to. A waiting worker takes
-    an update request only from a Photos page.
+    an update request only from a Photonamous page.
 
 **Untrusted input.**
 - Everything read from Drive is schema-checked, with size limits, before
@@ -1268,17 +1268,17 @@ The develop stages are new shader families under
 
 | ID | Change | Phase |
 |---|---|---|
-| L1 | Receive a handoff (6.12): the `?photos-handoff=` parameter, the handshake with the opener, band uploads into a new document, and the "From Lopsy Photos" bar with **Save to Lopsy Photos** and **Back to Photos** | 3 |
+| L1 | Receive a handoff (6.12): the `?photos-handoff=` parameter, the handshake with the opener, band uploads into a new document, and the "From Photonamous" bar with **Save to Photonamous** and **Back to Photonamous** | 3 |
 | L2 | `.lopsy` v3: 16-bit layer pixels, reusing the engine's u16 compressed-blob format (RLE or LZ4, `apps/lopsy-web/CLAUDE.md`), plus an optional `photos` source block. v2 files still open; older builds refuse v3 through the existing "newer version" guard. This also fixes today's loss of precision when a RAW import is saved. | 3 |
-| L3 | **Save to Lopsy Photos**: post the `.lopsy` v3 and the flattened 16-bit render to Photos, opening a Photos tab if there is none, and show the result | 3 |
-| L4 | **Add to Lopsy Photos** in the File menu: hand the document to Photos, which signs in if needed | 3 |
-| L5 | **Grade in Lopsy Photos** for a raster layer (6.12) | 5 |
+| L3 | **Save to Photonamous**: post the `.lopsy` v3 and the flattened 16-bit render to Photonamous, opening a Photonamous tab if there is none, and show the result | 3 |
+| L4 | **Add to Photonamous** in the File menu: hand the document to Photonamous, which signs in if needed | 3 |
+| L5 | **Grade in Photonamous** for a raster layer (6.12) | 5 |
 | L6 | RAF and DNG import go through E2 and the default recipe. Their look stays within one 8-bit step on the sample corpus. | 2 |
 | L7 | Documentation: `FEATURES.md` (the handoff, the new menu items, `.lopsy` v3), `SKILL.md` if any selector it uses changes, and `SPEC.md` | 3 |
 
 Lopsy gains no Google sign-in, no Drive code and no new storage: it
-stays an app with no account. Apart from the **Add to Lopsy Photos** menu
-item, nothing changes for someone who never uses Photos.
+stays an app with no account. Apart from the **Add to Photonamous** menu
+item, nothing changes for someone who never uses Photonamous.
 
 ## 10. Testing
 
@@ -1324,9 +1324,9 @@ item, nothing changes for someone who never uses Photos.
 - Reload in the middle of an import.
 - Two devices: two browser contexts with separate storage against one
   fake Drive, editing at the same time and offline, then converging.
-- The Lopsy round trip, twice: on one origin (Lopsy at `/`, Photos at
+- The Lopsy round trip, twice: on one origin (Lopsy at `/`, Photonamous at
   `/photos/`) and on two origins (two ports). It includes a save made
-  after the Photos tab was closed.
+  after the Photonamous tab was closed.
 - Token expiry during an upload.
 
 **RAW fixtures.**
@@ -1452,9 +1452,9 @@ first part of E15; L6.
 ### Phase 3: Lopsy round trip
 
 **Features.**
-- Edit in Lopsy and Save to Lopsy Photos.
+- Edit in Lopsy and Save to Photonamous.
 - Documents in stacks, re-opening a document, conflict copies.
-- Add to Lopsy Photos from Lopsy.
+- Add to Photonamous from Lopsy.
 
 **Engine and Lopsy work:** L1 to L4 and L7.
 
@@ -1484,9 +1484,9 @@ corpus covers local edits.
 - Tuning for 50,000 photos.
 - XMP import and export: ratings, labels and keywords, plus a mapping of
   basic edits, for people moving from other software.
-- Share links, a watermark on export, and Grade in Lopsy Photos (L5).
+- Share links, a watermark on export, and Grade in Photonamous (L5).
 - The sign-in helper, if chosen.
-- "Open with Lopsy Photos" from Drive's own UI, through Drive UI
+- "Open with Photonamous" from Drive's own UI, through Drive UI
   integration, which also grants `drive.file` access to the file opened.
 
 **Engine work:** E16 and E17.
@@ -1514,7 +1514,7 @@ tablet layout, and print.
 | The hourly token expiry makes long imports stall | Resumable everything; reconnect without losing state; the helper (open question 2). |
 | While the apps share lopsy.art, a script-injection bug in one reaches the other | A strict CSP; no third-party scripts but Google's; no HTML from Drive; or the app's own domain |
 | A page that is not the other app sends handoff messages | Origin allowlists on both sides, explicit target origins, schema checks (6.12) |
-| A tab is closed in the middle of a handoff | Nothing is written until Save; a save with no Photos tab open reopens one (6.12) |
+| A tab is closed in the middle of a handoff | Nothing is written until Save; a save with no Photonamous tab open reopens one (6.12) |
 | Scope: this is a large product next to a large editor | The phases each ship something usable; the Not in 1.0 list stands. |
 
 ## 14. Open questions
@@ -1547,9 +1547,9 @@ Each question has a recommendation; the decision is the owner's.
 7. **Export metadata default.** "Remove location" on by default
    (proposed). Recommendation: keep it on.
 8. **Should Lopsy save to Drive on its own** (Save, Open recent), rather
-   than through Add to Lopsy Photos? It would bring Google sign-in into
+   than through Add to Photonamous? It would bring Google sign-in into
    Lopsy, which today has no account. Recommendation: no; Add to Lopsy
-   Photos covers it.
+   Photonamous covers it.
 9. **Fujifilm look names.** Profiles named after the in-camera film
    simulations they approximate. Recommendation: use descriptive names
    that say "approximates", and confirm the wording before the public
@@ -1560,7 +1560,7 @@ Each question has a recommendation; the decision is the owner's.
 The step-by-step version for the proof of concept is `photonamous-setup.md`.
 
 **Google Cloud** (Phase 0):
-- [ ] A project for Lopsy Photos, with the Drive API and Google Picker
+- [ ] A project for Photonamous, with the Drive API and Google Picker
       API enabled.
 - [ ] OAuth consent screen: External, app name, logo, support email,
       `lopsy.art` (and the app's own domain, if it gets one) as
@@ -1632,14 +1632,14 @@ feature: `apps/photonamous/FEATURES.md`. How the library database works:
 | 5.3, 6.8 Import | Files, folders, and Add from Google Drive (Picker). Duplicates by SHA-256 (named before importing), RAW+JPEG pairs, embedded previews, EXIF, XMP sidecars with Lightroom's develop settings mapped (`xmp/crs-mapping.ts`), a preset, album and keywords to apply. Staged in OPFS, resumable uploads with checksum verification, retry with backoff, Retry for parked items. Survives a reload; one tab at a time claims an import. |
 | 5.4, 6.10 Edit | Profile (Standard and the Fujifilm looks from the base curves, Neutral, Monochrome), White balance (As shot, Auto, the camera's presets, picker, Kelvin for RAW), Tone with Auto, Curves (luminance, red, green, blue), Color with Color by hue, Color Grading, Local contrast (large details, small details, haze), Sharpness & noise, Framing (crop with aspect presets, straighten with a Level tool, rotate, flip both ways), Finish (vignette amount, midpoint, roundness, feather; grain), Areas (up to 8 linear or radial gradients with their own tone, white balance and saturation). Histogram with clipping warnings (J, and Alt while dragging Blacks, Whites or sharpening). History with click-back, Versions, Presets (built-in and the user's, previewed on hover), Copy and Paste edits, Before and after (toggle and split), filmstrip. Edits run on a working image of at most 4096 px; full resolution loads at 50 % zoom and for output. |
 | 5.5, 6.11 Export | JPEG, PNG (8 or 16-bit) and TIFF (16-bit, Deflate, ICC), in sRGB or Display P3. Size by long edge, short edge or megapixels, with "Don't enlarge". Metadata all, copyright only or none, with location removed by default. File-name templates. To `Exports/` in the library, a download, or a ZIP. Export presets (built-in and the user's). Show in Drive and share links, only after the user confirms. |
-| 5.6, 6.12 Round trips | Edit in Lopsy (16-bit), Save to Lopsy Photos (`.lopsy` v3 with a 16-bit render, stacked with the photo, updated in place only at a matching revision, otherwise a copy), Add to Lopsy Photos from Lopsy's File menu, and Grade in Lopsy Photos for a layer (L5). Lopsy offers none of this unless its build sets `VITE_PHOTOS_URL`; without it Lopsy is unchanged, and Save Project still writes v2. |
+| 5.6, 6.12 Round trips | Edit in Lopsy (16-bit), Save to Photonamous (`.lopsy` v3 with a 16-bit render, stacked with the photo, updated in place only at a matching revision, otherwise a copy), Add to Photonamous from Lopsy's File menu, and Grade in Photonamous for a layer (L5). Lopsy offers none of this unless its build sets `VITE_PHOTOS_URL`; without it Lopsy is unchanged, and Save Project still writes v2. |
 | 5.7, 6.7 Devices and offline | The library opens offline from IndexedDB, and a service worker loads the app shell offline. Keep originals: Recent, All or None. Previews re-render in the background after presets, pastes, synced edits and new versions. Sync panel, storage meter, device cache. |
 | 6.6 Library database | Per-device journals of last-writer-wins fields stamped with hybrid logical clocks, snapshots, roll-up, the Drive change feed, a Web Locks single writer per device, durable-before-destructive ordering, and merging of duplicate library roots. A 50,000-photo library opens cold in about 2 s. |
-| 6.3 Hosting | Lopsy at `/`, Photos at `/photos/` with its own CSP. Deployed only when the repository variable `DEPLOY_PHOTOS` is `true`. CI runs Photos' typecheck, lint and unit tests. |
+| 6.3 Hosting | Lopsy at `/`, Photonamous at `/photos/` with its own CSP. Deployed only when the repository variable `DEPLOY_PHOTOS` is `true`. CI runs Photonamous' typecheck, lint and unit tests. |
 
 ### Where it departs from the design
 
-- **Phase 0's package moves were not done.** Photos imports Lopsy's engine
+- **Phase 0's package moves were not done.** Photonamous imports Lopsy's engine
   package and design tokens from `apps/lopsy-web`.
 - **The develop chain is display-referred.** The RAW stage outputs
   sRGB-encoded values and the later stages (Lopsy's adjustments, the
@@ -1661,7 +1661,7 @@ feature: `apps/photonamous/FEATURES.md`. How the library database works:
 - **Rec. 2020 export and WebP export** are not offered, and TIFF carries no
   EXIF. There is no output sharpening.
 - **Lopsy's own Save Project** stays at `.lopsy` v2 (8-bit); v3 is written
-  only for Photos.
+  only for Photonamous.
 - **White balance in Lightroom sidecars** maps for JPEG, PNG and TIFF.
   For RAW files it needs the photo's own Kelvin scale, which the import
   doesn't pass yet, so RAW sidecars keep the as-shot white balance.
@@ -1676,7 +1676,7 @@ feature: `apps/photonamous/FEATURES.md`. How the library database works:
 
 - Areas from a brush, a brightness range or a colour range; Spot fixes;
   Lens corrections; Perspective (Phase 4).
-- Proxies, "Open with Lopsy Photos" from Drive's UI, the sign-in helper, a
+- Proxies, "Open with Photonamous" from Drive's UI, the sign-in helper, a
   watermark on export, keyword paths (Phase 5).
 - RAW formats other than Fujifilm RAF, and Fujifilm's lossy compressed RAF
   (about 2–3 days with a sample file); HDR editing and export (Phase 6).
@@ -1715,7 +1715,7 @@ feature: `apps/photonamous/FEATURES.md`. How the library database works:
 
 ### Decisions for the owner
 
-1. **Shared origin or its own domain.** At `/photos/` Photos shares an
+1. **Shared origin or its own domain.** At `/photos/` Photonamous shares an
    origin with Lopsy, so a script injection in either reaches the other's
    storage and tokens (6.13). The service worker checks every file it
    serves against the build's hashes, but its own domain is the real fix;

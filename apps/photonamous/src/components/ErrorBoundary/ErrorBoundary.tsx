@@ -23,7 +23,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    console.error('Lopsy Photos stopped rendering', error, info.componentStack);
+    console.error('Photonamous stopped rendering', error, info.componentStack);
   }
 
   render(): ReactNode {
@@ -32,7 +32,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     return (
       <div className={styles.screen} role="alert">
         <h1 className={styles.title}>Something went wrong</h1>
-        <p className={styles.text}>Lopsy Photos hit a problem it could not recover from. Your library is saved as you work; reloading opens it again.</p>
+        <p className={styles.text}>Photonamous hit a problem it could not recover from. Your library is saved as you work; reloading opens it again.</p>
         <p className={styles.detail}>{error.message}</p>
         <Button variant="primary" onClick={() => window.location.reload()}>
           Reload

@@ -34,19 +34,19 @@ const LOPSY_MAGIC = new Uint8Array([0x4c, 0x4f, 0x50, 0x53, 0x59, 0x00]); // "LO
 /**
  * v3: layer pixels are stored at 16 bits per channel as the engine's LZ4
  * u16 blob (`pixelFormat: 'rgba16-lz4'`), and the manifest may carry a
- * Lopsy Photos source block (`photos`). v2 files still open.
+ * Photonamous source block (`photos`). v2 files still open.
  */
 export const FORMAT_VERSION = 3;
 
 /**
  * What Save Project writes: v2, 8-bit gzipped RGBA, so its files stay as
  * small as before and open in every Lopsy that reads v2. v3 (16-bit) is
- * written only for Lopsy Photos, which keeps full precision.
+ * written only for Photonamous, which keeps full precision.
  */
 export const DEFAULT_SAVE_VERSION = 2;
 
 export interface SerializeOptions {
-  /** A Lopsy Photos source block for the manifest. */
+  /** A Photonamous source block for the manifest. */
   readonly photos?: PhotosSourceBlock;
   /** 16 writes v3 with 16-bit layer pixels; 8 (the default) writes v2. */
   readonly precision?: 8 | 16;
@@ -55,7 +55,7 @@ export interface SerializeOptions {
 /** The engine's u16 compressed-blob format; `uploadLayerPixelsCompressedU16` reads it back. */
 export const PIXEL_FORMAT_RGBA16_LZ4 = 'rgba16-lz4';
 
-/** Where a document belongs in a Lopsy Photos library (spec 6.12). */
+/** Where a document belongs in a Photonamous library (spec 6.12). */
 export interface PhotosSourceBlock {
   readonly libraryId: string;
   readonly assetId: string;
@@ -96,7 +96,7 @@ export interface LopsyManifest {
   readonly paths?: readonly StoredPath[];
   /** Canvas guides. Absent in files saved before these were serialized. */
   readonly guides?: readonly Guide[];
-  /** Set when the document came from or was saved to Lopsy Photos. Absent before v3. */
+  /** Set when the document came from or was saved to Photonamous. Absent before v3. */
   readonly photos?: PhotosSourceBlock;
 }
 
@@ -162,7 +162,7 @@ export interface SerializedLayer {
    * the layer's logical width/height. Absent in pre-fix v1 files. */
   readonly pixelWidth?: number;
   readonly pixelHeight?: number;
-  /** Raster layers: the recipe of the last Grade in Lopsy Photos (provenance only). */
+  /** Raster layers: the recipe of the last Grade in Photonamous (provenance only). */
   readonly gradeRecipe?: Readonly<Record<string, unknown>>;
   /** `'rgba16-lz4'` for a 16-bit blob (v3). Absent: gzip-compressed RGBA8. */
   readonly pixelFormat?: typeof PIXEL_FORMAT_RGBA16_LZ4;

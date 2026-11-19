@@ -1,6 +1,6 @@
 /**
  * Reading a `.lopsy` container safely. A project file is untrusted input:
- * it can come from a URL (`?open=`), from Lopsy Photos, or from disk. Before
+ * it can come from a URL (`?open=`), from Photonamous, or from disk. Before
  * anything replaces the open document, this module checks the header, the
  * manifest's shape and every size in it, and every blob against what the
  * manifest says it holds. Pixel blobs are inflated with a cap of exactly the

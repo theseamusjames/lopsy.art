@@ -55,7 +55,7 @@ export function Header() {
   return (
     <header className={styles.header}>
       <div className={styles.identity}>
-        <span className={styles.brand}>Lopsy Photos</span>
+        <span className={styles.brand}>Photonamous</span>
         <span className={styles.where} title={connection.accountLabel}>
           {connection.accountLabel}
         </span>

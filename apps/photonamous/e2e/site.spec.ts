@@ -57,7 +57,7 @@ test('Photos loads at /photos/ with its CSP and no COOP', async ({ page }) => {
   const headers = response?.headers() ?? {};
   expect(headers['content-security-policy']).toContain("'wasm-unsafe-eval'");
   expect(headers['cross-origin-opener-policy']).toBeUndefined();
-  await expect(page.getByRole('heading', { name: 'Lopsy Photos' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Photonamous' })).toBeVisible();
   await page.waitForLoadState('networkidle');
   expect(await cspViolations(page)).toEqual([]);
   expect(problems.list).toEqual([]);
@@ -67,8 +67,8 @@ test('a deep link under /photos/ serves Photos, not Lopsy', async ({ page }) => 
   const problems = watch(page);
   const response = await page.goto('/photos/some/deep/link');
   expect(response?.status()).toBe(200);
-  await expect(page).toHaveTitle('Lopsy Photos');
-  await expect(page.getByRole('heading', { name: 'Lopsy Photos' })).toBeVisible();
+  await expect(page).toHaveTitle('Photonamous');
+  await expect(page.getByRole('heading', { name: 'Photonamous' })).toBeVisible();
   expect(await cspViolations(page)).toEqual([]);
   expect(problems.list).toEqual([]);
 });
@@ -84,7 +84,7 @@ test("Lopsy's handoff default points at the served Photos", async ({ page }) => 
   const photosUrl = await page.evaluate(() => new URL('/photos/', window.location.href).href);
   const photos = await page.request.get(photosUrl);
   expect(photos.status()).toBe(200);
-  expect(await photos.text()).toContain('<title>Lopsy Photos</title>');
+  expect(await photos.text()).toContain('<title>Photonamous</title>');
 });
 
 test("a first Photos visit under Lopsy's root worker neither reloads nor offers an update", async ({ page }) => {
@@ -102,7 +102,7 @@ test("a first Photos visit under Lopsy's root worker neither reloads nor offers 
     loads += 1;
   });
   await page.goto('/photos/');
-  await expect(page.getByRole('heading', { name: 'Lopsy Photos' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Photonamous' })).toBeVisible();
   await page.evaluate(() => Reflect.set(window, '__firstVisit', true));
   await expect
     .poll(() => page.evaluate(async () => (await navigator.serviceWorker.getRegistration('/photos/'))?.active?.state ?? null))

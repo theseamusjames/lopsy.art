@@ -11,7 +11,7 @@ import { generatedJpeg, importFiles, tiles } from './library';
 
 const API = 'https://www.googleapis.com/drive/v3/files';
 
-/** Every path under the Drive root, `Lopsy Photos/Originals/2026/…`. */
+/** Every path under the Drive root, `Photonamous/Originals/2026/…`. */
 async function drivePaths(drive: FakeDrive): Promise<string[]> {
   const out: string[] = [];
   const walk = async (id: string, prefix: string): Promise<void> => {
@@ -51,8 +51,8 @@ test('Google Drive: the library in Drive, and a second device sees it', async ({
   await expect(page.getByRole('button', { name: /Saved/ })).toBeVisible({ timeout: 30_000 });
 
   const paths = await drivePaths(drive);
-  expect(paths).toContainEqual(expect.stringMatching(/^Lopsy Photos\/Originals\/\d{4}\/\d{4}-\d{2}-\d{2}\/harbour\.jpg$/));
-  expect(paths).toContainEqual(expect.stringMatching(/^Lopsy Photos\/Library data\/journal\/[^/]+\/.+/));
+  expect(paths).toContainEqual(expect.stringMatching(/^Photonamous\/Originals\/\d{4}\/\d{4}-\d{2}-\d{2}\/harbour\.jpg$/));
+  expect(paths).toContainEqual(expect.stringMatching(/^Photonamous\/Library data\/journal\/[^/]+\/.+/));
 
   // Another device: a fresh browser profile on the same Drive.
   const other = await browser.newContext();

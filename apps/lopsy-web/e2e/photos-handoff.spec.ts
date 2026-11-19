@@ -1,5 +1,5 @@
 /**
- * The Lopsy Photos handoff, Lopsy's side (spec 6.12).
+ * The Photonamous handoff, Lopsy's side (spec 6.12).
  *
  * A stand-in Photos page is served with `context.route` at Lopsy's default
  * dev Photos URL (http://localhost:5174/). Its inline script plays the
@@ -262,16 +262,16 @@ function savesOf(photos: Page): Promise<RecordedSave[]> {
   return photos.evaluate(() => (window as unknown as { __saves: RecordedSave[] }).__saves);
 }
 
-test.describe('Lopsy Photos handoff', () => {
+test.describe('Photonamous handoff', () => {
   test('opens a 16-bit PNG from Photos and saves back a .lopsy and a 16-bit PNG', async ({ page, context, baseURL }) => {
     await servePhotosPages(context, new URL(baseURL!).origin);
     await page.goto(`${PHOTOS_ORIGIN}/library`);
     const lopsy = await openLopsyFrom(context, page, `${baseURL}/`);
     await waitForStore(lopsy);
 
-    const bar = lopsy.getByRole('region', { name: 'Lopsy Photos' });
+    const bar = lopsy.getByRole('region', { name: 'Photonamous' });
     await expect(bar).toBeVisible({ timeout: 30_000 });
-    await expect(bar).toContainText('From Lopsy Photos: DSCF1234');
+    await expect(bar).toContainText('From Photonamous: DSCF1234');
     await expect(lopsy.getByRole('dialog', { name: 'New Document' })).toBeHidden();
     // The parameter is stripped so a reload doesn't ask for the photo again.
     expect(new URL(lopsy.url()).search).toBe('');
@@ -295,8 +295,8 @@ test.describe('Lopsy Photos handoff', () => {
     expect(px.a).toBe(255);
     await lopsy.screenshot({ path: 'e2e/screenshots/photos-handoff-opened.png' });
 
-    await bar.getByRole('button', { name: 'Save to Lopsy Photos' }).click();
-    await expect(bar.getByRole('status')).toHaveText('Saved to Lopsy Photos', { timeout: 30_000 });
+    await bar.getByRole('button', { name: 'Save to Photonamous' }).click();
+    await expect(bar.getByRole('status')).toHaveText('Saved to Photonamous', { timeout: 30_000 });
     await lopsy.screenshot({ path: 'e2e/screenshots/photos-handoff-saved.png' });
 
     const [first] = await savesOf(page);
@@ -334,19 +334,19 @@ test.describe('Lopsy Photos handoff', () => {
     await page.goto(`${PHOTOS_ORIGIN}/library`);
     const lopsy = await openLopsyFrom(context, page, `${baseURL}/`);
     await waitForStore(lopsy);
-    const bar = lopsy.getByRole('region', { name: 'Lopsy Photos' });
+    const bar = lopsy.getByRole('region', { name: 'Photonamous' });
     await expect(bar).toBeVisible({ timeout: 30_000 });
 
     // The tab Lopsy came from is still open, but the page in it no longer listens for this handoff.
     await page.reload();
     const [receiver] = await Promise.all([
       context.waitForEvent('page', { timeout: 10_000 }),
-      bar.getByRole('button', { name: 'Save to Lopsy Photos' }).click(),
+      bar.getByRole('button', { name: 'Save to Photonamous' }).click(),
     ]);
     await receiver.waitForURL(/receive=/);
     expect(new URL(receiver.url()).origin).toBe(PHOTOS_ORIGIN);
     expect(new URL(receiver.url()).searchParams.get('receive')).toMatch(/^[A-Za-z0-9_-]+$/);
-    await expect(bar.getByRole('status')).toHaveText('Saved to Lopsy Photos', { timeout: 30_000 });
+    await expect(bar.getByRole('status')).toHaveText('Saved to Photonamous', { timeout: 30_000 });
     const [save] = await savesOf(receiver);
     expect(save!.source).toEqual({ libraryId: 'lib-1', assetId: 'asset-1', versionId: 'v-1', recipeHash: 'hash-1' });
     expect(save!.baseRevision).toBe('rev-1');
@@ -360,11 +360,11 @@ test.describe('Lopsy Photos handoff', () => {
     await page.goto(`${PHOTOS_ORIGIN}/library`);
     const lopsy = await openLopsyFrom(context, page, `${baseURL}/`, 'handshake', FINE_GRADIENT);
     await waitForStore(lopsy);
-    const bar = lopsy.getByRole('region', { name: 'Lopsy Photos' });
+    const bar = lopsy.getByRole('region', { name: 'Photonamous' });
     await expect(bar).toBeVisible({ timeout: 30_000 });
 
-    await bar.getByRole('button', { name: 'Save to Lopsy Photos' }).click();
-    await expect(bar.getByRole('status')).toHaveText('Saved to Lopsy Photos', { timeout: 30_000 });
+    await bar.getByRole('button', { name: 'Save to Photonamous' }).click();
+    await expect(bar.getByRole('status')).toHaveText('Saved to Photonamous', { timeout: 30_000 });
     const [saved] = await savesOf(page);
     const before = decodePng16(Buffer.from(saved!.renderBase64, 'base64'));
     // The render holds values between 8-bit steps (an 8-bit value v widens to v * 257).
@@ -387,7 +387,7 @@ test.describe('Lopsy Photos handoff', () => {
     await lopsy.getByRole('button', { name: 'File' }).click();
     const [photos2] = await Promise.all([
       context.waitForEvent('page'),
-      lopsy.getByRole('menuitem', { name: 'Add to Lopsy Photos' }).click(),
+      lopsy.getByRole('menuitem', { name: 'Add to Photonamous' }).click(),
     ]);
     await expect.poll(async () => (await savesOf(photos2)).length, { timeout: 30_000 }).toBe(1);
     const [resaved] = await savesOf(photos2);
@@ -411,13 +411,13 @@ test.describe('Lopsy Photos handoff', () => {
     // The wrong-origin page keeps posting a valid document every 200 ms.
     await lopsy.waitForTimeout(3000);
     await expect(lopsy.getByRole('dialog', { name: 'New Document' })).toBeVisible();
-    await expect(lopsy.getByRole('region', { name: 'Lopsy Photos' })).toHaveCount(0);
+    await expect(lopsy.getByRole('region', { name: 'Photonamous' })).toHaveCount(0);
     expect((await getEditorState(lopsy)).document.width).not.toBe(PNG_W);
     // Lopsy said ready only to the Photos origin, so this page never heard from it.
     expect(await page.evaluate(() => (window as unknown as { __log: string[] }).__log)).toEqual([]);
   });
 
-  test('File > Add to Lopsy Photos opens Photos to receive the document', async ({ page, context, baseURL }) => {
+  test('File > Add to Photonamous opens Photos to receive the document', async ({ page, context, baseURL }) => {
     await servePhotosPages(context, new URL(baseURL!).origin);
     await page.goto('/');
     await waitForStore(page);
@@ -431,13 +431,13 @@ test.describe('Lopsy Photos handoff', () => {
     await page.getByRole('button', { name: 'File' }).click();
     const [photos] = await Promise.all([
       context.waitForEvent('page'),
-      page.getByRole('menuitem', { name: 'Add to Lopsy Photos' }).click(),
+      page.getByRole('menuitem', { name: 'Add to Photonamous' }).click(),
     ]);
     await photos.waitForURL(/receive=/);
     expect(new URL(photos.url()).origin).toBe(PHOTOS_ORIGIN);
     expect(new URL(photos.url()).searchParams.get('receive')).toMatch(/^[A-Za-z0-9_-]+$/);
 
-    await expect(page.getByText('Added to Lopsy Photos')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('Added to Photonamous')).toBeVisible({ timeout: 30_000 });
     const [save] = await savesOf(photos);
     expect(save!.source).toBeUndefined();
     expect(save!.baseRevision).toBeUndefined();
@@ -446,7 +446,7 @@ test.describe('Lopsy Photos handoff', () => {
     expect(save!.renderWidth).toBe(120);
     expect(save!.renderHeight).toBe(80);
     // A document that did not come from Photos gets no bar.
-    await expect(page.getByRole('region', { name: 'Lopsy Photos' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Photonamous' })).toHaveCount(0);
   });
 
   test('without the handoff parameter Lopsy shows no Photos bar', async ({ page }) => {
@@ -459,6 +459,6 @@ test.describe('Lopsy Photos handoff', () => {
       store.getState().createDocument(200, 100, false);
     });
     await expect(page.getByRole('button', { name: 'File' })).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Lopsy Photos' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Photonamous' })).toHaveCount(0);
   });
 });

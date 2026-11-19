@@ -354,7 +354,7 @@ describe('reopen flow', () => {
     expect(saves[1]!.baseRevision).toBe('r9');
   });
 
-  it('Add to Lopsy Photos opens Photos and sends no source block', async () => {
+  it('Add to Photonamous opens Photos and sends no source block', async () => {
     const lopsy = new FakeWindow(LOPSY);
     let payloadReady: (p: ReturnType<typeof savePayload>) => void = () => {};
     const outcome = saveToPhotos({

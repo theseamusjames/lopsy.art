@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Lopsy Photos: a photo library and RAW editor on the Lopsy engine (proof of concept)",
+  "description": "Photonamous: a photo library and RAW editor on the Lopsy engine (proof of concept)",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

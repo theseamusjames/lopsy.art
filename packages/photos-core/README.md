@@ -1,6 +1,6 @@
 # @lopsy/photos-core
 
-Lopsy Photos without the UI: storage adapters, the synced library
+Photonamous without the UI: storage adapters, the synced library
 database, import, export, caches, search and XMP. It is plain TypeScript
 with no React, and it runs in the browser. Its unit tests run in Node.
 
@@ -32,7 +32,7 @@ the adapter. Every folder and file carries the `appProperties`
 `layout.ts` creates the layout and repairs a partly created one.
 
 ```
-Lopsy Photos/                 role library
+Photonamous/                 role library
   README.txt                  readme
   Originals/2026/2026-11-14/… originals; each file has role original and lp.sha
   Lopsy documents/            documents (.lopsy)

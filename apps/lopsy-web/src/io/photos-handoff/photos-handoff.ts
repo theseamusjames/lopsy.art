@@ -1,10 +1,10 @@
 /**
- * Lopsy's side of the Lopsy Photos round trip (spec 5.6, 6.12):
+ * Lopsy's side of the Photonamous round trip (spec 5.6, 6.12):
  *
  * - `?photos-handoff=<id>` on load: receive a document from the Photos tab
- *   that opened this one and open it, with the "From Lopsy Photos" bar.
- * - Save to Lopsy Photos: post the `.lopsy` and a flattened 16-bit PNG back.
- * - Add to Lopsy Photos (File menu): send the current document as new.
+ *   that opened this one and open it, with the "From Photonamous" bar.
+ * - Save to Photonamous: post the `.lopsy` and a flattened 16-bit PNG back.
+ * - Add to Photonamous (File menu): send the current document as new.
  *
  * Lopsy never talks to Google; Photos does all Drive work.
  */
@@ -97,7 +97,7 @@ export async function openPhotosHandoffFromQuery(): Promise<void> {
   const { pathname, search, hash } = window.location;
   window.history.replaceState(window.history.state, '', `${pathname}${searchWithoutHandoffParam(search)}${hash}`);
 
-  useUIStore.getState().openModal({ kind: 'loading', message: 'Receiving from Lopsy Photos…' });
+  useUIStore.getState().openModal({ kind: 'loading', message: 'Receiving from Photonamous…' });
   try {
     const { document, connection } = await acceptHandoff({ photosUrl: url, id });
     const previousDocumentId = useEditorStore.getState().documentReady ? useEditorStore.getState().document.id : null;
@@ -116,7 +116,7 @@ export async function openPhotosHandoffFromQuery(): Promise<void> {
       ...(document.camera ? { camera: document.camera } : {}),
     });
   } catch (err) {
-    notifyError(`Couldn't receive the photo from Lopsy Photos: ${describeError(err)}`);
+    notifyError(`Couldn't receive the photo from Photonamous: ${describeError(err)}`);
   } finally {
     useUIStore.getState().closeModalOfKind('loading');
   }
@@ -137,7 +137,7 @@ async function buildSavePayload(source?: HandoffSource, camera?: CameraSummary):
 }
 
 /**
- * Save to Lopsy Photos. Call it from a click or key press: when the Photos
+ * Save to Photonamous. Call it from a click or key press: when the Photos
  * tab is gone it is reopened before the files are built, while the browser
  * still allows popups.
  */
@@ -164,7 +164,7 @@ export async function saveDocumentToPhotos(): Promise<void> {
   }
 }
 
-/** Back to Photos: focuses the Photos tab, or opens Photos when it was closed. */
+/** Back to Photonamous: focuses its tab, or opens it when it was closed. */
 export function backToPhotos(): void {
   const session = usePhotosHandoffStore.getState().session;
   const url = photosUrl();
@@ -172,10 +172,10 @@ export function backToPhotos(): void {
   focusPhotos({ photosUrl: url, connection: session?.connection ?? null });
 }
 
-/** File > Add to Lopsy Photos: hands the document to Photos as a new document. */
+/** File > Add to Photonamous: hands the document to Photos as a new document. */
 export async function addDocumentToPhotos(): Promise<void> {
   if (!getEngine()) {
-    notifyError('Cannot add to Lopsy Photos: engine not ready.');
+    notifyError('Cannot add to Photonamous: engine not ready.');
     return;
   }
   try {
@@ -183,11 +183,11 @@ export async function addDocumentToPhotos(): Promise<void> {
     if (!url) return;
     const outcome = await saveToPhotos({ photosUrl: url, connection: null, payload: buildSavePayload() });
     if (outcome.ok) {
-      notifyInfo('Added to Lopsy Photos');
+      notifyInfo('Added to Photonamous');
     } else {
-      notifyError(`Couldn't add to Lopsy Photos: ${outcome.error}`);
+      notifyError(`Couldn't add to Photonamous: ${outcome.error}`);
     }
   } catch (err) {
-    notifyError(`Couldn't add to Lopsy Photos: ${describeError(err)}`);
+    notifyError(`Couldn't add to Photonamous: ${describeError(err)}`);
   }
 }

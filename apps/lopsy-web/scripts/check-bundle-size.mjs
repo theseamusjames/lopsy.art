@@ -33,7 +33,7 @@ const MARGIN = 0.03;
 // backend completes, and each of the 26 read exports a task that can wait
 // for one. The wgpu build needs both, and the two builds share the engine.
 //
-// The glue was raised for Lopsy Photos' RAW develop exports (setRawDevelop,
+// The glue was raised for Photonamous' RAW develop exports (setRawDevelop,
 // clearRawDevelop, rafRenderLinearBand, rafRenderBinnedLinear,
 // rafDevelopDefaults, rafDevelopProfiles, readDevelopHistogram, autoTone,
 // rafAutoWhiteBalance) by what they measurably added to the wasm-bindgen
@@ -45,7 +45,7 @@ const MARGIN = 0.03;
 // and +0.89 % over the old budget): still inside the margin, but the
 // colour controls that follow would otherwise eat the rest of it.
 //
-// The glue was raised again for Lopsy Photos' colour, detail, areas and
+// The glue was raised again for Photonamous' colour, detail, areas and
 // finish exports (setImageColorGrading, setImageColorMixer, setImageDetail,
 // setImageLocalContrast, setImageAreas, setImageAreaOverlay,
 // setImageFinish, setImageDetailMaskView, setClippingWarning, their

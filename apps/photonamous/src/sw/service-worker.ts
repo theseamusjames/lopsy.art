@@ -1,5 +1,5 @@
 /**
- * Lopsy Photos' service worker (spec 5.7, 6.3): the app shell offline.
+ * Photonamous' service worker (spec 5.7, 6.3): the app shell offline.
  * The build emits this file as `<base>sw.js` (scripts/vite-plugin-service-worker.ts)
  * and writes the precache manifest, with each file's SHA-256, into
  * `__PRECACHE_MANIFEST__`. It has no imports left after bundling and no

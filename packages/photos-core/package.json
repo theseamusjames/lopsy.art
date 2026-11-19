@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Lopsy Photos: storage adapters (Google Drive, local folder, memory), the library database and import. Plain TypeScript, no React.",
+  "description": "Photonamous: storage adapters (Google Drive, local folder, memory), the library database and import. Plain TypeScript, no React.",
   "exports": {
     "./*": "./src/*.ts"
   },

@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * The Lopsy Photos ⇄ Lopsy round trip, with both apps running: Lopsy's dev
+ * The Photonamous ⇄ Lopsy round trip, with both apps running: Lopsy's dev
  * server on 5173 and Photos' on 5174, the URLs each side's dev defaults
  * point at. Each server is also told the other's URL (VITE_PHOTOS_URL,
  * VITE_LOPSY_URL), so other ports work too. Run from apps/photonamous:

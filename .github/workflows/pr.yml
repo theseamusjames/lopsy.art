@@ -186,7 +186,7 @@ jobs:
       - run: npm run typecheck
 
   photos:
-    name: Lopsy Photos (typecheck, lint, unit tests)
+    name: Photonamous (typecheck, lint, unit tests)
     runs-on: ubuntu-latest
     needs: wasm-build
     steps:

@@ -17,7 +17,7 @@ interface LayerContextMenuProps {
   y: number;
   currentTag: LayerColorTag | null | undefined;
   onSetColorTag: (tag: LayerColorTag | null) => void;
-  /** Grade in Lopsy Photos, offered for a raster layer in builds that ship Photos. */
+  /** Grade in Photonamous, offered for a raster layer in builds that ship Photos. */
   onGradeInPhotos?: () => void;
   onClose: () => void;
 }
@@ -71,7 +71,7 @@ export function LayerContextMenu({ x, y, currentTag, onSetColorTag, onGradeInPho
       {onGradeInPhotos && (
         <>
           <button className={styles.contextMenuItem} onClick={onGradeInPhotos} type="button" role="menuitem">
-            Grade in Lopsy Photos…
+            Grade in Photonamous…
           </button>
           <div className={styles.contextMenuDivider} />
         </>

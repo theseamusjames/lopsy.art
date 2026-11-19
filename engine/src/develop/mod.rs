@@ -1,4 +1,4 @@
-//! The Lopsy Photos develop chain: the GPU stages that turn a document's
+//! The Photonamous develop chain: the GPU stages that turn a document's
 //! composite into the developed picture, and the RAW stage that starts it.
 //! Start here; each stage's maths lives in its CPU reference in `lopsy-core`.
 //!

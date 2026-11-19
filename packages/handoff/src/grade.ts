@@ -69,7 +69,7 @@ export async function gradeInPhotos(options: GradeInPhotosOptions): Promise<Grad
   // A tab of its own per grade, so a second grade never navigates away an
   // open one (and the first never waits on a tab that is gone).
   const opened = win.open(withParam(photosUrl, GRADE_PARAM, id), `${GRADE_WINDOW_NAME}-${id}`);
-  if (!opened) throw new HandoffError('popup-blocked', 'The browser blocked opening Lopsy Photos.');
+  if (!opened) throw new HandoffError('popup-blocked', 'The browser blocked opening Photonamous.');
   const peer = opened;
   const layerPromise = Promise.resolve(options.layer);
   layerPromise.catch(() => {});
@@ -82,7 +82,7 @@ export async function gradeInPhotos(options: GradeInPhotosOptions): Promise<Grad
       return m && m.id === id ? m : null;
     },
     timeoutMs: options.timeouts?.readyMs ?? 60_000,
-    timeoutMessage: 'Lopsy Photos did not open in time.',
+    timeoutMessage: 'Photonamous did not open in time.',
     isClosed: () => peer.closed,
   });
   ready.catch(() => {});
@@ -102,7 +102,7 @@ export async function gradeInPhotos(options: GradeInPhotosOptions): Promise<Grad
       return null;
     },
     timeoutMs: options.timeouts?.gradeMs ?? 24 * 60 * 60 * 1000,
-    timeoutMessage: 'Lopsy Photos did not finish the grade.',
+    timeoutMessage: 'Photonamous did not finish the grade.',
     isClosed: () => peer.closed,
   });
   const message: LopsyGradeMessage = { protocol: PROTOCOL_VERSION, type: 'lopsy:grade', id, layer };
@@ -114,14 +114,14 @@ export async function gradeInPhotos(options: GradeInPhotosOptions): Promise<Grad
   } catch (err) {
     // Closing the Photos tab is a cancel, not a failure.
     if (err instanceof HandoffError && err.code === 'closed') {
-      if (isRejected) throw new Error('Lopsy Photos sent a grade Lopsy could not accept (too large or malformed).');
+      if (isRejected) throw new Error('Photonamous sent a grade Lopsy could not accept (too large or malformed).');
       return { kind: 'cancelled' };
     }
     throw err;
   }
   if (answer.ok) return { kind: 'graded', png: answer.png, recipe: answer.recipe };
   if (answer.cancelled) return { kind: 'cancelled' };
-  throw new Error(answer.error ?? 'Lopsy Photos could not grade the layer.');
+  throw new Error(answer.error ?? 'Photonamous could not grade the layer.');
 }
 
 function isGradeAnswerFor(data: unknown, id: string): boolean {

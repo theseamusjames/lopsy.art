@@ -708,8 +708,8 @@ needs the engine can copy `apps/lopsy-web/src/engine-wasm/pkg` from one
 that built it instead of building its own, and site builds should be
 deleted after the test that needed them.
 
-## Lopsy Photos tests: real RAFs and import order
-Photos' RAF e2e reads real camera files from `LOPSY_RAF_SAMPLES`: clone
+## Photonamous tests: real RAFs and import order
+Photonamous' RAF e2e reads real camera files from `LOPSY_RAF_SAMPLES`: clone
 github.com/theseamusjames/sample-raf-images (sandboxes often have it at
 `/home/user/theseamusjames/sample-raf-images`). Never fabricate one. The
 importer prepares files concurrently, so of two identical files in one
@@ -718,7 +718,7 @@ default concurrency must not assume which (CI saw both orders).
 
 Where Playwright's pinned Chromium build is missing (see "Sandbox:
 Playwright wants a Chromium build that is not installed"), each suite has
-its own way in: Photos' configs take `PLAYWRIGHT_CHROMIUM_EXECUTABLE` or
+its own way in: Photonamous' configs take `PLAYWRIGHT_CHROMIUM_EXECUTABLE` or
 fall back to `$PLAYWRIGHT_BROWSERS_PATH/chromium_headless_shell`;
 photos-core's browser harness takes `PW_CHROMIUM_PATH` (and run it with
 `CI=1`, or it may reuse another worktree's server on its fixed port);

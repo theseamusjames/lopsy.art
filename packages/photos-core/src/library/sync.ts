@@ -42,7 +42,7 @@ export const SYNC_INTERVALS = {
   deviceFileMs: 5 * 60_000,
 } as const;
 
-export const NEWER_APP_MESSAGE = 'Another device uses a newer version of Lopsy Photos. Reload to update.';
+export const NEWER_APP_MESSAGE = 'Another device uses a newer version of Photonamous. Reload to update.';
 
 /** Segments hold at most this many ops, so one huge import does not make one huge file. */
 const MAX_OPS_PER_SEGMENT = 10_000;

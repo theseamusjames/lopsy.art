@@ -1,7 +1,7 @@
 /**
  * A Photos page Lopsy opened with `?receive=<id>` (spec 6.12): Lopsy had no
  * Photos tab to save to (it was closed or reloaded, or the user chose Add
- * to Lopsy Photos). Says ready to Lopsy, stores each save it sends, and
+ * to Photonamous). Says ready to Lopsy, stores each save it sends, and
  * reports progress for the app to show.
  */
 

@@ -1,5 +1,5 @@
 /**
- * Grade in Lopsy Photos (spec 6.12, L5): sends one raster layer to Photos'
+ * Grade in Photonamous (spec 6.12, L5): sends one raster layer to Photos'
  * Edit view and, on Done, replaces the layer's pixels with the graded ones
  * as one history step, keeping the recipe on the layer for provenance.
  *
@@ -23,7 +23,7 @@ import { pngDimensions } from '@lopsy/handoff/messages';
 import { photosUrl } from './photos-url';
 import { blobSize, canGradeLayer } from './grade-checks';
 
-export const GRADE_HISTORY_LABEL = 'Grade in Lopsy Photos';
+export const GRADE_HISTORY_LABEL = 'Grade in Photonamous';
 
 async function readGradeLayer(layerId: string, name: string): Promise<GradeLayer> {
   finalizePendingStrokeGlobal();
@@ -67,8 +67,8 @@ export function applyGrade(layerId: string, result: Extract<GradeResult, { kind:
 }
 
 /**
- * Layer → Grade in Lopsy Photos. Call it from a click: Photos opens before
- * the layer is read. Does nothing in a build without Lopsy Photos.
+ * Layer → Grade in Photonamous. Call it from a click: Photos opens before
+ * the layer is read. Does nothing in a build without Photonamous.
  */
 export async function gradeLayerInPhotos(layerId?: string): Promise<void> {
   const url = photosUrl();
@@ -77,7 +77,7 @@ export async function gradeLayerInPhotos(layerId?: string): Promise<void> {
   const id = layerId ?? doc.activeLayerId;
   const layer = doc.layers.find((l) => l.id === id);
   if (!id || !layer || !canGradeLayer(layer)) {
-    notifyError('Grade in Lopsy Photos works on an unlocked pixel layer.');
+    notifyError('Grade in Photonamous works on an unlocked pixel layer.');
     return;
   }
   if (!getEngine()) {
@@ -90,8 +90,8 @@ export async function gradeLayerInPhotos(layerId?: string): Promise<void> {
     if (result.kind === 'cancelled') return;
     const sent = await pending;
     applyGrade(id, result, { width: sent.width, height: sent.height });
-    notifyInfo(`Graded “${layer.name}” in Lopsy Photos`);
+    notifyInfo(`Graded “${layer.name}” in Photonamous`);
   } catch (err) {
-    notifyError(`Couldn't grade in Lopsy Photos: ${describeError(err)}`);
+    notifyError(`Couldn't grade in Photonamous: ${describeError(err)}`);
   }
 }

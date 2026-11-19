@@ -65,14 +65,14 @@ export function runAdapterContract(name: string, makeAdapter: () => Promise<Stor
     });
 
     it('creates folders with properties and lists them', async () => {
-      const folder = await adapter.createFolder(root.id, 'Lopsy Photos', { 'lp.role': 'library' });
+      const folder = await adapter.createFolder(root.id, 'Photonamous', { 'lp.role': 'library' });
       expect(folder.isFolder).toBe(true);
-      expect(folder.name).toBe('Lopsy Photos');
+      expect(folder.name).toBe('Photonamous');
       expect(folder.parentId).toBe(root.id);
       expect(folder.size).toBe(0);
       expect(folder.properties).toEqual({ 'lp.role': 'library' });
       expect(ids(await adapter.listChildren(root.id))).toContain(folder.id);
-      expect(await adapter.getFile(folder.id)).toMatchObject({ id: folder.id, name: 'Lopsy Photos', isFolder: true });
+      expect(await adapter.getFile(folder.id)).toMatchObject({ id: folder.id, name: 'Photonamous', isFolder: true });
     });
 
     it('creates a file and reads it back whole and by range', async () => {

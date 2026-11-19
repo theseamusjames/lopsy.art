@@ -44,7 +44,7 @@ export function useSplitBefore(
           url = URL.createObjectURL(blob);
           setSrc(url);
         })
-        .catch((err: unknown) => console.warn('Lopsy Photos: the before view could not be rendered', err));
+        .catch((err: unknown) => console.warn('Photonamous: the before view could not be rendered', err));
     }, RENDER_DELAY_MS);
     return () => {
       isCancelled = true;

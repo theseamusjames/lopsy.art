@@ -88,7 +88,7 @@ export async function acceptHandoff(options: AcceptHandoffOptions): Promise<Acce
   const { id } = options;
   const opener = win.opener;
   if (!opener || opener.closed) {
-    throw new HandoffError('no-opener', 'Lopsy Photos is no longer open.');
+    throw new HandoffError('no-opener', 'Photonamous is no longer open.');
   }
   const ready: LopsyReadyMessage = { protocol: PROTOCOL_VERSION, type: 'lopsy:ready', id };
   const { message } = await waitForMessage(win, {
@@ -99,7 +99,7 @@ export async function acceptHandoff(options: AcceptHandoffOptions): Promise<Acce
       return m && m.id === id ? m : null;
     },
     timeoutMs: options.timeoutMs ?? 120_000,
-    timeoutMessage: 'Lopsy Photos did not send the photo in time.',
+    timeoutMessage: 'Photonamous did not send the photo in time.',
     isClosed: () => opener.closed,
     repeat: { ms: 1000, run: () => opener.postMessage(ready, origin) },
   });
@@ -132,7 +132,7 @@ export type SaveOutcome =
 
 export interface SaveToPhotosOptions extends LopsyHandoffConfig {
   /**
-   * The handoff this document came from. Null (Add to Lopsy Photos) opens a
+   * The handoff this document came from. Null (Add to Photonamous) opens a
    * new Photos tab and sends no source block. When the connection's tab was
    * closed, Photos is reopened and the connection follows the new tab.
    */
@@ -167,7 +167,7 @@ export async function saveToPhotos(options: SaveToPhotosOptions): Promise<SaveOu
 
   const reopen = (): { peer: HandoffPeer; ready: Promise<unknown> } => {
     const opened = win.open(withParam(photosUrl, RECEIVE_PARAM, id), PHOTOS_WINDOW_NAME);
-    if (!opened) throw new HandoffError('popup-blocked', 'The browser blocked opening Lopsy Photos.');
+    if (!opened) throw new HandoffError('popup-blocked', 'The browser blocked opening Photonamous.');
     const ready = waitForMessage(win, {
       origin,
       source: () => opened,
@@ -176,7 +176,7 @@ export async function saveToPhotos(options: SaveToPhotosOptions): Promise<SaveOu
         return m && m.id === id ? m : null;
       },
       timeoutMs: options.timeouts?.readyMs ?? 60_000,
-      timeoutMessage: 'Lopsy Photos did not open in time.',
+      timeoutMessage: 'Photonamous did not open in time.',
       isClosed: () => opened.closed,
     });
     ready.catch(() => {});
@@ -221,7 +221,7 @@ export async function saveToPhotos(options: SaveToPhotosOptions): Promise<SaveOu
       return m && m.id === id && m.saveId === saveId ? m : null;
     },
     timeoutMs: options.timeouts?.savedMs ?? 600_000,
-    timeoutMessage: 'Lopsy Photos did not confirm the save in time.',
+    timeoutMessage: 'Photonamous did not confirm the save in time.',
     isClosed: () => target.closed,
   });
   target.postMessage(message, origin, [payload.lopsy, payload.render]);
@@ -251,7 +251,7 @@ async function isListening(win: HandoffWindow, peer: HandoffPeer, origin: string
       return m && m.id === id ? m : null;
     },
     timeoutMs,
-    timeoutMessage: 'Lopsy Photos did not answer.',
+    timeoutMessage: 'Photonamous did not answer.',
     isClosed: () => peer.closed,
   });
   peer.postMessage(ping, origin);

@@ -41,7 +41,7 @@ export interface ReceivedSave {
   readonly lopsy: ArrayBuffer;
   /** The flattened composite, a 16-bit PNG. */
   readonly render: ArrayBuffer;
-  /** Absent for Add to Lopsy Photos: file it as a new document. */
+  /** Absent for Add to Photonamous: file it as a new document. */
   readonly source?: HandoffSource;
   readonly baseRevision?: string;
 }

@@ -1,4 +1,4 @@
-# Lopsy Photos on Cloudflare Pages (docs/photonamous-spec.md, 6.3).
+# Photonamous on Cloudflare Pages (docs/photonamous-spec.md, 6.3).
 # Paths are relative to the app: scripts/assemble-site.mjs moves them under
 # /photos/ for lopsy.art; on its own domain they apply as written.
 #

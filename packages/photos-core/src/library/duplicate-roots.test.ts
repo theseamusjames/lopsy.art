@@ -4,7 +4,7 @@ import { MemoryLocalStore } from './local-store';
 import { openLibrary } from './session';
 import { TestAdapter } from './test-support/test-adapter';
 
-/** Two devices set up at the same moment: each makes its own `Lopsy Photos/` root. */
+/** Two devices set up at the same moment: each makes its own `Photonamous/` root. */
 async function racedSetup() {
   const adapter = new TestAdapter();
   const storeA = new MemoryLocalStore();

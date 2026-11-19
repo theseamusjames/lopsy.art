@@ -31,7 +31,7 @@ export interface RasterLayer extends LayerBase {
   readonly width: number;
   readonly height: number;
   /**
-   * The Lopsy Photos develop recipe of the last Grade in Lopsy Photos, kept
+   * The Photonamous develop recipe of the last Grade in Photonamous, kept
    * for provenance only: the grade is baked into the pixels, and a later
    * grade starts from them with the default recipe.
    */

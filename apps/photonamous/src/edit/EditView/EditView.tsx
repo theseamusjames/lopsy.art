@@ -105,7 +105,7 @@ export interface EditViewProps {
   /** The current view's photos along the bottom; ← and → move along it. */
   readonly filmstrip?: { readonly items: readonly FilmstripItem[]; readonly currentId: string; readonly onOpen: (assetId: string) => void } | undefined;
   /**
-   * Layer mode (Grade in Lopsy Photos): a Done button that hands over the
+   * Layer mode (Grade in Photonamous): a Done button that hands over the
    * saved recipe and a renderer of the full-size 16-bit PNG. Export and
    * Edit in Lopsy are not offered then.
    */
@@ -281,7 +281,7 @@ export function EditView({
         .then((bins) => {
           if (!isCancelled && bins) setHistogram(bins);
         })
-        .catch((err: unknown) => console.warn('Lopsy Photos: the histogram could not be read', err));
+        .catch((err: unknown) => console.warn('Photonamous: the histogram could not be read', err));
     }, HISTOGRAM_DELAY_MS);
     return () => {
       isCancelled = true;
@@ -295,7 +295,7 @@ export function EditView({
       const tone = await engine.autoTone(savedRecipe);
       commit(toneChanges(savedRecipe, tone), 'Auto tone');
     } catch (err) {
-      console.error('Lopsy Photos: Auto tone failed', err);
+      console.error('Photonamous: Auto tone failed', err);
     } finally {
       engine.setRecipe(engineRecipe);
     }
@@ -590,7 +590,7 @@ export function EditView({
       const blob = await engine.exportImage({ format: 'jpeg', quality: 0.92, recipe: savedRecipe });
       onExport(blob, `${baseName(asset.fileName)}.jpg`);
     } catch (err) {
-      console.error('Lopsy Photos: export failed', err);
+      console.error('Photonamous: export failed', err);
     } finally {
       setIsBusy(false);
     }

@@ -239,7 +239,7 @@ export interface LibraryView {
 /** Folder IDs of a library (spec 6.5, Layout). */
 export interface LibraryLayout {
   readonly libraryId: string;
-  /** `Lopsy Photos/` */
+  /** `Photonamous/` */
   readonly rootId: FileId;
   readonly originalsId: FileId;
   readonly documentsId: FileId;

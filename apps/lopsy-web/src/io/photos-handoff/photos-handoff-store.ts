@@ -1,6 +1,6 @@
 /**
- * The document that came from Lopsy Photos, if any, and the state of its
- * last Save to Lopsy Photos. Null for everyone who never uses Photos, so
+ * The document that came from Photonamous, if any, and the state of its
+ * last Save to Photonamous. Null for everyone who never uses Photos, so
  * the bar never shows for them.
  */
 

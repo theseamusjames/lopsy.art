@@ -1,6 +1,6 @@
 import type { StorybookConfig } from '@storybook/react-vite';
 
-/** Lopsy Photos' components, on the same Storybook setup as lopsy-web. */
+/** Photonamous' components, on the same Storybook setup as lopsy-web. */
 const config: StorybookConfig = {
   stories: ['../src/**/*.stories.@(ts|tsx)'],
   addons: [],
