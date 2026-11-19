@@ -214,7 +214,7 @@ test.describe('the command API', () => {
   });
 
   test('describe lists exactly the commands defined so far, with JSON-round-trippable schemas', async ({ page }) => {
-    const all = await describe(page);
+    const all = await describe(page, 'document');
     expect(all.map((c) => c.id)).toEqual([
       'adjust.add', 'adjust.list', 'adjust.remove', 'adjust.reorder', 'adjust.set', 'adjust.set-enabled', 'adjust.set-node-enabled',
       'brush.define',
@@ -255,7 +255,27 @@ test.describe('the command API', () => {
     const docNew = all.find((c) => c.id === 'doc.new')!;
     expect(docNew.params.width).toMatchObject({ type: 'number', integer: true, min: 1, max: 16384 });
     expect(docNew.params.background).toMatchObject({ type: 'string', enum: ['white', 'transparent'], default: 'white' });
-    expect(await describe(page, 'ui')).toEqual([]);
+
+    const ui = await describe(page, 'ui');
+    expect(ui.map((c) => c.id)).toEqual([
+      'ui.dialog.export', 'ui.dialog.filter', 'ui.dialog.help', 'ui.dialog.image', 'ui.dialog.select',
+      'ui.edit.clear-guides', 'ui.edit.define-brush', 'ui.edit.fill', 'ui.edit.redo', 'ui.edit.undo',
+      'ui.file.export-psd', 'ui.file.new', 'ui.file.open', 'ui.file.open-project', 'ui.file.quick-export-png', 'ui.file.save-project',
+      'ui.filter.liquify', 'ui.filter.tilt-shift',
+      'ui.help.agents',
+      'ui.image.mode',
+      'ui.layer.adjustment-layer', 'ui.layer.duplicate', 'ui.layer.new',
+      'ui.select.inverse',
+      'ui.view.actual-size', 'ui.view.fit', 'ui.view.grid', 'ui.view.guides', 'ui.view.pixel-grid', 'ui.view.renderer',
+      'ui.view.ruler-unit', 'ui.view.rulers', 'ui.view.seamless-pattern', 'ui.view.snap-to-grid', 'ui.view.snap-to-guides',
+      'ui.view.snap-to-layers', 'ui.view.zoom-in', 'ui.view.zoom-out',
+    ]);
+    expect(JSON.parse(JSON.stringify(ui))).toEqual(ui);
+    for (const command of ui) {
+      expect(command.surface).toBe('ui');
+      expect(command.summary.length).toBeGreaterThan(20);
+    }
+    expect((await describe(page)).map((c) => c.id).sort()).toEqual([...all, ...ui].map((c) => c.id).sort());
   });
 
   test('a batch runs in order and returns each result', async ({ page }) => {
