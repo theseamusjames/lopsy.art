@@ -50,7 +50,8 @@ const { usePatternStore } = await import('../../app/pattern-store');
 const { filterRegistry } = await import('../../filters/filter-registry');
 const { CommandError } = await import('../command');
 const { runCommand, describeCommands } = await import('../registry');
-await import('./filter');
+const { colorLutInvocation, dialogFilterInvocation, patternFillInvocation } = await import('./filter');
+const { getBuiltinPresets } = await import('../../filters/color-lut');
 
 type Layer = ReturnType<typeof useEditorStore.getState>['document']['layers'][number];
 
@@ -253,5 +254,43 @@ describe('filter.pattern-fill', () => {
     expect(await runCommand('filter.pattern-fill')).toMatchObject({ target: 'pixels' });
     patchActive({ type: 'text' });
     expect((await failure(runCommand('filter.pattern-fill'))).message).toBe(TEXT_REFUSAL);
+  });
+});
+
+describe('the dialogs\' Apply with Preview off, as invocations', () => {
+  it('turns a Filter dialog\'s values into the params that apply exactly those values', async () => {
+    const values = { amount: 40, monochromatic: 1, distribution: 0 };
+    const invocation = dialogFilterInvocation('add-noise', values);
+    expect(invocation).toEqual({ id: 'filter.add-noise', params: { amount: 40, monochromatic: 'Mono', distribution: 'Uniform' } });
+    await runCommand(invocation!.id, invocation!.params);
+    expect(mocks.applyGenericFilter).toHaveBeenCalledWith('add-noise', values);
+  });
+
+  it('has no invocation for Find Edges\' dialog, a missing or extra value, or a toggle value no option has', () => {
+    expect(dialogFilterInvocation('find-edges', {})).toBeNull();
+    expect(dialogFilterInvocation('gaussian-blur', {})).toBeNull();
+    expect(dialogFilterInvocation('gaussian-blur', { radius: 5, extra: 1 })).toBeNull();
+    expect(dialogFilterInvocation('add-noise', { amount: 40, monochromatic: 7, distribution: 0 })).toBeNull();
+  });
+
+  it('fills with the dialog\'s pattern only while it is the current one, which the command then leaves as it is', async () => {
+    addPattern('p1', 'Pattern 1');
+    addPattern('p2', 'Pattern 2');
+    const settings = { scale: 50, rowStagger: 10, columnStagger: 0, offsetX: 5, offsetY: 0 };
+    usePatternStore.getState().setActivePattern('p2');
+    expect(patternFillInvocation('p1', settings)).toBeNull();
+    const invocation = patternFillInvocation('p2', settings)!;
+    expect(invocation).toEqual({ id: 'filter.pattern-fill', params: settings });
+    await runCommand(invocation.id, invocation.params);
+    expect(mocks.applyPatternFill).toHaveBeenCalledWith('p2', settings);
+  });
+
+  it('applies a built-in Color LUT at the dialog\'s fraction exactly, and leaves an imported one to the dialog', async () => {
+    const [preset] = getBuiltinPresets();
+    const invocation = colorLutInvocation(preset!, 0.29)!;
+    expect(invocation.id).toBe('filter.color-lut');
+    await runCommand(invocation.id, invocation.params);
+    expect(mocks.applyColorLutDirect).toHaveBeenCalledWith(preset, 0.29);
+    expect(colorLutInvocation({ ...preset!, id: 'imported' }, 1)).toBeNull();
   });
 });

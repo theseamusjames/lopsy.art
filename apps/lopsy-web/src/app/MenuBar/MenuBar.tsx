@@ -52,6 +52,7 @@ import {
 } from '../selection-actions';
 import { announceRefusal } from '../../commands/refusal';
 import { invokeFromUi } from '../../commands/invoke-from-ui';
+import { colorLutInvocation, dialogFilterInvocation, patternFillInvocation } from '../../commands/filter/filter';
 import { registerDialogOpener, unregisterDialogOpener } from './dialog-openers';
 import { BrandLinks } from '../../components/BrandLinks/BrandLinks';
 import styles from './MenuBar.module.css';
@@ -168,7 +169,9 @@ export function MenuBar() {
       applyGenericFilterWithPreview(activeDialog, values);
       previewActiveRef.current = false;
     } else {
-      applyGenericFilter(activeDialog, values);
+      const invocation = dialogFilterInvocation(activeDialog, values);
+      if (invocation) invokeFromUi(invocation.id, invocation.params);
+      else applyGenericFilter(activeDialog, values);
     }
     setActiveDialog(null);
   }, [activeDialog]);
@@ -214,7 +217,9 @@ export function MenuBar() {
       applyPatternFillWithPreview(patternId, settings);
       previewActiveRef.current = false;
     } else {
-      applyPatternFill(patternId, settings);
+      const invocation = patternFillInvocation(patternId, settings);
+      if (invocation) invokeFromUi(invocation.id, invocation.params);
+      else applyPatternFill(patternId, settings);
     }
     setActiveDialog(null);
   }, []);
@@ -241,7 +246,9 @@ export function MenuBar() {
       applyColorLut(preset, intensity);
       previewActiveRef.current = false;
     } else {
-      applyColorLutDirect(preset, intensity);
+      const invocation = colorLutInvocation(preset, intensity);
+      if (invocation) invokeFromUi(invocation.id, invocation.params);
+      else applyColorLutDirect(preset, intensity);
     }
     setActiveDialog(null);
   }, []);

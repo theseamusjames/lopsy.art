@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
-import { rasterizePathToLayer } from '../../app/interactions/path-stroke';
+import { invokeFromUi } from '../../commands/invoke-from-ui';
 import { colorToCSS } from '../../utils/color';
 import { clampStrokePathWidth, MAX_STROKE_PATH_WIDTH, MIN_STROKE_PATH_WIDTH } from './stroke-path-width';
 import styles from './StrokePathModal.module.css';
@@ -31,9 +31,9 @@ export function StrokePathModal() {
     if (!path || !activeId) return;
 
     const strokeWidth = clampStrokePathWidth(parseFloat(width) || 1);
-    rasterizePathToLayer(path.anchors, path.closed, activeId, strokeWidth, foregroundColor);
+    invokeFromUi('path.stroke', { path: path.id, width: strokeWidth });
     setStrokeModalPathId(null);
-  }, [strokeModalPathId, width, foregroundColor, setStrokeModalPathId]);
+  }, [strokeModalPathId, width, setStrokeModalPathId]);
 
   const handleCancel = useCallback(() => {
     setStrokeModalPathId(null);

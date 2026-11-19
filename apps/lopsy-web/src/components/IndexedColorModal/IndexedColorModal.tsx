@@ -2,13 +2,13 @@ import { useState, useCallback } from 'react';
 import { useEditorStore } from '../../app/editor-store';
 import styles from './IndexedColorModal.module.css';
 import { MAX_COLORS, MIN_COLORS } from './indexed-color-limits';
+import { invokeFromUi } from '../../commands/invoke-from-ui';
 
 interface IndexedColorModalProps {
   onClose: () => void;
 }
 
 export function IndexedColorModal({ onClose }: IndexedColorModalProps) {
-  const convertColorMode = useEditorStore((s) => s.convertColorMode);
   const layerCount = useEditorStore(
     (s) => s.document.layers.filter((l) => l.type !== 'group').length,
   );
@@ -19,9 +19,9 @@ export function IndexedColorModal({ onClose }: IndexedColorModalProps) {
   const handleApply = useCallback(() => {
     const parsed = parseInt(colors, 10) || MAX_COLORS;
     const maxColors = Math.max(MIN_COLORS, Math.min(MAX_COLORS, parsed));
-    convertColorMode('indexed', { maxColors, dither });
+    invokeFromUi('doc.color-mode', { mode: 'indexed', maxColors, dither });
     onClose();
-  }, [colors, dither, convertColorMode, onClose]);
+  }, [colors, dither, onClose]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {

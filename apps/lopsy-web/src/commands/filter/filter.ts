@@ -13,10 +13,10 @@ import {
 import { filterTargetRefusal, isFilteringMask } from '../../app/MenuBar/filter-target';
 import { applyPatternFill } from '../../app/MenuBar/pattern-actions';
 import { applyColorLutDirect } from '../../app/MenuBar/color-lut-actions';
-import { usePatternStore, type PatternDefinition } from '../../app/pattern-store';
+import { usePatternStore, type PatternDefinition, type PatternFillSettings } from '../../app/pattern-store';
 import { filterRegistry } from '../../filters/filter-registry';
 import type { FilterDefinition } from '../../filters/filter-types';
-import { BUILTIN_LUT_PRESETS, getBuiltinPresets } from '../../filters/color-lut';
+import { BUILTIN_LUT_PRESETS, getBuiltinPresets, type LutPreset } from '../../filters/color-lut';
 import { pixelWriteRefusal } from '../../layers/paint-target';
 import { docScaledMax } from '../../utils/slider-ranges';
 import { MAX_DOCUMENT_SIDE } from '../../utils/document-size';
@@ -239,3 +239,54 @@ export const filterColorLut = defineCommand({
     return result;
   },
 });
+
+export interface FilterInvocation {
+  id: string;
+  params: Record<string, unknown>;
+}
+
+/**
+ * The filter.<id> invocation that applies exactly what a Filter dialog's
+ * Apply with Preview off applies for `values`, or null when no command does
+ * (Find Edges' dialog, or a value no param maps back to).
+ */
+export function dialogFilterInvocation(dialogId: string, values: Readonly<Record<string, number>>): FilterInvocation | null {
+  const definition = filterRegistry[dialogId];
+  if (!definition || NOT_DIALOG_FILTERS.has(definition.id)) return null;
+  if (Object.keys(values).length !== definition.params.length) return null;
+  const params: Record<string, unknown> = {};
+  for (const param of definition.params) {
+    const value = values[param.key];
+    if (value === undefined) return null;
+    if (!param.options) {
+      params[param.key] = value;
+      continue;
+    }
+    const option = param.options.find((candidate) => candidate.value === value);
+    if (!option) return null;
+    params[param.key] = option.label;
+  }
+  return { id: `filter.${definition.id}`, params };
+}
+
+/**
+ * filter.pattern-fill for the Fill with Pattern dialog's Apply with Preview
+ * off, or null when the dialog's pattern is not the current one: the command
+ * would make it current first, which the dialog's Apply does not.
+ */
+export function patternFillInvocation(patternId: string, settings: PatternFillSettings): FilterInvocation | null {
+  if (usePatternStore.getState().activePatternId !== patternId) return null;
+  return { id: 'filter.pattern-fill', params: { ...settings } };
+}
+
+/**
+ * filter.color-lut for the Color LUT dialog's Apply with Preview off, or null
+ * for an imported .cube preset, or an intensity the command's percent does
+ * not turn back into exactly.
+ */
+export function colorLutInvocation(preset: LutPreset, intensity: number): FilterInvocation | null {
+  if (!getBuiltinPresets().includes(preset)) return null;
+  const percent = intensity * 100;
+  if (percent / 100 !== intensity) return null;
+  return { id: 'filter.color-lut', params: { preset: preset.id, intensity: percent } };
+}
