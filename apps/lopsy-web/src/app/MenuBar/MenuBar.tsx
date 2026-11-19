@@ -44,22 +44,19 @@ import { IndexedColorModal } from '../../components/IndexedColorModal/IndexedCol
 import { KeyboardShortcutsModal } from '../../components/KeyboardShortcutsModal/KeyboardShortcutsModal';
 import { AboutModal } from '../../components/AboutModal/AboutModal';
 import { useEditorStore } from '../editor-store';
-import { growSelection, shrinkSelection, selectionBounds } from '../../selection/selection';
-import { notifyInfo } from '../notifications-store';
-import { getEngine } from '../../engine-wasm/engine-state';
-import { seedSelectionMaskRef } from '../../engine-wasm/sync-state';
-import { featherMaskOnGpu } from '../interactions/selection-handlers';
-import { createTransformState } from '../../tools/transform/transform';
-import { useUIStore } from '../ui-store';
-import { commitLiveFloat } from '../interactions/live-float';
+import {
+  EMPTY_MODIFIED_SELECTION,
+  modifySelection,
+  SELECTION_MODIFY_LABELS,
+  type SelectionModifyOutcome,
+} from '../selection-actions';
+import { announceRefusal } from '../../commands/refusal';
 import { BrandLinks } from '../../components/BrandLinks/BrandLinks';
 import styles from './MenuBar.module.css';
 
-const SELECT_DIALOG_LABELS: Readonly<Record<SelectDialogId, string>> = {
-  grow: 'Grow Selection',
-  shrink: 'Shrink Selection',
-  feather: 'Feather Selection',
-};
+function announceEmptyModify(outcome: SelectionModifyOutcome): void {
+  if (outcome === 'empty') announceRefusal(EMPTY_MODIFIED_SELECTION);
+}
 
 export function MenuBar() {
   const [openMenu, setOpenMenu] = useState<number | null>(null);
@@ -265,49 +262,14 @@ export function MenuBar() {
   const handleSelectDialogApply = useCallback((values: Record<string, number>) => {
     if (!selectDialog) return;
     const amount = values['amount'] ?? 1;
-    // Grow, shrink or feather the outline on screen, including a pending
-    // Move-tool scale or rotate.
-    commitLiveFloat();
-    const editor = useEditorStore.getState();
-    const sel = editor.selection;
-    if (!sel.active || !sel.mask) { setSelectDialog(null); return; }
-    const { width: docW, height: docH } = editor.document;
-    const dialog = selectDialog;
-    const apply = (newMask: Uint8ClampedArray): void => {
-      const newBounds = selectionBounds(newMask, docW, docH);
-      if (newBounds) {
-        editor.pushHistoryMetadata(SELECT_DIALOG_LABELS[dialog]);
-        editor.setSelection(newBounds, newMask, docW, docH);
-        useUIStore.getState().setTransform(createTransformState(newBounds));
-      } else {
-        // An empty result would read as "no selection", which Delete, Fill
-        // and filters treat as the whole layer (#1026). Keep the selection.
-        notifyInfo('No pixels would remain selected. The selection was not changed.');
-      }
-    };
-    const engine = getEngine();
-    if (dialog === 'feather' && engine) {
-      const before = sel.mask;
-      featherMaskOnGpu(engine, before, docW, docH, amount)
-        .catch(() => null)
-        .then((feathered) => {
-          // The selection changed while the feather was being read.
-          if (useEditorStore.getState().selection.mask !== before) return;
-          if (!feathered) {
-            apply(before);
-            return;
-          }
-          // #763: the feathered bytes are already on the GPU — seed the
-          // tracked ref so the next syncSelection skips the echo upload.
-          seedSelectionMaskRef(engine, feathered.mask);
-          apply(feathered.mask);
-        })
-        .finally(() => setSelectDialog(null));
+    const close = (): void => setSelectDialog(null);
+    const outcome = modifySelection(selectDialog, amount);
+    if (outcome instanceof Promise) {
+      void outcome.then(announceEmptyModify).finally(close);
       return;
     }
-    if (dialog === 'feather') apply(sel.mask);
-    else apply(dialog === 'grow' ? growSelection(sel.mask, docW, docH, amount) : shrinkSelection(sel.mask, docW, docH, amount));
-    setSelectDialog(null);
+    announceEmptyModify(outcome);
+    close();
   }, [selectDialog]);
 
   const filterDef = activeDialog && activeDialog !== 'pattern-fill' && activeDialog !== 'color-lut'
@@ -457,7 +419,7 @@ export function MenuBar() {
       )}
       {selectDialog && (
         <FilterDialog
-          title={SELECT_DIALOG_LABELS[selectDialog]}
+          title={SELECTION_MODIFY_LABELS[selectDialog]}
           params={[{
             key: 'amount',
             label: selectDialog === 'feather' ? 'Radius (px)' : 'Amount (px)',

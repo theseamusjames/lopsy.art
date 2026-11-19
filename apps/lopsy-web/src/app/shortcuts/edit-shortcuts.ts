@@ -1,6 +1,6 @@
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
-import { selectAll, invertSelectionAction } from '../MenuBar/menus/select-menu';
+import { selectAll, invertSelectionAction } from '../selection-actions';
 import { applyAutoTone, applyAutoContrast, applyAutoColor } from '../MenuBar/menus/image-menu';
 import { openLiquify } from '../MenuBar/liquify-actions';
 import { scheduleFallbackPaste } from '../useKeyboardShortcuts';

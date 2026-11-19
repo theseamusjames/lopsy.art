@@ -16,7 +16,7 @@ import {
   createRectSelection,
   createEllipseSelection,
   commitFeatheredSelection,
-  commitSelectionShape,
+  commitMarqueeShape,
   hasCombinableSelection,
 } from '../../app/interactions/selection-handlers';
 import { getMarqueePreview, setMarqueePreview } from './marquee-preview';
@@ -175,11 +175,7 @@ export const marqueeStrategy: SelectionToolStrategy = {
       return;
     }
 
-    const selRect = preview.rect;
-    const mask = preview.kind === 'ellipse'
-      ? createEllipseSelection(selRect, docW, docH)
-      : createRectSelection(selRect, docW, docH);
-    commitSelectionShape(selRect, mask, docW, docH, combineMode);
+    void commitMarqueeShape(preview.kind, preview.rect, combineMode);
   },
 };
 
@@ -195,5 +191,5 @@ export function confirmMarqueeRegion(shape: MarqueeShape, from: Point, to: Point
   const mask = shape === 'ellipse'
     ? createEllipseSelection(rect, docW, docH)
     : createRectSelection(rect, docW, docH);
-  commitFeatheredSelection(rect, mask, docW, docH);
+  void commitFeatheredSelection(rect, mask, docW, docH);
 }

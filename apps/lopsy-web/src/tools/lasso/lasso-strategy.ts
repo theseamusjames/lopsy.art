@@ -4,7 +4,7 @@ import type { SelectionToolStrategy, SelectionToolId } from '../../app/interacti
 import type { Point } from '../../types';
 import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
-import { createPolygonMask, selectionBounds, commitSelectionShape, hasCombinableSelection } from '../../app/interactions/selection-handlers';
+import { commitLassoPolygon, hasCombinableSelection } from '../../app/interactions/selection-handlers';
 import { selectionCombineMode } from '../../selection/selection';
 
 export const lassoStrategy: SelectionToolStrategy = {
@@ -31,15 +31,7 @@ export const lassoStrategy: SelectionToolStrategy = {
 
   onUp(state: InteractionState): void {
     const lassoPoints = useUIStore.getState().lassoPoints;
-    if (lassoPoints.length >= 3) {
-      const editorState = useEditorStore.getState();
-      const { width: docW, height: docH } = editorState.document;
-      const lassoMask = createPolygonMask(lassoPoints, docW, docH);
-      const lassoBounds = selectionBounds(lassoMask, docW, docH);
-      if (lassoBounds) {
-        commitSelectionShape(lassoBounds, lassoMask, docW, docH, state.selectionCombineMode ?? 'replace');
-      }
-    }
+    void commitLassoPolygon(lassoPoints, state.selectionCombineMode ?? 'replace');
     useUIStore.getState().clearLassoPoints();
   },
 };

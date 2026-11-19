@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import '../../../test/canvas-mock';
+import '../test/canvas-mock';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { Rect } from '../../../types';
+import type { Rect } from '../types';
 
 // Issue #721: Cmd+A after a paste-triggered alpha selection left the
 // transform-overlay handles pinned to the pre-Cmd+A bounds, because
@@ -27,20 +27,20 @@ const editorState = {
   setSelection: vi.fn(),
   pushHistoryMetadata: vi.fn(),
 };
-vi.mock('../../editor-store', () => ({
+vi.mock('./editor-store', () => ({
   useEditorStore: { getState: () => editorState },
 }));
 
 const invertedBounds = vi.hoisted(() => ({ current: null as Rect | null }));
 
 const uiState = { setTransform: vi.fn() };
-vi.mock('../../ui-store', () => ({
+vi.mock('./ui-store', () => ({
   useUIStore: { getState: () => uiState },
 }));
 
 // Neither of the touched code paths reaches createRectSelection's math in a
 // way the test needs to introspect — a stub keeps the fixture minimal.
-vi.mock('../../../selection/selection', () => ({
+vi.mock('../selection/selection', () => ({
   createRectSelection: () => MASK_SENTINEL,
   invertSelection: (mask: Uint8ClampedArray) => mask,
   selectionBounds: () => invertedBounds.current,
@@ -48,17 +48,17 @@ vi.mock('../../../selection/selection', () => ({
 
 // selection-to-path is only used by selectionToPathAction; stub it so the
 // import graph resolves under jsdom.
-vi.mock('../../../selection/selection-to-path', () => ({
+vi.mock('../selection/selection-to-path', () => ({
   selectionToPath: () => [],
 }));
 
 // createTransformState wraps its arg in a TransformState; we only need the
 // bounds to flow through, so surface them for assertions.
-vi.mock('../../../tools/transform/transform', () => ({
+vi.mock('../tools/transform/transform', () => ({
   createTransformState: (bounds: Rect) => ({ __bounds: bounds }),
 }));
 
-import { selectAll, invertSelectionAction } from './select-menu';
+import { selectAll, invertSelectionAction } from './selection-actions';
 
 describe('selectAll / invertSelectionAction — transform state stays in sync', () => {
   beforeEach(() => {
