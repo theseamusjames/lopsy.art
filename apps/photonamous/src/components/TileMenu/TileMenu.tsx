@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ClipboardCopy, ClipboardPaste, CopyPlus, Download, Maximize, Paintbrush, SlidersHorizontal, Star, Trash2 } from 'lucide-react';
 import { parseItem, type ItemId } from '../../library/items';
@@ -16,11 +17,16 @@ interface TileMenuProps {
 
 /**
  * The grid's right-click menu: what can be done with the selected photos.
- * It is drawn at the end of the page rather than inside the grid, whose
- * rows may hold only cells.
+ * It is drawn in the landmark that holds the grid (main), not inside the
+ * grid, which may hold only rows of cells.
  */
 export function TileMenu({ x, y, orderedIds, onClose }: TileMenuProps) {
-  const { menuRef, onMenuKeyDown } = useMenuKeys({ isOpen: true, onClose });
+  const anchorRef = useRef<HTMLSpanElement>(null);
+  const [landmark, setLandmark] = useState<Element | null>(null);
+  useLayoutEffect(() => {
+    setLandmark(anchorRef.current?.closest('main, [role="main"]') ?? document.body);
+  }, []);
+  const { menuRef, onMenuKeyDown } = useMenuKeys({ isOpen: landmark !== null, onClose });
   const selected = useUi((s) => s.selection.ids.size);
   const copied = useUi((s) => s.copiedEdits);
   const single = selected <= 1;
@@ -46,7 +52,7 @@ export function TileMenu({ x, y, orderedIds, onClose }: TileMenuProps) {
     </button>
   );
 
-  return createPortal(
+  const menu = (
     <div
       ref={menuRef}
       className={styles.menu}
@@ -73,7 +79,13 @@ export function TileMenu({ x, y, orderedIds, onClose }: TileMenuProps) {
       <hr className={styles.rule} />
       {item('Export…', <Download size={14} />, () => useUi.getState().openDialog('export'))}
       {item('Move to the trash…', <Trash2 size={14} />, askDeleteTargets)}
-    </div>,
-    document.body,
+    </div>
+  );
+
+  return (
+    <>
+      <span ref={anchorRef} hidden />
+      {landmark && createPortal(menu, landmark)}
+    </>
   );
 }
