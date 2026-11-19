@@ -153,6 +153,34 @@ Everything else has a UI path and must go through it. If you think
 something doesn't, check the helpers table — there's probably a helper
 you missed.
 
+### API specs (`e2e/api/`)
+
+The rules above are for UI specs: they drive the UI and never call the
+store or the commands. Specs under `e2e/api/` test the command API
+(`src/commands/`) instead, and are the only specs that may call
+`window.__lopsyCommands`, always through `e2e/api/harness.ts`:
+
+- Import `test` and `expect` from `./harness`. Each test starts on `/`
+  with the API installed and **no document**: create one with `doc.new`
+  or `createDocument` from `../helpers`.
+- `run(page, { op, ...params })` (or an array, for a batch) returns the
+  result; a refusal rejects with an `ApiError` carrying `code` and
+  `message`. `runError(page, invocation)` returns that `{ code, message }`
+  and fails if the command succeeded.
+- Assert on real state and real pixels read back with the dev hooks, as
+  a UI spec would. Each command needs a spec that would fail if it were a
+  no-op, and one for each refusal.
+- A **comparison spec** runs one operation through the UI and through a
+  command and asserts the documents are equal:
+  `compareUiAndApi(page, { setup?, viaUi, viaApi })`. Each side gets a
+  reloaded page and a fresh document of the same size, and the two
+  `snapshot(page)`s (layers by position, pixel hashes in document space,
+  selection, history labels; no ids) must match. If they don't, find what
+  the UI does that the command doesn't; `ignore` is a last resort, and
+  each key in it needs a comment saying why.
+
+API specs run on the chromium project only.
+
 ## Screenshots are the source of truth
 
 **Always write tests by screenshot first, assertion second.** The
@@ -270,11 +298,13 @@ double-check that a global exists before using it — don't assume.
 | `__effectCacheStats()` | The live compositor's per-layer effect cache: `{entries, images, bytes, budgetBytes, hits, misses}`. `bytes` is the VRAM its cached images hold. `__readCompositedPixels` forces a recomposite but does not invalidate the cache, so a second read is served from it — compare that against an export to catch stale effects (`effect-cache-invalidation.spec.ts`). |
 | `__textFrameOffsetMeasureCount()` | How many times the engine has measured an upright text layer's render offset to recover its anchor. Measurements are cached by props, so moving a text layer must not raise it (`text-move-frame-cache-1223.spec.ts`). |
 
-**What is NOT exposed:** there is no `__engineState`, `__wasmBridge`,
-`__wasmEngine`, or `__imageAdjustmentsModule`. Several historical tests
-referenced these and silently passed because the globals returned
-`undefined`. Don't add them — use the four stores plus the read
-functions above.
+`__engineState` (`{ getEngine }`) and `__wasmBridge` (the
+`wasm-bridge` module) are set by `src/engine-wasm/engine-state.ts` each
+time the engine starts (`__wasmBridge` a moment later, by a dynamic
+import), so they are `undefined` until a document's engine is up;
+`__readLayerInDocument` and `surfaceState` use them. There is no
+`__wasmEngine` or `__imageAdjustmentsModule`: historical tests that read
+those silently passed on `undefined`.
 
 ### Shared helpers (`e2e/helpers.ts`)
 
