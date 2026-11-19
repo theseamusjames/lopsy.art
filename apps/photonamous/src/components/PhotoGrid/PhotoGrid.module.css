@@ -4,7 +4,6 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  outline: none;
 }
 
 .spacer {
@@ -23,4 +22,9 @@
   grid-template-columns: repeat(var(--grid-columns), var(--tile-size));
   gap: var(--grid-gap);
   pointer-events: auto;
+}
+
+/* The photo actions menu sits beside the grid, which may hold only rows; the menu places itself. */
+.menuHost {
+  display: contents;
 }

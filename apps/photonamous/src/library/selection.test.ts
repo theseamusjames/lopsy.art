@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   EMPTY_SELECTION,
+  focusAt,
   moveFocus,
   orderedSelection,
   pruneSelection,
@@ -78,6 +79,20 @@ describe('selection', () => {
     const pruned = pruneSelection(s, new Set(['a', 'b']));
     expect([...pruned.ids].sort()).toEqual(['a', 'b']);
     expect(pruned.focus).toBeNull();
+  });
+
+  it('moves focus to an index, selecting it, growing the range or leaving the selection', () => {
+    expect([...focusAt(selectOne('b'), order, 3, 'select').ids]).toEqual(['d']);
+    const grown = focusAt(selectOne('b'), order, 3, 'extend');
+    expect(orderedSelection(grown, order)).toEqual(['b', 'c', 'd']);
+    expect(grown.anchor).toBe('b');
+    expect(grown.focus).toBe('d');
+    const kept = focusAt(toggleOne(selectOne('a'), 'c'), order, 4, 'keep');
+    expect(orderedSelection(kept, order)).toEqual(['a', 'c']);
+    expect(kept.focus).toBe('e');
+    expect(kept.anchor).toBe('c');
+    expect(focusAt(EMPTY_SELECTION, order, 2, 'extend').ids).toEqual(new Set(['c']));
+    expect(focusAt(selectOne('a'), order, 9, 'select')).toEqual(selectOne('a'));
   });
 
   it('targets the focus when nothing is selected', () => {

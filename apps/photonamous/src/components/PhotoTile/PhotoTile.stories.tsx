@@ -12,5 +12,5 @@ type Story = StoryObj<typeof PhotoTile>;
 
 const [first, second] = fakeAssetIds(2);
 
-export const Default: Story = { args: { assetId: first ?? '', selected: false, focused: false, onPick: () => undefined, onOpen: () => undefined } };
-export const Selected: Story = { args: { assetId: second ?? '', selected: true, focused: true, onPick: () => undefined, onOpen: () => undefined } };
+export const Default: Story = { args: { assetId: first ?? '', column: 1, selected: false, focused: false, tabbable: false, onPick: () => undefined, onOpen: () => undefined } };
+export const Selected: Story = { args: { assetId: second ?? '', column: 2, selected: true, focused: true, tabbable: true, onPick: () => undefined, onOpen: () => undefined } };

@@ -67,6 +67,19 @@ export function visibleRange(
 }
 
 /**
+ * The rows to render: those in range, plus the row of `keepIndex` (the
+ * focused photo) wherever it is, so the tile with keyboard focus stays in
+ * the DOM while the grid scrolls away from it. In display order.
+ */
+export function renderedRows(geometry: GridGeometry, range: VisibleRange, keepIndex: number): number[] {
+  const rows: number[] = [];
+  for (let r = range.firstRow; r <= range.lastRow; r++) rows.push(r);
+  const keep = keepIndex < 0 ? -1 : Math.floor(keepIndex / Math.max(1, geometry.columns));
+  if (keep < 0 || keep >= geometry.rowCount || (keep >= range.firstRow && keep <= range.lastRow)) return rows;
+  return keep < range.firstRow ? [keep, ...rows] : [...rows, keep];
+}
+
+/**
  * The scroll position that brings `index` into view, or null when it is
  * already fully visible.
  */
