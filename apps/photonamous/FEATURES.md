@@ -83,10 +83,11 @@ is `docs/photonamous-spec.md`; running and setup are in
   with Previous/Next (← →). Above it, **Back to the grid** (a link at the
   left edge), the file name, centred, and its place in the list; then a
   bar with the colour labels at the left, the stars in the centre and
-  **Edit in Lopsy** and **Edit** at the right. Below the photo, a bar
-  with its versions and, at the right end, **Set aside / Bring back**;
-  then the Lopsy documents made from it. Space or Escape goes back to the
-  grid. In a narrow window the bars wrap
+  **Edit in Lopsy** and **Edit** at the right. A Lopsy document has
+  **Open in Lopsy** there instead, as it opens in Lopsy, not in the Edit
+  view. Below the photo, a bar with its versions and, at the right end,
+  **Set aside / Bring back**; then the Lopsy documents made from it.
+  Space or Escape goes back to the grid. In a narrow window the bars wrap
   rather than overlap: the edit buttons go under the labels and stars, and
   Set aside under the versions.
 - **Versions in Single view**: up to four are chips (choose one; rename it
@@ -328,7 +329,8 @@ never talks to Google. Lopsy's side is in `apps/lopsy-web/FEATURES.md`
   opens Lopsy in its tab (`lopsy-editor`) from the click. A photo goes as
   its developed full-size 16-bit PNG with its source (library, asset,
   version, recipe hash) and a camera summary; a Lopsy document goes as its
-  `.lopsy` with the file's current revision (read until stable).
+  `.lopsy` with the file's current revision (read until stable). In Single
+  view a document's button is **Open in Lopsy**, and it has no Edit.
 - **Save to Photonamous** (in Lopsy): the `.lopsy` and a flattened 16-bit
   PNG come back and are stored in `Lopsy documents/` as a document
   asset, stacked behind the photo it was made from, with previews. Saving

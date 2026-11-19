@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { generatedJpeg, importFiles } from './library';
 
 /**
@@ -6,7 +6,7 @@ import { generatedJpeg, importFiles } from './library';
  * the labels, stars and edit buttons left, centre and right in a bar above
  * the photo; the versions in a bar below it with Set aside at its right end,
  * as chips that scroll on their own up to four versions and as a dropdown
- * beyond.
+ * beyond; and a Lopsy document, which opens in Lopsy and has no Edit button.
  */
 
 test.use({ actionTimeout: 15_000 });
@@ -196,4 +196,69 @@ test('at a narrow width the version chips scroll on their own and never cover Se
   await scroller.evaluate((el) => el.scrollTo({ left: 0 }));
   expect(await hitsSetAside()).toBe('Set aside');
   expect((await box(scroller)).right).toBeLessThanOrEqual((await box(setAside)).left);
+});
+
+/**
+ * Stands in for Lopsy at its URL: says ready to the Photonamous tab that
+ * opened it, takes the document it sends (its kind becomes the page title),
+ * and `saveToPhotonamous(name)` sends a save back as Lopsy's Save to
+ * Photonamous does: a `.lopsy` (its magic, then a few bytes) and a PNG.
+ */
+async function standInForLopsy(context: BrowserContext, photosOrigin: string): Promise<void> {
+  const script = `
+    const photos = ${JSON.stringify(photosOrigin)};
+    const id = new URLSearchParams(location.search).get('photos-handoff');
+    let source;
+    const ready = setInterval(() => opener.postMessage({ protocol: 1, type: 'lopsy:ready', id }, photos), 200);
+    addEventListener('message', (e) => {
+      if (e.origin !== photos || e.data?.id !== id) return;
+      if (e.data.type === 'photos:document') {
+        clearInterval(ready);
+        source = e.data.document.source;
+        opener.postMessage({ protocol: 1, type: 'lopsy:received', id }, photos);
+        document.title = 'Received ' + e.data.document.kind;
+      }
+      if (e.data.type === 'photos:saved') document.title = e.data.ok ? 'Saved' : 'Not saved: ' + e.data.error;
+    });
+    window.saveToPhotonamous = async (name) => {
+      const canvas = new OffscreenCanvas(96, 64);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#c04040';
+      ctx.fillRect(0, 0, 96, 64);
+      const render = await (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer();
+      const lopsy = new Uint8Array([0x4c, 0x4f, 0x50, 0x53, 0x59, 0x00, 1, 2, 3]).buffer;
+      opener.postMessage({ protocol: 1, type: 'lopsy:save', id, saveId: 'save1', name, lopsy, render, source }, photos, [lopsy, render]);
+    };`;
+  await context.route(
+    (url) => url.searchParams.has('photos-handoff'),
+    (route) => route.fulfill({ contentType: 'text/html', body: `<!doctype html><meta charset="utf-8"><title>Lopsy</title><script>${script}</script>` }),
+  );
+}
+
+test('a Lopsy document has no Edit button: it opens in Lopsy, as its .lopsy', async ({ page, context }) => {
+  test.setTimeout(240_000);
+  const view = await openPhotoInSingleView(page, 'source.jpg');
+  await standInForLopsy(context, new URL(page.url()).origin);
+
+  // Edit in Lopsy from the bar above the photo, and the stand-in saves a document back.
+  const [lopsy] = await Promise.all([context.waitForEvent('page'), view.getByRole('button', { name: 'Edit in Lopsy' }).click()]);
+  await expect(lopsy).toHaveTitle('Received png16', { timeout: 120_000 });
+  await lopsy.evaluate(() => (window as unknown as { saveToPhotonamous: (name: string) => Promise<void> }).saveToPhotonamous('Poster'));
+  await expect(lopsy).toHaveTitle('Saved', { timeout: 60_000 });
+
+  // The document joins the photo's stack; opened in Single view, it has no Edit and no Edit in Lopsy, but Open in Lopsy.
+  await view.getByRole('button', { name: 'Back to the grid' }).click();
+  const photo = page.locator('[role="gridcell"][title="source.jpg"]');
+  await photo.getByRole('button', { name: '1 Lopsy document', exact: true }).click();
+  const documentTile = page.locator('[role="gridcell"][title="Poster.lopsy"]');
+  await documentTile.dblclick();
+  const documentView = page.getByRole('region', { name: 'Poster.lopsy' });
+  await expect(documentView.getByRole('button', { name: 'Open in Lopsy' })).toBeVisible();
+  await expect(documentView.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
+  await expect(documentView.getByRole('button', { name: 'Edit in Lopsy' })).toHaveCount(0);
+  await page.screenshot({ path: 'test-results/single-view-document.png' });
+
+  // Open in Lopsy sends the document itself, to the same Lopsy tab.
+  await documentView.getByRole('button', { name: 'Open in Lopsy' }).click();
+  await expect(lopsy).toHaveTitle('Received lopsy', { timeout: 60_000 });
 });

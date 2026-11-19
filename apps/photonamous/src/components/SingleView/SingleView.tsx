@@ -69,14 +69,24 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
             <Stars rating={asset.rating} size={18} onChange={(r) => setRating(r, orderedIds, [asset.id])} />
           </div>
           <div className={styles.edit}>
-            <Button size="sm" variant="ghost" onClick={openFocusedInLopsy}>
-              <Paintbrush size={14} />
-              Edit in Lopsy
-            </Button>
-            <Button size="sm" onClick={openEdit}>
-              <SlidersHorizontal size={14} />
-              Edit
-            </Button>
+            {asset.kind === 'document' ? (
+              // A Lopsy document is edited in Lopsy, as its .lopsy: the Edit view cannot open it.
+              <Button size="sm" onClick={openFocusedInLopsy}>
+                <Paintbrush size={14} />
+                Open in Lopsy
+              </Button>
+            ) : (
+              <>
+                <Button size="sm" variant="ghost" onClick={openFocusedInLopsy}>
+                  <Paintbrush size={14} />
+                  Edit in Lopsy
+                </Button>
+                <Button size="sm" onClick={openEdit}>
+                  <SlidersHorizontal size={14} />
+                  Edit
+                </Button>
+              </>
+            )}
           </div>
         </div>
       )}
