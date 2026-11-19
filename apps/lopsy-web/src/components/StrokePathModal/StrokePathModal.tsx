@@ -4,6 +4,7 @@ import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { rasterizePathToLayer } from '../../app/interactions/path-stroke';
 import { colorToCSS } from '../../utils/color';
+import { clampStrokePathWidth, MAX_STROKE_PATH_WIDTH, MIN_STROKE_PATH_WIDTH } from './stroke-path-width';
 import styles from './StrokePathModal.module.css';
 
 export function StrokePathModal() {
@@ -29,7 +30,7 @@ export function StrokePathModal() {
     const activeId = editorState.document.activeLayerId;
     if (!path || !activeId) return;
 
-    const strokeWidth = Math.max(1, Math.min(50, Math.round(parseFloat(width) || 1)));
+    const strokeWidth = clampStrokePathWidth(parseFloat(width) || 1);
     rasterizePathToLayer(path.anchors, path.closed, activeId, strokeWidth, foregroundColor);
     setStrokeModalPathId(null);
   }, [strokeModalPathId, width, foregroundColor, setStrokeModalPathId]);
@@ -66,8 +67,8 @@ export function StrokePathModal() {
                 ref={widthRef}
                 className={styles.fieldInput}
                 type="number"
-                min="1"
-                max="50"
+                min={MIN_STROKE_PATH_WIDTH}
+                max={MAX_STROKE_PATH_WIDTH}
                 value={width}
                 onChange={(e) => setWidth(e.target.value)}
               />

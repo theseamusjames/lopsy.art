@@ -53,16 +53,23 @@ function fitPastedLayerIfOversized(): void {
  * respond straight away. Without this the paste had no selection of its own —
  * at best the copy's marquee carried over — and a handle drag moved it instead.
  */
-export function pasteInternalClipboard(): void {
+export function pasteInternalClipboard(): PastedLayer | null {
   const pastedId = useEditorStore.getState().paste();
-  if (!pastedId) return;
+  if (!pastedId) return null;
   useUIStore.getState().setActiveTool('move');
   // Register the new layer with the engine now instead of on the next frame,
   // so the selection is in place before any key that follows the paste.
   flushLayerSync(useEditorStore.getState());
   // No prefloat: it would grow the layer to the document at (0, 0), and a
   // paste in place keeps the copied size and offset. The first drag floats.
-  void selectLayerAlpha(pastedId, { prefloat: false });
+  const selected = selectLayerAlpha(pastedId, { prefloat: false });
+  return { id: pastedId, selected };
+}
+
+export interface PastedLayer {
+  readonly id: string;
+  /** Settles once the pasted pixels are selected; nothing in the UI waits on it. */
+  readonly selected: Promise<void>;
 }
 
 export interface PasteOrOpenOutcome {

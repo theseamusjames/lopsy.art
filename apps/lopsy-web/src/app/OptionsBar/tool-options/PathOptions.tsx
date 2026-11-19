@@ -5,7 +5,7 @@ import { useEditorStore } from '../../editor-store';
 import { useUIStore } from '../../ui-store';
 import { commitCurrentPath } from '../../interactions/path-stroke';
 import { Slider } from '../../../components/Slider/Slider';
-import { applyBooleanOp } from '../../MenuBar/menus/path-menu';
+import { applyBooleanOp } from '../../path-boolean-ops';
 import type { BooleanOp } from '../../../tools/path/boolean-ops';
 import optStyles from '../OptionsBar.module.css';
 import styles from './PathOptions.module.css';

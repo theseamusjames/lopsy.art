@@ -28,7 +28,7 @@ describe('pasteInternalClipboard', () => {
   it('selects the pasted layer and switches to Move', () => {
     useEditorStore.setState({ paste: () => 'pasted-1' });
 
-    pasteInternalClipboard();
+    expect(pasteInternalClipboard()).toMatchObject({ id: 'pasted-1' });
 
     expect(useUIStore.getState().activeTool).toBe('move');
     // The engine must know the new layer before its alpha is read back.
@@ -38,7 +38,7 @@ describe('pasteInternalClipboard', () => {
   it('does nothing further when the clipboard pasted nothing', () => {
     useEditorStore.setState({ paste: () => null });
 
-    pasteInternalClipboard();
+    expect(pasteInternalClipboard()).toBeNull();
 
     expect(useUIStore.getState().activeTool).toBe('marquee-rect');
     expect(selectLayerAlpha).not.toHaveBeenCalled();
