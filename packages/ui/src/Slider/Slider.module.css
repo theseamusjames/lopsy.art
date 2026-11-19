@@ -60,7 +60,7 @@
 }
 
 .valueInput {
-  width: 40px;
+  width: var(--slider-value-width, 40px);
   padding: 0 var(--space-1);
   background: transparent;
   border: none;
