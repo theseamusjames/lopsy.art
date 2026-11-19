@@ -74,7 +74,7 @@
   height: 4px;
   transform: translateY(-50%);
   background: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid var(--ph-control-edge);
   border-radius: var(--radius-round);
 }
 
