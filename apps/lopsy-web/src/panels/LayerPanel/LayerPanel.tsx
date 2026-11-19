@@ -8,6 +8,7 @@ import { selectionCombineMode } from '../../selection/selection';
 import { hasCombinableSelection } from '../../app/interactions/selection-handlers';
 import { buildFlatDisplayList } from '../../layers/group-utils';
 import { useLayerDnd } from './useLayerDnd';
+import { addMaskAndEdit, removeMaskAndLeaveEdit } from './mask-actions';
 import { LayerRow } from './LayerRow';
 import { LayerContextMenu } from './LayerContextMenu';
 import { useState } from 'react';
@@ -25,8 +26,6 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
   const onAddLayer = useEditorStore((s) => s.addLayer);
   const onDropLayer = useEditorStore((s) => s.dropLayer);
   const onUpdateOpacity = useEditorStore((s) => s.updateLayerOpacity);
-  const addLayerMask = useEditorStore((s) => s.addLayerMask);
-  const removeLayerMask = useEditorStore((s) => s.removeLayerMask);
   const duplicateLayer = useEditorStore((s) => s.duplicateLayer);
   const toggleLayerLock = useEditorStore((s) => s.toggleLayerLock);
   const renameLayer = useEditorStore((s) => s.renameLayer);
@@ -106,18 +105,12 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
   }, [showEffectsDrawer, activeLayerId, setShowEffectsDrawer, onSelectLayer]);
 
   const handleAddMask = useCallback((layerId: string) => {
-    addLayerMask(layerId);
-    // A new mask is added to be painted on; leaving the layer pixels as the
-    // paint target made the next stroke land on the artwork.
-    if (useEditorStore.getState().document.layers.find((l) => l.id === layerId)?.mask) {
-      setMaskEditMode(true);
-    }
-  }, [addLayerMask, setMaskEditMode]);
+    addMaskAndEdit(layerId);
+  }, []);
 
   const handleRemoveMask = useCallback((layerId: string) => {
-    removeLayerMask(layerId);
-    setMaskEditMode(false);
-  }, [removeLayerMask, setMaskEditMode]);
+    removeMaskAndLeaveEdit(layerId);
+  }, []);
 
   useEffect(() => {
     const panel = panelRef.current;

@@ -13,15 +13,8 @@ import { DropShadowForm } from './DropShadowForm';
 import { StrokeForm } from './StrokeForm';
 import { GlowForm } from './GlowForm';
 import { ColorOverlayForm } from './ColorOverlayForm';
+import { EFFECT_LIST, effectLabel } from './effect-list';
 import styles from './LayerEffectsPanel.module.css';
-
-const EFFECT_LIST: { key: EffectKey; label: string }[] = [
-  { key: 'dropShadow', label: 'Drop Shadow' },
-  { key: 'stroke', label: 'Stroke' },
-  { key: 'outerGlow', label: 'Outer Glow' },
-  { key: 'innerGlow', label: 'Inner Glow' },
-  { key: 'colorOverlay', label: 'Color Overlay' },
-];
 
 interface LayerEffectsPanelProps {
   dragProps?: DragProps;
@@ -55,9 +48,6 @@ export function LayerEffectsPanel({ dragProps }: LayerEffectsPanelProps) {
     },
     [activeLayerId, effects, updateLayerEffects],
   );
-
-  const effectLabel = (key: EffectKey): string =>
-    EFFECT_LIST.find((e) => e.key === key)?.label ?? 'Effect';
 
   // Committed update: apply effects change. History is pushed separately
   // by the caller (handleToggle, beginEffectsDrag) to avoid flooding the
