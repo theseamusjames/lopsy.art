@@ -41,10 +41,12 @@ test('find photos by text, camera, saved search and date', async ({ page }) => {
   await page.getByRole('navigation', { name: 'Library' }).getByRole('button', { name: /^The X-T5/ }).click();
   await expect(tiles(page)).toHaveCount(1);
 
-  // The date tree: 2025, then June, then the 14th.
+  // The date tree: 2025, then June, then the 14th. Each arrow sits beside its row, in the row's list item.
   const nav = page.getByRole('navigation', { name: 'Library' });
-  await nav.getByRole('button', { name: /2025/ }).first().locator('[aria-label="Open"]').click();
-  await nav.getByRole('button', { name: /June/ }).locator('[aria-label="Open"]').click();
+  const arrowOf = (row: RegExp) =>
+    nav.getByRole('listitem').filter({ has: page.getByRole('button', { name: row }) }).last().getByRole('button', { name: /^Open/ }).first();
+  await arrowOf(/^2025/).click();
+  await arrowOf(/^June/).click();
   await nav.getByRole('button', { name: /14 June 2025/ }).click();
   await expect(tiles(page)).toHaveCount(2);
   await nav.getByRole('button', { name: /2026/ }).first().click();

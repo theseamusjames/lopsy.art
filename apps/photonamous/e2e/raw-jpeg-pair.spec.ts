@@ -53,7 +53,7 @@ test('a RAW+JPEG pair is one tile with its badge, counted once', async ({ page }
 
   // Every count agrees: one photo.
   await expect(sidebar.getByRole('button', { name: /^All photos 1$/ })).toBeVisible();
-  const dates = sidebar.getByRole('button', { name: /^Open \d{4} \d+$/ });
+  const dates = sidebar.getByRole('button', { name: /^\d{4} \d+$/ });
   await expect(dates).toHaveCount(1);
   await expect(dates.first()).toHaveAccessibleName(/ 1$/);
 });
