@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { Pipette } from 'lucide-react';
 import type { Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Json } from '@lopsy/photos-core/library/types';
@@ -20,6 +21,7 @@ export interface WhiteBalanceMenuProps {
 /** White balance mode: As shot, Auto, presets, or Custom (what the sliders set). */
 export function WhiteBalanceMenu({ recipe, auto, presets, isDisabled, onCommit, isPicking, onTogglePicker }: WhiteBalanceMenuProps) {
   const choice = currentChoice(recipe, auto, presets);
+  const pickerHintId = useId();
   return (
     <div className={styles.row}>
       <span className={styles.title}>Mode</span>
@@ -48,6 +50,7 @@ export function WhiteBalanceMenu({ recipe, auto, presets, isDisabled, onCommit, 
         type="button"
         className={styles.picker}
         aria-label="Pick a neutral grey"
+        aria-describedby={pickerHintId}
         title="Click something in the photo that should be neutral grey (Esc cancels)"
         aria-pressed={isPicking}
         disabled={isDisabled}
@@ -58,6 +61,9 @@ export function WhiteBalanceMenu({ recipe, auto, presets, isDisabled, onCommit, 
       >
         <Pipette size={14} aria-hidden />
       </button>
+      <span id={pickerHintId} className={styles.srOnly}>
+        Then click something in the photo that should be neutral grey; Escape cancels. The Temperature and Tint sliders set the white balance without it.
+      </span>
     </div>
   );
 }

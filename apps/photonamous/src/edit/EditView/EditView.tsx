@@ -1078,7 +1078,7 @@ export function EditView({
               onReset={handleGroupReset}
               onAuto={() => setIsLevelling((v) => !v)}
               autoLabel={isLevelling ? 'Cancel' : 'Level'}
-              autoTitle="Draw along something that should be level"
+              autoTitle="Draw along something in the photo that should be level; the Angle slider straightens by keyboard"
             />
           )}
           {GROUPS.map((group) => (
