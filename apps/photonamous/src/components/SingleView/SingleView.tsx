@@ -47,7 +47,7 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
       aria-describedby={cull ? hintId : undefined}
     >
       <div className={styles.top}>
-        <Button variant="ghost" size="sm" onClick={backOut}>
+        <Button variant="link" size="sm" className={styles.back} onClick={backOut}>
           <ArrowLeft size={14} />
           {cull ? 'Leave full screen' : 'Back to the grid'}
         </Button>
@@ -59,6 +59,37 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
           {asset ? `${asset.fileName}, ${position}` : ''}
         </p>
       </div>
+
+      {asset && (
+        <div className={styles.actions}>
+          <div className={styles.labels}>
+            <LabelPicker value={asset.label} onChange={(l) => setLabel(l, orderedIds, [asset.id])} />
+          </div>
+          <div className={styles.rating}>
+            <Stars rating={asset.rating} size={18} onChange={(r) => setRating(r, orderedIds, [asset.id])} />
+          </div>
+          <div className={styles.edit}>
+            {asset.kind === 'document' ? (
+              // A Lopsy document is edited in Lopsy, as its .lopsy: the Edit view cannot open it.
+              <Button size="sm" onClick={openFocusedInLopsy}>
+                <Paintbrush size={14} />
+                Open in Lopsy
+              </Button>
+            ) : (
+              <>
+                <Button size="sm" variant="ghost" onClick={openFocusedInLopsy}>
+                  <Paintbrush size={14} />
+                  Edit in Lopsy
+                </Button>
+                <Button size="sm" onClick={openEdit}>
+                  <SlidersHorizontal size={14} />
+                  Edit
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className={styles.stage}>
         {focus !== null && asset ? (
@@ -90,36 +121,23 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
         />
       </div>
 
-      {asset && focus !== null && <VersionStrip itemId={focus} />}
-      {asset && <DocumentList assetId={asset.id} />}
-      {asset && (
-        <div className={styles.bar}>
-          <Stars rating={asset.rating} size={18} onChange={(r) => setRating(r, orderedIds, [asset.id])} />
-          <LabelPicker value={asset.label} onChange={(l) => setLabel(l, orderedIds, [asset.id])} />
-          <Button size="sm" variant={asset.setAside ? 'primary' : 'secondary'} onClick={() => toggleSetAside(orderedIds, [asset.id])}>
-            <EyeOff size={14} />
-            {asset.setAside ? 'Bring back' : 'Set aside'}
-          </Button>
-          <span className={styles.spacer} />
-          {cull && (
-            <span id={hintId} className={styles.hint}>
-              1–5 rate · X set aside · each moves on · Esc leaves
-            </span>
-          )}
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={openFocusedInLopsy}
-          >
-            <Paintbrush size={14} />
-            Edit in Lopsy
-          </Button>
-          <Button size="sm" onClick={openEdit}>
-            <SlidersHorizontal size={14} />
-            Edit
-          </Button>
+      {asset && focus !== null && (
+        <div className={styles.versionsBar}>
+          <VersionStrip itemId={focus} className={styles.versions} />
+          <div className={styles.aside}>
+            {cull && (
+              <span id={hintId} className={styles.hint}>
+                1–5 rate · X set aside · each moves on · Esc leaves
+              </span>
+            )}
+            <Button size="sm" variant={asset.setAside ? 'primary' : 'secondary'} onClick={() => toggleSetAside(orderedIds, [asset.id])}>
+              <EyeOff size={14} />
+              {asset.setAside ? 'Bring back' : 'Set aside'}
+            </Button>
+          </div>
         </div>
       )}
+      {asset && <DocumentList assetId={asset.id} />}
     </div>
   );
 }

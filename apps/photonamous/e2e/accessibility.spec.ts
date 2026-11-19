@@ -207,6 +207,25 @@ test('every view, as a user reaches it', async ({ page }) => {
   });
   await page.keyboard.press('Escape');
 
+  // More than four versions are chosen from a dropdown, with the chosen one's actions beside it.
+  // On the second photo: the steps above gave the first one a Radial area in the Edit view.
+  await step(page, 'single view, versions dropdown', async () => {
+    await tiles(page).nth(1).dblclick();
+    const versions = page.getByRole('group', { name: 'Versions' });
+    for (let i = 0; i < 4; i++) {
+      await versions.getByRole('button', { name: 'New version' }).click();
+      await page.getByRole('dialog', { name: 'New version' }).getByRole('button', { name: 'Create' }).click();
+      await expect(page.getByRole('dialog', { name: 'New version' })).toHaveCount(0);
+    }
+    await expect(versions.getByRole('combobox', { name: 'Versions' })).toBeVisible({ timeout: 15_000 });
+  });
+
+  await step(page, 'cull view', async () => {
+    await page.keyboard.press('f');
+    await expect(page.getByRole('dialog', { name: /^Cull: / })).toBeVisible({ timeout: 15_000 });
+  });
+  await page.keyboard.press('Escape');
+
   await step(page, 'grade screen', async () => {
     await page.goto('/?grade=missing');
   });

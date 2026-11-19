@@ -80,11 +80,27 @@ is `docs/photonamous-spec.md`; running and setup are in
 ### Single, Compare and Cull
 
 - **Single view** (Space, or double-click): one photo large at 2048 px,
-  with Previous/Next (← →), its versions, and **Edit**, **Edit in Lopsy**
-  and **Set aside / Bring back**. Space or Escape goes back to the grid.
+  with Previous/Next (← →). Above it, **Back to the grid** (a link at the
+  left edge), the file name, centred, and its place in the list; then a
+  bar with the colour labels at the left, the stars in the centre and
+  **Edit in Lopsy** and **Edit** at the right. A Lopsy document has
+  **Open in Lopsy** there instead, as it opens in Lopsy, not in the Edit
+  view. Below the photo, a bar with its versions and, at the right end,
+  **Set aside / Bring back**; then the Lopsy documents made from it.
+  Space or Escape goes back to the grid. In a narrow window the bars wrap
+  rather than overlap: the edit buttons go under the labels and stars, and
+  Set aside under the versions.
+- **Versions in Single view**: up to four are chips (choose one; rename it
+  with its pencil or a double-click, Enter saves and Escape keeps the old
+  name; **Show** it for the photo; delete it, never the last). When the
+  bar has no room for them, the chips scroll sideways on their own and
+  never run under Set aside. With five or more, a dropdown chooses the
+  version and the chosen one's Rename, Show and Delete sit beside it.
+  **New version** is there either way.
 - **Compare** (C): two to four selected photos side by side.
-- **Cull** (F): full screen, one photo at a time; rating (1–5) or setting
-  aside (X) moves on to the next. Escape leaves.
+- **Cull** (F): full screen, one photo at a time, laid out as Single view,
+  with the keys' hint beside Set aside; rating (1–5) or setting aside (X)
+  moves on to the next. Escape leaves.
 
 ### Marks, details and keywords
 
@@ -120,9 +136,9 @@ is `docs/photonamous-spec.md`; running and setup are in
 - **New version**: asks for a name ("Version 2" offered, selected), then
   makes another edit of the same photo starting from the current one; the
   original file is untouched. The photo's stack opens to show its
-  versions as their own tiles. Single view lists them: switch, rename,
-  **Show** (the one the photo shows everywhere), delete (the shown one
-  too, when another is left).
+  versions as their own tiles. Single view lists them, as chips or, past
+  four, a dropdown: switch, rename, **Show** (the one the photo shows
+  everywhere), delete (the shown one too, when another is left).
 - **Albums** hold whole photos or single versions: with a version's tile
   selected, the details panel adds that version.
 - **Copy edits…** (⇧⌘C) asks which groups to copy; **Paste edits**
@@ -313,7 +329,8 @@ never talks to Google. Lopsy's side is in `apps/lopsy-web/FEATURES.md`
   opens Lopsy in its tab (`lopsy-editor`) from the click. A photo goes as
   its developed full-size 16-bit PNG with its source (library, asset,
   version, recipe hash) and a camera summary; a Lopsy document goes as its
-  `.lopsy` with the file's current revision (read until stable).
+  `.lopsy` with the file's current revision (read until stable). In Single
+  view a document's button is **Open in Lopsy**, and it has no Edit.
 - **Save to Photonamous** (in Lopsy): the `.lopsy` and a flattened 16-bit
   PNG come back and are stored in `Lopsy documents/` as a document
   asset, stacked behind the photo it was made from, with previews. Saving

@@ -1,25 +1,47 @@
+/* New version moves to a line of its own only when not even one chip would fit beside it. */
 .strip {
   display: flex;
-  align-items: center;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-1) var(--space-2);
-  padding: var(--space-1) var(--space-4);
-  border-top: 1px solid var(--color-border-subtle);
-  background: var(--color-bg-secondary);
+  min-width: 0;
   font-size: var(--font-size-sm);
 }
 
 .title {
+  flex: none;
   color: var(--color-text-secondary);
-  margin-right: var(--space-1);
+}
+
+/*
+ * The chips take the room the row has, at least about one chip's, and
+ * scroll sideways on their own when that is not enough. The padding keeps
+ * their focus rings inside the scroller's clip; the margin takes it back
+ * out of the layout.
+ */
+.chips {
+  display: flex;
+  flex: 1 1 128px;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: max-content;
+  margin: -3px;
+  padding: 3px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
 }
 
 .version {
   display: inline-flex;
+  flex: none;
   align-items: center;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-round);
   padding-right: 2px;
+  white-space: nowrap;
 }
 
 .version[data-current='true'] {
@@ -45,6 +67,7 @@
 }
 
 .input {
+  flex: none;
   height: 24px;
   width: 140px;
   padding: 0 var(--space-2);
@@ -66,4 +89,39 @@
   font-size: var(--font-size-xs);
   color: var(--ph-accent-text);
   padding: 0 var(--space-1);
+}
+
+/* More versions than chips: the dropdown, then the chosen version's actions. The dropdown narrows before New version moves down. */
+.current {
+  display: inline-flex;
+  flex: 1 1 160px;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: max-content;
+}
+
+/* The arrow and the right padding are the app's for every select. */
+.select {
+  min-width: 6rem;
+  max-width: 16rem;
+  height: 26px;
+  padding-left: var(--space-2);
+  margin-right: var(--space-1);
+  border: 1px solid var(--ph-control-edge);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-input-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  text-overflow: ellipsis;
+}
+
+.select:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 1px;
+}
+
+.add {
+  flex: none;
 }

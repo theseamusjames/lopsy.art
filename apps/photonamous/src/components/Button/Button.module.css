@@ -91,3 +91,21 @@
   background: var(--color-danger-bg-hover);
   border-color: var(--color-danger-bg-hover);
 }
+
+/*
+ * Reads as a link. No padding at its sides, so its text lines up with the
+ * content beside and below it. Its words make it wider than 24 px; a
+ * min-width would let a grid or flex row squeeze it narrower than them.
+ */
+.link {
+  min-height: 24px;
+  padding-inline: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--ph-accent-text);
+  text-underline-offset: 3px;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
