@@ -83,3 +83,35 @@ export function formatShare(share: number): string {
   const pct = share * 100;
   return `${pct < 10 ? pct.toFixed(1) : Math.round(pct)} %`;
 }
+
+export interface ToneShares {
+  /** Share of the luminance in the darkest third of the range, 0..1. */
+  readonly dark: number;
+  readonly middle: number;
+  readonly bright: number;
+}
+
+export function toneShares(h: Histogram): ToneShares {
+  const third = BINS / 3;
+  let dark = 0;
+  let middle = 0;
+  let bright = 0;
+  h.luminance.forEach((count, i) => {
+    if (i < third) dark += count;
+    else if (i < 2 * third) middle += count;
+    else bright += count;
+  });
+  return { dark: dark / h.total, middle: middle / h.total, bright: bright / h.total };
+}
+
+/** The histogram in words, for its text alternative: where the tones lie and how much clips. */
+export function describeHistogram(h: Histogram | null): string {
+  if (!h) return 'Histogram, not read yet';
+  const tones = toneShares(h);
+  const clip = clipping(h);
+  const pct = (share: number) => `${Math.round(share * 100)} %`;
+  return (
+    `Histogram: ${pct(tones.dark)} of the tones dark, ${pct(tones.middle)} in the middle, ${pct(tones.bright)} bright; ` +
+    `${formatShare(clip.shadows)} at black, ${formatShare(clip.highlights)} at white.`
+  );
+}
