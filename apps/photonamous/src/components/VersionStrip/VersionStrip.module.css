@@ -28,13 +28,20 @@
 }
 
 .name {
+  min-height: 24px;
   border: none;
+  border-radius: var(--radius-round);
   background: transparent;
   color: var(--color-text-primary);
   font-family: var(--font-ui);
   font-size: var(--font-size-sm);
   padding: 2px var(--space-2);
   cursor: pointer;
+}
+
+.name:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: -2px;
 }
 
 .input {
@@ -50,8 +57,13 @@
   outline: none;
 }
 
+.input:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 1px;
+}
+
 .shown {
   font-size: var(--font-size-xs);
-  color: var(--color-accent);
+  color: var(--ph-accent-text);
   padding: 0 var(--space-1);
 }
