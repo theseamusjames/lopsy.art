@@ -100,7 +100,7 @@
 
 .kind {
   min-width: 44px;
-  color: var(--color-text-disabled);
+  color: var(--ph-text-muted);
   font-size: var(--font-size-xs);
 }
 
@@ -125,7 +125,7 @@
 
 .icon[aria-pressed='true'] {
   background: var(--color-bg-active);
-  color: var(--color-accent);
+  color: var(--ph-accent-text);
 }
 
 .rename {

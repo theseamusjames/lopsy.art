@@ -79,12 +79,16 @@
 }
 
 .primaryButton {
-  background: var(--color-accent);
-  color: var(--color-text-primary);
+  background: var(--ph-primary-bg);
+  color: var(--ph-primary-text);
 }
 
 .primaryButton:hover:not(:disabled) {
-  background: var(--color-accent-hover);
+  background: var(--ph-primary-bg-hover);
+}
+
+.primaryButton:active:not(:disabled) {
+  background: var(--ph-primary-bg-active);
 }
 
 .primaryButton:disabled {

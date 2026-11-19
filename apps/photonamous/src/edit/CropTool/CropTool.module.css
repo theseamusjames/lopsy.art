@@ -109,11 +109,15 @@
 }
 
 .primary {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: var(--color-text-primary);
+  background: var(--ph-primary-bg);
+  border-color: var(--ph-primary-bg);
+  color: var(--ph-primary-text);
 }
 
 .primary:hover {
-  background: var(--color-accent-hover);
+  background: var(--ph-primary-bg-hover);
+}
+
+.primary:active {
+  background: var(--ph-primary-bg-active);
 }

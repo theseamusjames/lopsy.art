@@ -33,6 +33,6 @@
 }
 
 .step[data-undone] {
-  color: var(--color-text-disabled);
+  color: var(--ph-text-muted);
   font-style: italic;
 }
