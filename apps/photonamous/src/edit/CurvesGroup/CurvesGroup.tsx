@@ -4,6 +4,7 @@ import type { CurveChannel, CurvePoint, Recipe } from '@lopsy/photos-core/librar
 import type { Json } from '@lopsy/photos-core/library/types';
 import { CurveEditor } from '../../components/CurveEditor/CurveEditor';
 import { CURVE_CHANNEL_DEFS, curvesResetChanges } from '../edit-controls';
+import { useTabs } from '../tabs';
 import styles from './CurvesGroup.module.css';
 
 export interface CurvesGroupProps {
@@ -24,6 +25,11 @@ export function CurvesGroup({ recipe, isDisabled, onDraft, onCommit }: CurvesGro
   const def = CURVE_CHANNEL_DEFS.find((c) => c.id === channel) ?? CURVE_CHANNEL_DEFS[0];
   const resetChanges = curvesResetChanges(recipe);
   const isDefault = Object.keys(resetChanges).length === 0;
+  const { tabProps, panelProps } = useTabs(
+    CURVE_CHANNEL_DEFS.map((c) => c.id),
+    channel,
+    setChannel,
+  );
   if (!def) return null;
   const path = `curves.${def.id}`;
 
@@ -44,26 +50,21 @@ export function CurvesGroup({ recipe, isDisabled, onDraft, onCommit }: CurvesGro
       </header>
       <div className={styles.tabs} role="tablist" aria-label="Curve channel">
         {CURVE_CHANNEL_DEFS.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            role="tab"
-            className={styles.tab}
-            aria-selected={c.id === channel}
-            onClick={() => setChannel(c.id)}
-          >
+          <button key={c.id} type="button" className={styles.tab} {...tabProps(c.id)}>
             {c.label}
           </button>
         ))}
       </div>
-      <CurveEditor
-        label={`${def.label} curve`}
-        points={recipe.curves[def.id]}
-        color={def.color}
-        isDisabled={isDisabled}
-        onChange={(points) => onDraft({ [path]: asJson(points) })}
-        onCommit={(points) => onCommit({ [path]: asJson(points) }, `Curves: ${def.label}`)}
-      />
+      <div {...panelProps}>
+        <CurveEditor
+          label={`${def.label} curve`}
+          points={recipe.curves[def.id]}
+          color={def.color}
+          isDisabled={isDisabled}
+          onChange={(points) => onDraft({ [path]: asJson(points) })}
+          onCommit={(points) => onCommit({ [path]: asJson(points) }, `Curves: ${def.label}`)}
+        />
+      </div>
     </section>
   );
 }
