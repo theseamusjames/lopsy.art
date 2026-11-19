@@ -236,11 +236,11 @@
 }
 
 .createButton {
-  background: var(--color-accent);
+  background: var(--color-primary-bg);
   border: none;
   border-radius: var(--radius-md);
   padding: var(--space-2) var(--space-5);
-  color: #ffffff;
+  color: var(--color-primary-text);
   font-family: var(--font-ui);
   font-size: var(--font-size-sm);
   font-weight: 600;
@@ -249,11 +249,11 @@
 }
 
 .createButton:hover {
-  background: var(--color-accent-hover);
+  background: var(--color-primary-bg-hover);
 }
 
 .createButton:active {
-  background: var(--color-accent-active);
+  background: var(--color-primary-bg-active);
 }
 
 .tip {
