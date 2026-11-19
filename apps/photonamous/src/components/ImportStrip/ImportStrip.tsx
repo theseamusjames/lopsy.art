@@ -4,25 +4,21 @@ import { useImportProgress, useLibraryView } from '../../app/hooks';
 import { isHiddenPairHalf } from '../../library/asset-query';
 import { useUi } from '../../app/store';
 import { getBackend } from '../../app/backend-registry';
-import { estimateLeft, importStats, type ImportStats } from '../../import/import-progress';
-import { formatBytes, plural } from '../../import/import-summary';
-import type { ImportJob, ImportProgress } from '@lopsy/photos-core/import/types';
+import { showToast } from '../../app/toasts';
+import { endedCleanly, estimateLeft, importHeadline, importStats } from '../../import/import-progress';
+import { plural } from '../../import/import-summary';
+import type { ImportJob } from '@lopsy/photos-core/import/types';
 import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
-import { announceImport, type Announced } from './import-announcer';
+import { announceImport, type Announced, type ImportFacts } from './import-announcer';
 import styles from './ImportStrip.module.css';
 
-function headlineOf(progress: ImportProgress, stats: ImportStats, pairHalves: number): string {
-  const waiting = stats.waiting.length;
-  if (progress.finished && stats.paused > 0) return `Import paused · ${plural(stats.paused, 'photo')} still to go`;
-  if (progress.finished && waiting > 0) return `Imported ${plural(stats.done, 'photo')} · ${plural(waiting, 'photo')} waiting to try again`;
-  if (progress.finished) {
-    return `Imported ${plural(stats.done - pairHalves, 'photo')}${pairHalves > 0 ? ` (${plural(stats.done, 'file')}: RAW+JPEG pairs count once)` : ''}${stats.duplicates > 0 ? `, skipped ${stats.duplicates} already in the library` : ''}`;
-  }
-  return `Importing ${stats.settled.toLocaleString()} of ${plural(stats.total, 'photo')} · ${formatBytes(stats.totalBytes - stats.sentBytes)} left`;
-}
-
-/** The progress strip while an import runs, and its outcome afterwards. */
+/**
+ * The progress strip while an import runs. An import that ends cleanly
+ * leaves it: its outcome is a toast, held while hovered or focused. Any
+ * other end keeps the strip, with Retry or Resume and what failed, until
+ * it is dismissed.
+ */
 export function ImportStrip() {
   const job = useUi((s) => s.importJob);
   const setImportJob = useUi((s) => s.setImportJob);
@@ -64,26 +60,40 @@ export function ImportStrip() {
         : 0,
     [progress, view.assets],
   );
+  const facts = useMemo<ImportFacts | null>(
+    () =>
+      progress && stats
+        ? {
+            total: stats.total,
+            settled: stats.settled,
+            fraction: stats.fraction,
+            finished: progress.finished,
+            failed: stats.failed.length,
+            added: stats.done - pairHalves,
+            skipped: stats.duplicates,
+            waiting: stats.waiting.length,
+            paused: stats.paused,
+          }
+        : null,
+    [progress, stats, pairHalves],
+  );
+  const isClean = facts !== null && endedCleanly(facts);
+  const headline = progress && stats ? importHeadline(progress, stats, pairHalves) : null;
   // The strip changes every second; a screen reader hears the start, each quarter and the end (import-announcer).
   const [said, setSaid] = useState<{ job: ImportJob; announced: Announced } | null>(null);
   useEffect(() => {
-    if (!job || !progress || !stats) return setSaid(null);
-    const facts = {
-      total: stats.total,
-      settled: stats.settled,
-      fraction: stats.fraction,
-      finished: progress.finished,
-      failed: stats.failed.length,
-      added: stats.done - pairHalves,
-      skipped: stats.duplicates,
-      waiting: stats.waiting.length,
-      paused: stats.paused,
-    };
+    if (!job || !facts) return setSaid(null);
     setSaid((before) => {
       const announced = announceImport(before?.job === job ? before.announced : null, facts);
       return before?.job === job && before.announced === announced ? before : { job, announced };
     });
-  }, [job, progress, stats, pairHalves]);
+  }, [job, facts]);
+  // A clean end needs no row of its own: its outcome becomes a toast (which says it to a screen reader) and the strip goes.
+  useEffect(() => {
+    if (!job || !isClean || headline === null) return;
+    showToast(headline);
+    if (useUi.getState().importJob === job) setImportJob(null);
+  }, [job, isClean, headline, setImportJob]);
   const voice = (
     <>
       <p className={styles.visuallyHidden} role="status">
@@ -95,12 +105,11 @@ export function ImportStrip() {
     </>
   );
 
-  if (!job || !progress || !stats) return voice;
+  if (!job || !progress || !stats || isClean) return voice;
 
   const left = progress.finished ? null : estimateLeft(stats, now - started.current);
   const paused = progress.finished && stats.paused > 0;
   const waiting = stats.waiting.length;
-  const headline = headlineOf(progress, stats, pairHalves);
 
   return (
     <>

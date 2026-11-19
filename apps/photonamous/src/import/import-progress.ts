@@ -1,6 +1,10 @@
-/** The numbers the import strip shows, from an ImportProgress. Pure. */
+/**
+ * What the import strip shows, from an ImportProgress: its numbers, its
+ * headline, and whether the import ended cleanly. Pure.
+ */
 
 import type { ImportItem, ImportProgress } from '@lopsy/photos-core/import/types';
+import { formatBytes, plural } from './import-summary';
 
 export interface ImportStats {
   readonly total: number;
@@ -66,6 +70,42 @@ export function importStats(progress: ImportProgress): ImportStats {
     sentBytes,
     fraction: totalBytes === 0 ? (progress.finished ? 1 : 0) : sentBytes / totalBytes,
   };
+}
+
+/** How an import stands, in counts. */
+export interface ImportEnd {
+  readonly finished: boolean;
+  readonly failed: number;
+  /** Items set aside to try again. */
+  readonly waiting: number;
+  /** Items a pause left to do. */
+  readonly paused: number;
+}
+
+/**
+ * Whether the import is over with nothing failed, nothing waiting to try
+ * again and nothing paused. Its outcome is then a toast and the strip goes;
+ * any other end keeps the strip, with Retry or Resume and what failed.
+ */
+export function endedCleanly(end: ImportEnd): boolean {
+  return end.finished && end.failed === 0 && end.waiting === 0 && end.paused === 0;
+}
+
+/**
+ * The strip's headline, and a clean import's toast: progress while it runs,
+ * then its outcome, counting photos as the grid does (`pairHalves` JPEG
+ * halves of RAW+JPEG pairs are files, not photos of their own).
+ */
+export function importHeadline(progress: ImportProgress, stats: ImportStats, pairHalves: number): string {
+  const waiting = stats.waiting.length;
+  if (progress.finished && stats.paused > 0) return `Import paused · ${plural(stats.paused, 'photo')} still to go`;
+  if (progress.finished && waiting > 0) return `Imported ${plural(stats.done, 'photo')} · ${plural(waiting, 'photo')} waiting to try again`;
+  if (progress.finished) {
+    const pairs = pairHalves > 0 ? ` (${plural(stats.done, 'file')}: RAW+JPEG pairs count once)` : '';
+    const skipped = stats.duplicates > 0 ? `, skipped ${stats.duplicates} already in the library` : '';
+    return `Imported ${plural(stats.done - pairHalves, 'photo')}${pairs}${skipped}`;
+  }
+  return `Importing ${stats.settled.toLocaleString()} of ${plural(stats.total, 'photo')} · ${formatBytes(stats.totalBytes - stats.sentBytes)} left`;
 }
 
 /** "About 3 minutes left", from bytes sent so far over the time taken. */

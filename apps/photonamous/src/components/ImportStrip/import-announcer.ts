@@ -4,26 +4,25 @@
  * failures once when the first one happens and again at the end
  * (assertive). Pure: the strip feeds it the numbers it shows. Its words
  * differ from the strip's own, which stay on screen to be read there.
+ *
+ * A clean end (`endedCleanly`) is not said here: the strip goes, and its
+ * outcome is a toast, which the toasts' own live region says. Saying it
+ * here as well would say it twice.
  */
 
+import { endedCleanly, type ImportEnd } from '../../import/import-progress';
 import { plural } from '../../import/import-summary';
 
-export interface ImportFacts {
+export interface ImportFacts extends ImportEnd {
   readonly total: number;
   /** Items that have stopped moving, whatever the outcome. */
   readonly settled: number;
   /** 0..1, as the progress bar shows it. */
   readonly fraction: number;
-  readonly finished: boolean;
-  readonly failed: number;
   /** Photos added (a RAW+JPEG pair counts once). */
   readonly added: number;
   /** Files skipped as already in the library. */
   readonly skipped: number;
-  /** Items set aside to try again. */
-  readonly waiting: number;
-  /** Items a pause left to do. */
-  readonly paused: number;
 }
 
 export interface Announced {
@@ -43,7 +42,9 @@ function failures(n: number): string {
   return `Import problem: ${plural(n, 'photo')} failed`;
 }
 
+/** How the import ended, or '' for a clean end, which the toast says. */
 function outcome(facts: ImportFacts): string {
+  if (endedCleanly(facts)) return '';
   if (facts.paused > 0) return `Import paused with ${plural(facts.paused, 'photo')} to go`;
   const added = `Import done: ${plural(facts.added, 'photo')} added`;
   if (facts.waiting > 0) return `${added}, ${facts.waiting.toLocaleString('en-US')} to try again`;

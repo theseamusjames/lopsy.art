@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { generatedJpeg } from './library';
+import { generatedJpeg, importStrip, toast } from './library';
 
 /** The import sheet adds to an album with keywords, and warns about photos already in the library before importing. */
 test('import into a new album with keywords; duplicates are named before import', async ({ page }) => {
@@ -20,7 +20,9 @@ test('import into a new album with keywords; duplicates are named before import'
   await page.getByRole('textbox', { name: 'New album name' }).fill('Coast');
   await page.getByRole('textbox', { name: 'Keywords for the import' }).fill('sea, summer');
   await page.getByRole('button', { name: 'Import 2 photos' }).click();
-  await expect(page.getByText(/^Imported 2 photo/)).toBeVisible({ timeout: 60_000 });
+  // A clean import's outcome is a toast; the strip goes.
+  await expect(toast(page, 'Imported 2 photos')).toBeVisible({ timeout: 60_000 });
+  await expect(importStrip(page)).toHaveCount(0);
 
   const sidebar = page.getByRole('navigation', { name: 'Library' });
   await expect(sidebar.getByRole('button', { name: /^Coast 2$/ })).toBeVisible({ timeout: 30_000 });
@@ -38,5 +40,5 @@ test('import into a new album with keywords; duplicates are named before import'
   await expect(page.getByText('1 is already in the library and will be skipped: beach.jpg.')).toBeVisible();
   await expect(page.getByText('1 new photo,', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: 'Import 1 photo' }).click();
-  await expect(page.getByText(/^Imported 1 photo/)).toBeVisible({ timeout: 60_000 });
+  await expect(toast(page, 'Imported 1 photo')).toBeVisible({ timeout: 60_000 });
 });

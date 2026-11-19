@@ -171,10 +171,15 @@ is `docs/photonamous-spec.md`; running and setup are in
   against its hash, and added with its metadata (capture time,
   orientation, camera, lens, exposure, GPS). Previews (512 and 2048 px)
   come from the camera's embedded JPEG or the browser's decode.
-- Progress shows in a strip at the bottom of the window; the outcome
-  counts photos as the grid does ("Imported 5 photos (6 files: RAW+JPEG
-  pairs count once)"). Imports in the same minute are told apart in the
-  sidebar by their seconds. An import that
+- Progress shows in a strip at the bottom of the window while the import
+  runs, with Pause and Stop. An import that ends cleanly (nothing failed,
+  nothing waiting to try again, not paused) says how it went in a message
+  that goes after a few seconds (it stays while the pointer is on it or
+  it has focus), and the strip goes. Any other end keeps the strip, with
+  what failed (listed by file), **Retry** or **Resume**, until it is
+  dismissed. The outcome counts photos as the grid does ("Imported 5
+  photos (6 files: RAW+JPEG pairs count once)"). Imports in the same
+  minute are told apart in the sidebar by their seconds. An import that
   is interrupted (the tab closes, the network drops) resumes; uploads
   resume where Drive allows.
 
@@ -400,7 +405,8 @@ best-practice rules at each step; the `a11y-*.spec.ts` and
     Right choose the marked photo.
   - Screen readers hear the photo count as filters and selections change,
     the photo and its position in Single view and Cull, import milestones
-    (failures at once), and leaving full screen.
+    (failures at once; a clean import's outcome once, as its message), and
+    leaving full screen.
   - Below 760 px wide, or at 200 % zoom, the library is one scrolling
     column: header, sidebar, grid, details.
 - **Dialogs.** Tab and Shift+Tab stay inside the open dialog; Escape

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ImportItem } from '@lopsy/photos-core/import/types';
-import { estimateLeft, importStats } from './import-progress';
+import { endedCleanly, estimateLeft, importHeadline, importStats } from './import-progress';
 
 function item(state: ImportItem['state'], byteSize: number, sentBytes = 0): ImportItem {
   return { id: `${state}-${byteSize}`, fileName: 'x.jpg', byteSize, state, sentBytes, assetId: null, error: null };
@@ -51,5 +51,30 @@ describe('waiting to retry', () => {
     const s = importStats({ finished: true, items: [item('done', 100), parked] });
     expect(s.waiting.map((i) => i.error)).toEqual(['Waiting to retry: network down']);
     expect(s.paused).toBe(0);
+  });
+});
+
+describe('how an import ends', () => {
+  const end = { finished: true, failed: 0, waiting: 0, paused: 0 };
+
+  it('ends cleanly only when over with nothing failed, waiting or paused', () => {
+    expect(endedCleanly(end)).toBe(true);
+    expect(endedCleanly({ ...end, finished: false })).toBe(false);
+    expect(endedCleanly({ ...end, failed: 1 })).toBe(false);
+    expect(endedCleanly({ ...end, waiting: 1 })).toBe(false);
+    expect(endedCleanly({ ...end, paused: 1 })).toBe(false);
+  });
+
+  it('heads the strip, and a clean end’s toast, with what happened', () => {
+    const running = { finished: false, items: [item('done', 1000), item('uploading', 2_000_000, 1000)] };
+    expect(importHeadline(running, importStats(running), 0)).toBe('Importing 1 of 2 photos · 2.0 MB left');
+    const done = { finished: true, items: [item('done', 100), item('done', 100), item('duplicate', 100)] };
+    expect(importHeadline(done, importStats(done), 0)).toBe('Imported 2 photos, skipped 1 already in the library');
+    // The JPEG half of a RAW+JPEG pair is a file, not a photo.
+    expect(importHeadline(done, importStats(done), 1)).toBe('Imported 1 photo (2 files: RAW+JPEG pairs count once), skipped 1 already in the library');
+    const parked = { finished: true, items: [item('done', 100), { ...item('queued', 100), error: 'Waiting to retry: network down' }] };
+    expect(importHeadline(parked, importStats(parked), 0)).toBe('Imported 1 photo · 1 photo waiting to try again');
+    const paused = { finished: true, items: [item('done', 100), { ...item('queued', 100), error: 'Paused' }] };
+    expect(importHeadline(paused, importStats(paused), 0)).toBe('Import paused · 1 photo still to go');
   });
 });
