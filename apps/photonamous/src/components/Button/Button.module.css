@@ -15,6 +15,7 @@
 }
 
 .sm {
+  min-height: 24px;
   padding: 2px var(--space-2);
   font-size: var(--font-size-sm);
 }
