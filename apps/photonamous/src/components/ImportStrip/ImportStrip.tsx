@@ -1,14 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, X } from 'lucide-react';
+import { Check, TriangleAlert, X } from 'lucide-react';
 import { useImportProgress, useLibraryView } from '../../app/hooks';
 import { isHiddenPairHalf } from '../../library/asset-query';
 import { useUi } from '../../app/store';
 import { getBackend } from '../../app/backend-registry';
-import { estimateLeft, importStats } from '../../import/import-progress';
+import { estimateLeft, importStats, type ImportStats } from '../../import/import-progress';
 import { formatBytes, plural } from '../../import/import-summary';
+import type { ImportJob, ImportProgress } from '@lopsy/photos-core/import/types';
 import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
+import { announceImport, type Announced } from './import-announcer';
 import styles from './ImportStrip.module.css';
+
+function headlineOf(progress: ImportProgress, stats: ImportStats, pairHalves: number): string {
+  const waiting = stats.waiting.length;
+  if (progress.finished && stats.paused > 0) return `Import paused · ${plural(stats.paused, 'photo')} still to go`;
+  if (progress.finished && waiting > 0) return `Imported ${plural(stats.done, 'photo')} · ${plural(waiting, 'photo')} waiting to try again`;
+  if (progress.finished) {
+    return `Imported ${plural(stats.done - pairHalves, 'photo')}${pairHalves > 0 ? ` (${plural(stats.done, 'file')}: RAW+JPEG pairs count once)` : ''}${stats.duplicates > 0 ? `, skipped ${stats.duplicates} already in the library` : ''}`;
+  }
+  return `Importing ${stats.settled.toLocaleString()} of ${plural(stats.total, 'photo')} · ${formatBytes(stats.totalBytes - stats.sentBytes)} left`;
+}
 
 /** The progress strip while an import runs, and its outcome afterwards. */
 export function ImportStrip() {
@@ -52,72 +64,108 @@ export function ImportStrip() {
         : 0,
     [progress, view.assets],
   );
-  if (!job || !progress || !stats) return null;
+  // The strip changes every second; a screen reader hears the start, each quarter and the end (import-announcer).
+  const [said, setSaid] = useState<{ job: ImportJob; announced: Announced } | null>(null);
+  useEffect(() => {
+    if (!job || !progress || !stats) return setSaid(null);
+    const facts = {
+      total: stats.total,
+      settled: stats.settled,
+      fraction: stats.fraction,
+      finished: progress.finished,
+      failed: stats.failed.length,
+      added: stats.done - pairHalves,
+      skipped: stats.duplicates,
+      waiting: stats.waiting.length,
+      paused: stats.paused,
+    };
+    setSaid((before) => {
+      const announced = announceImport(before?.job === job ? before.announced : null, facts);
+      return before?.job === job && before.announced === announced ? before : { job, announced };
+    });
+  }, [job, progress, stats, pairHalves]);
+  const voice = (
+    <>
+      <p className={styles.visuallyHidden} role="status">
+        {said?.announced.polite ?? ''}
+      </p>
+      <p className={styles.visuallyHidden} role="alert">
+        {said?.announced.alert ?? ''}
+      </p>
+    </>
+  );
+
+  if (!job || !progress || !stats) return voice;
 
   const left = progress.finished ? null : estimateLeft(stats, now - started.current);
   const paused = progress.finished && stats.paused > 0;
   const waiting = stats.waiting.length;
-  const headline = paused
-    ? `Import paused · ${plural(stats.paused, 'photo')} still to go`
-    : progress.finished && waiting > 0
-    ? `Imported ${plural(stats.done, 'photo')} · ${plural(waiting, 'photo')} waiting to try again`
-    : progress.finished
-    ? `Imported ${plural(stats.done - pairHalves, 'photo')}${pairHalves > 0 ? ` (${plural(stats.done, 'file')}: RAW+JPEG pairs count once)` : ''}${stats.duplicates > 0 ? `, skipped ${stats.duplicates} already in the library` : ''}`
-    : `Importing ${stats.settled.toLocaleString()} of ${plural(stats.total, 'photo')} · ${formatBytes(stats.totalBytes - stats.sentBytes)} left`;
+  const headline = headlineOf(progress, stats, pairHalves);
 
   return (
-    <section className={styles.strip} aria-label="Import" aria-live="polite">
-      <div className={styles.row}>
-        {progress.finished && !paused && waiting === 0 && <Check size={16} className={styles.ok} />}
-        <span className={styles.headline}>{headline}</span>
-        {left && <span className={styles.muted}>{left}</span>}
-        {waiting > 0 && (
-          <Button size="sm" variant="ghost" onClick={() => setShowFailures((s) => !s)}>
-            <span className={styles.warn}>{plural(waiting, 'photo')} waiting to retry</span>
-          </Button>
-        )}
-        {stats.failed.length > 0 && (
-          <Button size="sm" variant="ghost" onClick={() => setShowFailures((s) => !s)}>
-            <span className={styles.bad}>{plural(stats.failed.length, 'photo')} could not be imported</span>
-          </Button>
-        )}
-        <span className={styles.spacer} />
-        {paused ? (
-          <Button size="sm" variant="primary" onClick={resume}>
-            Resume
-          </Button>
-        ) : progress.finished && waiting > 0 ? (
-          <Button size="sm" variant="primary" onClick={resume}>
-            Retry
-          </Button>
-        ) : progress.finished ? (
-          <IconButton size="sm" label="Dismiss" icon={<X size={14} />} onClick={() => setImportJob(null)} />
-        ) : (
-          <>
-            <Button size="sm" onClick={() => job.pause()}>
-              Pause
+    <>
+      {voice}
+      <section className={styles.strip} aria-label="Import">
+        <div className={styles.row}>
+          {progress.finished && !paused && waiting === 0 && <Check size={16} className={styles.ok} />}
+          <span className={styles.headline}>{headline}</span>
+          {left && <span className={styles.muted}>{left}</span>}
+          {waiting > 0 && (
+            <Button size="sm" variant="ghost" onClick={() => setShowFailures((s) => !s)}>
+              <span className={styles.warn}>{plural(waiting, 'photo')} waiting to retry</span>
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => job.cancel()}>
-              Stop
+          )}
+          {stats.failed.length > 0 && (
+            <Button size="sm" variant="ghost" onClick={() => setShowFailures((s) => !s)}>
+              <TriangleAlert size={14} className={styles.bad} />
+              {plural(stats.failed.length, 'photo')} could not be imported
             </Button>
-          </>
-        )}
-      </div>
-      {!progress.finished && (
-        <div className={styles.bar}>
-          <span className={styles.fill} style={{ '--fraction': `${stats.fraction * 100}%` } as React.CSSProperties} />
+          )}
+          <span className={styles.spacer} />
+          {paused ? (
+            <Button size="sm" variant="primary" onClick={resume}>
+              Resume
+            </Button>
+          ) : progress.finished && waiting > 0 ? (
+            <Button size="sm" variant="primary" onClick={resume}>
+              Retry
+            </Button>
+          ) : progress.finished ? (
+            <IconButton size="sm" label="Dismiss" icon={<X size={14} />} onClick={() => setImportJob(null)} />
+          ) : (
+            <>
+              <Button size="sm" onClick={() => job.pause()}>
+                Pause
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => job.cancel()}>
+                Stop
+              </Button>
+            </>
+          )}
         </div>
-      )}
-      {showFailures && (
-        <ul className={styles.failures}>
-          {[...stats.waiting, ...stats.failed].map((f) => (
-            <li key={f.id}>
-              <span className={styles.file}>{f.fileName}</span>
-              <span className={styles.muted}>{f.error ?? 'Failed'}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+        {!progress.finished && (
+          <div
+            className={styles.bar}
+            role="progressbar"
+            aria-label="Import"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(stats.fraction * 100)}
+          >
+            <span className={styles.fill} style={{ '--fraction': `${stats.fraction * 100}%` } as React.CSSProperties} />
+          </div>
+        )}
+        {showFailures && (
+          <ul className={styles.failures}>
+            {[...stats.waiting, ...stats.failed].map((f) => (
+              <li key={f.id}>
+                <span className={styles.file}>{f.fileName}</span>
+                <span className={styles.muted}>{f.error ?? 'Failed'}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </>
   );
 }
