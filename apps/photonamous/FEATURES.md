@@ -73,6 +73,7 @@ is `docs/photonamous-spec.md`; running and setup are in
 - **Photo actions** (a tile's right-click menu): Look at it large, Edit,
   New version, Show this version for the photo (on a version's tile),
   Edit in Lopsy, Copy edits…, Paste edits, Export…, Move to the trash….
+  A Lopsy document's menu has no Edit: it is edited in Lopsy.
 - **Drag** photos onto an album in the sidebar to add them; dragging a
   version's own tile adds just that version, which the album then shows
   as its own tile.
@@ -187,21 +188,32 @@ is `docs/photonamous-spec.md`; running and setup are in
   against its hash, and added with its metadata (capture time,
   orientation, camera, lens, exposure, GPS). Previews (512 and 2048 px)
   come from the camera's embedded JPEG or the browser's decode.
-- Progress shows in a strip at the bottom of the window; the outcome
-  counts photos as the grid does ("Imported 5 photos (6 files: RAW+JPEG
-  pairs count once)"). Imports in the same minute are told apart in the
-  sidebar by their seconds. An import that
+- Progress shows in a strip at the bottom of the window while the import
+  runs, with Pause and Stop. An import that ends cleanly (nothing failed,
+  nothing waiting to try again, not paused) says how it went in a message
+  that goes after a few seconds (it stays while the pointer is on it or
+  it has focus), and the strip goes. Any other end keeps the strip, with
+  what failed (listed by file), **Retry** or **Resume**, until it is
+  dismissed. The outcome counts photos as the grid does ("Imported 5
+  photos (6 files: RAW+JPEG pairs count once)"). Imports in the same
+  minute are told apart in the sidebar by their seconds. An import that
   is interrupted (the tab closes, the network drops) resumes; uploads
   resume where Drive allows.
 
 ## Edit view
 
 Opened with Enter (in the grid, Single view or Cull) or **Edit** in Single
-view; double-clicking a tile opens Single view, not Edit. One photo, a
-left column, the image and a panel of groups; edits are saved to the
-version as they are made, and previews are rendered when the edit settles
-(never during a slider drag), on leaving, and before the filmstrip opens
-another photo.
+view and the tile menu; double-clicking a tile opens Single view, not
+Edit. One photo, a left column, the image and a panel of groups; edits
+are saved to the version as they are made, and previews are rendered when
+the edit settles (never during a slider drag), on leaving, and before the
+filmstrip opens another photo.
+
+Lopsy documents are edited in Lopsy, never here: Enter on one opens it in
+Lopsy instead (as Edit in Lopsy does), and the filmstrip and ← → go past
+them. Should the Edit view be asked for one all the same, it names the
+document, says it opens in Lopsy, and offers **Open in Lopsy** and **Back
+to the library**.
 
 - **Loading and working size.** RAF decodes on a pool of workers into the
   engine's RAW develop stage; DNG through the engine's decoder; 16-bit PNG
@@ -217,7 +229,10 @@ another photo.
   version**) and **History** (every step; clicking one goes back to it).
   The column folds away with the button at its bottom left, which stays
   there while it is folded. A **filmstrip** of the photos around this one
-  moves between them.
+  moves between them, in the grid's order: a photo whose stack is open in
+  the grid shows each version as a tile of its own (named "<file>
+  (<version>)", with that version's preview), which opens that version.
+  Lopsy documents are left out.
 - **Toolbar.** Library (back), Undo / Redo (⌘Z, ⇧⌘Z or ⌘Y), Rotate left,
   Rotate right, Flip, Flip vertical, **Crop**, **Areas**, **Before** (or
   hold `\`), **Split** (before and after side by side, with a divider to
@@ -325,8 +340,9 @@ Photonamous and Lopsy talk over `window.postMessage` (`packages/handoff`); Lopsy
 never talks to Google. Lopsy's side is in `apps/lopsy-web/FEATURES.md`
 (Photonamous Round Trip).
 
-- **Edit in Lopsy** (grid toolbar, tile menu, Single view, Edit view):
-  opens Lopsy in its tab (`lopsy-editor`) from the click. A photo goes as
+- **Edit in Lopsy** (grid toolbar, tile menu, Single view, Edit view; on a
+  Lopsy document, Enter too): opens Lopsy in its tab (`lopsy-editor`)
+  from the click or key press. A photo goes as
   its developed full-size 16-bit PNG with its source (library, asset,
   version, recipe hash) and a camera summary; a Lopsy document goes as its
   `.lopsy` with the file's current revision (read until stable). In Single
@@ -418,7 +434,8 @@ best-practice rules at each step; the `a11y-*.spec.ts` and
     Right choose the marked photo.
   - Screen readers hear the photo count as filters and selections change,
     the photo and its position in Single view and Cull, import milestones
-    (failures at once), and leaving full screen.
+    (failures at once; a clean import's outcome once, as its message), and
+    leaving full screen.
   - Below 760 px wide, or at 200 % zoom, the library is one scrolling
     column: header, sidebar, grid, details.
 - **Dialogs.** Tab and Shift+Tab stay inside the open dialog; Escape
@@ -442,7 +459,9 @@ best-practice rules at each step; the `a11y-*.spec.ts` and
   politely and once.
 - **Edit view.** The photo is the page's main content with its file name
   as the heading, and the page title is "<file> – Edit – Photonamous".
-  Opening it focuses the heading and closing it gives focus back.
+  Opening it focuses the heading and closing it gives focus back. Asked
+  for a Lopsy document, it shows the document's name as a focused heading
+  instead, and Escape goes back as it does from the Edit view.
   Screen readers hear when the photo is ready, export progress, and what
   Undo or Redo did; errors also show on screen with Dismiss.
   - *Crop*: each edge is a slider. The arrow keys move the focused edge,
@@ -478,7 +497,7 @@ Shown in the app with `?`. The one-key shortcuts below (digits, letters,
 | ← → ↑ ↓ | Move between photos (↑ ↓ in the grid) |
 | Shift+← → | Grow the selection |
 | ⌘A / ⌘D | Select all shown / none |
-| Enter | Edit the photo |
+| Enter | Edit the photo (a Lopsy document opens in Lopsy) |
 | Space | One photo large, and back |
 | C | Compare the selected photos |
 | F | Sort through full screen |

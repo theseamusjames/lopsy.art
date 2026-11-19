@@ -760,6 +760,19 @@ fails them on a loaded machine.
   React StrictMode's double effect sends the dialog's returned focus to
   the wrong place; Photonamous applies it a frame later.
 
+## Photonamous e2e: Lopsy's side of a handoff without Lopsy
+A spec can play Lopsy with `context.route` on Lopsy's origin (the dev
+default `http://localhost:5173`) serving a page that speaks
+`packages/handoff`'s messages: say `lopsy:ready`, take `photos:document`,
+answer `lopsy:received`, send `lopsy:save` (a `.lopsy` needs only its
+`LOPSY\0` magic; the render must be a real PNG). That makes a real
+document in a test library in seconds, with no Lopsy server and none on
+that port reached: `e2e/edit-documents.spec.ts`. Read a popup's address
+with `waitForURL`; `url()` straight after the `page` event can be empty.
+And the grid's ids (`useOrderedIds`, the filmstrip's source) are item ids:
+`assetId#versionId` for the versions of an open stack, so resolve them
+with `parseItem` (`library/items.ts`), never `view.assets.get(id)`.
+
 ## UI preference: no coloured left border as an indicator
 A coloured left border (or any edge stripe, such as an inset box-shadow
 bar) used to mark state or kind is always wrong, in either app and on the

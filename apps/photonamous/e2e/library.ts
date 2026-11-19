@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 /** Draws a JPEG in the page with OffscreenCanvas and returns its bytes. */
 export async function generatedJpeg(page: Page, hue: number, width = 800, height = 600): Promise<Buffer> {
@@ -24,14 +24,30 @@ export async function generatedJpeg(page: Page, hue: number, width = 800, height
   return Buffer.from(bytes);
 }
 
-/** Imports files through Import photos → Choose photos, and waits for the import to finish. */
+/** A toast's message (the toasts that are not errors sit in a polite status region). */
+export function toast(page: Page, message: string | RegExp): Locator {
+  return page.getByRole('status').getByText(message);
+}
+
+/** The strip at the bottom of the library while an import runs, and after one that did not go cleanly. */
+export function importStrip(page: Page): Locator {
+  return page.getByRole('region', { name: 'Import' });
+}
+
+/**
+ * Imports new photos through Import photos → Choose photos, and waits for
+ * the import to end cleanly. The strip shows it from the click until then;
+ * a toast says the outcome. An earlier import's toast may still be up, so
+ * the strip going is what says this one is over.
+ */
 export async function importFiles(page: Page, files: { name: string; buffer: Buffer }[]): Promise<void> {
   await page.getByRole('button', { name: /Import photos/ }).first().click();
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('menuitem', { name: /Choose photos/ }).click();
   await (await chooser).setFiles(files.map((f) => ({ name: f.name, mimeType: 'image/jpeg', buffer: f.buffer })));
   await page.getByRole('button', { name: new RegExp(`^Import ${files.length} photo`) }).click();
-  await expect(page.getByText(/^Imported \d+ photo/)).toBeVisible({ timeout: 60_000 });
+  await expect(importStrip(page)).toHaveCount(0, { timeout: 60_000 });
+  await expect(toast(page, new RegExp(`^Imported ${files.length} photo`))).toBeVisible();
 }
 
 export function tiles(page: Page) {

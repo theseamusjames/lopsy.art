@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { writeFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
-import { generatedJpeg, tiles } from './library';
+import { generatedJpeg, importStrip, tiles, toast } from './library';
 
 /**
  * Accessibility (WCAG 2.2 AA): axe-core's rules run on every view of the
@@ -84,9 +84,9 @@ test('every view, as a user reaches it', async ({ page }) => {
     await expect(page.getByRole('button', { name: /^Import 3 photo/ })).toBeVisible({ timeout: 15_000 });
   });
 
-  await step(page, 'importing', async () => {
+  await step(page, 'import done, said in a toast', async () => {
     await page.getByRole('button', { name: /^Import 3 photo/ }).click();
-    await expect(page.getByText(/^Imported \d+ photo/)).toBeVisible({ timeout: 60_000 });
+    await expect(toast(page, /^Imported \d+ photo/)).toBeVisible({ timeout: 60_000 });
   });
 
   await step(page, 'library grid', async () => {
@@ -225,6 +225,17 @@ test('every view, as a user reaches it', async ({ page }) => {
     await expect(page.getByRole('dialog', { name: /^Cull: / })).toBeVisible({ timeout: 15_000 });
   });
   await page.keyboard.press('Escape');
+
+  // An import that did not go cleanly keeps its strip, with what failed.
+  await step(page, 'import strip with a failure', async () => {
+    await page.getByRole('button', { name: /Import photos/ }).first().click();
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('menuitem', { name: /Choose photos/ }).click();
+    await (await chooser).setFiles([{ name: 'not-a-photo.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('not a photo') }]);
+    await page.getByRole('button', { name: /^Import 1 photo/ }).click();
+    await importStrip(page).getByRole('button', { name: /could not be imported/ }).click({ timeout: 60_000 });
+    await expect(importStrip(page).getByText('not-a-photo.jpg')).toBeVisible({ timeout: 15_000 });
+  });
 
   await step(page, 'grade screen', async () => {
     await page.goto('/?grade=missing');

@@ -28,18 +28,25 @@ function said(updates: readonly ImportFacts[]): { polite: string[]; alert: strin
 }
 
 describe('announceImport', () => {
-  it('says the start, each quarter and the end, not every file', () => {
+  it('says the start and each quarter, not every file', () => {
     const updates: ImportFacts[] = [];
     for (let i = 0; i <= 119; i++) updates.push(running(i, i / 120));
-    updates.push(ended({ added: 118, skipped: 2 }));
     expect(said(updates).polite).toEqual([
       'Import started: 120 photos',
       'Import 25 % done: 30 of 120 photos',
       'Import 50 % done: 60 of 120 photos',
       'Import 75 % done: 90 of 120 photos',
-      'Import done: 118 photos added, 2 skipped as already in the library',
     ]);
     expect(said(updates).alert).toEqual([]);
+  });
+
+  it('leaves a clean end to the toast that shows it, so it is heard once', () => {
+    let state: Announced | null = null;
+    for (let i = 0; i <= 119; i++) state = announceImport(state, running(i, i / 120));
+    const end = announceImport(state, ended({ added: 118, skipped: 2 }));
+    expect(end).toMatchObject({ finished: true, polite: '', alert: '' });
+    // Every photo already in the library is a clean end too.
+    expect(announceImport(state, ended({ skipped: 120 })).polite).toBe('');
   });
 
   it('says a failure at once, then only again at the end if more failed', () => {
@@ -57,9 +64,11 @@ describe('announceImport', () => {
     expect(said([running(0, 0), ended({ waiting: 1, added: 119 })]).polite.at(-1)).toBe('Import done: 119 photos added, 1 to try again');
   });
 
-  it('says only the outcome of an import that is already over', () => {
-    const done = ended({ total: 3, settled: 3, added: 3 });
-    expect(said([done, done])).toEqual({ polite: ['Import done: 3 photos added'], alert: [] });
+  it('says only the outcome of an import that is already over, unless it ended cleanly', () => {
+    const failed = ended({ total: 3, settled: 3, added: 2, failed: 1 });
+    expect(said([failed, failed])).toEqual({ polite: ['Import done: 2 photos added'], alert: ['Import problem: 1 photo failed'] });
+    const clean = ended({ total: 3, settled: 3, added: 3 });
+    expect(said([clean, clean])).toEqual({ polite: [], alert: [] });
   });
 
   it('keeps quiet when the bytes go back a little', () => {

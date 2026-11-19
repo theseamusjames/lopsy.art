@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ClipboardCopy, ClipboardPaste, CopyPlus, Download, Maximize, Paintbrush, SlidersHorizontal, Star, Trash2 } from 'lucide-react';
 import { parseItem, type ItemId } from '../../library/items';
+import { useAsset } from '../../app/hooks';
 import { useUi } from '../../app/store';
 import { askDeleteTargets, makeShownVersion, newVersion, openEdit, openFocusedInLopsy, runCommand } from '../../app/commands';
 import { useMenuKeys } from '@lopsy/ui/a11y/use-menu-keys';
@@ -33,6 +34,8 @@ export function TileMenu({ x, y, orderedIds, onClose }: TileMenuProps) {
   const focus = useUi((s) => s.selection.focus);
   const parsed = focus === null ? null : parseItem(focus);
   const focusedVersion = parsed && parsed.versionId !== null ? { assetId: parsed.assetId, versionId: parsed.versionId } : null;
+  // A Lopsy document is edited in Lopsy (Edit in Lopsy below), never in the Edit view.
+  const isDocument = useAsset(parsed?.assetId ?? null)?.kind === 'document';
 
   const item = (label: string, icon: React.ReactNode, run: () => void, disabled = false) => (
     <button
@@ -63,7 +66,7 @@ export function TileMenu({ x, y, orderedIds, onClose }: TileMenuProps) {
       style={{ '--menu-x': `${x}px`, '--menu-y': `${y}px` } as React.CSSProperties}
     >
       {item('Look at it large', <Maximize size={14} />, () => runCommand('open-single', orderedIds), !single)}
-      {item('Edit', <SlidersHorizontal size={14} />, openEdit, !single)}
+      {!isDocument && item('Edit', <SlidersHorizontal size={14} />, openEdit, !single)}
       {item('New version', <CopyPlus size={14} />, newVersion, !single)}
       {focusedVersion &&
         item('Show this version for the photo', <Star size={14} />, () => makeShownVersion(focusedVersion.assetId, focusedVersion.versionId), !single)}
