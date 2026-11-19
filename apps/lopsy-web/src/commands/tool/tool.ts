@@ -92,7 +92,7 @@ function checkOptions(tool: ToolId, options: Record<string, unknown>): void {
 export const toolSet = defineCommand({
   id: 'tool.set',
   summary:
-    'Changes a tool\'s options as its options bar does (and the Gradient Editor for gradient stops); painting, filling and selecting commands use them. Options left out keep their values. Call tool.describe for the names, types and ranges. Text options are refused while a text layer is active or text is being edited, since in the UI they would restyle it. No history step. Returns the tool\'s options after.',
+    'Changes a tool\'s options as its options bar does (and the Gradient Editor for gradient stops); painting, filling and selecting commands use them. Options left out keep their values. Call tool.describe for the names, types and ranges. Text options are refused while a text layer is active or text is being edited, since in the UI they would restyle it: text.style restyles a text layer, text.set-font sets the font. No history step. Returns the tool\'s options after.',
   surface: 'document',
   params: {
     tool: toolSpec,

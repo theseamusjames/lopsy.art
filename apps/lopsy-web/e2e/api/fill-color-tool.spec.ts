@@ -393,7 +393,7 @@ test.describe('the toolbox and options bar, and the tool commands', () => {
     await addTextLayer(page);
     const error = await runError(page, { op: 'tool.set', tool: 'text', options: { fontSize: 40 } });
     expect(error.code).toBe('refused');
-    expect(error.message).toMatch(/^The active layer ".*" is a text layer: the text options would restyle it\. Select another layer first\.$/);
+    expect(error.message).toMatch(/^The active layer ".*" is a text layer: the text options would restyle it\. Restyle it with text\.style, or select another layer first\.$/);
     expect((await toolOptions(page, 'text')).fontSize).toBe(24);
   });
 });

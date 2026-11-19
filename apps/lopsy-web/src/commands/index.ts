@@ -33,6 +33,7 @@ import './selection/tool-select';
 import './layer/move';
 import './gesture/gesture';
 import './layer/nudge';
+import './text/text';
 
 setSettle(settled);
 

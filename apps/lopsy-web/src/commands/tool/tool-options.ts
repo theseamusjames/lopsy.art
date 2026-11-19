@@ -238,37 +238,37 @@ export function optionValues(tool: ToolId): Record<string, unknown> {
   return values;
 }
 
-function invalid(message: string): never {
-  throw new CommandError('invalid', `tool.set: ${message}`);
+function invalid(commandId: string, message: string): never {
+  throw new CommandError('invalid', `${commandId}: ${message}`);
 }
 
-function checkNumber(path: string, option: ToolOption, value: unknown): void {
-  if (typeof value !== 'number' || !Number.isFinite(value)) invalid(`${path} must be a finite number, got ${JSON.stringify(value)}`);
+function checkNumber(commandId: string, path: string, option: ToolOption, value: unknown): void {
+  if (typeof value !== 'number' || !Number.isFinite(value)) invalid(commandId, `${path} must be a finite number, got ${JSON.stringify(value)}`);
   const max = resolvedMax(option);
   const isBelow = option.min !== undefined && value < option.min;
   const isAbove = max !== undefined && value > max;
-  if (isBelow || isAbove) invalid(`${path} must be from ${option.min} to ${max} in this document, got ${value}`);
+  if (isBelow || isAbove) invalid(commandId, `${path} must be from ${option.min} to ${max} in this document, got ${value}`);
 }
 
-/** Throws `invalid` unless `value` is what the option takes. */
-export function checkOption(path: string, option: ToolOption, value: unknown): void {
+/** Throws `invalid` (naming `commandId`) unless `value` is what the option takes. */
+export function checkOption(path: string, option: ToolOption, value: unknown, commandId = 'tool.set'): void {
   switch (option.kind) {
     case 'number':
-      return checkNumber(path, option, value);
+      return checkNumber(commandId, path, option, value);
     case 'boolean':
-      if (typeof value !== 'boolean') invalid(`${path} must be a boolean, got ${JSON.stringify(value)}`);
+      if (typeof value !== 'boolean') invalid(commandId, `${path} must be a boolean, got ${JSON.stringify(value)}`);
       return;
     case 'enum':
       if (typeof value !== 'string' || !option.values?.includes(value)) {
-        invalid(`${path} must be one of ${(option.values ?? []).map((v) => JSON.stringify(v)).join(', ')}, got ${JSON.stringify(value)}`);
+        invalid(commandId, `${path} must be one of ${(option.values ?? []).map((v) => JSON.stringify(v)).join(', ')}, got ${JSON.stringify(value)}`);
       }
       return;
     case 'color':
       if (option.nullable && value === 'none') return;
-      parseHexColor('tool.set', path, value);
+      parseHexColor(commandId, path, value);
       return;
     case 'stops':
-      parseGradientStops('tool.set', path, value);
+      parseGradientStops(commandId, path, value);
       return;
   }
 }
@@ -281,7 +281,7 @@ export function textOptionsRefusal(): string | null {
   const doc = useEditorStore.getState().document;
   const active = doc.layers.find((layer) => layer.id === doc.activeLayerId);
   if (active?.type === 'text') {
-    return `The active layer "${active.name}" is a text layer: the text options would restyle it. Select another layer first.`;
+    return `The active layer "${active.name}" is a text layer: the text options would restyle it. Restyle it with text.style, or select another layer first.`;
   }
   return null;
 }

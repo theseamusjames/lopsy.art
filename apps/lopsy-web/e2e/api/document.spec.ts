@@ -242,6 +242,7 @@ test.describe('the command API', () => {
       'quickmask.set',
       'select.all', 'select.ellipse', 'select.from-layer', 'select.invert', 'select.modify', 'select.none', 'select.nudge', 'select.polygon',
       'select.quick', 'select.rect', 'select.to-path', 'select.wand',
+      'text.add', 'text.edit', 'text.set-font', 'text.style',
       'tool.describe', 'tool.gesture', 'tool.options', 'tool.select', 'tool.set',
       'view.render', 'view.render-layer', 'view.sample',
     ]);
