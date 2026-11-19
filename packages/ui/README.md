@@ -25,8 +25,11 @@ load this package's stories) and tests, following
 | `@lopsy/ui/a11y/radio-keys` | A group of `role="radio"` buttons as one Tab stop, moved with the arrows |
 | `@lopsy/ui/a11y/use-announcement` | The text for a polite live region, said once a state has settled |
 
-Import the three stylesheets once, at the app's entry point (fonts,
-tokens, then reset), before any component.
+Import the three stylesheets once, from the app's entry point: fonts,
+tokens, then reset. Both apps import them after their components, so the
+reset's `:focus-visible` ring outranks a CSS Module's plain
+`outline: none`; a component that draws its own ring does it in a
+`:focus-visible` rule, as the Slider does (`MEMORY.md`).
 
 ## Fonts
 

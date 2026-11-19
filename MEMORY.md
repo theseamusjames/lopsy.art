@@ -312,6 +312,27 @@ texel in the page and compare the whole texture (quantise to fp16 when
 `EXT_color_buffer_float` exists, else u8). See
 `apps/lopsy-web/e2e/mask-dab-scissor-1020.spec.ts`.
 
+## A module's `outline: none` loses to reset.css's `:focus-visible` ring
+
+`@lopsy/ui/styles/reset.css` draws the default focus ring with
+`:focus-visible { outline: … }`, specificity (0,1,0), and both apps import
+it after their components (last in `main.tsx`), so it comes later in the
+cascade than every CSS Module. A module rule of the same specificity, such
+as `.slider { outline: none }`, therefore loses and the reset's ring still
+shows; Storybook imports the reset first, so there it wins, and the two
+disagree. To change or remove a ring, write the module's own
+`:focus-visible` rule (`.slider:focus-visible { … }`, (0,2,0)), as the
+shared Slider does.
+
+## E2E: a native `<input type="range">` ignores synthetic key events
+
+`locator.dispatchEvent('keydown', …)` runs the page's handlers but not the
+browser's default action, so a native range never moves. Use
+`page.keyboard.press` or `down` (trusted events). A held key is
+`keyboard.down` repeated, then one `keyboard.up`: one key-up, so one commit
+from the shared Slider. In Chromium, Page Up and Page Down step a tenth of
+the range, and a press on the track moves the value to it before any drag.
+
 ## Content bounds of a GPU texture: reduce on the GPU, don't read it back
 
 `content_bounds_gpu::texture_content_bounds` folds a texture into a
