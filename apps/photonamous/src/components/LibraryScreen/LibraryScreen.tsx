@@ -22,6 +22,7 @@ import { PhotoGrid } from '../PhotoGrid/PhotoGrid';
 import { Sidebar } from '../Sidebar/Sidebar';
 import { SettingsDialog } from '../SettingsDialog/SettingsDialog';
 import { SingleView } from '../SingleView/SingleView';
+import { isControlKey } from './control-keys';
 import styles from './LibraryScreen.module.css';
 
 /** The library: header, sidebar, the grid or a viewer, the details panel, and the dialogs. */
@@ -51,7 +52,7 @@ export function LibraryScreen() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const ui = useUi.getState();
-      if (ui.editing !== null || e.defaultPrevented || isTypingTarget(e.target)) return;
+      if (ui.editing !== null || e.defaultPrevented || isTypingTarget(e.target) || isControlKey(e, e.target)) return;
       if (ui.dialog !== null && ui.dialog !== 'help' && ui.dialog !== 'sync') return;
       const context: ShortcutContext = ui.mode;
       const command = matchShortcut(e, context);
