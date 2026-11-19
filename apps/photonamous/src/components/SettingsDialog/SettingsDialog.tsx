@@ -9,6 +9,7 @@ import { clearPreviewCache } from '../../app/preview-cache';
 import { describeHealth, loadDriveAddMode, saveDriveAddMode, type DriveAddMode } from '../../app/device-settings';
 import { formatBytes, plural } from '../../import/import-summary';
 import { Button } from '../Button/Button';
+import { CharacterKeysToggle } from '../CharacterKeysToggle/CharacterKeysToggle';
 import { Modal } from '../Modal/Modal';
 import { focusedElement } from '../Modal/focus-trap';
 import { LeftoverAction } from '../LeftoverAction/LeftoverAction';
@@ -188,6 +189,11 @@ export function SettingsDialog() {
             </div>
           </section>
         )}
+
+        <section className={styles.section}>
+          <h3 className={styles.heading}>Keyboard</h3>
+          <CharacterKeysToggle />
+        </section>
 
         <section className={styles.section}>
           <h3 className={styles.heading}>Library health</h3>
