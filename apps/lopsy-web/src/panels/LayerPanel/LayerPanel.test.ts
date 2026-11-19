@@ -84,6 +84,8 @@ describe('LayerPanel', () => {
   it('Add Mask makes the new mask the edit target', async () => {
     const [{ act, createElement }, { createRoot }, { useEditorStore }, { LayerPanel }] = mods;
     const { useUIStore } = await import('../../app/ui-store');
+    // The button runs mask.add, registered by the commands index as the app's entry point does.
+    await import('../../commands/mask/mask');
     useEditorStore.getState().createDocument(300, 200, false);
     useUIStore.getState().setMaskEditMode(false);
     const layerName = useEditorStore.getState().document.layers

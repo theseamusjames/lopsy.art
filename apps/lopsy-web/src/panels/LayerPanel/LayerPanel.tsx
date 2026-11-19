@@ -8,7 +8,8 @@ import { selectionCombineMode } from '../../selection/selection';
 import { hasCombinableSelection } from '../../app/interactions/selection-handlers';
 import { buildFlatDisplayList } from '../../layers/group-utils';
 import { useLayerDnd } from './useLayerDnd';
-import { addMaskAndEdit, removeMaskAndLeaveEdit } from './mask-actions';
+import { removeMaskAndLeaveEdit } from './mask-actions';
+import { invokeFromUi } from '../../commands/invoke-from-ui';
 import { activateLayerFromPanel, selectLayerFromPanel } from '../../app/interactions/layer-activation';
 import { LayerRow } from './LayerRow';
 import { LayerContextMenu } from './LayerContextMenu';
@@ -20,14 +21,10 @@ export function LayerPanel() {
   const activeLayerId = useEditorStore((s) => s.document.activeLayerId);
   const selectedLayerIds = useEditorStore((s) => s.document.selectedLayerIds);
   const onToggleVisibility = useEditorStore((s) => s.toggleLayerVisibility);
-  const onAddLayer = useEditorStore((s) => s.addLayer);
   const onDropLayer = useEditorStore((s) => s.dropLayer);
   const onUpdateOpacity = useEditorStore((s) => s.updateLayerOpacity);
-  const duplicateLayer = useEditorStore((s) => s.duplicateLayer);
   const toggleLayerLock = useEditorStore((s) => s.toggleLayerLock);
   const renameLayer = useEditorStore((s) => s.renameLayer);
-  const addGroup = useEditorStore((s) => s.addGroup);
-  const rasterizeTextLayer = useEditorStore((s) => s.rasterizeTextLayer);
   const toggleGroupCollapsed = useEditorStore((s) => s.toggleGroupCollapsed);
   const setLayerColorTag = useEditorStore((s) => s.setLayerColorTag);
   const rootGroupId = useEditorStore((s) => s.document.rootGroupId);
@@ -40,7 +37,6 @@ export function LayerPanel() {
   const selectLayerRange = useEditorStore((s) => s.selectLayerRange);
   const setLayerSelection = useEditorStore((s) => s.setLayerSelection);
   const removeSelectedLayers = useEditorStore((s) => s.removeSelectedLayers);
-  const groupSelectedLayers = useEditorStore((s) => s.groupSelectedLayers);
   const panelRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; layerId: string } | null>(null);
 
@@ -99,10 +95,6 @@ export function LayerPanel() {
       setShowEffectsDrawer(true);
     }
   }, [showEffectsDrawer, activeLayerId, setShowEffectsDrawer]);
-
-  const handleAddMask = useCallback((layerId: string) => {
-    addMaskAndEdit(layerId);
-  }, []);
 
   const handleRemoveMask = useCallback((layerId: string) => {
     removeMaskAndLeaveEdit(layerId);
@@ -200,26 +192,26 @@ export function LayerPanel() {
         ))}
       </div>
       <div className={styles.toolbar} role="toolbar" aria-label="Layer actions">
-        <IconButton icon={<Plus size={16} />} label="Add Layer" onClick={onAddLayer} />
-        <IconButton icon={<FolderPlus size={16} />} label="New Group" onClick={() => addGroup()} />
+        <IconButton icon={<Plus size={16} />} label="Add Layer" onClick={() => invokeFromUi('layer.add')} />
+        <IconButton icon={<FolderPlus size={16} />} label="New Group" onClick={() => invokeFromUi('layer.add-group')} />
         {selectedLayerIds.filter((id) => id !== rootGroupId).length >= 2 && (
-          <IconButton icon={<Folder size={16} />} label="Group Layers" onClick={() => groupSelectedLayers()} />
+          <IconButton icon={<Folder size={16} />} label="Group Layers" onClick={() => invokeFromUi('layer.group')} />
         )}
         <IconButton
           icon={<Copy size={16} />}
           label="Duplicate Layer"
-          onClick={() => { if (activeLayerId && !isRootGroup(activeLayerId)) duplicateLayer(); }}
+          onClick={() => { if (activeLayerId && !isRootGroup(activeLayerId)) invokeFromUi('layer.duplicate'); }}
           disabled={!activeLayerId || isRootGroup(activeLayerId ?? '')}
         />
         {activeLayerId && (() => {
           const activeLayer = layers.find((l) => l.id === activeLayerId);
           if (!activeLayer || activeLayer.mask) return null;
-          return <IconButton icon={<RectangleCircle size={16} />} label="Add Mask" onClick={() => handleAddMask(activeLayerId)} />;
+          return <IconButton icon={<RectangleCircle size={16} />} label="Add Mask" onClick={() => invokeFromUi('mask.add')} />;
         })()}
         {activeLayerId && (() => {
           const activeLayer = layers.find((l) => l.id === activeLayerId);
           if (!activeLayer || activeLayer.type !== 'text') return null;
-          return <IconButton icon={<Type size={16} />} label="Rasterize Layer" onClick={() => rasterizeTextLayer()} />;
+          return <IconButton icon={<Type size={16} />} label="Rasterize Layer" onClick={() => invokeFromUi('layer.rasterize')} />;
         })()}
         <div className={styles.toolbarSpacer} />
         <IconButton
@@ -227,7 +219,7 @@ export function LayerPanel() {
           label="Delete Layer"
           onClick={() => {
             const deletable = selectedLayerIds.filter((id) => !isRootGroup(id));
-            if (deletable.length > 0) removeSelectedLayers();
+            if (deletable.length > 0) invokeFromUi('layer.remove-selected');
           }}
           disabled={layers.length <= 1 || selectedLayerIds.filter((id) => !isRootGroup(id)).length === 0}
         />
