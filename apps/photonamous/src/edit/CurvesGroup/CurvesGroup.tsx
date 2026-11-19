@@ -30,7 +30,7 @@ export function CurvesGroup({ recipe, isDisabled, onDraft, onCommit }: CurvesGro
   return (
     <section className={styles.group} aria-label="Curves">
       <header className={styles.header}>
-        <h3 className={styles.title}>Curves</h3>
+        <h2 className={styles.title}>Curves</h2>
         <button
           type="button"
           className={styles.reset}

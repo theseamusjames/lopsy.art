@@ -26,6 +26,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-ui);
   color: var(--color-text-secondary);
 }
 
@@ -107,6 +108,12 @@
   display: flex;
   flex: 1;
   min-height: 0;
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
 }
 
 .stage {

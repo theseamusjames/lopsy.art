@@ -47,7 +47,7 @@ export function TabbedGroup({ title, tabs, sharedControls = [], recipe, isDisabl
   return (
     <section className={styles.group} aria-label={title}>
       <header className={styles.header}>
-        <h3 className={styles.title}>{title}</h3>
+        <h2 className={styles.title}>{title}</h2>
         <button
           type="button"
           className={styles.reset}

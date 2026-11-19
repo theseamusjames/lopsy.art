@@ -57,6 +57,7 @@ import { usePixelReadout } from './use-pixel-readout';
 import { useClippingWarningOnEngine } from '../clipping-warning';
 import { useGrainSeed } from '../grain-seed';
 import { useAltDragViews } from '../alt-drag-views';
+import { editPageTitle, useDocumentTitle, useFocusOnOpen } from '../edit-page';
 import styles from './EditView.module.css';
 
 export interface EditViewProps {
@@ -112,6 +113,8 @@ export interface EditViewProps {
   readonly onDone?: (renderPng16: () => Promise<ArrayBuffer>, recipe: Recipe) => void;
   /** The leave button's words; 'Library' by default. */
   readonly closeLabel?: string;
+  /** The page's title while the view is open; "<file name> – Edit – Photonamous" by default. */
+  readonly documentTitle?: string;
 }
 
 /** Recipe paths of the controls whose engine passes are costly. */
@@ -160,9 +163,13 @@ export function EditView({
   onDeletePreset,
   onDone,
   closeLabel = 'Library',
+  documentTitle,
 }: EditViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useDocumentTitle(documentTitle ?? editPageTitle(asset.fileName));
+  useFocusOnOpen(headingRef);
   const { engine, status, view } = usePhotoEngine(canvasRef, asset, loadOriginal);
   useClippingWarningOnEngine(engine);
   useGrainSeed(engine, asset.id);
@@ -668,6 +675,18 @@ export function EditView({
   const workingScale = engine?.workingScale() ?? 1;
   const zoomPercent = view ? Math.round(view.zoom * workingScale * 100) : 100;
   const isLoadingFull = engine?.isLoadingFullResolution() ?? false;
+  const photoLabel =
+    status.kind === 'error'
+      ? `${asset.fileName}, could not be opened`
+      : !canEdit
+        ? `${asset.fileName}, loading`
+        : isBefore
+          ? `${asset.fileName} without its edits (Before)`
+          : isSplitShown
+            ? `${asset.fileName}, before and after side by side`
+            : isAllDefault
+              ? asset.fileName
+              : `${asset.fileName}, edited`;
 
   return (
     <div className={styles.editView} data-testid="edit-view" data-status={status.kind}>
@@ -676,9 +695,9 @@ export function EditView({
           <ArrowLeft size={16} aria-hidden />
           <span>{closeLabel}</span>
         </button>
-        <span className={styles.fileName} title={asset.fileName}>
+        <h1 ref={headingRef} className={styles.fileName} title={asset.fileName} tabIndex={-1}>
           {asset.fileName}
-        </span>
+        </h1>
         <div className={styles.toolGroup}>
           <button type="button" className={styles.iconButton} aria-label="Undo" title="Undo (⌘Z)" onClick={onUndo}>
             <Undo2 size={16} aria-hidden />
@@ -850,53 +869,55 @@ export function EditView({
       </header>
       <div className={styles.body}>
         <LeftColumn sections={leftSections} />
-        <div
-          ref={stageRef}
-          className={styles.stage}
-          onPointerDown={handleStagePointerDown}
-          onPointerMove={handleStagePointerMove}
-          onPointerUp={handleStagePointerUp}
-          onPointerCancel={handleStagePointerUp}
-          onPointerLeave={pixel.onPointerLeave}
-        >
-          <canvas ref={canvasRef} className={styles.canvas} data-testid="edit-canvas" />
-          {storedPreviewUrl && !canEdit && status.kind !== 'error' && (
-            <img className={styles.storedPreview} src={storedPreviewUrl} alt="" data-testid="stored-preview" draggable={false} />
-          )}
-          {(isLoadingFull || (storedPreviewUrl && !canEdit && status.kind !== 'error')) && (
-            <span className={styles.loadingBadge} role="status" data-testid="loading-badge">
-              {isLoadingFull ? 'Loading full resolution…' : 'Loading…'}
-            </span>
-          )}
-          {isPickingWb && wbPickBox && wbDocSize && (
-            <WhiteBalancePicker
-              imageBox={wbPickBox}
-              documentSize={wbDocSize}
-              onPick={(x, y) => void handleWhiteBalancePick(x, y)}
-              onCancel={() => setIsPickingWb(false)}
-            />
-          )}
-          {isLevelling && <LevelTool onLine={handleLevelLine} onCancel={() => setIsLevelling(false)} />}
-          {areaHandles}
-          {pixel.readout && (
-            <span className={styles.pixelReadout} data-testid="pixel-readout" aria-label="Colour under the pointer">
-              R {pixel.readout[0]} G {pixel.readout[1]} B {pixel.readout[2]}
-            </span>
-          )}
-          {splitBox && <SplitView imageBox={splitBox} beforeSrc={beforeSrc} at={splitAt} onChange={setSplitAt} />}
-          {cropDraft && cropBox && (
-            <CropTool
-              imageBox={cropBox.box}
-              imageAspect={cropBox.aspect}
-              rect={cropDraft}
-              onChange={setCropDraft}
-              onDone={() => finishCrop(true)}
-              onCancel={() => finishCrop(false)}
-            />
-          )}
-          {isBefore && canEdit && <span className={styles.beforeBadge}>Before</span>}
-          {!(storedPreviewUrl && status.kind !== 'error' && !canEdit) && <LoadStatus status={status} onClose={onClose} />}
-        </div>
+        <main className={styles.main}>
+          <div
+            ref={stageRef}
+            className={styles.stage}
+            onPointerDown={handleStagePointerDown}
+            onPointerMove={handleStagePointerMove}
+            onPointerUp={handleStagePointerUp}
+            onPointerCancel={handleStagePointerUp}
+            onPointerLeave={pixel.onPointerLeave}
+          >
+            <canvas ref={canvasRef} className={styles.canvas} role="img" aria-label={photoLabel} data-testid="edit-canvas" />
+            {storedPreviewUrl && !canEdit && status.kind !== 'error' && (
+              <img className={styles.storedPreview} src={storedPreviewUrl} alt="" data-testid="stored-preview" draggable={false} />
+            )}
+            {(isLoadingFull || (storedPreviewUrl && !canEdit && status.kind !== 'error')) && (
+              <span className={styles.loadingBadge} role="status" data-testid="loading-badge">
+                {isLoadingFull ? 'Loading full resolution…' : 'Loading…'}
+              </span>
+            )}
+            {isPickingWb && wbPickBox && wbDocSize && (
+              <WhiteBalancePicker
+                imageBox={wbPickBox}
+                documentSize={wbDocSize}
+                onPick={(x, y) => void handleWhiteBalancePick(x, y)}
+                onCancel={() => setIsPickingWb(false)}
+              />
+            )}
+            {isLevelling && <LevelTool onLine={handleLevelLine} onCancel={() => setIsLevelling(false)} />}
+            {areaHandles}
+            {pixel.readout && (
+              <span className={styles.pixelReadout} data-testid="pixel-readout">
+                R {pixel.readout[0]} G {pixel.readout[1]} B {pixel.readout[2]}
+              </span>
+            )}
+            {splitBox && <SplitView imageBox={splitBox} beforeSrc={beforeSrc} at={splitAt} onChange={setSplitAt} />}
+            {cropDraft && cropBox && (
+              <CropTool
+                imageBox={cropBox.box}
+                imageAspect={cropBox.aspect}
+                rect={cropDraft}
+                onChange={setCropDraft}
+                onDone={() => finishCrop(true)}
+                onCancel={() => finishCrop(false)}
+              />
+            )}
+            {isBefore && canEdit && <span className={styles.beforeBadge}>Before</span>}
+            {!(storedPreviewUrl && status.kind !== 'error' && !canEdit) && <LoadStatus status={status} onClose={onClose} />}
+          </div>
+        </main>
         <aside className={styles.panel} aria-label="Edits">
           <Histogram bins={histogram} />
           {isAreasOpen && (

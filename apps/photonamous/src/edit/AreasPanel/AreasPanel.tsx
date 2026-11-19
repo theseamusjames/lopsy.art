@@ -49,7 +49,7 @@ export function AreasPanel({ recipe, selectedId, isDisabled, onAdd, onSelect, on
   return (
     <section className={styles.panel} aria-label="Areas">
       <header className={styles.header}>
-        <h3 className={styles.title}>Areas</h3>
+        <h2 className={styles.title}>Areas</h2>
         <div className={styles.add}>
           <button type="button" className={styles.button} disabled={isDisabled || isFull} onClick={() => onAdd('linear')} title="A gradient across the photo">
             <Plus size={13} aria-hidden />
