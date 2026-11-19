@@ -1,0 +1,215 @@
+import { createRequire } from 'node:module';
+import { writeFileSync } from 'node:fs';
+import { expect, test, type Page } from '@playwright/test';
+import { generatedJpeg, tiles } from './library';
+
+/**
+ * Accessibility (WCAG 2.2 AA): axe-core's rules run on every view of the
+ * app as a user reaches it, in the library on "This browser". A11Y_REPORT
+ * names a JSON file to write every violation to.
+ */
+
+const AXE = createRequire(import.meta.url).resolve('axe-core/axe.min.js');
+const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
+
+interface Violation {
+  readonly state: string;
+  readonly id: string;
+  readonly impact: string | null;
+  readonly help: string;
+  readonly nodes: { readonly target: string; readonly html: string; readonly summary: string }[];
+}
+
+const found: Violation[] = [];
+
+test.use({ actionTimeout: 15_000 });
+
+async function scan(page: Page, state: string): Promise<void> {
+  await page.waitForTimeout(300);
+  const hasAxe = await page.evaluate(() => 'axe' in window);
+  if (!hasAxe) await page.addScriptTag({ path: AXE });
+  const violations = await page.evaluate(async (tags) => {
+    const axe = Reflect.get(window, 'axe') as {
+      run: (context: Document, options: object) => Promise<{
+        violations: { id: string; impact: string | null; help: string; nodes: { target: string[]; html: string; failureSummary?: string }[] }[];
+      }>;
+    };
+    const result = await axe.run(document, { runOnly: { type: 'tag', values: tags }, resultTypes: ['violations'] });
+    return result.violations.map((v) => ({
+      id: v.id,
+      impact: v.impact,
+      help: v.help,
+      nodes: v.nodes.map((n) => ({ target: n.target.join(' '), html: n.html.slice(0, 240), summary: (n.failureSummary ?? '').slice(0, 400) })),
+    }));
+  }, TAGS);
+  for (const v of violations) found.push({ state, ...v });
+}
+
+async function step(page: Page, state: string, action: () => Promise<void>): Promise<void> {
+  try {
+    await action();
+    await scan(page, state);
+  } catch (error) {
+    found.push({ state, id: 'step-failed', impact: null, help: String(error).slice(0, 300), nodes: [] });
+  }
+}
+
+test.afterAll(() => {
+  const report = process.env.A11Y_REPORT;
+  if (report) writeFileSync(report, JSON.stringify(found, null, 2));
+});
+
+test('every view, as a user reaches it', async ({ page }) => {
+  test.setTimeout(600_000);
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Photonamous' })).toBeVisible({ timeout: 15_000 });
+  await scan(page, 'start screen');
+
+  await step(page, 'empty library', async () => {
+    await page.getByRole('button', { name: /This browser/ }).click();
+    await expect(page.getByText('Your library is empty')).toBeVisible({ timeout: 15_000 });
+  });
+
+  await step(page, 'import menu', async () => {
+    await page.getByRole('button', { name: /Import photos/ }).first().click();
+    await expect(page.getByRole('menuitem', { name: /Choose photos/ })).toBeVisible({ timeout: 15_000 });
+  });
+
+  const files = [];
+  for (const [i, hue] of [20, 140, 260].entries()) files.push({ name: `photo-${i + 1}.jpg`, mimeType: 'image/jpeg', buffer: await generatedJpeg(page, hue, 640, 480) });
+  await step(page, 'import sheet', async () => {
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('menuitem', { name: /Choose photos/ }).click();
+    await (await chooser).setFiles(files);
+    await expect(page.getByRole('button', { name: /^Import 3 photo/ })).toBeVisible({ timeout: 15_000 });
+  });
+
+  await step(page, 'importing', async () => {
+    await page.getByRole('button', { name: /^Import 3 photo/ }).click();
+    await expect(page.getByText(/^Imported \d+ photo/)).toBeVisible({ timeout: 60_000 });
+  });
+
+  await step(page, 'library grid', async () => {
+    await page.getByRole('button', { name: /^All photos/ }).click();
+    await expect(tiles(page)).toHaveCount(3);
+    await expect(tiles(page).first().locator('img')).toBeVisible({ timeout: 30_000 });
+  });
+
+  await step(page, 'photo selected', async () => {
+    await tiles(page).first().click();
+    await page.keyboard.press('3');
+  });
+
+  await step(page, 'More menu', async () => {
+    await page.getByRole('button', { name: 'More', exact: true }).click();
+    await expect(page.getByRole('menu', { name: 'More' })).toBeVisible({ timeout: 15_000 });
+  });
+  await page.keyboard.press('Escape');
+
+  await step(page, 'photo actions menu', async () => {
+    await tiles(page).first().click({ button: 'right' });
+    await expect(page.getByRole('menu', { name: 'Photo actions' })).toBeVisible({ timeout: 15_000 });
+  });
+  await page.keyboard.press('Escape');
+
+  await step(page, 'sync panel', async () => {
+    await page.getByRole('button', { name: /Saved/ }).click();
+  });
+  await page.keyboard.press('Escape');
+
+  await step(page, 'keyboard shortcuts', async () => {
+    await page.getByRole('button', { name: 'Keyboard shortcuts' }).click();
+  });
+  await page.keyboard.press('Escape');
+
+  await step(page, 'settings', async () => {
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible({ timeout: 15_000 });
+  });
+  await page.keyboard.press('Escape');
+
+  await step(page, 'export dialog', async () => {
+    await tiles(page).first().click();
+    await page.getByRole('banner').getByRole('button', { name: /^Export/ }).click();
+    await expect(page.getByRole('dialog')).toBeVisible({ timeout: 15_000 });
+  });
+  await page.keyboard.press('Escape');
+
+  await step(page, 'new version dialog', async () => {
+    await tiles(page).first().click({ button: 'right' });
+    await page.getByRole('menu', { name: 'Photo actions' }).getByRole('menuitem', { name: 'New version' }).click();
+    await expect(page.getByRole('dialog', { name: 'New version' })).toBeVisible({ timeout: 15_000 });
+  });
+  await page.keyboard.press('Escape');
+
+  await step(page, 'copy edits dialog', async () => {
+    await tiles(page).first().click();
+    await page.keyboard.press('Control+Shift+C');
+    await expect(page.getByRole('dialog', { name: /Copy edits/ })).toBeVisible({ timeout: 15_000 });
+  });
+  await page.keyboard.press('Escape');
+
+  await step(page, 'compare view', async () => {
+    await tiles(page).nth(0).click();
+    await tiles(page).nth(1).click({ modifiers: ['Shift'] });
+    await page.getByRole('button', { name: /^Compare/ }).click();
+  });
+  await page.keyboard.press('Escape');
+
+  await step(page, 'single view', async () => {
+    await tiles(page).first().dblclick();
+  });
+  await page.keyboard.press('Escape');
+
+  await step(page, 'edit view', async () => {
+    await tiles(page).first().click();
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('edit-view')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('slider', { name: 'Exposure' })).toBeVisible({ timeout: 60_000 });
+  });
+
+  const edit = page.getByTestId('edit-view');
+  await step(page, 'edit view, every group open', async () => {
+    for (const toggle of await edit.locator('button[aria-expanded="false"]').all()) {
+      if (await toggle.isVisible()) await toggle.click();
+    }
+  });
+
+  await step(page, 'edit view, crop tool', async () => {
+    await page.keyboard.press('r');
+  });
+  await page.keyboard.press('Escape');
+
+  await step(page, 'edit view, areas', async () => {
+    await edit.getByRole('button', { name: 'Areas', exact: true }).click();
+    await edit.getByRole('button', { name: 'Radial' }).click();
+  });
+
+  await step(page, 'edit view, split before and after', async () => {
+    await edit.getByRole('button', { name: 'Split' }).click();
+  });
+
+  await step(page, 'library after edit', async () => {
+    await edit.getByRole('button', { name: 'Library', exact: true }).click();
+    await expect(tiles(page).first()).toBeVisible({ timeout: 15_000 });
+  });
+
+  await step(page, 'delete dialog', async () => {
+    await tiles(page).last().click();
+    await page.keyboard.press('Delete');
+  });
+  await page.keyboard.press('Escape');
+
+  await step(page, 'check library', async () => {
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Check library' }).click();
+    await expect(page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Check library' })).toBeEnabled({ timeout: 30_000 });
+  });
+  await page.keyboard.press('Escape');
+
+  await step(page, 'grade screen', async () => {
+    await page.goto('/?grade=missing');
+  });
+
+  expect(found).toEqual([]);
+});
