@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
+import { keepPressKeys } from '../Button/Button';
 import styles from './IconButton.module.css';
 
 interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
@@ -13,11 +14,22 @@ interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
   ref?: Ref<HTMLButtonElement>;
 }
 
-export function IconButton({ label, icon, active, pressed, size = 'md', className, ...rest }: IconButtonProps) {
+export function IconButton({ label, icon, active, pressed, size = 'md', className, onKeyDown, ...rest }: IconButtonProps) {
   const isOn = active ?? pressed ?? false;
   const cls = [styles.button, styles[size], isOn ? styles.active : '', className].filter(Boolean).join(' ');
   return (
-    <button type="button" className={cls} aria-label={label} title={label} aria-pressed={pressed} {...rest}>
+    <button
+      type="button"
+      className={cls}
+      aria-label={label}
+      title={label}
+      aria-pressed={pressed}
+      onKeyDown={(e) => {
+        onKeyDown?.(e);
+        keepPressKeys(e);
+      }}
+      {...rest}
+    >
       {icon}
     </button>
   );
