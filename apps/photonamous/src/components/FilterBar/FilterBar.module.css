@@ -144,3 +144,8 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* Placeholders carry instructions: the browser's grey is 2.4:1 on the field. */
+.input::placeholder {
+  color: var(--ph-text-muted);
+}

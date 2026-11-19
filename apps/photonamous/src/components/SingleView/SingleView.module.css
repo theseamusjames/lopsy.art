@@ -84,7 +84,7 @@
   transform: translateX(-50%);
   padding: 2px var(--space-2);
   border-radius: var(--radius-sm);
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--viewer-bg);
   color: var(--color-warning);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-ui);

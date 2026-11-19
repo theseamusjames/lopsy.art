@@ -97,3 +97,8 @@
   outline: 2px solid var(--ph-focus-ring);
   outline-offset: 1px;
 }
+
+/* Placeholders carry instructions: the browser's grey is 2.4:1 on the field. */
+.text::placeholder {
+  color: var(--ph-text-muted);
+}

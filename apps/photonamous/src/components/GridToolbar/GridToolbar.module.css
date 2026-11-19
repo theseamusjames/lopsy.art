@@ -158,3 +158,8 @@
   background: var(--color-border);
   margin: 0 var(--space-1);
 }
+
+/* Placeholders carry instructions: the browser's grey is 2.4:1 on the field. */
+.search input::placeholder {
+  color: var(--ph-text-muted);
+}

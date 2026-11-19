@@ -209,3 +209,8 @@
     border-bottom: 1px solid var(--color-border);
   }
 }
+
+/* Placeholders carry instructions: the browser's grey is 2.4:1 on the field. */
+.input::placeholder {
+  color: var(--ph-text-muted);
+}
