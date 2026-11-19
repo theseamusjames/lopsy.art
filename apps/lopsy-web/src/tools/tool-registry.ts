@@ -234,7 +234,7 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     handler: {
       down: (ctx) => handleSelectionDown(ctx, 'marquee-rect'),
       move: (ctx, state) => handleSelectionMove(state, ctx.canvasPos, ctx.metaKey),
-      up: (ctx, state) => handleSelectionUp(state, ctx.canvasPos, ctx.screenToCanvas!, ctx.containerRef!, ctx),
+      up: (ctx, state) => handleSelectionUp(state, ctx.canvasPos),
     },
   },
   'marquee-ellipse': {
@@ -244,7 +244,7 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     handler: {
       down: (ctx) => handleSelectionDown(ctx, 'marquee-ellipse'),
       move: (ctx, state) => handleSelectionMove(state, ctx.canvasPos, ctx.metaKey),
-      up: (ctx, state) => handleSelectionUp(state, ctx.canvasPos, ctx.screenToCanvas!, ctx.containerRef!, ctx),
+      up: (ctx, state) => handleSelectionUp(state, ctx.canvasPos),
     },
   },
   lasso: {
@@ -254,7 +254,7 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     handler: {
       down: (ctx) => handleSelectionDown(ctx, 'lasso'),
       move: (ctx, state) => handleSelectionMove(state, ctx.canvasPos, ctx.metaKey),
-      up: (ctx, state) => handleSelectionUp(state, ctx.canvasPos, ctx.screenToCanvas!, ctx.containerRef!, ctx),
+      up: (ctx, state) => handleSelectionUp(state, ctx.canvasPos),
     },
   },
   'lasso-magnetic': {
@@ -264,7 +264,7 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     handler: {
       down: (ctx) => handleSelectionDown(ctx, 'lasso-magnetic'),
       move: (ctx, state) => handleSelectionMove(state, ctx.canvasPos, ctx.metaKey),
-      up: (ctx, state) => handleSelectionUp(state, ctx.canvasPos, ctx.screenToCanvas!, ctx.containerRef!, ctx),
+      up: (ctx, state) => handleSelectionUp(state, ctx.canvasPos),
     },
   },
   wand: {

@@ -85,7 +85,6 @@ import { marqueeStrategy, confirmMarqueeRegion } from './marquee-strategy';
 import { getMarqueePreview, setMarqueePreview } from './marquee-preview';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS, withMoveGesture } from '../../app/interactions/interaction-types';
-import type { SelectionUpContext } from '../../app/interactions/selection-strategy';
 import { readSelectionMask } from '../../engine-wasm/wasm-bridge';
 
 function makeCtx(overrides: Partial<InteractionContext> = {}): InteractionContext {
@@ -121,18 +120,6 @@ function makeState(overrides: Partial<InteractionState> = {}): InteractionState 
     layerStartY: 0,
     ...DEFAULT_TRANSFORM_FIELDS,
     ...overrides,
-  };
-}
-
-function makeUpCtx(clientX: number, clientY: number): SelectionUpContext {
-  return {
-    screenToCanvas: (sx, sy) => ({ x: sx, y: sy }),
-    containerRef: {
-      current: {
-        getBoundingClientRect: () => ({ left: 0, top: 0 }),
-      } as unknown as HTMLDivElement,
-    },
-    event: { clientX, clientY },
   };
 }
 
@@ -371,14 +358,14 @@ describe('marquee onUp', () => {
       maskWidth: DOC_W,
       maskHeight: DOC_H,
     };
-    marqueeStrategy.onUp!(makeState({ startPoint: { x: 10, y: 10 } }), { x: 11, y: 11 }, makeUpCtx(11, 11));
+    marqueeStrategy.onUp!(makeState({ startPoint: { x: 10, y: 10 } }), { x: 11, y: 11 });
     expect(editorState.clearSelection).toHaveBeenCalledTimes(1);
     expect(uiState.setTransform).toHaveBeenCalledWith(null);
     expect(uiState.openModal).not.toHaveBeenCalled();
   });
 
   it('opens the region modal on a click with nothing selected', () => {
-    marqueeStrategy.onUp!(makeState({ startPoint: { x: 10, y: 12 } }), { x: 11, y: 12 }, makeUpCtx(11, 12));
+    marqueeStrategy.onUp!(makeState({ startPoint: { x: 10, y: 12 } }), { x: 11, y: 12 });
     expect(uiState.openModal).toHaveBeenCalledWith({
       kind: 'marqueeRegion',
       click: { shape: 'rect', point: { x: 10, y: 12 } },
@@ -391,7 +378,6 @@ describe('marquee onUp', () => {
     marqueeStrategy.onUp!(
       makeState({ tool: 'marquee-ellipse', startPoint: { x: 10, y: 10 } }),
       { x: 10, y: 10 },
-      makeUpCtx(10, 10),
     );
     expect(uiState.openModal).toHaveBeenCalledWith({
       kind: 'marqueeRegion',
@@ -401,7 +387,7 @@ describe('marquee onUp', () => {
 
   it('builds and commits the previewed rect after a real drag', () => {
     setMarqueePreview({ kind: 'rect', rect: { x: 10, y: 10, width: 20, height: 20 } });
-    marqueeStrategy.onUp!(makeState({ startPoint: { x: 10, y: 10 } }), { x: 40, y: 40 }, makeUpCtx(40, 40));
+    marqueeStrategy.onUp!(makeState({ startPoint: { x: 10, y: 10 } }), { x: 40, y: 40 });
     expect(editorState.clearSelection).not.toHaveBeenCalled();
     expect(editorState.setSelection).toHaveBeenCalledTimes(1);
     const [rect, mask, w, h] = editorState.setSelection.mock.calls[0]! as [
@@ -431,7 +417,7 @@ describe('marquee onUp', () => {
       makeState({ startPoint: { x: 0, y: 0 } }),
       { originalMask: src, originalBounds: { x: 2, y: 2, width: 2, height: 2 } },
     );
-    marqueeStrategy.onUp!(state, { x: 3, y: 2 }, makeUpCtx(3, 2));
+    marqueeStrategy.onUp!(state, { x: 3, y: 2 });
     const [bounds, mask] = editorState.setSelection.mock.calls[0]! as [
       { x: number; y: number; width: number; height: number },
       Uint8ClampedArray,
@@ -450,7 +436,7 @@ describe('marquee onUp', () => {
       makeState({ startPoint: { x: 0, y: 0 } }),
       { originalMask: src, originalBounds: { x: 0, y: 0, width: 1, height: 1 } },
     );
-    marqueeStrategy.onUp!(state, { x: -3, y: -3 }, makeUpCtx(-3, -3));
+    marqueeStrategy.onUp!(state, { x: -3, y: -3 });
     // Nothing is left on the canvas, so there is no selection to keep.
     expect(editorState.setSelection).not.toHaveBeenCalled();
     expect(editorState.clearSelection).toHaveBeenCalled();
@@ -465,7 +451,7 @@ describe('marquee onUp', () => {
       makeState({ startPoint: { x: 2, y: 2 } }),
       { originalMask: all, originalBounds: { x: 0, y: 0, width: 10, height: 10 } },
     );
-    marqueeStrategy.onUp!(state, { x: 8, y: 9 }, makeUpCtx(8, 9));
+    marqueeStrategy.onUp!(state, { x: 8, y: 9 });
     const [bounds, mask] = editorState.setSelection.mock.calls[0]! as [
       { x: number; y: number; width: number; height: number },
       Uint8ClampedArray,
@@ -481,9 +467,71 @@ describe('marquee onUp', () => {
       originalMask: new Uint8ClampedArray(4),
       originalBounds: { x: 0, y: 0, width: 2, height: 2 },
     });
-    marqueeStrategy.onUp!(state, { x: 50, y: 50 }, makeUpCtx(50, 50));
+    marqueeStrategy.onUp!(state, { x: 50, y: 50 });
     expect(editorState.clearSelection).not.toHaveBeenCalled();
     expect(editorState.setSelection).not.toHaveBeenCalled();
+  });
+});
+
+describe('a marquee gesture driven down → move → up', () => {
+  function drag(
+    from: { x: number; y: number },
+    lastMove: { x: number; y: number },
+    release: { x: number; y: number },
+    overrides: Partial<InteractionContext> = {},
+  ): void {
+    const state = marqueeStrategy.onDown(makeCtx({ canvasPos: from, ...overrides }), 'marquee-rect');
+    if (!state) throw new Error('expected a gesture');
+    marqueeStrategy.onMove!(state, lastMove, false);
+    marqueeStrategy.onUp!(state, release);
+  }
+
+  it('commits the rectangle of the last move when released after a drag', () => {
+    drag({ x: 10, y: 10 }, { x: 40, y: 30 }, { x: 40, y: 30 });
+    expect(editorState.setSelection).toHaveBeenCalledTimes(1);
+    expect(lastCommit().bounds).toEqual({ x: 10, y: 10, width: 30, height: 20 });
+    expect(uiState.openModal).not.toHaveBeenCalled();
+  });
+
+  it('decides drag versus click from the release position, not the last move', () => {
+    drag({ x: 10, y: 10 }, { x: 11, y: 11 }, { x: 60, y: 60 });
+    expect(editorState.setSelection).toHaveBeenCalledTimes(1);
+    expect(lastCommit().bounds).toEqual({ x: 10, y: 10, width: 1, height: 1 });
+    expect(uiState.openModal).not.toHaveBeenCalled();
+  });
+
+  it('treats a drag that returns to its start as a click', () => {
+    drag({ x: 10, y: 10 }, { x: 40, y: 30 }, { x: 11, y: 10 });
+    expect(editorState.setSelection).not.toHaveBeenCalled();
+    expect(uiState.openModal).toHaveBeenCalledWith({
+      kind: 'marqueeRegion',
+      click: { shape: 'rect', point: { x: 10, y: 10 } },
+    });
+  });
+
+  it('a click outside an active selection deselects', () => {
+    selectRect(50, 50, 10, 10);
+    drag({ x: 10, y: 10 }, { x: 10, y: 10 }, { x: 10, y: 10 });
+    expect(editorState.clearSelection).toHaveBeenCalledTimes(1);
+    expect(editorState.setSelection).not.toHaveBeenCalled();
+    expect(uiState.openModal).not.toHaveBeenCalled();
+  });
+
+  it('a Shift-click keeps the active selection', () => {
+    selectRect(50, 50, 10, 10);
+    drag({ x: 10, y: 10 }, { x: 10, y: 10 }, { x: 10, y: 10 }, { shiftKey: true });
+    expect(editorState.clearSelection).not.toHaveBeenCalled();
+    expect(editorState.setSelection).not.toHaveBeenCalled();
+    expect(uiState.setTransform).toHaveBeenLastCalledWith(
+      expect.objectContaining({ originalBounds: { x: 50, y: 50, width: 10, height: 10 } }),
+    );
+  });
+
+  it('a zero-height drag commits nothing and opens no dialog', () => {
+    drag({ x: 10, y: 10 }, { x: 40, y: 10 }, { x: 40, y: 10 });
+    expect(editorState.setSelection).not.toHaveBeenCalled();
+    expect(uiState.openModal).not.toHaveBeenCalled();
+    expect(editorState.clearSelection).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -534,7 +582,7 @@ describe('marquee add / subtract / intersect', () => {
   it('Shift-drag adds the rect to the selection as one history step', () => {
     selectRect(0, 0, 10, 10);
     setMarqueePreview({ kind: 'rect', rect: { x: 50, y: 50, width: 20, height: 20 } });
-    marqueeStrategy.onUp!(makeState({ startPoint: { x: 50, y: 50 }, selectionCombineMode: 'add' }), { x: 70, y: 70 }, makeUpCtx(70, 70));
+    marqueeStrategy.onUp!(makeState({ startPoint: { x: 50, y: 50 }, selectionCombineMode: 'add' }), { x: 70, y: 70 });
     const { bounds, mask } = lastCommit();
     expect(mask[5 * DOC_W + 5]).toBe(255); // old selection kept
     expect(mask[60 * DOC_W + 60]).toBe(255); // new rect added
@@ -547,7 +595,7 @@ describe('marquee add / subtract / intersect', () => {
   it('Alt-drag cuts a hole in the selection', () => {
     selectRect(0, 0, 60, 60);
     setMarqueePreview({ kind: 'rect', rect: { x: 20, y: 20, width: 20, height: 20 } });
-    marqueeStrategy.onUp!(makeState({ startPoint: { x: 20, y: 20 }, selectionCombineMode: 'subtract' }), { x: 40, y: 40 }, makeUpCtx(40, 40));
+    marqueeStrategy.onUp!(makeState({ startPoint: { x: 20, y: 20 }, selectionCombineMode: 'subtract' }), { x: 40, y: 40 });
     const { bounds, mask } = lastCommit();
     expect(mask[30 * DOC_W + 30]).toBe(0); // hole
     expect(mask[10 * DOC_W + 10]).toBe(255); // ring kept
@@ -562,7 +610,6 @@ describe('marquee add / subtract / intersect', () => {
     marqueeStrategy.onUp!(
       makeState({ tool: 'marquee-ellipse', startPoint: { x: 20, y: 20 }, selectionCombineMode: 'intersect' }),
       { x: 60, y: 60 },
-      makeUpCtx(60, 60),
     );
     const { bounds, mask } = lastCommit();
     expect(mask[35 * DOC_W + 35]).toBe(255); // in both
@@ -575,7 +622,7 @@ describe('marquee add / subtract / intersect', () => {
   it('clears the selection when a subtract removes all of it', () => {
     selectRect(10, 10, 10, 10);
     setMarqueePreview({ kind: 'rect', rect: { x: 0, y: 0, width: 50, height: 50 } });
-    marqueeStrategy.onUp!(makeState({ startPoint: { x: 0, y: 0 }, selectionCombineMode: 'subtract' }), { x: 50, y: 50 }, makeUpCtx(50, 50));
+    marqueeStrategy.onUp!(makeState({ startPoint: { x: 0, y: 0 }, selectionCombineMode: 'subtract' }), { x: 50, y: 50 });
     expect(editorState.clearSelection).toHaveBeenCalledTimes(1);
     expect(editorState.setSelection).not.toHaveBeenCalled();
     expect(uiState.setTransform).toHaveBeenLastCalledWith(null);
@@ -583,7 +630,7 @@ describe('marquee add / subtract / intersect', () => {
 
   it('a modifier-click keeps the selection and opens no dialog', () => {
     selectRect(10, 10, 10, 10);
-    marqueeStrategy.onUp!(makeState({ startPoint: { x: 50, y: 50 }, selectionCombineMode: 'add' }), { x: 50, y: 50 }, makeUpCtx(50, 50));
+    marqueeStrategy.onUp!(makeState({ startPoint: { x: 50, y: 50 }, selectionCombineMode: 'add' }), { x: 50, y: 50 });
     expect(editorState.clearSelection).not.toHaveBeenCalled();
     expect(editorState.setSelection).not.toHaveBeenCalled();
     expect(uiState.openModal).not.toHaveBeenCalled();
@@ -593,7 +640,7 @@ describe('marquee add / subtract / intersect', () => {
   it('a plain drag still replaces without a history step', () => {
     selectRect(0, 0, 10, 10);
     setMarqueePreview({ kind: 'rect', rect: { x: 50, y: 50, width: 20, height: 20 } });
-    marqueeStrategy.onUp!(makeState({ startPoint: { x: 50, y: 50 }, selectionCombineMode: 'replace' }), { x: 70, y: 70 }, makeUpCtx(70, 70));
+    marqueeStrategy.onUp!(makeState({ startPoint: { x: 50, y: 50 }, selectionCombineMode: 'replace' }), { x: 70, y: 70 });
     const { mask } = lastCommit();
     expect(mask[5 * DOC_W + 5]).toBe(0);
     expect(editorState.pushHistoryMetadata).not.toHaveBeenCalled();

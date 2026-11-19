@@ -369,13 +369,7 @@ export function handleSelectionMove(
   STRATEGY_MAP[tool]?.onMove?.(state, canvasPos, metaKey);
 }
 
-export function handleSelectionUp(
-  state: InteractionState,
-  _canvasPos: Point,
-  screenToCanvas: (sx: number, sy: number) => Point,
-  containerRef: React.RefObject<HTMLDivElement | null>,
-  e: { clientX: number; clientY: number },
-): void {
+export function handleSelectionUp(state: InteractionState, canvasPos: Point): void {
   const tool = state.tool as SelectionToolId;
-  STRATEGY_MAP[tool]?.onUp?.(state, _canvasPos, { screenToCanvas, containerRef, event: e });
+  STRATEGY_MAP[tool]?.onUp?.(state, canvasPos);
 }
