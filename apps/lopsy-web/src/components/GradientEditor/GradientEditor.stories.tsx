@@ -10,7 +10,7 @@ const meta: Meta<typeof GradientEditor> = {
 export default meta;
 type Story = StoryObj<typeof GradientEditor>;
 
-function Stateful(initial: readonly GradientStop[]) {
+function Stateful(initial: readonly GradientStop[], barBackground?: string, label?: string) {
   const [stops, setStops] = useState<readonly GradientStop[]>(initial);
   const [selected, setSelected] = useState(0);
   return (
@@ -20,6 +20,8 @@ function Stateful(initial: readonly GradientStop[]) {
         selectedIndex={selected}
         onStopsChange={setStops}
         onSelectStop={setSelected}
+        barBackground={barBackground}
+        label={label}
       />
     </div>
   );
@@ -49,4 +51,18 @@ export const TransparentFade: Story = {
       { position: 0, color: { r: 255, g: 120, b: 50, a: 1 } },
       { position: 1, color: { r: 255, g: 120, b: 50, a: 0 } },
     ]),
+};
+
+/** Color Grading's Tone bar: stops placed along a fixed black-to-white axis. */
+export const ToneAxis: Story = {
+  render: () =>
+    Stateful(
+      [
+        { position: 0, color: { r: 20, g: 60, b: 200, a: 1 } },
+        { position: 0.5, color: { r: 128, g: 128, b: 128, a: 1 } },
+        { position: 1, color: { r: 255, g: 170, b: 60, a: 1 } },
+      ],
+      'linear-gradient(to right, #000, #fff)',
+      'Tone',
+    ),
 };

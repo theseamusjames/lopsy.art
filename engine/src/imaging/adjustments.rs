@@ -67,6 +67,9 @@ pub struct ImageAdjustmentState {
     pub cg_global: [f32; 4],
     pub cg_exponent: f32,
     pub cg_width: f32,
+    /// Tint by tone from Color Grading's tone stops, in place of the wheels.
+    pub cg_lut_texture: Option<TextureHandle>,
+    pub has_cg_lut: bool,
 }
 
 impl Default for ImageAdjustmentState {
@@ -119,6 +122,8 @@ impl Default for ImageAdjustmentState {
             cg_global: [0.0; 4],
             cg_exponent: 1.0,
             cg_width: 0.18,
+            cg_lut_texture: None,
+            has_cg_lut: false,
         }
     }
 }
@@ -204,6 +209,7 @@ pub fn params(adj: &ImageAdjustmentState, brightness: f32, doc_color_mode: u32, 
         cg_global: adj.cg_global,
         cg_exponent: adj.cg_exponent,
         cg_width: adj.cg_width,
+        has_cg_lut: flag(has_lut(adj.has_cg_lut, adj.cg_lut_texture)),
         doc_color_mode: doc_color_mode as i32,
         keep_over_white: flag(over_white == OverWhite::Kept && !rebuilds_colour),
     }
@@ -230,6 +236,7 @@ pub fn pass<'a>(
         ("u_levelsLut", has_lut(adj.has_levels, adj.levels_texture), adj.levels_texture),
         ("u_curveLut", has_lut(adj.has_curves, adj.curves_texture), adj.curves_texture),
         ("u_gradientLut", has_lut(adj.has_gradient_map, adj.gradient_map_texture), adj.gradient_map_texture),
+        ("u_cgLut", has_lut(adj.has_cg_lut, adj.cg_lut_texture), adj.cg_lut_texture),
     ];
     for (name, is_enabled, texture) in luts {
         let live = texture.filter(|&h| is_enabled && im.gpu.has_texture(h));

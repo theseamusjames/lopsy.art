@@ -399,6 +399,7 @@ uniforms! {
         pub cg_global: [f32; 4],
         pub cg_exponent: f32,
         pub cg_width: f32,
+        pub has_cg_lut: f32,
         pub doc_color_mode: i32,
         pub keep_over_white: f32,
     }

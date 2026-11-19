@@ -18,7 +18,7 @@ import type { ImageAdjustments } from '../filters/image-adjustments';
 import { buildCurvesLutRgba, isIdentityCurves } from '../filters/curves';
 import { buildLevelsLutRgba, isIdentityLevels } from '../filters/levels';
 import { nodesToLegacyAdjustments } from '../filters/adjustment-node-utils';
-import { compileColorGrade, isIdentityColorGrade } from '../filters/color-grading';
+import { compileColorGrade, compileToneStopsLut, isIdentityColorGrade } from '../filters/color-grading';
 import {
   setDocumentSize,
   setViewport,
@@ -64,6 +64,7 @@ import {
   setGroupHueSaturation,
   setGroupColorBalance,
   setGroupColorGrading,
+  setGroupColorGradingLut,
   setGroupPhotoFilter,
   setGroupBlackWhite,
   setGroupChannelMixer,
@@ -613,6 +614,9 @@ function pushGroupToEngine(
   }
   if (adj?.colorGrading && !isIdentityColorGrade(adj.colorGrading)) {
     setGroupColorGrading(engine, group.id, compileColorGrade(adj.colorGrading));
+    if (adj.colorGrading.toneStops) {
+      setGroupColorGradingLut(engine, group.id, compileToneStopsLut(adj.colorGrading.toneStops, adj.colorGrading.blending));
+    }
   }
   return childrenJson;
 }
