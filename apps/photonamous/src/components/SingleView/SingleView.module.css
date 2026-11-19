@@ -6,6 +6,11 @@
   background: var(--viewer-bg);
 }
 
+.view:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: -2px;
+}
+
 .cull {
   position: fixed;
   inset: 0;
@@ -21,8 +26,24 @@
 }
 
 .name {
+  min-width: 0;
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-ui);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .position {

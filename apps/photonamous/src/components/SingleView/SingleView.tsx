@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, EyeOff, Paintbrush, SlidersHorizontal } from 'lucide-react';
 import type { AssetId } from '@lopsy/photos-core/library/types';
 import { useAsset } from '../../app/hooks';
@@ -12,6 +12,7 @@ import { VersionStrip } from '../VersionStrip/VersionStrip';
 import { DocumentList } from '../DocumentList/DocumentList';
 import { Preview, type ZoomPoint } from '../Preview/Preview';
 import { Stars } from '../Stars/Stars';
+import { useViewFocus } from './use-view-focus';
 import styles from './SingleView.module.css';
 
 interface SingleViewProps {
@@ -27,18 +28,36 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
   // Zoom belongs to one photo; moving on fits the next one again.
   const [zoomed, setZoomed] = useState<{ id: AssetId; point: ZoomPoint } | null>(null);
   const zoom = zoomed !== null && zoomed.id === focus ? zoomed.point : null;
+  const root = useRef<HTMLDivElement>(null);
+  const headingId = useId();
+  const hintId = useId();
+  useViewFocus(root);
+  const position = index >= 0 ? `${(index + 1).toLocaleString()} of ${orderedIds.length.toLocaleString()}` : '';
 
   return (
-    <div className={`${styles.view} ${cull ? styles.cull : ''}`}>
+    <div
+      ref={root}
+      className={`${styles.view} ${cull ? styles.cull : ''}`}
+      tabIndex={-1}
+      // Cull covers the whole screen and the library behind it is inert: a modal dialog.
+      role={cull ? 'dialog' : 'region'}
+      aria-modal={cull ? true : undefined}
+      aria-label={cull ? `Cull: ${asset?.fileName ?? 'no photo'}` : undefined}
+      aria-labelledby={cull ? undefined : headingId}
+      aria-describedby={cull ? hintId : undefined}
+    >
       <div className={styles.top}>
         <Button variant="ghost" size="sm" onClick={backOut}>
           <ArrowLeft size={14} />
           {cull ? 'Leave full screen' : 'Back to the grid'}
         </Button>
-        <span className={styles.name}>{asset?.fileName ?? ''}</span>
-        <span className={styles.position}>
-          {index >= 0 && `${(index + 1).toLocaleString()} of ${orderedIds.length.toLocaleString()}`}
-        </span>
+        <h1 id={headingId} className={styles.name}>
+          {asset?.fileName ?? 'No photo'}
+        </h1>
+        <span className={styles.position}>{position}</span>
+        <p className={styles.visuallyHidden} role="status">
+          {asset ? `${asset.fileName}, ${position}` : ''}
+        </p>
       </div>
 
       <div className={styles.stage}>
@@ -82,7 +101,11 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
             {asset.setAside ? 'Bring back' : 'Set aside'}
           </Button>
           <span className={styles.spacer} />
-          {cull && <span className={styles.hint}>1–5 rate · X set aside · each moves on · Esc leaves</span>}
+          {cull && (
+            <span id={hintId} className={styles.hint}>
+              1–5 rate · X set aside · each moves on · Esc leaves
+            </span>
+          )}
           <Button
             size="sm"
             variant="ghost"
