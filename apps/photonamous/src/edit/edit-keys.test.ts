@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isPreviewStale, isTypingTarget, neighbourId, shortcutFor, type KeyInfo } from './edit-keys';
+import { isPreviewStale, isTypingTarget, neighbourId, shortcutFor, splitAfterKey, splitValueText, type KeyInfo } from './edit-keys';
 
 function key(k: string, mods: Partial<KeyInfo> = {}): KeyInfo {
   return { key: k, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, ...mods };
@@ -57,5 +57,25 @@ describe('neighbourId', () => {
     expect(neighbourId(['a', 'b', 'c'], 'b', 1)).toBe('c');
     expect(neighbourId(['a', 'b', 'c'], 'a', -1)).toBeNull();
     expect(neighbourId(['a'], 'x', 1)).toBeNull();
+  });
+});
+
+describe('splitAfterKey', () => {
+  it('steps, pages and jumps to the edges', () => {
+    expect(splitAfterKey(0.5, 'ArrowRight', false)).toBeCloseTo(0.52);
+    expect(splitAfterKey(0.5, 'ArrowLeft', true)).toBeCloseTo(0.4);
+    expect(splitAfterKey(0.5, 'PageUp', false)).toBeCloseTo(0.6);
+    expect(splitAfterKey(0.5, 'Home', false)).toBe(0);
+    expect(splitAfterKey(0.5, 'End', false)).toBe(1);
+  });
+
+  it('stays on the photo and leaves other keys alone', () => {
+    expect(splitAfterKey(0.99, 'ArrowRight', true)).toBe(1);
+    expect(splitAfterKey(0.01, 'PageDown', false)).toBe(0);
+    expect(splitAfterKey(0.5, 'Enter', false)).toBeNull();
+  });
+
+  it('reads both sides', () => {
+    expect(splitValueText(0.3)).toBe('30 % before, 70 % after');
   });
 });

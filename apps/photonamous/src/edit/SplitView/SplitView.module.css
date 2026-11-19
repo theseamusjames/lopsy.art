@@ -13,9 +13,9 @@
   position: absolute;
   left: var(--split-x);
   top: var(--split-top);
-  width: 16px;
+  width: 24px;
   height: var(--split-height);
-  margin-left: -8px;
+  margin-left: -12px;
   cursor: ew-resize;
   touch-action: none;
   outline: none;
@@ -24,7 +24,7 @@
 .divider::before {
   content: '';
   position: absolute;
-  left: 7px;
+  left: 11px;
   top: 0;
   bottom: 0;
   width: 2px;
@@ -35,7 +35,7 @@
 .divider::after {
   content: '';
   position: absolute;
-  left: 0;
+  left: 4px;
   top: 50%;
   width: 16px;
   height: 16px;

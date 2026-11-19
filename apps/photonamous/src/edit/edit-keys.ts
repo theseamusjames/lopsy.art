@@ -90,3 +90,41 @@ export const EDIT_SHORTCUTS: readonly { readonly keys: string; readonly action: 
   { keys: 'Esc', action: 'Back to the library, or cancel the tool in use' },
   { keys: '?', action: 'These shortcuts' },
 ];
+
+/** The split divider's step for an arrow key, and for Shift, Page Up and Page Down. */
+export const SPLIT_STEP = 0.02;
+export const SPLIT_LARGE_STEP = 0.1;
+
+/**
+ * Where a key puts the split divider (0 left, 1 right), or null for a key
+ * it does not take: arrows step it, Shift and Page Up/Down by more, Home
+ * and End to the photo's edges.
+ */
+export function splitAfterKey(at: number, key: string, isLarge: boolean): number | null {
+  const step = isLarge ? SPLIT_LARGE_STEP : SPLIT_STEP;
+  const clamp = (v: number) => Math.min(1, Math.max(0, v));
+  switch (key) {
+    case 'ArrowLeft':
+    case 'ArrowDown':
+      return clamp(at - step);
+    case 'ArrowRight':
+    case 'ArrowUp':
+      return clamp(at + step);
+    case 'PageDown':
+      return clamp(at - SPLIT_LARGE_STEP);
+    case 'PageUp':
+      return clamp(at + SPLIT_LARGE_STEP);
+    case 'Home':
+      return 0;
+    case 'End':
+      return 1;
+    default:
+      return null;
+  }
+}
+
+/** What the split divider reads out: how much of the photo shows before and after. */
+export function splitValueText(at: number): string {
+  const before = Math.round(Math.min(1, Math.max(0, at)) * 100);
+  return `${before} % before, ${100 - before} % after`;
+}
