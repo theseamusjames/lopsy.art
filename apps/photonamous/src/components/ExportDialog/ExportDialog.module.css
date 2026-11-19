@@ -77,16 +77,21 @@
   gap: var(--space-1);
 }
 
+/* Longhands: a select's right padding and background image are its arrow (styles/index.css). */
 .select,
 .input {
   height: 28px;
-  padding: 0 var(--space-2);
+  padding-left: var(--space-2);
   border: 1px solid var(--ph-control-edge);
   border-radius: var(--radius-sm);
-  background: var(--color-input-bg);
+  background-color: var(--color-input-bg);
   color: var(--color-text-primary);
   font-family: var(--font-ui);
   font-size: var(--font-size-md);
+}
+
+.input {
+  padding-right: var(--space-2);
 }
 
 .select:focus-visible,
