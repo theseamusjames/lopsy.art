@@ -1,13 +1,14 @@
 /**
- * Camera Raw edits (the `crs:` namespace) mapped onto our
- * recipe, both ways (spec Phase 5, for people moving from other software).
+ * The develop settings other editors write into XMP sidecars (the `crs:`
+ * namespace) mapped onto our recipe, both ways (spec Phase 5, for people
+ * moving from other software).
  *
- * Every mapping is approximate. Our controls are not Adobe's maths, so
+ * Every mapping is approximate. Our controls do not compute what theirs do, so
  * the same number gives the same direction and a similar strength, not
  * the same picture. Where the ranges differ the value is scaled or
  * clamped, as each row says.
  *
- * | Camera Raw (crs:)                    | Their range     | Recipe path                    | Mapping |
+ * | crs: property                        | Their range     | Recipe path                    | Mapping |
  * |--------------------------------------|-----------------|--------------------------------|---------|
  * | Exposure2012                         | -5..+5 EV       | tone.exposure                  | x1 |
  * | Contrast2012, Highlights2012,        | -100..100       | tone.contrast, .highlights,    | x1 |
@@ -116,7 +117,7 @@ export const CRS_SCALARS: readonly CrsScalar[] = [
 
 /**
  * Shape controls that mean something only while their effect is on, so
- * they are read and written only then: Camera Raw writes its defaults
+ * they are read and written only then: other editors write their defaults
  * (midpoint 50, grain size 25) even with no vignette, and ours differ.
  */
 const CRS_DEPENDENT: readonly { readonly when: string; readonly scalars: readonly CrsScalar[] }[] = [
@@ -145,7 +146,7 @@ export const CRS_CURVES: Readonly<Record<CurveChannel, string>> = {
   blue: 'ToneCurvePV2012Blue',
 };
 
-/** Temperatures above this are Kelvin (RAW); at or below it, Camera Raw's relative -100..100 (JPEG, TIFF). */
+/** Temperatures above this are Kelvin (RAW); at or below it, the relative -100..100 used for JPEG and TIFF. */
 const KELVIN_FLOOR = 1000;
 
 /**
@@ -153,7 +154,7 @@ const KELVIN_FLOOR = 1000;
  * shape of the engine's `rafWhiteBalanceKelvin`:
  * `kelvin = 1e6 / (miredAtZero + miredPerUnit · temperature)`, with
  * `asShotKelvin` at temperature 0. Our RAW temperature is relative to the
- * camera's as-shot balance and Camera Raw's is absolute Kelvin, so without
+ * camera's as-shot balance and a sidecar's is absolute Kelvin, so without
  * this scale a RAW sidecar's white balance cannot be mapped either way.
  */
 export interface KelvinScale {
@@ -186,7 +187,7 @@ function isUsableScale(scale: KelvinScale | null | undefined): scale is KelvinSc
 
 export type CrsValue = string | readonly string[];
 
-/** A tone curve from Camera Raw's "x, y" points (0..255); null when it cannot be read. */
+/** A tone curve from a sidecar's "x, y" points (0..255); null when it cannot be read. */
 export function curveFromCrs(value: CrsValue | undefined): CurvePoint[] | null {
   if (value === undefined) return null;
   const items = typeof value === 'string' ? [value] : value;
@@ -203,7 +204,7 @@ export function curveFromCrs(value: CrsValue | undefined): CurvePoint[] | null {
   const first = points[0];
   const last = points[points.length - 1];
   if (!first || !last) return null;
-  // Camera Raw's curves run from 0 to 255; one that stops short is held flat to the ends.
+  // Sidecar curves run from 0 to 255; one that stops short is held flat to the ends.
   if (first.x > 0) points.unshift({ x: 0, y: first.y });
   if (last.x < 1) points.push({ x: 1, y: last.y });
   if (points.length < 2 || points.length > MAX_CURVE_POINTS) return null;
@@ -218,7 +219,7 @@ export interface CrsSource {
 }
 
 /**
- * The recipe values a sidecar's Camera Raw settings ask for, by path
+ * The recipe values a sidecar's crs: settings ask for, by path
  * (unclamped: `recipeFromPaths` clamps). `kelvinScale` is the photo's, for
  * a RAW sidecar's Kelvin white balance; without it that is left as shot.
  */
@@ -249,8 +250,8 @@ export function crsToRecipePaths(src: CrsSource, kelvinScale?: KelvinScale | nul
   return out;
 }
 
-/** Detail controls Camera Raw gives a default of its own (sharpening 40, colour noise 25 on RAW) when they are missing. */
-const CAMERA_RAW_DETAIL_DEFAULTS: readonly (readonly [crs: string, path: string])[] = [
+/** Detail controls other editors give a default of their own (such as sharpening 40 and colour noise 25 on RAW) when they are missing. */
+const IMPLIED_DETAIL_DEFAULTS: readonly (readonly [crs: string, path: string])[] = [
   ['Sharpness', 'sharpness.amount'],
   ['ColorNoiseReduction', 'noise.color'],
   ['LuminanceSmoothing', 'noise.luminance'],
@@ -258,11 +259,11 @@ const CAMERA_RAW_DETAIL_DEFAULTS: readonly (readonly [crs: string, path: string]
 
 /**
  * Attributes for the detail controls `written` leaves out, at our values:
- * without them Camera Raw would add its own sharpening and noise reduction.
+ * without them another editor would add its own sharpening and noise reduction.
  */
 export function explicitDetailDefaults(recipe: Recipe, written: readonly string[]): string[] {
   const paths = recipeToPaths(recipe);
-  return CAMERA_RAW_DETAIL_DEFAULTS.filter(([crs]) => !written.some((a) => a.startsWith(`crs:${crs}=`))).map(
+  return IMPLIED_DETAIL_DEFAULTS.filter(([crs]) => !written.some((a) => a.startsWith(`crs:${crs}=`))).map(
     ([crs, path]) => `crs:${crs}="${String(paths[path])}"`,
   );
 }
@@ -293,7 +294,7 @@ function signed(value: number): string {
 }
 
 /**
- * The recipe as Camera Raw settings: attributes for everything that maps,
+ * The recipe as crs: settings: attributes for everything that maps,
  * and `rdf:Seq` elements for curves. Values at our defaults are left out.
  * A custom white balance is written as relative Temperature and Tint for
  * JPEGs, and as Kelvin for RAW files when the photo's `kelvinScale` is
@@ -314,7 +315,7 @@ export function recipeToCrs(
   }
   for (const { when, scalars } of CRS_DEPENDENT) {
     if (paths[when] === 0) continue;
-    // All of them, defaults included: Camera Raw's defaults are not ours.
+    // All of them, defaults included: other editors' defaults are not ours.
     for (const { crs, path } of scalars) {
       const value = paths[path];
       if (typeof value === 'number') attributes.push(`crs:${crs}="${signed(Math.round(value))}"`);

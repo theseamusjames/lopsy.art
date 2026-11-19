@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MemoryAdapter } from '../storage/memory-adapter';
 import type { StorageAdapter } from '../storage/types';
-import { CAMERA_RAW_XMP, REJECTED_CROPPED_XMP } from '../xmp/test-support/samples';
+import { OTHER_EDITOR_XMP, REJECTED_CROPPED_XMP } from '../xmp/test-support/samples';
 import { startImportFromStorage } from './from-storage';
 import { startImport } from './importer';
 import { buildJpeg, buildTiff } from './test-support/builders';
@@ -45,10 +45,10 @@ describe('XMP sidecars at import', () => {
     const { session, recipes, marks } = await setup();
     const files = [
       new File([jpegBytes(1, 6)], 'DSCF1.JPG'),
-      new File([CAMERA_RAW_XMP], 'DSCF1.xmp'),
+      new File([OTHER_EDITOR_XMP], 'DSCF1.xmp'),
       new File([jpegBytes(2)], 'DSCF2.JPG'),
       new File([REJECTED_CROPPED_XMP], 'DSCF2.JPG.xmp'),
-      new File([CAMERA_RAW_XMP], 'orphan.xmp'),
+      new File([OTHER_EDITOR_XMP], 'orphan.xmp'),
     ];
     const result = await startImport(files, { session, previewRenderer: renderer }).finished;
     expect(result.items.map((i) => [i.state, i.state === 'done' ? null : i.error])).toEqual([
@@ -78,7 +78,7 @@ describe('XMP sidecars at import', () => {
 
   it('leaves sidecars unapplied when asked, still never importing them', async () => {
     const { session, marks } = await setup();
-    const files = [new File([jpegBytes(1)], 'A.JPG'), new File([CAMERA_RAW_XMP], 'A.xmp')];
+    const files = [new File([jpegBytes(1)], 'A.JPG'), new File([OTHER_EDITOR_XMP], 'A.xmp')];
     const result = await startImport(files, { session, previewRenderer: renderer, options: { applySidecars: false } }).finished;
     expect(result.items.map((i) => [i.state, i.state === 'done' ? null : i.error])).toEqual([
       ['done', null],
@@ -90,7 +90,7 @@ describe('XMP sidecars at import', () => {
   it('applies sidecars picked from Drive', async () => {
     const { adapter, root, session, marks } = await setup();
     const photo = await adapter.createFile({ parentId: root.id, name: 'B.JPG', mimeType: 'image/jpeg' }, new Blob([jpegBytes(3)]));
-    const xmp = await adapter.createFile({ parentId: root.id, name: 'B.xmp', mimeType: 'application/rdf+xml' }, new Blob([CAMERA_RAW_XMP]));
+    const xmp = await adapter.createFile({ parentId: root.id, name: 'B.xmp', mimeType: 'application/rdf+xml' }, new Blob([OTHER_EDITOR_XMP]));
     const result = await startImportFromStorage([photo.id, xmp.id], { session, previewRenderer: renderer }).finished;
     expect(result.items.map((i) => i.state)).toEqual(['done', 'skipped']);
     expect(session.getView().assets.get(result.items[0]?.assetId ?? '')?.keywords).toContain('Boats');

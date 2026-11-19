@@ -1502,7 +1502,7 @@ tablet layout, and print.
 | Risk | Mitigation |
 |---|---|
 | Camera coverage. A RAW editor that reads only RAF and DNG covers few cameras. | Say so at sign-up; document converting to DNG; make formats a Phase 6 priority (open question 3). |
-| Licences. Lopsy is MIT with the Commons Clause, which adds a restriction the GPL forbids, so GPL code (darktable, RawTherapee) cannot be used. LGPL decoders need a review before use. | Implement from papers and specifications; record the source of camera data as `base_curves.rs` does. |
+| Licences. Lopsy is MIT with the Commons Clause, which adds a restriction the GPL forbids, so GPL code, which includes the main open-source RAW developers, cannot be used. LGPL decoders need a review before use. | Implement from papers and specifications; record the source of camera data as `base_curves.rs` does. |
 | Google changes quotas, scopes or the token model; verification takes time | Keep everything behind `photos-core`; start brand verification in Phase 2; re-check Appendix A at each phase. |
 | A sync bug loses or corrupts edits | An append-only journal; property tests; never deleting another device's files; snapshots kept three deep; Rebuild from Drive. |
 | Users run out of Drive space; RAWs are 25 to 60 MB each | Show quota before import; warn at 90 %; pause uploads cleanly on `storageQuotaExceeded`. |
@@ -1625,7 +1625,7 @@ feature: `apps/photonamous/FEATURES.md`. How the library database works:
 |---|---|
 | 5.1 First run | Three kinds of storage: Google Drive (GIS token model, `drive.file`), a folder on this computer (Chromium) and this browser (OPFS). Reconnecting checks it is the same Google account. |
 | 5.2 Library | Grid (sizes, sorting, windowed for large libraries), Single, Compare and Cull. Ratings, labels, set aside, titles, captions, keywords, albums (whole photos or single versions), the Info panel. Filters with counts, text search, saved searches, dates, imports, bursts. Stacks of RAW+JPEG pairs, versions and Lopsy documents. Library undo (⌘Z) for marks, keywords, albums, deletes and versions. Delete to trash and restore. Check library: orphans, missing, trashed, changed and left-over files, with repair. |
-| 5.3, 6.8 Import | Files, folders, and Add from Google Drive (Picker). Duplicates by SHA-256 (named before importing), RAW+JPEG pairs, embedded previews, EXIF, XMP sidecars with Camera Raw's develop settings mapped (`xmp/crs-mapping.ts`), a preset, album and keywords to apply. Staged in OPFS, resumable uploads with checksum verification, retry with backoff, Retry for parked items. Survives a reload; one tab at a time claims an import. |
+| 5.3, 6.8 Import | Files, folders, and Add from Google Drive (Picker). Duplicates by SHA-256 (named before importing), RAW+JPEG pairs, embedded previews, EXIF, XMP sidecars with their develop settings (`crs:`) mapped (`xmp/crs-mapping.ts`), a preset, album and keywords to apply. Staged in OPFS, resumable uploads with checksum verification, retry with backoff, Retry for parked items. Survives a reload; one tab at a time claims an import. |
 | 5.4, 6.10 Edit | Profile (Standard and the Fujifilm looks from the base curves, Neutral, Monochrome), White balance (As shot, Auto, the camera's presets, picker, Kelvin for RAW), Tone with Auto, Curves (luminance, red, green, blue), Color with Color by hue, Color Grading, Local contrast (large details, small details, haze), Sharpness & noise, Framing (crop with aspect presets, straighten with a Level tool, rotate, flip both ways), Finish (vignette amount, midpoint, roundness, feather; grain), Areas (up to 8 linear or radial gradients with their own tone, white balance and saturation). Histogram with clipping warnings (J, and Alt while dragging Blacks, Whites or sharpening). History with click-back, Versions, Presets (built-in and the user's, previewed on hover), Copy and Paste edits, Before and after (toggle and split), filmstrip. Edits run on a working image of at most 4096 px; full resolution loads at 50 % zoom and for output. |
 | 5.5, 6.11 Export | JPEG, PNG (8 or 16-bit) and TIFF (16-bit, Deflate, ICC), in sRGB or Display P3. Size by long edge, short edge or megapixels, with "Don't enlarge". Metadata all, copyright only or none, with location removed by default. File-name templates. To `Exports/` in the library, a download, or a ZIP. Export presets (built-in and the user's). Show in Drive and share links, only after the user confirms. |
 | 5.6, 6.12 Round trips | Edit in Lopsy (16-bit), Save to Photonamous (`.lopsy` v3 with a 16-bit render, stacked with the photo, updated in place only at a matching revision, otherwise a copy), Add to Photonamous from Lopsy's File menu, and Grade in Photonamous for a layer (L5). Lopsy offers none of this unless its build sets `VITE_PHOTONAMOUS_URL`; without it Lopsy is unchanged, and Save Project still writes v2. |
@@ -1646,8 +1646,8 @@ feature: `apps/photonamous/FEATURES.md`. How the library database works:
   reasons.
 - **The engine runs on the main thread** (spike S4 was not done). RAF
   decoding runs in workers.
-- **Curves' luminance channel is Lopsy's RGB master curve**, which shifts
-  saturation as Photoshop's RGB curve does.
+- **Curves' luminance channel is Lopsy's RGB master curve**, so it shifts
+  saturation as well as brightness.
 - **Color Grading has sliders, not drawn wheels.** There is no Black &
   White per-hue mix.
 - **Presets are ordinary fields on new IDs**, not a `preset.add` op.
@@ -1658,7 +1658,7 @@ feature: `apps/photonamous/FEATURES.md`. How the library database works:
   EXIF. There is no output sharpening.
 - **Lopsy's own Save Project** stays at `.lopsy` v2 (8-bit); v3 is written
   only for Photonamous.
-- **White balance in Camera Raw sidecars** maps for JPEG, PNG and TIFF.
+- **White balance from sidecars' develop settings** maps for JPEG, PNG and TIFF.
   For RAW files it needs the photo's own Kelvin scale, which the import
   doesn't pass yet, so RAW sidecars keep the as-shot white balance.
 - **⌘Z reaches a delete only right after it** (or through the message's

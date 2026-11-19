@@ -1,6 +1,6 @@
 /**
  * Writes an XMP sidecar for an asset: rating, label, keywords, title and
- * caption in the standard namespaces; the basic edits as Camera Raw
+ * caption in the standard namespaces; the basic edits as crs: develop
  * settings (crs-mapping.ts, the same approximate mapping read.ts uses); and
  * the full recipe in our namespace, which reads back exactly.
  */

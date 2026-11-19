@@ -1,6 +1,6 @@
 /**
  * Sidecars for people moving to other software: one `.xmp` per photo,
- * named `<base name>.xmp` as Camera Raw and Capture One expect, or
+ * named `<base name>.xmp`, where other editors look for it, or
  * `<file name>.xmp` when two photos share a base name (a RAW+JPEG pair).
  */
 

@@ -160,13 +160,13 @@ is `docs/photonamous-spec.md`; running and setup are in
 - **Edits to start from**: none ("as the camera took them") or a preset.
 - **XMP sidecars.** A `.xmp` picked or dropped with its photo
   (`<name>.xmp` or `<name>.<ext>.xmp`) is not imported as a file: its
-  rating, label, title, caption, keywords and Camera Raw edits
+  rating, label, title, caption, keywords and develop settings
   (`crs:`, mapped approximately onto the recipe: tone, presence, detail,
   curves, colour by hue, colour grading, crop and straighten, vignette and
   grain) are applied to the photo it belongs to, also when that photo is
   already in the library. White balance comes across for JPEG, PNG and
   TIFF photos; a RAW file keeps its as-shot white balance, because
-  Camera Raw's Kelvin values only map through the photo's own scale.
+  a sidecar's Kelvin values only map through the photo's own scale.
 - Each file is hashed, uploaded into `Originals/<year>/<month>/`, checked
   against its hash, and added with its metadata (capture time,
   orientation, camera, lens, exposure, GPS). Previews (512 and 2048 px)

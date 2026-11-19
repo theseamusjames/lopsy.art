@@ -1,6 +1,6 @@
-/** Hand-written sidecars in the shapes Camera Raw and darktable write. */
+/** Hand-written sidecars in the shapes other editors write. */
 
-export const CAMERA_RAW_XMP = `<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 7.0-c000 1.000000, 0000/00/00-00:00:00        ">
+export const OTHER_EDITOR_XMP = `<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 7.0">
  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
   <rdf:Description rdf:about=""
     xmlns:xmp="http://ns.adobe.com/xap/1.0/"
@@ -10,7 +10,7 @@ export const CAMERA_RAW_XMP = `<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adob
     xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/"
    xmp:Rating="4"
    xmp:Label="Green"
-   xmp:CreatorTool="Adobe Photoshop Camera Raw 16.0 (Macintosh)"
+   xmp:CreatorTool="Example Editor 1.0"
    tiff:Orientation="6"
    crs:Version="16.0"
    crs:ProcessVersion="11.0"

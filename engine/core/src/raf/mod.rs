@@ -399,8 +399,7 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
         raf_log!("[RAF] decompressing Fujifilm compressed strip");
         Some(compression::decompress_fuji_strip(pixel_data, raw_w as u32, raw_h as u32, &base_pat_for_decompress)
             .map_err(|e| format!("This camera's compressed RAW format isn't supported yet ({e}). \
-                Set the camera to \"Uncompressed\" RAW, or convert to DNG \
-                with Adobe DNG Converter."))?)
+                Set the camera to \"Uncompressed\" RAW, or convert it to DNG."))?)
     } else {
         let expected_bytes = raw_w * raw_h * 2;
         if pixel_bytes < expected_bytes {
@@ -442,7 +441,7 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
         return Err(
             "This camera's compressed RAW format isn't supported yet (the decoded \
              data has no signal). Set the camera to \"Uncompressed\" RAW, or convert \
-             to DNG with Adobe DNG Converter.".into()
+             it to DNG.".into()
         );
     }
 

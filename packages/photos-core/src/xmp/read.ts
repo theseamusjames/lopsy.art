@@ -2,16 +2,16 @@
  * Reads XMP sidecars written by other editors (and by us): marks,
  * keywords, title, caption, and edits.
  *
- * Camera Raw edits are mapped by the table in crs-mapping.ts, which is an
- * approximation throughout. On top of it, here:
+ * Other editors' develop settings (`crs:`) are mapped by the table in
+ * crs-mapping.ts, which is an approximation throughout. On top of it, here:
  *
- * | Camera Raw / tiff          | Range        | Recipe path       | Mapping |
+ * | crs: / tiff                | Range        | Recipe path       | Mapping |
  * |----------------------------|--------------|-------------------|---------|
  * | CropLeft/Top/Right/Bottom  | 0..1         | framing.crop      | when HasCrop, CropAngle 0 and the photo is unrotated |
  * | tiff:Orientation vs file   | 1, 6, 3, 8   | framing.rotate    | the quarter turns between them |
  *
  * With a CropAngle the angle maps to framing.angle and the crop is left
- * out: Camera Raw's turned crop rectangle has no exact form in ours, which
+ * out: their turned crop rectangle has no exact form in ours, which
  * crops the straightened image to its largest upright rectangle.
  */
 
@@ -56,9 +56,9 @@ export interface XmpData {
   readonly caption: string | null;
   /** Our own recipe, exactly as written by `writeXmp`; null when the sidecar has none. */
   readonly recipe: Recipe | null;
-  /** Approximate edits from Camera Raw settings, by recipe path (crs-mapping.ts). */
+  /** Approximate edits from the sidecar's crs: settings, by recipe path (crs-mapping.ts). */
   readonly edits: Readonly<Record<string, RecipeLeaf>>;
-  /** Camera Raw crop, normalized to the unrotated image; null without a plain crop. */
+  /** The crs: crop, normalized to the unrotated image; null without a plain crop. */
   readonly crop: CropRect | null;
   /** tiff:Orientation, when the sidecar has one. */
   readonly orientation: number | null;
@@ -205,7 +205,7 @@ const QUARTER_TURNS: Readonly<Record<number, number>> = { 1: 0, 6: 90, 3: 180, 8
 
 /**
  * The recipe a sidecar asks for on a photo with EXIF `fileOrientation`:
- * ours when present (exact), else the Camera Raw mapping on the default
+ * ours when present (exact), else the crs: mapping on the default
  * recipe; null when the sidecar has no edits.
  */
 export function recipeFromXmp(data: XmpData, fileOrientation: number): Recipe | null {
@@ -219,7 +219,7 @@ export function recipeFromXmp(data: XmpData, fileOrientation: number): Recipe | 
     paths['framing.rotate'] = (((to ?? 0) - (from ?? 0)) % 360 + 360) % 360;
     changed = true;
   }
-  // Camera Raw crops are relative to the unrotated image; ours to the oriented one, so only the trivial case maps.
+  // crs: crops are relative to the unrotated image; ours to the oriented one, so only the trivial case maps.
   if (data.crop && fileOrientation === 1 && (data.orientation ?? 1) === 1) {
     paths['framing.crop'] = data.crop;
     changed = true;

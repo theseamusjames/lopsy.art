@@ -20,7 +20,7 @@ instead of repeating it. The app's rules are in
 | `export/` | The export job ([6.11](../../docs/photonamous-spec.md#611-export)), export settings and presets, the EXIF writer, file names and zip. Rendering is injected. |
 | `cache/` | Originals and previews on the device ([6.7](../../docs/photonamous-spec.md#67-storage-on-the-device)): OPFS blob caches, checked downloads, and Keep originals. |
 | `search/` | Saved-search rules, text search, facets, dates and bursts over a `LibraryView`. |
-| `xmp/` | Reading and writing XMP sidecars, including the Camera Raw `crs:` edit mapping (`crs-mapping.ts`, a commented table). |
+| `xmp/` | Reading and writing XMP sidecars, including the mapping of other editors' `crs:` develop settings (`crs-mapping.ts`, a commented table). |
 
 ## On storage
 
