@@ -28,6 +28,12 @@ export function discardDeferredHistoryEntry(layerId: string): boolean {
   return true;
 }
 
+/** Whether the next history change would record a pending entry first. */
+export function hasDeferredHistoryEntry(layers: readonly { readonly id: string }[]): boolean {
+  const layerId = deferred?.layerId;
+  return layerId !== undefined && layers.some((l) => l.id === layerId);
+}
+
 /** Remove and return the pending entry, if its layer is still in the document. */
 export function takeDeferredHistoryEntry(
   layers: readonly { readonly id: string }[],
