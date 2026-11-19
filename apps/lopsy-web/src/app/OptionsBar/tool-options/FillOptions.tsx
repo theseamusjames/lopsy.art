@@ -1,5 +1,5 @@
 import { useToolSettingsStore } from '../../tool-settings-store';
-import { Slider } from '../../../components/Slider/Slider';
+import { Slider } from '@lopsy/ui/Slider';
 import styles from '../OptionsBar.module.css';
 
 export function FillOptions() {

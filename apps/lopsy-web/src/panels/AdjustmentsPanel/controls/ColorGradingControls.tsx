@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ColorWheel } from '../../../components/ColorWheel/ColorWheel';
-import { Slider } from '../../../components/Slider/Slider';
+import { Slider } from '@lopsy/ui/Slider';
 import { DEFAULT_GRADE_BLENDING } from '../../../filters/color-grading';
 import type { ColorGradeWheel, ColorGradingNode } from '../../../types/adjustment-nodes';
 import type { NodeControlProps } from './types';

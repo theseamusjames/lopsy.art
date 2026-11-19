@@ -1,6 +1,6 @@
 import { useToolSettingsStore } from '../../tool-settings-store';
 import { useEditorStore } from '../../editor-store';
-import { Slider } from '../../../components/Slider/Slider';
+import { Slider } from '@lopsy/ui/Slider';
 import { docScaledMax } from '../../../utils/slider-ranges';
 
 export function SprayOptions() {

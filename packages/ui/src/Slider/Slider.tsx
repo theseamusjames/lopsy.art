@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react';
-import { clamp } from '../../utils/math';
 import styles from './Slider.module.css';
 
 interface SliderProps {
@@ -17,6 +16,10 @@ interface SliderProps {
   onDragStart?: () => void;
   showValue?: boolean;
   suffix?: string;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
 function posLog(v: number, min: number, max: number): number {

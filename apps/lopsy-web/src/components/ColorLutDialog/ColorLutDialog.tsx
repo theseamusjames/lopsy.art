@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { Upload } from 'lucide-react';
-import { Slider } from '../Slider/Slider';
+import { Slider } from '@lopsy/ui/Slider';
 import { useDraggablePanel } from '../../app/hooks/useDraggablePanel';
 import { getBuiltinPresets, parseCubeFile } from '../../filters/color-lut';
 import type { LutPreset } from '../../filters/color-lut';

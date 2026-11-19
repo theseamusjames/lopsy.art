@@ -3,7 +3,7 @@ import { useDraggablePanel } from '../../app/hooks/useDraggablePanel';
 import { useToolSettingsStore, abrBrushToPreset } from '../../app/tool-settings-store';
 import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
-import { Slider } from '../Slider/Slider';
+import { Slider } from '@lopsy/ui/Slider';
 import { AngleControl } from './AngleControl';
 import { BrushDabPreview } from './BrushDabPreview';
 import { BrushThumbnail } from './BrushThumbnail';

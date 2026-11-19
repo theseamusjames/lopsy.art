@@ -1,7 +1,7 @@
 import { AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { useEditorStore } from '../../app/editor-store';
-import { Slider } from '../../components/Slider/Slider';
+import { Slider } from '@lopsy/ui/Slider';
 import { FontPicker } from '../../components/FontPicker/FontPicker';
 import { useFontEntry } from '../../app/local-fonts-store';
 import { extractFamilyName } from '../../utils/font-loader';

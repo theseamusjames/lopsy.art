@@ -1,5 +1,5 @@
 import { AspectRatioControl } from './AspectRatioControl';
-import { Slider } from '../../../components/Slider/Slider';
+import { Slider } from '@lopsy/ui/Slider';
 import { useToolSettingsStore } from '../../tool-settings-store';
 
 export function MarqueeOptions() {

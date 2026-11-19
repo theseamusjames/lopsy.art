@@ -1,4 +1,4 @@
-import { Slider } from '../../../components/Slider/Slider';
+import { Slider } from '@lopsy/ui/Slider';
 import type { SaturationNode } from '../../../types/adjustment-nodes';
 import type { NodeControlProps } from './types';
 import styles from '../AdjustmentsPanel.module.css';

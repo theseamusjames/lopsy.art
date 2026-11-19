@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowUpDown } from 'lucide-react';
 import { ColorSwatch } from '../../components/ColorSwatch/ColorSwatch';
 import { ColorPicker } from '../../components/ColorPicker/ColorPicker';
-import { Slider } from '../../components/Slider/Slider';
+import { Slider } from '@lopsy/ui/Slider';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { rgbToHex6, hexToRgb } from '../../utils/color';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
