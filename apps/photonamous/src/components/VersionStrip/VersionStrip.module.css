@@ -91,6 +91,37 @@
   padding: 0 var(--space-1);
 }
 
+/* More versions than chips: the dropdown, then the chosen version's actions. The dropdown narrows before New version moves down. */
+.current {
+  display: inline-flex;
+  flex: 1 1 160px;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: max-content;
+}
+
+/* The arrow and the right padding are the app's for every select. */
+.select {
+  min-width: 6rem;
+  max-width: 16rem;
+  height: 26px;
+  padding-left: var(--space-2);
+  margin-right: var(--space-1);
+  border: 1px solid var(--ph-control-edge);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-input-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  text-overflow: ellipsis;
+}
+
+.select:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 1px;
+}
+
 .add {
   flex: none;
 }

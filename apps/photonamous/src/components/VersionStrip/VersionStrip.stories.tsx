@@ -11,7 +11,7 @@ const meta: Meta<typeof VersionStrip> = {
 export default meta;
 type Story = StoryObj<typeof VersionStrip>;
 
-const [first, second] = fakeAssetIds(2);
+const [first, second, third] = fakeAssetIds(3);
 
 /** Gives a story photo `count` versions in all. The story library is shared, so only the ones it lacks are made. */
 function withVersions(assetId: string, count: number): void {
@@ -33,4 +33,10 @@ export const ScrollingChips: Story = {
       </div>
     ),
   ],
+};
+
+/** More than four: a dropdown, with the chosen version's actions beside it. */
+export const Dropdown: Story = {
+  args: { itemId: third ?? '' },
+  loaders: [() => withVersions(third ?? '', 6)],
 };

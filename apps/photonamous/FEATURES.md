@@ -89,11 +89,13 @@ is `docs/photonamous-spec.md`; running and setup are in
   grid. In a narrow window the bars wrap
   rather than overlap: the edit buttons go under the labels and stars, and
   Set aside under the versions.
-- **Versions in Single view**: chips (choose one; rename it with its
-  pencil or a double-click, Enter saves and Escape keeps the old name;
-  **Show** it for the photo; delete it, never the last), then **New
-  version**. When the bar has no room for them, the chips scroll sideways
-  on their own and never run under Set aside.
+- **Versions in Single view**: up to four are chips (choose one; rename it
+  with its pencil or a double-click, Enter saves and Escape keeps the old
+  name; **Show** it for the photo; delete it, never the last). When the
+  bar has no room for them, the chips scroll sideways on their own and
+  never run under Set aside. With five or more, a dropdown chooses the
+  version and the chosen one's Rename, Show and Delete sit beside it.
+  **New version** is there either way.
 - **Compare** (C): two to four selected photos side by side.
 - **Cull** (F): full screen, one photo at a time, laid out as Single view,
   with the keys' hint beside Set aside; rating (1–5) or setting aside (X)
@@ -133,9 +135,9 @@ is `docs/photonamous-spec.md`; running and setup are in
 - **New version**: asks for a name ("Version 2" offered, selected), then
   makes another edit of the same photo starting from the current one; the
   original file is untouched. The photo's stack opens to show its
-  versions as their own tiles. Single view lists them: switch, rename,
-  **Show** (the one the photo shows everywhere), delete (the shown one
-  too, when another is left).
+  versions as their own tiles. Single view lists them, as chips or, past
+  four, a dropdown: switch, rename, **Show** (the one the photo shows
+  everywhere), delete (the shown one too, when another is left).
 - **Albums** hold whole photos or single versions: with a version's tile
   selected, the details panel adds that version.
 - **Copy edits…** (⇧⌘C) asks which groups to copy; **Paste edits**

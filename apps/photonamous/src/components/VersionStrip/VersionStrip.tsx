@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { CopyPlus, Pencil, Star, Trash2 } from 'lucide-react';
 import type { Version, VersionId } from '@lopsy/photos-core/library/types';
 import { useLibraryView, useSession } from '../../app/hooks';
@@ -9,6 +9,9 @@ import { selectOne } from '../../library/selection';
 import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
 import styles from './VersionStrip.module.css';
+
+/** Up to this many versions show as chips; more are chosen from a dropdown. */
+const MAX_VERSION_CHIPS = 4;
 
 /** How far past a chip's edge the chips scroll to bring it into sight, so its focus ring shows too. */
 const SCROLL_MARGIN = 4;
@@ -22,8 +25,9 @@ interface VersionStripProps {
 
 /**
  * A photo's versions: switch between them, choose the shown one, add, rename
- * and delete (never the last). They are chips, which scroll sideways on
- * their own when there is no room.
+ * and delete (never the last). Up to four are chips, which scroll sideways
+ * on their own when there is no room; more are a dropdown with the chosen
+ * version's actions beside it.
  */
 export function VersionStrip({ itemId, className }: VersionStripProps) {
   const session = useSession();
@@ -37,7 +41,9 @@ export function VersionStrip({ itemId, className }: VersionStripProps) {
   /** Set when a rename ends from the keyboard: focus goes back to that version. */
   const refocus = useRef<VersionId | null>(null);
   const cancelled = useRef(false);
+  const selectId = useId();
   const current = versionId ?? asset?.primaryVersionId ?? null;
+  const isMenu = versions.length > MAX_VERSION_CHIPS;
 
   // The chosen chip stays in sight when the chips scroll. Only the chips scroll: scrollIntoView would move the page too.
   useEffect(() => {
@@ -48,18 +54,19 @@ export function VersionStrip({ itemId, className }: VersionStripProps) {
     const inner = chip.getBoundingClientRect();
     if (inner.left < outer.left) box.scrollLeft -= outer.left - inner.left + SCROLL_MARGIN;
     else if (inner.right > outer.right) box.scrollLeft += inner.right - outer.right + SCROLL_MARGIN;
-  }, [current, versions.length]);
+  }, [current, versions.length, isMenu]);
 
   useEffect(() => {
     const id = refocus.current;
     if (renaming !== null || id === null) return;
     refocus.current = null;
-    const target = root.current?.querySelector(`[data-version-id="${CSS.escape(id)}"]`);
+    const target = isMenu ? root.current?.querySelector('select') : root.current?.querySelector(`[data-version-id="${CSS.escape(id)}"]`);
     if (target instanceof HTMLElement) target.focus();
-  }, [renaming]);
+  }, [renaming, isMenu]);
 
   if (!asset || current === null) return null;
   const choose = (id: VersionId) => useUi.getState().setSelection(selectOne(itemForVersion(view, asset.id, id)));
+  const chosen = versions.find((v) => v.id === current);
 
   const renameField = (v: Version) => (
     <input
@@ -130,10 +137,32 @@ export function VersionStrip({ itemId, className }: VersionStripProps) {
     </div>
   );
 
+  const dropdown =
+    chosen && renaming === chosen.id ? (
+      renameField(chosen)
+    ) : (
+      <span className={styles.current}>
+        <select id={selectId} className={styles.select} value={current} onChange={(e) => choose(e.target.value)}>
+          {versions.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.name}
+            </option>
+          ))}
+        </select>
+        {chosen && actions(chosen)}
+      </span>
+    );
+
   return (
     <div ref={root} className={[styles.strip, className].filter(Boolean).join(' ')} role="group" aria-label="Versions">
-      <span className={styles.title}>Versions</span>
-      {chipList}
+      {isMenu ? (
+        <label className={styles.title} htmlFor={selectId}>
+          Versions
+        </label>
+      ) : (
+        <span className={styles.title}>Versions</span>
+      )}
+      {isMenu ? dropdown : chipList}
       <Button size="sm" variant="ghost" className={styles.add} onClick={newVersion}>
         <CopyPlus size={13} />
         New version

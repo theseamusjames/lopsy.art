@@ -5,7 +5,8 @@ import { generatedJpeg, importFiles } from './library';
  * The Single view's layout, through the UI: the back link at the left edge;
  * the labels, stars and edit buttons left, centre and right in a bar above
  * the photo; the versions in a bar below it with Set aside at its right end,
- * as chips that scroll on their own when there is no room.
+ * as chips that scroll on their own up to four versions and as a dropdown
+ * beyond.
  */
 
 test.use({ actionTimeout: 15_000 });
@@ -89,6 +90,67 @@ test('the back link is at the left edge, and labels, stars and edit buttons sit 
   expect(Math.abs(versions.left - (frame.left + EDGE))).toBeLessThanOrEqual(1);
   expect(Math.abs(setAside.right - (frame.right - EDGE))).toBeLessThanOrEqual(1);
   expect(Math.abs(setAside.centerY - versions.centerY)).toBeLessThanOrEqual(2);
+});
+
+test('more than four versions become a dropdown; switching works and the actions apply to the chosen version', async ({ page }) => {
+  test.setTimeout(240_000);
+  const view = await openPhotoInSingleView(page, 'many.jpg');
+  const strip = view.getByRole('group', { name: 'Versions' });
+  const chips = strip.locator('button[aria-pressed]');
+  const dropdown = strip.getByRole('combobox', { name: 'Versions' });
+
+  // Up to four, each version is a chip.
+  for (const name of ['Second', 'Third', 'Fourth']) await addVersion(page, name);
+  await expect(chips).toHaveText(['Original', 'Second', 'Third', 'Fourth']);
+  await expect(dropdown).toHaveCount(0);
+
+  // The fifth turns them into a dropdown, showing the new version; New version stays.
+  await addVersion(page, 'Fifth');
+  await expect(dropdown).toBeVisible();
+  await expect(chips).toHaveCount(0);
+  await expect(dropdown.locator('option')).toHaveText(['Original', 'Second', 'Third', 'Fourth', 'Fifth']);
+  await expect(dropdown.locator('option:checked')).toHaveText('Fifth');
+  await expect(strip.getByRole('button', { name: 'New version' })).toBeVisible();
+  await page.screenshot({ path: 'test-results/single-view-versions-dropdown.png' });
+
+  // Choosing one shows it, with its own actions beside the dropdown.
+  await dropdown.selectOption({ label: 'Second' });
+  await expect(dropdown.locator('option:checked')).toHaveText('Second');
+  await expect(strip.getByRole('button', { name: 'Rename Second' })).toBeVisible();
+  await expect(strip.getByRole('button', { name: 'Show Second for this photo' })).toBeVisible();
+  await expect(strip.getByRole('button', { name: 'Delete Second' })).toBeVisible();
+  await expect(strip.getByRole('button', { name: /Fifth/ })).toHaveCount(0);
+
+  // Rename: Escape keeps the name (and the view), Enter saves it and gives focus back to the dropdown.
+  await strip.getByRole('button', { name: 'Rename Second' }).click();
+  const nameBox = strip.getByRole('textbox', { name: 'Version name' });
+  await expect(nameBox).toBeFocused();
+  await nameBox.fill('Not this');
+  await nameBox.press('Escape');
+  await expect(view).toBeVisible();
+  await expect(dropdown.locator('option:checked')).toHaveText('Second');
+  await strip.getByRole('button', { name: 'Rename Second' }).click();
+  await nameBox.fill('Second, warmer');
+  await nameBox.press('Enter');
+  await expect(dropdown.locator('option:checked')).toHaveText('Second, warmer');
+  await expect(dropdown).toBeFocused();
+
+  // Show for this photo: the chosen version becomes the shown one.
+  await strip.getByRole('button', { name: 'Show Second, warmer for this photo' }).click();
+  await expect(strip.getByText('Shown', { exact: true })).toBeVisible();
+  await expect(dropdown.locator('option:checked')).toHaveText('Second, warmer');
+
+  // Delete takes only the chosen version; at four, the chips come back.
+  await dropdown.selectOption({ label: 'Third' });
+  await expect(strip.getByRole('button', { name: 'Delete Third' })).toBeVisible();
+  await strip.getByRole('button', { name: 'Delete Third' }).click();
+  await expect(chips).toHaveText(['Original', 'Second, warmer', 'Fourth', 'Fifth']);
+  await expect(dropdown).toHaveCount(0);
+
+  // The photo shows the version that was made the shown one; the grid's tile says so.
+  await view.getByRole('button', { name: 'Back to the grid' }).click();
+  await expect(page.locator('[role="gridcell"][title="many.jpg (Original)"]')).toBeVisible();
+  await expect(page.locator('[role="gridcell"][title="many.jpg (Third)"]')).toHaveCount(0);
 });
 
 test('at a narrow width the version chips scroll on their own and never cover Set aside', async ({ page }) => {
