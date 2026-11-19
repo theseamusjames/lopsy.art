@@ -6,6 +6,7 @@ import {
   peekLayerContentRectLocal,
   readLayerContentRectLocal,
 } from './layer-content-rect';
+import { invalidateCachedSnapshot } from './store/history-slice';
 
 /**
  * A raster layer's bounds after a crop to its content: `[x, y, width,
@@ -15,6 +16,9 @@ export type CroppedBounds = ArrayLike<number>;
 
 function cropTo(engine: Engine, layerId: string, content: Rect | null): CroppedBounds {
   if (!content) return [];
+  // A snapshot cached at a stroke's pointer-up holds the uncropped texture;
+  // the next history entry would pair it with the cropped bounds (#1792).
+  invalidateCachedSnapshot(layerId);
   const bounds = wasmCropLayerToContent(engine, layerId, content.x, content.y, content.width, content.height);
   const width = bounds[2] ?? 0;
   const height = bounds[3] ?? 0;
