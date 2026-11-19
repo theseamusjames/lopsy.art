@@ -18,7 +18,12 @@
  *   runError(page, invocation)     Run expecting a CommandError; returns it.
  *   describe(page, surface?)       The registry's command descriptions.
  *   snapshot(page)                 A JSON picture of the document with no
- *                                  ids or times in it, for toEqual.
+ *                                  ids or times in it, for toEqual: layers
+ *                                  (with group adjustment nodes), selection,
+ *                                  history, a hash of the export composite,
+ *                                  and the active tool and colours.
+ *   editorState(page)              The active tool and the colours.
+ *   compositeHash(page)            Hash of the export composite.
  *   compareUiAndApi(page, {...})   Run one operation through the UI and
  *                                  through a command on identical fresh
  *                                  documents and assert the snapshots match.
@@ -172,6 +177,13 @@ export interface SnapshotLayer {
   pixels: string | null;
   /** Hash of the layer's mask as the GPU holds it (mask.data lags the GPU); null when there is none. */
   mask: string | null;
+  /** A group's adjustment nodes as the store holds them, without ids; null for other layers. */
+  adjustments: SnapshotAdjustments | null;
+}
+
+export interface SnapshotAdjustments {
+  enabled: boolean;
+  nodes: Array<{ type: string; enabled: boolean; params: Record<string, unknown> }>;
 }
 
 export interface DocSnapshot {
@@ -189,13 +201,35 @@ export interface DocSnapshot {
     mask: string | null;
   };
   history: { undo: string[]; redo: string[] };
+  /** Hash of the flattened document as Export renders it, so adjustments show in the comparison. */
+  composite: string;
+  /** Ambient editor state: compared only when a comparison asks for it with `withEditorState`. */
+  editor: EditorState;
+}
+
+export interface EditorState {
+  tool: string;
+  /** Colours as the store holds them: 0-255 channels, alpha 0-1. */
+  foreground: { r: number; g: number; b: number; a: number };
+  background: { r: number; g: number; b: number; a: number };
 }
 
 interface StructureLayer extends Omit<SnapshotLayer, 'pixels' | 'mask'> {
   id: string;
 }
 
-type Structure = Omit<DocSnapshot, 'layers'> & { layers: StructureLayer[] };
+type Structure = Omit<DocSnapshot, 'layers' | 'editor' | 'composite'> & { layers: StructureLayer[] };
+
+/** The active tool and the foreground/background colours. */
+export async function editorState(page: Page): Promise<EditorState> {
+  return page.evaluate(() => {
+    type Rgba = { r: number; g: number; b: number; a: number };
+    const w = window as unknown as Record<string, { getState: () => Record<string, unknown> }>;
+    const ui = w.__uiStore!.getState() as { activeTool: string };
+    const tools = w.__toolSettingsStore!.getState() as { foregroundColor: Rgba; backgroundColor: Rgba };
+    return { tool: ui.activeTool, foreground: { ...tools.foregroundColor }, background: { ...tools.backgroundColor } };
+  });
+}
 
 async function readStructure(page: Page): Promise<Structure> {
   return page.evaluate(() => {
@@ -203,6 +237,8 @@ async function readStructure(page: Page): Promise<Structure> {
       id: string; name: string; type: string; visible: boolean; locked: boolean; opacity: number;
       blendMode: string; x: number; y: number; mask: { enabled: boolean } | null; effects: unknown;
       children?: readonly string[];
+      adjustments?: ReadonlyArray<{ id: string; type: string; enabled: boolean } & Record<string, unknown>>;
+      adjustmentsEnabled?: boolean;
     };
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
       getState: () => {
@@ -251,6 +287,12 @@ async function readStructure(page: Page): Promise<Structure> {
         maskEnabled: l.mask ? l.mask.enabled : null,
         effects: l.effects,
         parent: parentOf.get(l.id) ?? null,
+        adjustments: l.type === 'group'
+          ? {
+              enabled: l.adjustmentsEnabled ?? true,
+              nodes: (l.adjustments ?? []).map(({ id: _id, type, enabled, ...params }) => ({ type, enabled, params })),
+            }
+          : null,
       })),
       activeLayer: doc.activeLayerId === null ? null : (indexOf.get(doc.activeLayerId) ?? null),
       selectedLayers: doc.selectedLayerIds
@@ -284,7 +326,26 @@ export async function snapshot(page: Page): Promise<DocSnapshot> {
     const mask = layer.hasMask ? await gpuMaskHash(page, id) : null;
     layers.push({ ...layer, pixels, mask });
   }
-  return { ...structure, layers };
+  return { ...structure, layers, composite: await compositeHash(page), editor: await editorState(page) };
+}
+
+/** Hash of the export composite (lossless RGBA), read through the bridge as the parity check reads it. */
+export async function compositeHash(page: Page): Promise<string> {
+  return page.evaluate(async () => {
+    const w = window as unknown as {
+      __engineState?: { getEngine: () => unknown };
+      __wasmBridge?: { compositeForExport: (engine: unknown) => Promise<Uint8Array> | Uint8Array };
+    };
+    const engine = w.__engineState?.getEngine();
+    if (!engine || !w.__wasmBridge) throw new Error('the engine or __wasmBridge is not installed');
+    const bytes = await w.__wasmBridge.compositeForExport(engine);
+    let h = 0x811c9dc5;
+    for (let i = 0; i < bytes.length; i++) {
+      h ^= bytes[i]!;
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return `${bytes.length}:${h.toString(16).padStart(8, '0')}`;
+  });
 }
 
 /** Hash of a layer's GPU mask, read through the bridge as mask-data-sync reads it. */
@@ -317,6 +378,8 @@ export interface CompareOptions {
   viaApi: (page: Page) => Promise<void>;
   /** Snapshot keys left out of the comparison. Justify each in a comment at the call. */
   ignore?: readonly (keyof DocSnapshot)[];
+  /** Also compare `editor` (active tool and colours), which UI paths often change on the way. */
+  withEditorState?: boolean;
 }
 
 export interface Comparison {
@@ -353,7 +416,7 @@ function without(snap: DocSnapshot, ignore: readonly (keyof DocSnapshot)[]): Par
 export async function compareUiAndApi(page: Page, options: CompareOptions): Promise<Comparison> {
   const ui = await freshSide(page, options, options.viaUi);
   const api = await freshSide(page, options, options.viaApi);
-  const ignore = options.ignore ?? [];
+  const ignore = [...(options.ignore ?? []), ...(options.withEditorState ? [] : ['editor' as const])];
   expect(without(api, ignore), 'the command left a different document than the UI did').toEqual(without(ui, ignore));
   return { ui, api };
 }
