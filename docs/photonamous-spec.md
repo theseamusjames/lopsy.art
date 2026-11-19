@@ -532,10 +532,12 @@ load, but cannot sign in or hand off.
   Spike S1 settles the exact policy before Phase 1.
 - **PWA.** The app has its own web manifest, and a service worker at its
   root. Lopsy's worker is on another origin and never sees its pages.
-- **Search.** The app stays out of search results until the public
-  launch: its `_headers` send `X-Robots-Tag: noindex`, removed at launch.
-  Neither build gains a root `404.html`: Pages treats a site as an SPA
-  only while it has none (`MEMORY.md`).
+- **Search.** The app is open to search engines from its first deploy.
+  `robots.txt` allows everything and points at a one-page `sitemap.xml`.
+  The page has a description, and names `https://photonamous.com/` as its
+  canonical URL, so the `pages.dev` copy is not listed in its place.
+  Neither build gains a root `404.html`: Pages treats a site as an SPA only
+  while it has none (`MEMORY.md`).
 - **No shared storage.** On different origins the two apps share no
   IndexedDB, OPFS, CacheStorage or cookies. Everything between them
   crosses in handoff messages.

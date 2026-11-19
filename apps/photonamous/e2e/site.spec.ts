@@ -48,13 +48,32 @@ test('Photonamous loads with its CSP and no COOP', async ({ page }) => {
   expect(headers['content-security-policy']).toContain("'wasm-unsafe-eval'");
   // A COOP header would cut the sign-in popup and Lopsy's tab off from their openers.
   expect(headers['cross-origin-opener-policy']).toBeUndefined();
-  // Out of search results until the public launch (spec 6.3).
-  expect(headers['x-robots-tag']).toBe('noindex');
   await expect(page).toHaveTitle('Photonamous');
   await expect(page.getByRole('heading', { name: 'Photonamous' })).toBeVisible();
   await page.waitForLoadState('networkidle');
   expect(await cspViolations(page)).toEqual([]);
   expect(problems.list).toEqual([]);
+});
+
+test('search engines may list it', async ({ page }) => {
+  const response = await page.goto('/');
+  expect(response?.headers()['x-robots-tag']).toBeUndefined();
+  await expect(page.locator('meta[name="robots"]')).toHaveCount(0);
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /photo library/);
+  // The pages.dev copy names photonamous.com, so it is not listed in its place.
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://photonamous.com/');
+
+  const robots = await page.request.get('/robots.txt');
+  expect(robots.status()).toBe(200);
+  expect(robots.headers()['content-type']).toContain('text/plain');
+  const rules = await robots.text();
+  expect(rules).toContain('Allow: /');
+  expect(rules).not.toMatch(/Disallow: \/\s*$/m);
+  expect(rules).toContain('Sitemap: https://photonamous.com/sitemap.xml');
+
+  const sitemap = await page.request.get('/sitemap.xml');
+  expect(sitemap.status()).toBe(200);
+  expect(await sitemap.text()).toContain('<loc>https://photonamous.com/</loc>');
 });
 
 test('a deep link gets the app', async ({ page }) => {
