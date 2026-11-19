@@ -20,13 +20,19 @@ you change what users see).
 | `packages/photos-core/src/library/types.ts` | The data model and `LibrarySession`, the only way the UI changes the library |
 | `packages/photos-core/src/library/recipe.ts` | The edit recipe |
 | `packages/photos-core/src/import/types.ts` | Import contracts |
+| `packages/ui/` | `@lopsy/ui`, shared with Lopsy: tokens, reset and fonts, the Slider, the Menu, and the keyboard and focus helpers (`a11y/`) |
 
 The engine is the wasm package `npm run wasm:build` (or `wasm:build:dev`)
 writes into `apps/lopsy-web/src/engine-wasm/pkg/`; this app imports it as
-`@lopsy/engine-pkg/…`. Design tokens, the reset and fonts are imported
-from `apps/lopsy-web/src/styles/`. Both move to shared packages in Phase 0
-of the spec; until then, read them where they are and do not change them
-for this app's sake.
+`@lopsy/engine-pkg/…`. It moves to a shared package in Phase 0 of the
+spec; until then, read it where it is.
+
+The UI this app shares with Lopsy is `packages/ui` (`@lopsy/ui`, see its
+`README.md`): the design tokens, reset and fonts (`src/styles/index.css`
+imports them), the Slider, the Menu, and the keyboard and focus helpers
+(`@lopsy/ui/a11y/…`). It is Lopsy's as much as this app's: don't restyle
+it here, and don't change it for this app's sake alone. A component Lopsy
+could use too goes there; one only this app uses stays here.
 
 ## Rules
 
@@ -57,9 +63,12 @@ for this app's sake.
     `--color-text-disabled`, and every control is at least 24 × 24 px;
   - every focusable element shows the `--ph-focus-ring` ring; never set
     `outline: none` without one;
-  - dialogs use `Modal`, menus `use-menu-keys`, radio groups `radio-keys`,
-    toggles `IconButton`'s `pressed`; status and errors go through
-    `showToast` / `showErrorToast` or a live region, not colour alone;
+  - dialogs use `Modal`, menus `@lopsy/ui/Menu` or `use-menu-keys`,
+    radio groups `radio-keys` (both `@lopsy/ui/a11y/…`), toggles
+    `IconButton`'s `pressed`; status and errors go through `showToast` /
+    `showErrorToast` or a live region, not colour alone;
+  - sliders are `@lopsy/ui/Slider`, in the Edit view through
+    `edit/EditSlider` (this app's readouts, one commit per change);
   - new single-character shortcuts go in `src/shortcuts/registry.ts`, so
     the help lists them and Settings > Keyboard can turn them off.
 
@@ -77,7 +86,7 @@ there is a document, a drag or an import.
 ```bash
 npm run wasm:build:dev     # the engine, once (or after engine changes)
 npm run dev:photos         # http://localhost:5174
-npm run test:photos        # Vitest: photos-core, then the app
+npm run test:photos        # Vitest: packages/ui, photos-core, then the app
 npm run typecheck:photos
 npm run lint:photos
 npm run storybook:photos        # Storybook on port 6007

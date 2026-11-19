@@ -1633,13 +1633,18 @@ feature: `apps/photonamous/FEATURES.md`. How the library database works:
 | 5.6, 6.12 Round trips | Edit in Lopsy (16-bit), Save to Photonamous (`.lopsy` v3 with a 16-bit render, stacked with the photo, updated in place only at a matching revision, otherwise a copy), Add to Photonamous from Lopsy's File menu, and Grade in Photonamous for a layer (L5). Lopsy offers none of this unless its build sets `VITE_PHOTONAMOUS_URL`; without it Lopsy is unchanged, and Save Project still writes v2. |
 | 5.7, 6.7 Devices and offline | The library opens offline from IndexedDB, and a service worker loads the app shell offline. Keep originals: Recent, All or None. Previews re-render in the background after presets, pastes, synced edits and new versions. Sync panel, storage meter, device cache. |
 | 6.6 Library database | Per-device journals of last-writer-wins fields stamped with hybrid logical clocks, snapshots, roll-up, the Drive change feed, a Web Locks single writer per device, durable-before-destructive ordering, and merging of duplicate library roots. A 50,000-photo library opens cold in about 2 s. |
+| 6.2 Code layout | `packages/ui` (`@lopsy/ui`), which both apps import: the design tokens, reset and fonts; the Slider, Lopsy's, which Photonamous' Edit view now uses too; a Menu with Photonamous' look, used by Import photos; and the keyboard and focus helpers from the accessibility pass (`@lopsy/ui/a11y`). `packages/handoff` and `packages/photos-core` as specified. The engine bridge is still in `apps/lopsy-web`. |
 | 6.3 Hosting | Its own Pages project, `photonamous`, for `photonamous.com`, with its own CSP; Lopsy hands off to it there. Deployed only when the repository variable `DEPLOY_PHOTONAMOUS` is `true`. CI runs Photonamous' typecheck, lint and unit tests. |
 | Accessibility | WCAG 2.2 AA: AA contrast tokens, 24 px targets, a visible focus ring, every function by keyboard (crop edges, curve points and areas included, with fields or sliders instead of dragging), focus that moves into dialogs and menus and back, live announcements, page titles, a skip link, a reflowing library, and a setting that turns single-key shortcuts off. `e2e/accessibility.spec.ts` runs axe-core on every view; keyboard specs cover each area. |
 
 ### Where it departs from the design
 
-- **Phase 0's package moves were not done.** Photonamous imports Lopsy's engine
-  package and design tokens from `apps/lopsy-web`.
+- **Phase 0's package moves were done only in part.** `packages/engine-web`
+  does not exist: Photonamous imports Lopsy's engine package from
+  `apps/lopsy-web`. `packages/ui` has the tokens, reset and fonts, the
+  Slider, a Menu and the accessibility helpers; the other components each
+  app shows (Button, IconButton, Modal, Popover and the rest) are still its
+  own.
 - **The develop chain is display-referred.** The RAW stage outputs
   sRGB-encoded values and the later stages (Lopsy's adjustments, the
   colour mixer, areas, detail, finish) work on them, not on linear

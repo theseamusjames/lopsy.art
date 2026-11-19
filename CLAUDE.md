@@ -13,6 +13,7 @@ one for the directory you are changing before you change it.
 | `apps/photonamous/` | Photonamous, a photo library and RAW editor on the engine (proof of concept of `docs/photonamous-spec.md`) | `apps/photonamous/CLAUDE.md` |
 | `packages/photos-core/` | Photonamous' storage adapters (Google Drive, local folder, memory), library database and import; plain TypeScript | `apps/photonamous/CLAUDE.md` |
 | `packages/handoff/` | The postMessage protocol between Lopsy and Photonamous (Edit in Lopsy, Save and Add to Photonamous, Grade in Photonamous); plain TypeScript used by both apps | `apps/photonamous/CLAUDE.md` |
+| `packages/ui/` | `@lopsy/ui`, the UI both apps share: design tokens, reset and fonts, the Slider, the Menu and the keyboard and focus helpers; React and CSS Modules (`packages/ui/README.md`) | `apps/lopsy-web/CLAUDE.md` |
 | `engine/` | The Rust rendering engine: the engine crate at its top, `core/`, `shaderc/`, and the hosts that embed it (`hosts/wasm` for the browser, `hosts/cli` for the command line) | `engine/CLAUDE.md` |
 | `docs/` | Documents about the repository as a whole | — |
 | `.github/`, `.githooks/` | CI, deploy and the pre-push hook | — |
@@ -55,6 +56,7 @@ npm run lint         # ESLint, plus the pixel-debt and GL-debt checks
 npm run typecheck    # tsc --noEmit
 npm run wasm:build   # Build the engine to WASM. ALWAYS npm run, never wasm-pack directly
 npm run wasm:test    # cargo test for the engine
+npm run test:ui      # Vitest for packages/ui; also typecheck:ui, lint:ui
 ```
 
 Tools run directly, not through `npm run` (`npx playwright test`,
@@ -88,4 +90,7 @@ Sometimes you'll need example images to test image editing, particularly when wo
 - Minimize dependencies. Before adding a package, consider if it can be done in < 50 lines of code.
 - Current stack: React, Vite, Vitest, Playwright, Storybook, Zustand, Lucide React, Rust/wasm-pack (engine).
 - No CSS frameworks. No UI component libraries (no MUI, Chakra, Radix, etc.).
-- Fonts: Inter (UI), JetBrains Mono (monospace). Self-hosted woff2 in `public/fonts/`.
+- UI that more than one app uses lives in `packages/ui` (`@lopsy/ui`): put a
+  new shared component there rather than in one app for another to import.
+- Fonts: Inter (UI), JetBrains Mono (monospace). Self-hosted woff2 in each
+  app's `public/fonts/`, declared in `@lopsy/ui/styles/fonts.css`.
