@@ -44,3 +44,29 @@ export function currentStepId(history: readonly HistoryStep[]): string {
   }
   return ORIGINAL_STEP_ID;
 }
+
+/**
+ * The step Undo takes back: the one the history marks as next (the
+ * library's), else the newest active step of this device's own.
+ */
+export function stepToUndo(history: readonly HistoryStep[]): HistoryStep | null {
+  if (history.some((s) => s.nextUndo !== undefined)) return history.find((s) => s.nextUndo) ?? null;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const step = history[i];
+    if (step?.active && isOwn(step)) return step;
+  }
+  return null;
+}
+
+/**
+ * The step Redo brings back: the one the history marks as next, else the
+ * oldest undone step of this device's own after the newest active one.
+ */
+export function stepToRedo(history: readonly HistoryStep[]): HistoryStep | null {
+  if (history.some((s) => s.nextRedo !== undefined)) return history.find((s) => s.nextRedo) ?? null;
+  let lastActive = -1;
+  history.forEach((step, i) => {
+    if (step.active) lastActive = i;
+  });
+  return history.slice(lastActive + 1).find((s) => !s.active && isOwn(s)) ?? null;
+}
