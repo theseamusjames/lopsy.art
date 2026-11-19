@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { describeDownload, describePreviewRefresh } from './sync-words';
+import type { SyncStatus } from '@lopsy/photos-core/library/types';
+import { describeDownload, describePreviewRefresh, downloadAnnouncement, previewAnnouncement, syncAnnouncement } from './sync-words';
 
 const base = { total: 1200, done: 300, failed: 0, downloadedBytes: 0 };
 
@@ -19,5 +20,25 @@ describe('describePreviewRefresh', () => {
     expect(describePreviewRefresh({ pending: 3, paused: false, failed: 0 })).toBe('Updating 3 previews.');
     expect(describePreviewRefresh({ pending: 1, paused: true, failed: 0 })).toBe('1 preview to update after editing.');
     expect(describePreviewRefresh({ pending: 0, paused: false, failed: 2 })).toBe('2 could not be updated.');
+  });
+});
+
+describe('announcements', () => {
+  const status = (state: SyncStatus['state'], pendingOps = 0): SyncStatus => ({ state, pendingOps, lastSyncedAt: null, error: null });
+
+  it('says saving states, but not changes that merely wait', () => {
+    expect(syncAnnouncement(status('idle'))).toBe('Everything is saved');
+    expect(syncAnnouncement(status('idle', 3))).toBeNull();
+    expect(syncAnnouncement(status('syncing', 3))).toBe('Saving…');
+    expect(syncAnnouncement(status('offline', 2))).toBe('Offline — changes are kept and saved when the connection is back');
+  });
+
+  it('says a download or preview update has started, not each step of it', () => {
+    expect(downloadAnnouncement({ ...base, state: 'running' })).toBe('Downloading originals…');
+    expect(downloadAnnouncement({ ...base, done: 301, state: 'running' })).toBe('Downloading originals…');
+    expect(downloadAnnouncement({ ...base, state: 'paused' })).toBe('Paused: 300 of 1,200 originals on this device');
+    expect(previewAnnouncement({ pending: 3, paused: false, failed: 0 })).toBe('Updating previews…');
+    expect(previewAnnouncement({ pending: 2, paused: false, failed: 0 })).toBe('Updating previews…');
+    expect(previewAnnouncement({ pending: 0, paused: false, failed: 2 })).toBe('2 could not be updated.');
   });
 });
