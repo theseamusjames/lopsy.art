@@ -65,8 +65,17 @@ export function pasteInternalClipboard(): void {
   void selectLayerAlpha(pastedId, { prefloat: false });
 }
 
-export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNewDocument = false): Promise<void> {
+export interface PasteOrOpenOutcome {
+  /**
+   * When the image was added to an open document: settles once its pixels
+   * are selected, which happens on the next animation frame. Otherwise null.
+   */
+  readonly selected: Promise<void> | null;
+}
+
+export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNewDocument = false): Promise<PasteOrOpenOutcome> {
   const store = useEditorStore.getState();
+  let selected: Promise<void> | null = null;
 
   if (forceNewDocument && store.documentReady) {
     const bitmap = await createImageBitmap(blob);
@@ -120,7 +129,9 @@ export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNew
     // descriptor before selectLayerAlpha tries to float it.
     const pastedId = useEditorStore.getState().document.activeLayerId;
     if (pastedId) {
-      requestAnimationFrame(() => void selectLayerAlpha(pastedId));
+      selected = new Promise((resolve) => {
+        requestAnimationFrame(() => resolve(selectLayerAlpha(pastedId)));
+      });
     }
   } else {
     const layerId = crypto.randomUUID();
@@ -146,4 +157,5 @@ export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNew
   // Seed bitmap cache for efficient thumbnail rendering
   const activeLayerId = useEditorStore.getState().document.activeLayerId;
   if (activeLayerId) seedBitmapFromBlob(activeLayerId, blob);
+  return { selected };
 }

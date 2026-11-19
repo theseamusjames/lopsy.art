@@ -1,6 +1,6 @@
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS, seedPixel } from '../../app/interactions/interaction-types';
-import type { Point } from '../../types';
+import type { Color, Point } from '../../types';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { sampleColor as wasmSampleColor } from '../../engine-wasm/wasm-bridge';
@@ -13,20 +13,25 @@ import { coalesceToAnimationFrame } from '../../utils/raf-coalesce';
  */
 let latestSampleRequest = 0;
 
+/** The Eyedropper reads one pixel: the engine's sample is `size` x `size` pixels, averaged. */
+export const EYEDROPPER_SAMPLE_SIZE = 1;
+
+/** The colour an engine sample answers with, as the Eyedropper makes it the foreground; null for a short answer. */
+export function colorFromSample(rgba: Uint8Array): Color | null {
+  if (rgba.length < 4) return null;
+  return { r: rgba[0]!, g: rgba[1]!, b: rgba[2]!, a: rgba[3]! / 255 };
+}
+
 /** Sample one composited pixel from the GPU and make it the foreground colour. */
 function sampleAndApply(x: number, y: number): void {
   const engine = getEngine();
   if (!engine) return;
   const request = ++latestSampleRequest;
-  wasmSampleColor(engine, x, y, 1)
+  wasmSampleColor(engine, x, y, EYEDROPPER_SAMPLE_SIZE)
     .then((rgba) => {
-      if (request !== latestSampleRequest || rgba.length < 4) return;
-      useToolSettingsStore.getState().setForegroundColor({
-        r: rgba[0]!,
-        g: rgba[1]!,
-        b: rgba[2]!,
-        a: rgba[3]! / 255,
-      });
+      const color = colorFromSample(rgba);
+      if (request !== latestSampleRequest || !color) return;
+      useToolSettingsStore.getState().setForegroundColor(color);
     })
     .catch(() => {});
 }

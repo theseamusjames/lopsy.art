@@ -90,9 +90,13 @@ function flattenLayerTreeForPsd(
   return result;
 }
 
-export async function exportPsdFile(depth: 8 | 16 = 8): Promise<void> {
+/**
+ * The document as the bytes of a PSD file, after committing what the file
+ * must hold. Null when the engine has not started; throws when encoding fails.
+ */
+export async function encodePsdFile(depth: 8 | 16 = 8): Promise<Uint8Array | null> {
   const engine = getEngine();
-  if (!engine) return;
+  if (!engine) return null;
 
   // Commit any in-progress brush stroke and flush all pending JS pixel
   // data to the GPU before the synchronous WASM export call.  Without this
@@ -201,13 +205,17 @@ export async function exportPsdFile(depth: 8 | 16 = 8): Promise<void> {
   // PSD header color mode: grayscale documents write a single gray channel;
   // every other Lopsy mode round-trips as RGB.
   const psdColorMode = useEditorStore.getState().document.colorMode === 'grayscale' ? 1 : 3;
-  const psdBytes = await exportPsd(engine, layersJson, allMaskData, depth, isWideGamut() ? 1 : 0, psdColorMode);
+  return exportPsd(engine, layersJson, allMaskData, depth, isWideGamut() ? 1 : 0, psdColorMode);
+}
 
+export async function exportPsdFile(depth: 8 | 16 = 8): Promise<void> {
+  const psdBytes = await encodePsdFile(depth);
+  if (!psdBytes) return;
   const blob = new Blob([psdBytes.slice().buffer], { type: 'application/octet-stream' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${doc.name || 'lopsy'}.psd`;
+  a.download = `${useEditorStore.getState().document.name || 'lopsy'}.psd`;
   a.click();
   URL.revokeObjectURL(url);
   useEditorStore.getState().markClean();

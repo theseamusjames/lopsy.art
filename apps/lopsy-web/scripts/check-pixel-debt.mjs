@@ -145,7 +145,8 @@ const ALLOWLIST = {
   // ──────────────────────────────────────────────────────────────────────
   // File I/O — produce raw buffers for encoders / parsers / loaders.
   // ──────────────────────────────────────────────────────────────────────
-  'src/app/MenuBar/menus/file-menu.ts': 2,                   // PNG export + JPEG export
+  'src/app/MenuBar/menus/file-menu.ts': 1,                   // Export dialog preview composite
+  'src/io/export-image.ts': 1,                               // export composite (PNG/JPEG/WebP/BMP), moved from file-menu.ts
   'src/io/project-load.ts': 1,                               // .lopsy project unpack
   'src/io/psd.ts': 2,                                        // leaf + group mask unpack
 

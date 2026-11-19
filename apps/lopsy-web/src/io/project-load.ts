@@ -182,8 +182,15 @@ function forgetFamilyLayouts(family: string): void {
   }
 }
 
-export async function loadProject(file: File): Promise<void> {
+export interface LoadedProject {
+  /** Settles once the fonts the document's text layers use are loaded, or failed to. */
+  readonly fonts: Promise<void>;
+}
+
+/** Opens a .lopsy file as the document; throws when it cannot be read, leaving the open document if it fails before replacing it. */
+export async function loadProjectOrThrow(file: File): Promise<LoadedProject> {
   useUIStore.getState().openModal({ kind: 'loading', message: 'Opening project…' });
+  let fonts: Promise<void> = Promise.resolve();
 
   try {
     await initWasm();
@@ -335,13 +342,20 @@ export async function loadProject(file: File): Promise<void> {
         uploadLayerMask(engine, s.id, maskBytes, layer.mask.width, layer.mask.height);
       }
 
-      void loadDocumentFonts(newLayers, forgetFamilyLayouts);
+      fonts = loadDocumentFonts(newLayers, forgetFamilyLayouts);
     }
 
     useEditorStore.getState().fitToView();
+  } finally {
     useUIStore.getState().closeModalOfKind('loading');
+  }
+  return { fonts };
+}
+
+export async function loadProject(file: File): Promise<void> {
+  try {
+    await loadProjectOrThrow(file);
   } catch (err) {
-    useUIStore.getState().closeModalOfKind('loading');
     notifyError(`Failed to load project: ${describeError(err)}`);
   }
 }
