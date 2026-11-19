@@ -202,6 +202,7 @@ jobs:
         with:
           name: wasm-pkg
           path: apps/lopsy-web/src/engine-wasm/pkg
+      # Each of these checks packages/ui (@lopsy/ui, which Lopsy uses too) first.
       - run: npm run typecheck:photos
       - run: npm run lint:photos
       - run: npm run test:photos

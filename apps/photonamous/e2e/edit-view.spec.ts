@@ -46,7 +46,8 @@ test.describe('Edit view on a JPEG', () => {
     await page.keyboard.press('ControlOrMeta+Shift+z');
     await expect(readout).toHaveValue('+25');
 
-    await page.getByRole('slider', { name: 'Contrast' }).dblclick();
+    // On the label: a press on the track would first move the value to where it landed.
+    await page.getByRole('region', { name: 'Tone' }).getByText('Contrast', { exact: true }).dblclick();
     await expect(readout).toHaveValue('0');
     expect(await page.evaluate(() => window.__photosHarness?.steps)).toEqual(['Contrast +25', 'Contrast 0']);
   });
@@ -70,7 +71,7 @@ test.describe('Edit view on a JPEG', () => {
     const before = page.getByRole('button', { name: 'Before' });
     await before.click();
     await expect(before).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByRole('slider', { name: 'Exposure' })).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.getByRole('slider', { name: 'Exposure' })).toBeDisabled();
     await before.click();
     await expect(before).toHaveAttribute('aria-pressed', 'false');
   });

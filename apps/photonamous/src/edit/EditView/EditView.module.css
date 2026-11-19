@@ -198,6 +198,10 @@
   overflow-y: auto;
   background: var(--color-bg-secondary);
   border-left: 1px solid var(--color-border-subtle);
+  /* Every slider's track starts and ends at the same place: room for the
+     longest label ("Large details") and the widest readout ("50000 K"). */
+  --slider-label-width: 72px;
+  --slider-value-width: 56px;
 }
 
 .panelFooter {

@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 import { pauseToasts, resumeToasts, useToasts, type Toast } from '../../app/toasts';
 import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
-import { focusedElement } from '../Modal/focus-trap';
+import { focusedElement } from '@lopsy/ui/a11y/focus-trap';
 import styles from './Toasts.module.css';
 
 /** Keys a toast's buttons use, which the page's shortcuts must not also act on. */

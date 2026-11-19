@@ -27,7 +27,7 @@ import { currentVersions } from '../../app/commands';
 import { plural } from '../../import/import-summary';
 import { Button } from '../Button/Button';
 import { Modal } from '../Modal/Modal';
-import { focusedElement } from '../Modal/focus-trap';
+import { focusedElement } from '@lopsy/ui/a11y/focus-trap';
 import styles from './ExportDialog.module.css';
 
 const TOKENS = ['{name}', '{date}', '{seq}', '{seq:3}', '{title}', '{version}', '{camera}'];

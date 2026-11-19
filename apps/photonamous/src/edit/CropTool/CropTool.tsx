@@ -96,8 +96,8 @@ export function CropTool({ imageBox, imageSize, rect, onChange, onDone, onCancel
       const target = e.target instanceof HTMLElement ? e.target : null;
       if (target?.tagName === 'SELECT') return;
       if (e.key === 'Enter') {
-        // A button does its own thing with Enter; a field has already taken what was typed.
-        if (target?.tagName === 'BUTTON' || target?.tagName === 'INPUT') return;
+        // A button does its own thing with Enter; a field has already taken what was typed. A slider takes no Enter.
+        if (target?.tagName === 'BUTTON' || (target instanceof HTMLInputElement && target.type !== 'range')) return;
         e.preventDefault();
         keys.current.onDone();
       } else if (e.key === 'Escape') {

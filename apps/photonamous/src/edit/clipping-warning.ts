@@ -9,6 +9,7 @@
 import { useEffect } from 'react';
 import { create } from 'zustand';
 import type { DevelopEngine } from '../engine/develop-engine';
+import { isFieldKey } from './edit-keys';
 
 export interface ClippingWarning {
   readonly shadows: boolean;
@@ -45,9 +46,7 @@ export const useClippingWarning = create<ClippingWarningState>()((set, get) => (
 export function isClippingKey(event: { key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; target: EventTarget | null }): boolean {
   if (event.key !== 'j' && event.key !== 'J') return false;
   if (event.metaKey || event.ctrlKey || event.altKey) return false;
-  const target = event.target;
-  if (typeof HTMLElement !== 'undefined' && target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return false;
-  return true;
+  return !isFieldKey(event.key, event.target);
 }
 
 /** Keeps the engine's overlay in step with the toggles while the Edit view is open, and turns it off when it closes. */

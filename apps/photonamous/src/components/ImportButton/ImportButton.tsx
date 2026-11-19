@@ -6,7 +6,8 @@ import { showErrorToast } from '../../app/toasts';
 import { useUi } from '../../app/store';
 import { canPickFolder } from '../../import/collect-files';
 import { Button } from '../Button/Button';
-import { useMenuKeys } from '../Menu/use-menu-keys';
+import { useMenuKeys } from '@lopsy/ui/a11y/use-menu-keys';
+import { Menu, MenuItem } from '@lopsy/ui/Menu';
 import styles from './ImportButton.module.css';
 
 const ACCEPT = '.raf,.dng,.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp';
@@ -20,7 +21,7 @@ export function ImportButton({ variant = 'primary' }: { variant?: 'primary' | 's
   const setPendingImport = useUi((s) => s.setPendingImport);
   const session = useUi((s) => s.connection?.session ?? null);
   const close = useCallback(() => setOpen(false), []);
-  const { menuRef, onMenuKeyDown, onTriggerKeyDown } = useMenuKeys({ isOpen: open, onClose: close, onOpen: () => setOpen(true), triggerRef });
+  const menuKeys = useMenuKeys({ isOpen: open, onClose: close, onOpen: () => setOpen(true), triggerRef });
   const id = useId();
 
   const onPicked = (e: ChangeEvent<HTMLInputElement>) => {
@@ -35,7 +36,7 @@ export function ImportButton({ variant = 'primary' }: { variant?: 'primary' | 's
         ref={triggerRef}
         variant={variant}
         onClick={() => setOpen((o) => !o)}
-        onKeyDown={onTriggerKeyDown}
+        onKeyDown={menuKeys.onTriggerKeyDown}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? `${id}-menu` : undefined}
@@ -45,70 +46,53 @@ export function ImportButton({ variant = 'primary' }: { variant?: 'primary' | 's
         <ChevronDown size={14} />
       </Button>
       {open && (
-        <div ref={menuRef} className={styles.popup} onKeyDown={onMenuKeyDown}>
-          <div className={styles.menu} role="menu" id={`${id}-menu`} aria-label="Import photos" aria-describedby={`${id}-hint`}>
-            <button
-              type="button"
-              role="menuitem"
-              tabIndex={-1}
-              className={styles.item}
-              onClick={() => {
+        <Menu
+          keys={menuKeys}
+          label="Import photos"
+          id={`${id}-menu`}
+          className={styles.popup}
+          note="You can also drop photos or a folder anywhere on the window."
+        >
+          <MenuItem
+            icon={<Images size={16} />}
+            detail="Pick one or more files"
+            onSelect={() => {
+              close();
+              filesRef.current?.click();
+            }}
+          >
+            Choose photos…
+          </MenuItem>
+          {canPickFolder() && (
+            <MenuItem
+              icon={<FolderOpen size={16} />}
+              detail="Everything in it, including folders inside"
+              onSelect={() => {
                 close();
-                filesRef.current?.click();
+                folderRef.current?.click();
               }}
             >
-              <Images size={16} />
-              <span>
-                <span className={styles.itemTitle}>Choose photos…</span>
-                <span className={styles.itemDetail}>Pick one or more files</span>
-              </span>
-            </button>
-            {canPickFolder() && (
-              <button
-                type="button"
-                role="menuitem"
-                tabIndex={-1}
-                className={styles.item}
-                onClick={() => {
-                  close();
-                  folderRef.current?.click();
-                }}
-              >
-                <FolderOpen size={16} />
-                <span>
-                  <span className={styles.itemTitle}>Choose a folder…</span>
-                  <span className={styles.itemDetail}>Everything in it, including folders inside</span>
-                </span>
-              </button>
-            )}
-            {session && getBackend().canAddFromDrive(session) && (
-              <button
-                type="button"
-                role="menuitem"
-                tabIndex={-1}
-                className={styles.item}
-                onClick={() => {
-                  close();
-                  getBackend()
-                    .addFromDrive(session, { move: loadDriveAddMode() === 'move' })
-                    .then((job) => {
-                      if (job) useUi.getState().setImportJob(job);
-                    })
-                    .catch((error: unknown) => showErrorToast(`Adding from Google Drive failed: ${error instanceof Error ? error.message : String(error)}`));
-                }}
-              >
-                <Cloud size={16} />
-                <span>
-                  <span className={styles.itemTitle}>Add from Google Drive…</span>
-                  <span className={styles.itemDetail}>Photos already in your Drive</span>
-                </span>
-              </button>
-            )}
-          </div>
-          <p className={styles.hint} id={`${id}-hint`}>
-            You can also drop photos or a folder anywhere on the window.
-          </p>
-        </div>
+              Choose a folder…
+            </MenuItem>
+          )}
+          {session && getBackend().canAddFromDrive(session) && (
+            <MenuItem
+              icon={<Cloud size={16} />}
+              detail="Photos already in your Drive"
+              onSelect={() => {
+                close();
+                getBackend()
+                  .addFromDrive(session, { move: loadDriveAddMode() === 'move' })
+                  .then((job) => {
+                    if (job) useUi.getState().setImportJob(job);
+                  })
+                  .catch((error: unknown) => showErrorToast(`Adding from Google Drive failed: ${error instanceof Error ? error.message : String(error)}`));
+              }}
+            >
+              Add from Google Drive…
+            </MenuItem>
+          )}
+        </Menu>
       )}
       <input ref={filesRef} className={styles.hidden} type="file" multiple accept={ACCEPT} onChange={onPicked} />
       <input

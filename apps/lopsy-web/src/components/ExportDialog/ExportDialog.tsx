@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useEditorStore } from '../../app/editor-store';
-import { Slider } from '../Slider/Slider';
+import { Slider } from '@lopsy/ui/Slider';
 import { Button } from '../Button/Button';
 import {
   type ExportFormat,

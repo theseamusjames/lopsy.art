@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
-import { focusedElement, returnFocus, tabStops } from '../Modal/focus-trap';
-import { closeLayer, isTopLayer, openLayer, type Layer } from '../Modal/layers';
+import { focusedElement, returnFocus, tabStops } from '@lopsy/ui/a11y/focus-trap';
+import { closeLayer, isTopLayer, openLayer, type Layer } from '@lopsy/ui/a11y/layers';
 import styles from './Popover.module.css';
 
 interface PopoverProps {

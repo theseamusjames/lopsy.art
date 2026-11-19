@@ -1,5 +1,5 @@
 import { useToolSettingsStore } from '../../app/tool-settings-store';
-import { Slider } from '../../components/Slider/Slider';
+import { Slider } from '@lopsy/ui/Slider';
 import styles from '../../app/OptionsBar/OptionsBar.module.css';
 
 export function QuickSelectOptions() {

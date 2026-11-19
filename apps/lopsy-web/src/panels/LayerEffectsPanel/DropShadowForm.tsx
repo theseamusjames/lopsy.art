@@ -1,4 +1,4 @@
-import { Slider } from '../../components/Slider/Slider';
+import { Slider } from '@lopsy/ui/Slider';
 import type { ShadowEffect } from '../../types';
 import { useEditorStore } from '../../app/editor-store';
 import { docScaledMax, docScaledOffset } from '../../utils/slider-ranges';

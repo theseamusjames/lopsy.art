@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useToolSettingsStore } from '../../tool-settings-store';
-import { Slider } from '../../../components/Slider/Slider';
+import { Slider } from '@lopsy/ui/Slider';
 import { ColorSwatch } from '../../../components/ColorSwatch/ColorSwatch';
 import { ColorPicker } from '../../../components/ColorPicker/ColorPicker';
 import { useDockStore } from '../../../panels/dock/dock-store';

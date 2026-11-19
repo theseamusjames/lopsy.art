@@ -1,6 +1,6 @@
 import { X } from 'lucide-react';
 import type { ColorLabel } from '@lopsy/photos-core/library/types';
-import { handleRadioKeys, radioTabIndex } from '../RadioGroup/radio-keys';
+import { handleRadioKeys, radioTabIndex } from '@lopsy/ui/a11y/radio-keys';
 import styles from './LabelPicker.module.css';
 
 export const LABEL_NAMES: Readonly<Record<ColorLabel, string>> = {

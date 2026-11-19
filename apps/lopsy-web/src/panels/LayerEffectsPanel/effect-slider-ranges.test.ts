@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { docScaledMax, docScaledOffset } from '../../utils/slider-ranges';
-import { sliderKnobPosition } from '../../components/Slider/Slider';
+import { sliderKnobPosition } from '@lopsy/ui/Slider';
 
 /**
  * #664 — the effects-panel sliders (drop shadow, glow, stroke) declare

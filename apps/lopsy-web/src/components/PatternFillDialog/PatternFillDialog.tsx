@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Slider } from '../Slider/Slider';
+import { Slider } from '@lopsy/ui/Slider';
 import { useDraggablePanel } from '../../app/hooks/useDraggablePanel';
 import { usePatternStore } from '../../app/pattern-store';
 import type { PatternDefinition, PatternFillSettings } from '../../app/pattern-store';

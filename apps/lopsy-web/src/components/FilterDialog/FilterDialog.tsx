@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { RefreshCw } from 'lucide-react';
-import { Slider } from '../Slider/Slider';
+import { Slider } from '@lopsy/ui/Slider';
 import { useDraggablePanel } from '../../app/hooks/useDraggablePanel';
 import { useEditorStore } from '../../app/editor-store';
 import { docScaledMax } from '../../utils/slider-ranges';

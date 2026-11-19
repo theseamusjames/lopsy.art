@@ -1,8 +1,7 @@
-import { useCallback, useState } from 'react';
-import { clamp } from '../../utils/math';
+import { useCallback, useRef, useState } from 'react';
 import styles from './Slider.module.css';
 
-interface SliderProps {
+export interface SliderProps {
   value: number;
   min: number;
   max: number;
@@ -13,10 +12,27 @@ interface SliderProps {
   defaultValue?: number;
   scale?: 'linear' | 'log';
   onChange: (value: number) => void;
-  onCommit?: () => void;
+  /** At the end of a change (pointer up, key up, a typed, stepped or reset value), with the value it ended on. */
+  onCommit?: (value: number) => void;
   onDragStart?: () => void;
   showValue?: boolean;
   suffix?: string;
+  disabled?: boolean;
+  /** What the value box shows for a value; `String(value)` by default. */
+  format?: (value: number) => string;
+  /** The value typed into the value box, or null when the text is not one; `parseFloat` by default. */
+  parse?: (text: string) => number | null;
+  /** Read after the value by screen readers ("+0.50 EV"); the suffix when there is none. */
+  unit?: string;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function parseNumber(text: string): number | null {
+  const parsed = parseFloat(text);
+  return isNaN(parsed) ? null : parsed;
 }
 
 function posLog(v: number, min: number, max: number): number {
@@ -56,6 +72,11 @@ export function sliderKnobPosition(
   return scale === 'log' ? posLog(clamped, sliderMin, sliderMax) : clamped;
 }
 
+/** What a screen reader says for the value: the value box's text, then the unit or suffix. */
+export function sliderValueText(text: string, unit?: string): string {
+  return unit ? `${text} ${unit}` : text;
+}
+
 export function Slider({
   value,
   min,
@@ -71,12 +92,33 @@ export function Slider({
   onDragStart,
   showValue = true,
   suffix,
+  disabled = false,
+  format = String,
+  parse = parseNumber,
+  unit,
 }: SliderProps) {
   const [localValue, setLocalValue] = useState(String(value));
   const [isFocused, setIsFocused] = useState(false);
+  // The value the last change set, until it is committed: onCommit reports
+  // it even when the parent has not re-rendered with it yet.
+  const changedTo = useRef<number | null>(null);
 
   const knobMin = Math.max(min, sliderMin ?? min);
   const knobMax = Math.min(max, sliderMax ?? max);
+
+  const change = useCallback(
+    (next: number) => {
+      changedTo.current = next;
+      onChange(next);
+    },
+    [onChange],
+  );
+
+  const commit = useCallback(() => {
+    const committed = changedTo.current ?? value;
+    changedTo.current = null;
+    onCommit?.(committed);
+  }, [value, onCommit]);
 
   // The value box, its arrow keys, and double-click-reset each apply a
   // single discrete change rather than a continuous drag, but callers that
@@ -84,31 +126,32 @@ export function Slider({
   // layer restyles, #846) need that bracketing here too — a drag on the
   // range input isn't the only way to change a value.
   const handleDoubleClick = () => {
+    if (disabled) return;
     const next = defaultValue ?? min;
     if (next === value) return;
     onDragStart?.();
-    onChange(next);
-    onCommit?.();
+    change(next);
+    commit();
   };
 
   const handleBlur = useCallback(() => {
     setIsFocused(false);
-    const parsed = parseFloat(localValue);
-    if (isNaN(parsed)) {
-      setLocalValue(String(value));
+    const parsed = parse(localValue);
+    if (parsed === null) {
+      setLocalValue(format(value));
     } else {
       const clamped = clamp(parsed, min, max);
-      setLocalValue(String(clamped));
+      setLocalValue(format(clamped));
       // Re-entering the current value is a no-op — don't bracket it with a
       // history entry (onDragStart), or every value-box visit would pollute
       // undo with an empty step (#867 regression).
       if (clamped !== value) {
         onDragStart?.();
-        onChange(clamped);
-        onCommit?.();
+        change(clamped);
+        commit();
       }
     }
-  }, [localValue, value, min, max, onChange, onDragStart, onCommit]);
+  }, [localValue, value, min, max, parse, format, change, onDragStart, commit]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -120,9 +163,9 @@ export function Slider({
         const next = clamp(raw, min, max);
         if (next !== value) {
           onDragStart?.();
-          onChange(next);
-          onCommit?.();
-          setLocalValue(String(next));
+          change(next);
+          commit();
+          setLocalValue(format(next));
         }
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -130,18 +173,18 @@ export function Slider({
         const next = clamp(raw, min, max);
         if (next !== value) {
           onDragStart?.();
-          onChange(next);
-          onCommit?.();
-          setLocalValue(String(next));
+          change(next);
+          commit();
+          setLocalValue(format(next));
         }
       }
     },
-    [value, step, onChange, scale, min, max, onDragStart, onCommit],
+    [value, step, change, scale, min, max, format, onDragStart, commit],
   );
 
   const knobPosition = sliderKnobPosition(value, knobMin, knobMax, scale);
   return (
-    <div className={styles.container} onDoubleClick={handleDoubleClick}>
+    <div className={styles.container} data-disabled={disabled || undefined} onDoubleClick={handleDoubleClick}>
       {label && <span className={styles.label}>{label}</span>}
       <input
         type="range"
@@ -150,27 +193,39 @@ export function Slider({
         min={knobMin}
         max={knobMax}
         step={step}
+        disabled={disabled}
         aria-label={label ?? 'Value'}
+        aria-valuetext={sliderValueText(format(value), unit ?? suffix)}
         onChange={(e) => {
           const iv = Number(e.target.value);
           const v = scale === 'log' ? valLog(iv, knobMin, knobMax) : iv;
-          onChange(clamp(v, min, max));
+          change(clamp(v, min, max));
         }}
-        onPointerDown={() => onDragStart?.()}
-        onPointerUp={() => onCommit?.()}
-        onKeyUp={() => onCommit?.()}
+        onPointerDown={() => {
+          if (disabled) return;
+          changedTo.current = null;
+          onDragStart?.();
+        }}
+        onPointerUp={() => {
+          if (!disabled) commit();
+        }}
+        onKeyDown={() => {
+          changedTo.current = null;
+        }}
+        onKeyUp={commit}
       />
       {showValue && (
         <div className={styles.valueWrapper}>
           <input
             type="text"
             className={styles.valueInput}
-            value={isFocused ? localValue : String(value)}
+            value={isFocused ? localValue : format(value)}
+            disabled={disabled}
             aria-label={label ? `${label} value` : 'Value'}
             onChange={(e) => setLocalValue(e.target.value)}
             onFocus={(e) => {
               setIsFocused(true);
-              setLocalValue(String(value));
+              setLocalValue(format(value));
               e.target.select();
             }}
             onBlur={handleBlur}

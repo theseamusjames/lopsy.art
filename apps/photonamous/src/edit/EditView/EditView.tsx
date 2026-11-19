@@ -31,7 +31,7 @@ import {
   type ControlDef,
   type GroupDef,
 } from '../edit-controls';
-import { EDIT_SHORTCUTS, isTypingTarget, neighbourId, shortcutFor, stageKeyAction } from '../edit-keys';
+import { EDIT_SHORTCUTS, isFieldKey, neighbourId, shortcutFor, stageKeyAction } from '../edit-keys';
 import { Modal } from '../../components/Modal/Modal';
 import type { PhotoInfo } from '../../engine/develop-engine';
 import type { DevelopProfile } from '../../engine/profiles';
@@ -400,7 +400,7 @@ export function EditView({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (isTypingTarget(e.target) || e.defaultPrevented) return;
+      if (isFieldKey(e.key, e.target) || e.defaultPrevented) return;
       const shortcut = shortcutFor(e);
       if (!shortcut) return;
       const h = handlers.current;

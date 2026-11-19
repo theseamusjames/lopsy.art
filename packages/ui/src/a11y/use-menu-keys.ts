@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, type KeyboardEvent, type RefObject } from 'react';
-import { focusedElement, returnFocus } from '../Modal/focus-trap';
+import { focusedElement, returnFocus } from './focus-trap';
 
 const ITEMS = '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]';
 

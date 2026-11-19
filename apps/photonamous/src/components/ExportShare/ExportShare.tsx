@@ -3,7 +3,7 @@ import type { LibrarySession } from '@lopsy/photos-core/library/types';
 import type { ExportFolder } from '../../app/backend';
 import { Button } from '../Button/Button';
 import { Modal } from '../Modal/Modal';
-import { focusedElement } from '../Modal/focus-trap';
+import { focusedElement } from '@lopsy/ui/a11y/focus-trap';
 import { shareWarning } from './share-words';
 import styles from './ExportShare.module.css';
 
