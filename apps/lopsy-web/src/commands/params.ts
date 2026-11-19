@@ -49,6 +49,11 @@ export interface ObjectSpec extends BaseSpec<Readonly<Record<string, unknown>>> 
   readonly fields: ParamSchema;
 }
 
+/** A JSON object whose keys and values the command checks itself, against a table it can describe. */
+export interface RecordSpec extends BaseSpec<Readonly<Record<string, unknown>>> {
+  readonly type: 'record';
+}
+
 export type ParamSpec =
   | NumberSpec
   | StringSpec
@@ -56,7 +61,8 @@ export type ParamSpec =
   | ColorSpec
   | PointSpec
   | ArraySpec
-  | ObjectSpec;
+  | ObjectSpec
+  | RecordSpec;
 
 export type ParamSchema = Readonly<Record<string, ParamSpec>>;
 
@@ -74,7 +80,9 @@ export type ParamValue<S> = S extends { type: 'number' }
             ? ParamValue<I>[]
             : S extends { type: 'object'; fields: infer F }
               ? InferParams<F>
-              : never;
+              : S extends { type: 'record' }
+                ? Record<string, unknown>
+                : never;
 
 type OmittableKeys<S> = {
   [K in keyof S]: S[K] extends { optional: true }
@@ -158,6 +166,7 @@ export function expectedText(spec: ParamSpec): string {
     case 'array':
       return `an array${countText(spec.minItems, spec.maxItems, 'items')}`;
     case 'object':
+    case 'record':
       return 'an object';
   }
 }
@@ -246,6 +255,9 @@ function validateSpec(ctx: Context, spec: ParamSpec, value: unknown, path: strin
     case 'object':
       if (!isPlainObject(value)) fail(ctx, path, spec, value);
       return validateFields(ctx, spec.fields, value, path);
+    case 'record':
+      if (!isPlainObject(value)) fail(ctx, path, spec, value);
+      return { ...value };
   }
 }
 

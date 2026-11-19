@@ -49,6 +49,27 @@ describe('validateParams: number', () => {
   });
 });
 
+describe('validateParams: record', () => {
+  const schema = { options: { type: 'record' } } as const;
+
+  it('accepts any plain object and copies it', () => {
+    const input = { size: 3, stops: [{ position: 0 }] };
+    const output = validateParams('test.cmd', schema, { options: input });
+    expect(output).toEqual({ options: input });
+    expect(output.options).not.toBe(input);
+    expectTypeOf(output.options).toEqualTypeOf<Record<string, unknown>>();
+  });
+
+  it('rejects arrays, null and primitives', () => {
+    expect(invalidMessage(schema, { options: [1] })).toBe('test.cmd: options must be an object, got an array of 1 items');
+    expect(invalidMessage(schema, { options: 3 })).toBe('test.cmd: options must be an object, got 3');
+  });
+
+  it('is described by its type', () => {
+    expect(describeParams({ options: { type: 'record', description: 'd' } })).toEqual({ options: { type: 'record', description: 'd' } });
+  });
+});
+
 describe('validateParams: string', () => {
   const schema = {
     mode: { type: 'string', enum: ['normal', 'multiply'] },
