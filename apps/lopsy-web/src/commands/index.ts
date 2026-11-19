@@ -20,6 +20,8 @@ import './document/files';
 import './layer/add-image';
 import './view/view';
 import './clipboard/clipboard';
+import './path/path';
+import './guide/guide';
 
 setSettle(settled);
 
