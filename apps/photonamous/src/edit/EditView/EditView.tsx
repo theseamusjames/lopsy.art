@@ -57,7 +57,7 @@ import { usePixelReadout } from './use-pixel-readout';
 import { useClippingWarningOnEngine } from '../clipping-warning';
 import { useGrainSeed } from '../grain-seed';
 import { useAltDragViews } from '../alt-drag-views';
-import { editPageTitle, useDocumentTitle, useFocusOnOpen } from '../edit-page';
+import { editPageTitle, useDocumentTitle, useFocusOnOpen, useFocusReturn } from '../edit-page';
 import styles from './EditView.module.css';
 
 export interface EditViewProps {
@@ -183,6 +183,8 @@ export function EditView({
   const [isLevelling, setIsLevelling] = useState(false);
   const [cropDraft, setCropDraft] = useState<Rect | null>(null);
   const isCropping = cropDraft !== null;
+  const cropButtonRef = useRef<HTMLButtonElement>(null);
+  useFocusReturn(isCropping, cropButtonRef);
   const isReady = status.kind === 'ready';
   const canEdit = isReady;
   const isBefore = isBeforeToggled || isBeforeHeld;
@@ -474,7 +476,7 @@ export function EditView({
         }
       : null;
   const cropImageBox = boxOf(fullSize);
-  const cropBox = fullSize && cropImageBox ? { aspect: fullSize.width / fullSize.height, box: cropImageBox } : null;
+  const cropBox = fullSize && cropImageBox ? { size: fullSize, box: cropImageBox } : null;
 
   // ---- straighten -----------------------------------------------------
 
@@ -750,6 +752,7 @@ export function EditView({
             </button>
           )}
           <button
+            ref={cropButtonRef}
             type="button"
             className={styles.iconButton}
             aria-label="Crop"
@@ -907,7 +910,7 @@ export function EditView({
             {cropDraft && cropBox && (
               <CropTool
                 imageBox={cropBox.box}
-                imageAspect={cropBox.aspect}
+                imageSize={cropBox.size}
                 rect={cropDraft}
                 onChange={setCropDraft}
                 onDone={() => finishCrop(true)}

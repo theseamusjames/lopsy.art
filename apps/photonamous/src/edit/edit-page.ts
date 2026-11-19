@@ -3,7 +3,7 @@
  * browser while it is open, and where focus goes when it opens and closes.
  */
 
-import { useEffect, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 
 /** The page title while a photo is open in the Edit view. */
 export function editPageTitle(fileName: string): string {
@@ -37,4 +37,19 @@ export function useFocusOnOpen(target: RefObject<HTMLElement | null>): void {
       if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
     };
   }, [opener, target]);
+}
+
+/**
+ * When a tool closes (`isOpen` turns false) and focus went with it, puts
+ * focus on `target`, normally the button that opened it.
+ */
+export function useFocusReturn(isOpen: boolean, target: RefObject<HTMLElement | null>): void {
+  const wasOpen = useRef(isOpen);
+  useEffect(() => {
+    if (wasOpen.current && !isOpen) {
+      const active = document.activeElement;
+      if (!active || active === document.body) target.current?.focus();
+    }
+    wasOpen.current = isOpen;
+  }, [isOpen, target]);
 }

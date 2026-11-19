@@ -29,13 +29,31 @@
 
 .handle {
   position: absolute;
-  width: 14px;
-  height: 14px;
-  margin: -7px 0 0 -7px;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  touch-action: none;
+}
+
+.handle::after {
+  content: '';
+  position: absolute;
+  inset: 5px;
   background: var(--color-text-primary);
   border: 1px solid var(--color-bg-primary);
   border-radius: var(--radius-sm);
-  touch-action: none;
+  transition: transform var(--transition-fast);
+}
+
+.handle:focus-visible {
+  outline: none;
+}
+
+.handle:focus-visible::after,
+.handle[data-active]::after {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+  transform: scale(1.3);
 }
 
 .handle[data-handle='nw'] { left: 0; top: 0; cursor: nwse-resize; }
@@ -53,14 +71,72 @@
   bottom: var(--space-3);
   transform: translateX(-50%);
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: var(--space-2);
+  max-width: calc(100% - var(--space-6));
   padding: var(--space-2);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
   pointer-events: auto;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.number {
+  width: 68px;
+  height: 28px;
+  padding: 0 var(--space-1);
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+}
+
+.unit {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .select {
@@ -122,6 +198,7 @@
   background: var(--ph-primary-bg-active);
 }
 
+.number:focus-visible,
 .select:focus-visible,
 .button:focus-visible,
 .iconButton:focus-visible,
