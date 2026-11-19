@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { blendModeGroupsFor } from './BlendModeSelect';
+import { blendModeGroupsFor } from './blend-mode-groups';
 
 describe('blendModeGroupsFor', () => {
   it('offers Pass Through first for groups only', () => {
