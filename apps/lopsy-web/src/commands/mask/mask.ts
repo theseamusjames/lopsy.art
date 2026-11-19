@@ -1,6 +1,6 @@
 import { CommandError } from '../command';
 import { defineCommand } from '../registry';
-import { activateIfOther, layerRefSpec, requireDocument, resolveLayer, selectReplace } from '../context';
+import { activateIfOther, enterMaskEdit, layerRefSpec, requireDocument, resolveLayer, selectReplace } from '../context';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { addMaskAndEdit, removeMaskAndLeaveEdit } from '../../panels/LayerPanel/mask-actions';
@@ -112,8 +112,7 @@ export const maskEdit = defineCommand({
       return maskState(layer.id);
     }
     const layer = maskedLayer(ref);
-    store().setActiveLayer(layer.id);
-    useUIStore.getState().setMaskEditMode(true);
+    enterMaskEdit(layer.id);
     return maskState(layer.id);
   },
 });

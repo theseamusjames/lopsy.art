@@ -59,6 +59,12 @@ export function selectReplace(id: string): void {
   useUIStore.getState().setMaskEditMode(false);
 }
 
+/** What a click on a layer's mask thumbnail does that a plain module can reach: the layer becomes active and its mask is edited. */
+export function enterMaskEdit(id: string): void {
+  useEditorStore.getState().setActiveLayer(id);
+  useUIStore.getState().setMaskEditMode(true);
+}
+
 /** A row click on `id` unless it is already the active layer, as commands that act on the active layer need. */
 export function activateIfOther(id: string): void {
   if (useEditorStore.getState().document.activeLayerId !== id) selectReplace(id);

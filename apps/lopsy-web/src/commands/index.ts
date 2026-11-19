@@ -25,6 +25,8 @@ import './guide/guide';
 import './pattern/pattern';
 import './brush/brush';
 import './quick-mask/quick-mask';
+import './paint/clear';
+import './mask/clear';
 
 setSettle(settled);
 
