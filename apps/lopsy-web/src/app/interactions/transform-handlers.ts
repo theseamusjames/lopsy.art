@@ -444,17 +444,25 @@ export function renderTransformedFloat(layerId: string | null, transform: Transf
   compositeFloatAffine(engine, invMatrix, srcCx, srcCy, dst.x, dst.y, source.width, source.height);
 }
 
+/**
+ * The box, pushed out to the whole layer only on the sides where it is
+ * clamped at the canvas edge: the layer's content can only continue off the
+ * canvas there. The layer's rect also holds transparent margin left by
+ * earlier float growth, and carrying that through a rotation grew the
+ * texture again on every transform and resampled the layer at drifting
+ * offsets, leaving faint pixels outside a later ⌘-click selection.
+ */
 function affineSourceRect(layerId: string | null, box: Rect): Rect {
   const whole = layerId ? wholeLayerFloatRect(layerId) : null;
   if (!whole) return box;
-  const x = Math.min(box.x, whole.x);
-  const y = Math.min(box.y, whole.y);
-  return {
-    x,
-    y,
-    width: Math.max(box.x + box.width, whole.x + whole.width) - x,
-    height: Math.max(box.y + box.height, whole.y + whole.height) - y,
-  };
+  const doc = useEditorStore.getState().document;
+  const boxRight = box.x + box.width;
+  const boxBottom = box.y + box.height;
+  const x0 = box.x <= 0 ? Math.min(box.x, whole.x) : box.x;
+  const y0 = box.y <= 0 ? Math.min(box.y, whole.y) : box.y;
+  const x1 = boxRight >= doc.width ? Math.max(boxRight, whole.x + whole.width) : boxRight;
+  const y1 = boxBottom >= doc.height ? Math.max(boxBottom, whole.y + whole.height) : boxBottom;
+  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
 }
 
 /**
