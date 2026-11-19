@@ -24,7 +24,7 @@ test('find photos by text, camera, saved search and date', async ({ page }) => {
   await expect(tiles(page)).toHaveCount(3);
 
   // A facet, with its count.
-  await page.getByRole('toolbar', { name: 'Filters' }).getByRole('button', { name: /^Camera/ }).click();
+  await page.getByRole('group', { name: 'Filters' }).getByRole('button', { name: /^Camera/ }).click();
   const xt5 = page.getByRole('checkbox', { name: /X-T5/ });
   await expect(page.locator('label', { has: xt5 })).toContainText('1');
   await xt5.check();

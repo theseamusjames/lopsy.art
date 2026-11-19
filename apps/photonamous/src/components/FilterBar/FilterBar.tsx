@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { BookmarkPlus, ChevronDown, X } from 'lucide-react';
 import type { LabelChoice, SearchRule } from '@lopsy/photos-core/search/rules';
 import { writeSavedSearches } from '@lopsy/photos-core/search/rules';
@@ -67,7 +67,24 @@ export function FilterBar() {
   const [open, setOpen] = useState<FacetName | null>(null);
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState('');
-  const close = useCallback(() => setOpen(null), []);
+  const anchors = useRef(new Map<FacetName, HTMLDivElement>());
+  const bar = useRef<HTMLDivElement>(null);
+  const saveButton = () => bar.current?.querySelector<HTMLElement>('[data-save-search]') ?? null;
+  /** The control focus goes back to when what had it (a popover's checkbox, the name field) goes away. */
+  const returnTo = useRef<HTMLElement | null>(null);
+  const close = useCallback(() => {
+    const active = document.activeElement;
+    for (const anchor of anchors.current.values()) {
+      if (active !== null && anchor.contains(active)) returnTo.current = anchor.querySelector('button');
+    }
+    setOpen(null);
+  }, []);
+  useEffect(() => {
+    const target = returnTo.current;
+    returnTo.current = null;
+    const active = document.activeElement;
+    if (target && (active === null || active === document.body)) target.focus();
+  }, [open, naming]);
   const counts = result.facets;
 
   const savedRule: SearchRule | null =
@@ -80,6 +97,7 @@ export function FilterBar() {
     if (trimmed === '' || rule === null) return;
     const id = newSavedSearchId();
     writeSavedSearches(session, [...saved, { id, name: trimmed, rule }]);
+    returnTo.current = saveButton();
     setNaming(false);
     setName('');
     setCollection({ kind: 'saved', searchId: id });
@@ -114,8 +132,18 @@ export function FilterBar() {
       case 'rating': {
         const atLeast = (n: number) => counts.rating.filter((r) => r.value >= n).reduce((sum, r) => sum + r.count, 0);
         return [1, 2, 3, 4, 5].map((n) =>
-          option(String(n), `${'★'.repeat(n)} or more`, atLeast(n), facets.minRating === n, () =>
-            setFacets({ ...facets, minRating: facets.minRating === n ? null : n }),
+          option(
+            String(n),
+            <>
+              <span aria-hidden="true">{'★'.repeat(n)}</span>
+              <span className={styles.visuallyHidden}>
+                {n} star{n === 1 ? '' : 's'}
+              </span>{' '}
+              or more
+            </>,
+            atLeast(n),
+            facets.minRating === n,
+            () => setFacets({ ...facets, minRating: facets.minRating === n ? null : n }),
           ),
         );
       }
@@ -144,15 +172,23 @@ export function FilterBar() {
   };
 
   return (
-    <div className={styles.bar} role="toolbar" aria-label="Filters">
+    <div ref={bar} className={styles.bar} role="group" aria-label="Filters">
       {(Object.keys(TITLES) as FacetName[]).map((name) => {
         const active = summary(facets, name);
         return (
-          <div key={name} className={styles.anchor}>
+          <div
+            key={name}
+            className={styles.anchor}
+            ref={(el) => {
+              if (el) anchors.current.set(name, el);
+              else anchors.current.delete(name);
+            }}
+          >
             <button
               type="button"
               className={styles.chip}
               data-active={active !== null}
+              aria-haspopup="dialog"
               aria-expanded={open === name}
               onClick={() => setOpen(open === name ? null : name)}
             >
@@ -188,6 +224,7 @@ export function FilterBar() {
               if (e.key === 'Enter') save();
               if (e.key === 'Escape') {
                 e.stopPropagation();
+                returnTo.current = saveButton();
                 setNaming(false);
               }
             }}
@@ -198,6 +235,7 @@ export function FilterBar() {
         </span>
       ) : (
         <Button
+          data-save-search
           size="sm"
           variant="ghost"
           disabled={!canSave}
