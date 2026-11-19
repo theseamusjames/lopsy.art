@@ -10,7 +10,7 @@ import { useOrderedIds, usePresets, usePreviewUrl } from '../hooks';
 import { EditView } from '../../edit/EditView/EditView';
 import { getBackend } from '../backend-registry';
 import { useLibraryView, useSession } from '../hooks';
-import { showToast } from '../toasts';
+import { showErrorToast, showToast } from '../toasts';
 import { formatBytes } from '../../import/import-summary';
 import { downloadBlob } from '../download';
 import { Button } from '../../components/Button/Button';
@@ -91,7 +91,7 @@ export function EditSlot({ assetId, versionId, onClose }: EditSlotProps) {
         .storeEditPreviews(session, versionId, previews)
         .catch((error: unknown) => {
           console.warn('The edited previews could not be saved', error);
-          showToast('The edited thumbnail could not be saved; the grid shows the old one for now.');
+          showErrorToast('The edited thumbnail could not be saved; the grid shows the old one for now.');
         });
     },
     [session, versionId],

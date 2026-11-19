@@ -14,7 +14,7 @@ import { startHandoffReceiver, type HandoffReceiver, type ReceiverState } from '
 import type { StoredLopsySave } from '../handoff/store-lopsy-save';
 import { getExportRenderer } from './export-renderer-registry';
 import { unguarded } from './guard-session';
-import { dismissToast, showToast } from './toasts';
+import { dismissToast, showErrorToast, showToast } from './toasts';
 
 const previewRenderer = createBrowserPreviewRenderer();
 
@@ -90,7 +90,7 @@ export function openInLopsy(session: LibrarySession, assetId: AssetId, chosenVer
       onSaved: (stored, save) => showToast(savedMessage(save.name, stored)),
     });
   } catch (error) {
-    showToast(handoffFailureMessage(error));
+    showErrorToast(handoffFailureMessage(error));
     return;
   }
   handoffs.push(handoff);
@@ -99,7 +99,7 @@ export function openInLopsy(session: LibrarySession, assetId: AssetId, chosenVer
     () => dismissToast(opening),
     (error: unknown) => {
       dismissToast(opening);
-      showToast(handoffFailureMessage(error), 10_000);
+      showErrorToast(handoffFailureMessage(error));
     },
   );
 }

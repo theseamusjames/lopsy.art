@@ -9,7 +9,7 @@ import { openInLopsy } from './lopsy-handoff';
 import { itemAssets, itemForVersion, itemVersionId, nextVersionName, parseItem, versionItemId, versionsByAsset, type ItemId } from '../library/items';
 import type { CommandId } from '../shortcuts/registry';
 import { useUi, type ViewMode } from './store';
-import { showToast } from './toasts';
+import { showErrorToast, showToast } from './toasts';
 import { plural } from '../import/import-summary';
 import { findPreset } from '@lopsy/photos-core/library/presets';
 import { asGroupIds, pasteRecipeValues, pickRecipeValues } from '../library/recipe-copy';
@@ -74,7 +74,7 @@ export async function undoDelete(assetIds: readonly AssetId[]): Promise<void> {
     if (first !== undefined) useUi.getState().setSelection(selectOne(first));
     showToast(`Brought back ${assetIds.length === 1 ? 'the photo' : plural(assetIds.length, 'photo')} from the trash.`, 3000);
   } catch (e) {
-    showToast(e instanceof Error ? e.message : String(e));
+    showErrorToast(e instanceof Error ? e.message : String(e));
   }
 }
 

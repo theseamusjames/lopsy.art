@@ -64,7 +64,7 @@ import { getPreviewSource, setPreviewSource } from './preview-source';
 import { storeEditPreviews } from './edit-previews';
 import { guardSession, unguarded } from '../guard-session';
 import { trashAssets, untrashAssets } from './trash-assets';
-import { showToast } from '../toasts';
+import { showErrorToast, showToast } from '../toasts';
 import { downloadBlob } from '../download';
 import { loadKeepOriginals, saveKeepOriginals } from '../device-settings';
 
@@ -227,7 +227,7 @@ export class RealBackend implements PhotosBackend {
       if (error instanceof LibraryBusyError) this.busy = { kind, opened };
       throw error;
     }
-    const session = guardSession(rawSession, (message) => showToast(message));
+    const session = guardSession(rawSession, (message) => showErrorToast(message));
     const rootId = kind === 'local-folder' ? await opened.adapter.getRoot().then((r) => r.id, () => null) : null;
     const accountId = cacheAccountId(kind, opened.owner, rootId);
     const [caches, staging, queue] = await Promise.all([
