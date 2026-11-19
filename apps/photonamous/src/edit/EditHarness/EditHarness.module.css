@@ -38,14 +38,15 @@
   align-items: center;
   height: 32px;
   padding: 0 var(--space-4);
-  background: var(--color-accent);
+  background: var(--ph-primary-bg);
   border-radius: var(--radius-sm);
+  color: var(--ph-primary-text);
   font-size: var(--font-size-sm);
   cursor: pointer;
 }
 
 .pick:hover {
-  background: var(--color-accent-hover);
+  background: var(--ph-primary-bg-hover);
 }
 
 .fileInput {
@@ -54,4 +55,9 @@
   height: 1px;
   opacity: 0;
   pointer-events: none;
+}
+
+.pick:focus-within {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
 }

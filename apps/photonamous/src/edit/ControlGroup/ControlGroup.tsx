@@ -32,7 +32,7 @@ export function ControlGroup({ group, recipe, isDisabled, onChange, onCommit, on
   return (
     <section className={styles.group} aria-label={group.title}>
       <header className={styles.header}>
-        <h3 className={styles.title}>{group.title}</h3>
+        <h2 className={styles.title}>{group.title}</h2>
         {onAuto && (
           <div className={styles.actions}>
             <button

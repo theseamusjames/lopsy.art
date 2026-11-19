@@ -22,6 +22,7 @@
 .version {
   flex: 1;
   min-width: 0;
+  min-height: 24px;
   overflow: hidden;
   padding: var(--space-1) var(--space-2);
   background: transparent;
@@ -43,6 +44,7 @@
 
 .version[aria-current='true'] {
   background: var(--color-bg-active);
+  box-shadow: inset 3px 0 0 var(--ph-accent-text);
   color: var(--color-text-primary);
 }
 
@@ -50,8 +52,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   background: transparent;
   border: none;
@@ -67,7 +69,7 @@
 
 .danger,
 .small {
-  height: 22px;
+  height: 24px;
   padding: 0 var(--space-2);
   background: transparent;
   border: 1px solid var(--color-border);
@@ -79,8 +81,13 @@
 }
 
 .danger {
-  border-color: var(--color-error);
-  color: var(--color-error);
+  background: var(--ph-danger-bg);
+  border-color: var(--ph-danger-bg);
+  color: var(--ph-danger-text);
+}
+
+.danger:hover:not(:disabled) {
+  background: var(--ph-danger-bg-hover);
 }
 
 .form {
@@ -121,4 +128,18 @@
 .add:hover:not(:disabled) {
   background: var(--color-bg-hover);
   color: var(--color-text-primary);
+}
+
+.icon:focus-visible,
+.danger:focus-visible,
+.small:focus-visible,
+.add:focus-visible,
+.input:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+}
+
+.version:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: -2px;
 }

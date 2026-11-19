@@ -4,6 +4,7 @@ import type { Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Json } from '@lopsy/photos-core/library/types';
 import { Slider } from '../../components/Slider/Slider';
 import { defaultAt, numberAt, rangeOf, resetChangesFor, type ControlDef, type TabDef } from '../edit-controls';
+import { useTabs } from '../tabs';
 import styles from './TabbedGroup.module.css';
 
 export interface TabbedGroupProps {
@@ -25,6 +26,11 @@ export function TabbedGroup({ title, tabs, sharedControls = [], recipe, isDisabl
   const allControls = [...tabs.flatMap((t) => t.controls), ...sharedControls];
   const resetChanges = resetChangesFor(recipe, allControls);
   const isDefault = Object.keys(resetChanges).length === 0;
+  const { tabProps, panelProps } = useTabs(
+    tabs.map((t) => t.id),
+    tab?.id ?? '',
+    setTabId,
+  );
 
   const slider = (control: ControlDef) => {
     const range = rangeOf(control.path);
@@ -47,7 +53,7 @@ export function TabbedGroup({ title, tabs, sharedControls = [], recipe, isDisabl
   return (
     <section className={styles.group} aria-label={title}>
       <header className={styles.header}>
-        <h3 className={styles.title}>{title}</h3>
+        <h2 className={styles.title}>{title}</h2>
         <button
           type="button"
           className={styles.reset}
@@ -61,19 +67,12 @@ export function TabbedGroup({ title, tabs, sharedControls = [], recipe, isDisabl
       </header>
       <div className={styles.tabs} role="tablist" aria-label={`${title} tabs`}>
         {tabs.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            className={styles.tab}
-            aria-selected={t.id === tab?.id}
-            onClick={() => setTabId(t.id)}
-          >
+          <button key={t.id} type="button" className={styles.tab} {...tabProps(t.id)}>
             {t.label}
           </button>
         ))}
       </div>
-      <div className={styles.controls} role="tabpanel">
+      <div className={styles.controls} {...panelProps}>
         {tab?.controls.map(slider)}
         {sharedControls.length > 0 && <div className={styles.shared}>{sharedControls.map(slider)}</div>}
       </div>

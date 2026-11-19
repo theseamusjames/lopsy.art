@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BINS, clipping, formatShare, histogramPath, innerMax, isClipped, parseHistogram, sharedMax } from './histogram';
+import { BINS, clipping, describeHistogram, formatShare, histogramPath, innerMax, isClipped, parseHistogram, sharedMax, toneShares } from './histogram';
 
 function bins(fill: (channel: number, bin: number) => number): Uint32Array {
   const out = new Uint32Array(BINS * 4);
@@ -64,5 +64,24 @@ describe('clipping', () => {
     expect(isClipped(clip.shadows)).toBe(true);
     expect(isClipped(0.001)).toBe(false);
     expect(formatShare(0.0042)).toBe('0.4 %');
+  });
+});
+
+describe('describeHistogram', () => {
+  it('says where the tones lie and how much clips', () => {
+    const bins = new Uint32Array(BINS * 4);
+    // Luminance: 50 in the darkest third, 30 in the middle, 20 bright; red holds 2 % at white.
+    bins[3 * BINS + 10] = 50;
+    bins[3 * BINS + 128] = 30;
+    bins[3 * BINS + 200] = 20;
+    bins[BINS - 1] = 2;
+    const h = parseHistogram(bins);
+    if (!h) throw new Error('no histogram');
+    expect(toneShares(h)).toEqual({ dark: 0.5, middle: 0.3, bright: 0.2 });
+    expect(describeHistogram(h)).toBe('Histogram: 50 % of the tones dark, 30 % in the middle, 20 % bright; 0.0 % at black, 2.0 % at white.');
+  });
+
+  it('says when it has not been read', () => {
+    expect(describeHistogram(null)).toBe('Histogram, not read yet');
   });
 });

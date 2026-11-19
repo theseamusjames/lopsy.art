@@ -27,7 +27,7 @@
 }
 
 .actionButton {
-  height: 22px;
+  height: 24px;
   padding: 0 var(--space-2);
   background: transparent;
   border: 1px solid var(--color-border);
@@ -82,4 +82,10 @@
   margin: 0;
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
+}
+
+.actionButton:focus-visible,
+.reset:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
 }

@@ -21,7 +21,7 @@
   margin: 0;
   max-width: 480px;
   font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
+  color: var(--ph-text-muted);
 }
 
 .progress {
@@ -69,4 +69,9 @@
 
 .button:hover {
   background: var(--color-bg-hover);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
 }

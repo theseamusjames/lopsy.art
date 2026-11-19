@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Asset, Json } from '@lopsy/photos-core/library/types';
 import type { GradeSession } from '@lopsy/handoff/grade';
@@ -7,6 +7,7 @@ import { EditView } from '../../edit/EditView/EditView';
 import { applyChanges } from '../../edit/edit-controls';
 import { harnessAsset, harnessVersion } from '../../edit/EditHarness/harness-asset';
 import { pushStep, redoStep, startHistory, undoStep, type RecipeHistory } from '../../edit/EditHarness/recipe-history';
+import { useDocumentTitle } from '../../edit/edit-page';
 import { LOPSY_LAYER_MIME } from '../../engine/develop-engine';
 import styles from './GradeScreen.module.css';
 
@@ -35,11 +36,14 @@ function describe(err: unknown): string {
 /**
  * Grade in Photonamous (spec 6.12): the Edit view on one layer Lopsy sent,
  * with no library. Done sends the graded layer and its recipe back; Cancel
- * sends nothing.
+ * sends nothing. While it waits or sends, the page is its heading and a
+ * status line, which takes focus so a screen reader hears where it is.
  */
 export function GradeScreen({ session, onFinished }: GradeScreenProps) {
   const [phase, setPhase] = useState<Phase>({ kind: 'waiting' });
   const [history, setHistory] = useState<RecipeHistory | null>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useDocumentTitle('Grade – Photonamous');
 
   useEffect(() => {
     let isLive = true;
@@ -80,6 +84,11 @@ export function GradeScreen({ session, onFinished }: GradeScreenProps) {
     () => (phase.kind === 'grading' && history ? harnessVersion(phase.asset, history.present) : null),
     [phase, history],
   );
+  const isGrading = phase.kind === 'grading' && version !== null;
+
+  useEffect(() => {
+    if (!isGrading) headingRef.current?.focus();
+  }, [isGrading]);
 
   const handleCancel = useCallback(() => {
     session.cancel();
@@ -123,6 +132,7 @@ export function GradeScreen({ session, onFinished }: GradeScreenProps) {
           onClose={handleCancel}
           closeLabel="Cancel"
           onDone={handleDone}
+          documentTitle={`${phase.layer.name} – Grade – Photonamous`}
         />
       </div>
     );
@@ -138,10 +148,18 @@ export function GradeScreen({ session, onFinished }: GradeScreenProps) {
           : phase.message;
   return (
     <main className={styles.message} data-testid="grade-screen" data-phase={phase.kind}>
-      <h1 className={styles.title}>Grade in Photonamous</h1>
-      <p className={phase.kind === 'failed' ? styles.error : styles.hint} role="status">
-        {words}
-      </p>
+      <h1 ref={headingRef} className={styles.title} tabIndex={-1}>
+        Grade in Photonamous
+      </h1>
+      {phase.kind === 'failed' ? (
+        <p className={styles.error} role="alert">
+          {words}
+        </p>
+      ) : (
+        <p className={styles.hint} role="status">
+          {words}
+        </p>
+      )}
     </main>
   );
 }

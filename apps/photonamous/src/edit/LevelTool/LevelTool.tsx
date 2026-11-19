@@ -13,7 +13,11 @@ interface Line {
   b: { x: number; y: number };
 }
 
-/** Straighten by drawing along something that should be level (or upright). Esc cancels. */
+/**
+ * Straighten by drawing along something that should be level (or
+ * upright). Esc cancels. It is for the pointer; the Edit view says how to
+ * use it, and the Angle slider straightens by keyboard.
+ */
 export function LevelTool({ onLine, onCancel }: LevelToolProps) {
   const [line, setLine] = useState<Line | null>(null);
   const cancel = useRef(onCancel);
@@ -33,30 +37,32 @@ export function LevelTool({ onLine, onCancel }: LevelToolProps) {
   };
 
   return (
-    <svg
-      className={styles.levelTool}
-      data-testid="level-tool"
-      role="img"
-      aria-label="Draw along a line that should be level"
-      onPointerDown={(e) => {
-        if (e.button !== 0) return;
-        e.preventDefault();
-        e.stopPropagation();
-        e.currentTarget.setPointerCapture(e.pointerId);
-        const p = at(e);
-        setLine({ pointerId: e.pointerId, a: p, b: p });
-      }}
-      onPointerMove={(e) => {
-        if (!line || line.pointerId !== e.pointerId) return;
-        setLine({ ...line, b: at(e) });
-      }}
-      onPointerUp={(e) => {
-        if (!line || line.pointerId !== e.pointerId) return;
-        setLine(null);
-        onLine(line.a, at(e));
-      }}
-    >
-      {line && <line className={styles.line} x1={line.a.x} y1={line.a.y} x2={line.b.x} y2={line.b.y} />}
-    </svg>
+    <>
+      <svg
+        className={styles.levelTool}
+        data-testid="level-tool"
+        aria-hidden="true"
+        onPointerDown={(e) => {
+          if (e.button !== 0) return;
+          e.preventDefault();
+          e.stopPropagation();
+          e.currentTarget.setPointerCapture(e.pointerId);
+          const p = at(e);
+          setLine({ pointerId: e.pointerId, a: p, b: p });
+        }}
+        onPointerMove={(e) => {
+          if (!line || line.pointerId !== e.pointerId) return;
+          setLine({ ...line, b: at(e) });
+        }}
+        onPointerUp={(e) => {
+          if (!line || line.pointerId !== e.pointerId) return;
+          setLine(null);
+          onLine(line.a, at(e));
+        }}
+      >
+        {line && <line className={styles.line} x1={line.a.x} y1={line.a.y} x2={line.b.x} y2={line.b.y} />}
+      </svg>
+      <span className={styles.hint}>Draw along something level · Esc to cancel</span>
+    </>
   );
 }

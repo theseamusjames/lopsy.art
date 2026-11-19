@@ -29,7 +29,7 @@
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  height: 22px;
+  height: 24px;
   padding: 0 var(--space-2);
   background: transparent;
   border: 1px solid var(--color-border);
@@ -77,6 +77,7 @@
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
+  min-height: 24px;
   padding: var(--space-1) var(--space-2);
   background: transparent;
   border: none;
@@ -95,12 +96,13 @@
 
 .area[aria-current='true'] {
   background: var(--color-bg-active);
+  box-shadow: inset 3px 0 0 var(--ph-accent-text);
   color: var(--color-text-primary);
 }
 
 .kind {
   min-width: 44px;
-  color: var(--color-text-disabled);
+  color: var(--ph-text-muted);
   font-size: var(--font-size-xs);
 }
 
@@ -108,8 +110,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   background: transparent;
   border: none;
@@ -125,7 +127,7 @@
 
 .icon[aria-pressed='true'] {
   background: var(--color-bg-active);
-  color: var(--color-accent);
+  color: var(--ph-accent-text);
 }
 
 .rename {
@@ -152,4 +154,16 @@
   gap: var(--space-3);
   padding-top: var(--space-2);
   border-top: 1px solid var(--color-border-subtle);
+}
+
+.button:focus-visible,
+.icon:focus-visible,
+.input:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+}
+
+.area:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: -2px;
 }

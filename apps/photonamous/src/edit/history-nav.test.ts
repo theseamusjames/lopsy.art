@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { HistoryStep } from '@lopsy/photos-core/library/types';
-import { ORIGINAL_STEP_ID, currentStepId, movesTo } from './history-nav';
+import { ORIGINAL_STEP_ID, currentStepId, movesTo, stepToRedo, stepToUndo } from './history-nav';
 
 function step(id: string, active: boolean, own = true): HistoryStep {
   return { id, label: id, hlc: id, active, own };
@@ -30,5 +30,28 @@ describe('currentStepId', () => {
   it('is the newest active step, or the original', () => {
     expect(currentStepId(H)).toBe('c');
     expect(currentStepId([step('a', false)])).toBe(ORIGINAL_STEP_ID);
+  });
+});
+
+describe('stepToUndo and stepToRedo', () => {
+  const step = (id: string, active: boolean, extra: Partial<HistoryStep> = {}): HistoryStep => ({ id, label: `Step ${id}`, hlc: id, active, own: true, ...extra });
+
+  it('follow a linear history', () => {
+    const history = [step('1', true), step('2', true), step('3', false), step('4', false)];
+    expect(stepToUndo(history)?.id).toBe('2');
+    expect(stepToRedo(history)?.id).toBe('3');
+    expect(stepToUndo([])).toBeNull();
+    expect(stepToRedo([step('1', true)])).toBeNull();
+  });
+
+  it('skip steps made on other devices', () => {
+    const history = [step('1', true), step('2', true, { own: false })];
+    expect(stepToUndo(history)?.id).toBe('1');
+  });
+
+  it('take the steps the library marks', () => {
+    const history = [step('1', true, { nextUndo: false, nextRedo: false }), step('2', false, { nextUndo: false, nextRedo: true })];
+    expect(stepToUndo(history)).toBeNull();
+    expect(stepToRedo(history)?.id).toBe('2');
   });
 });

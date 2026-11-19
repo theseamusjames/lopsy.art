@@ -17,6 +17,11 @@
   font-size: var(--font-size-xl);
 }
 
+/* The heading takes focus only to be read out; it is not a control. */
+.title:focus {
+  outline: none;
+}
+
 .hint,
 .error {
   margin: 0;

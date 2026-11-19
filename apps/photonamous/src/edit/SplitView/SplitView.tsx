@@ -1,4 +1,5 @@
 import { useRef, type CSSProperties, type PointerEvent } from 'react';
+import { splitAfterKey, splitValueText } from '../edit-keys';
 import styles from './SplitView.module.css';
 
 export interface SplitViewProps {
@@ -11,7 +12,10 @@ export interface SplitViewProps {
   readonly onChange: (at: number) => void;
 }
 
-/** Before and after side by side: the before render over the left of the image, split by a draggable divider. */
+/**
+ * Before and after side by side: the before render over the left of the
+ * image, split by a divider that drags, or moves with the arrow keys.
+ */
 export function SplitView({ imageBox, beforeSrc, at, onChange }: SplitViewProps) {
   const drag = useRef<number | null>(null);
 
@@ -65,17 +69,17 @@ export function SplitView({ imageBox, beforeSrc, at, onChange }: SplitViewProps)
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(at * 100)}
+        aria-valuetext={splitValueText(at)}
         data-testid="split-divider"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
         onKeyDown={(e) => {
-          const step = e.shiftKey ? 0.1 : 0.02;
-          if (e.key === 'ArrowLeft') onChange(Math.max(0, at - step));
-          else if (e.key === 'ArrowRight') onChange(Math.min(1, at + step));
-          else return;
+          const next = splitAfterKey(at, e.key, e.shiftKey);
+          if (next === null) return;
           e.preventDefault();
+          onChange(next);
         }}
       />
     </>

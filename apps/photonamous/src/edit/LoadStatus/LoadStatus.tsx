@@ -6,6 +6,8 @@ import styles from './LoadStatus.module.css';
 export interface LoadStatusProps {
   readonly status: EngineStatus;
   readonly onClose: () => void;
+  /** The error's way out; 'Back to the library' by default. */
+  readonly closeLabel?: string;
 }
 
 function progressText(progress: LoadProgress | null): string {
@@ -15,7 +17,7 @@ function progressText(progress: LoadProgress | null): string {
 }
 
 /** Covers the image while the engine starts and the photo loads, or when either failed. */
-export function LoadStatus({ status, onClose }: LoadStatusProps) {
+export function LoadStatus({ status, onClose, closeLabel = 'Back to the library' }: LoadStatusProps) {
   if (status.kind === 'ready') return null;
   if (status.kind === 'error') {
     return (
@@ -23,7 +25,7 @@ export function LoadStatus({ status, onClose }: LoadStatusProps) {
         <p className={styles.title}>This photo could not be opened</p>
         <p className={styles.detail}>{status.message}</p>
         <button type="button" className={styles.button} onClick={onClose}>
-          Back to the library
+          {closeLabel}
         </button>
       </div>
     );

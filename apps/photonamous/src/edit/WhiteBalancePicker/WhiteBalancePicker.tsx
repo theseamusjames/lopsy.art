@@ -11,7 +11,11 @@ export interface WhiteBalancePickerProps {
   readonly onCancel: () => void;
 }
 
-/** White balance picker: click something that should be neutral grey. Esc cancels. */
+/**
+ * White balance picker: click something that should be neutral grey. Esc
+ * cancels. It is for the pointer; the Edit view says how to use it, and
+ * the Temperature and Tint sliders do the same by keyboard.
+ */
 export function WhiteBalancePicker({ imageBox, documentSize, onPick, onCancel }: WhiteBalancePickerProps) {
   const cancel = useRef(onCancel);
   cancel.current = onCancel;
@@ -27,9 +31,6 @@ export function WhiteBalancePicker({ imageBox, documentSize, onPick, onCancel }:
     <div
       className={styles.picker}
       data-testid="white-balance-picker"
-      role="button"
-      tabIndex={-1}
-      aria-label="Click something that should be neutral grey"
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         e.preventDefault();
@@ -41,7 +42,7 @@ export function WhiteBalancePicker({ imageBox, documentSize, onPick, onCancel }:
         onPick((cssX / imageBox.width) * documentSize.width, (cssY / imageBox.height) * documentSize.height);
       }}
     >
-      <span className={styles.hint} role="status" data-testid="white-balance-hint">
+      <span className={styles.hint} data-testid="white-balance-hint">
         Click something neutral · Esc to cancel
       </span>
     </div>
