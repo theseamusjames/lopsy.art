@@ -80,11 +80,24 @@ is `docs/photonamous-spec.md`; running and setup are in
 ### Single, Compare and Cull
 
 - **Single view** (Space, or double-click): one photo large at 2048 px,
-  with Previous/Next (← →), its versions, and **Edit**, **Edit in Lopsy**
-  and **Set aside / Bring back**. Space or Escape goes back to the grid.
+  with Previous/Next (← →). Above it, **Back to the grid** (a link at the
+  left edge), the file name, centred, and its place in the list; then a
+  bar with the colour labels at the left, the stars in the centre and
+  **Edit in Lopsy** and **Edit** at the right. Below the photo, a bar
+  with its versions and, at the right end, **Set aside / Bring back**;
+  then the Lopsy documents made from it. Space or Escape goes back to the
+  grid. In a narrow window the bars wrap
+  rather than overlap: the edit buttons go under the labels and stars, and
+  Set aside under the versions.
+- **Versions in Single view**: chips (choose one; rename it with its
+  pencil or a double-click, Enter saves and Escape keeps the old name;
+  **Show** it for the photo; delete it, never the last), then **New
+  version**. When the bar has no room for them, the chips scroll sideways
+  on their own and never run under Set aside.
 - **Compare** (C): two to four selected photos side by side.
-- **Cull** (F): full screen, one photo at a time; rating (1–5) or setting
-  aside (X) moves on to the next. Escape leaves.
+- **Cull** (F): full screen, one photo at a time, laid out as Single view,
+  with the keys' hint beside Set aside; rating (1–5) or setting aside (X)
+  moves on to the next. Escape leaves.
 
 ### Marks, details and keywords
 

@@ -207,6 +207,13 @@ test('every view, as a user reaches it', async ({ page }) => {
   });
   await page.keyboard.press('Escape');
 
+  await step(page, 'cull view', async () => {
+    await tiles(page).nth(1).click();
+    await page.keyboard.press('f');
+    await expect(page.getByRole('dialog', { name: /^Cull: / })).toBeVisible({ timeout: 15_000 });
+  });
+  await page.keyboard.press('Escape');
+
   await step(page, 'grade screen', async () => {
     await page.goto('/?grade=missing');
   });
