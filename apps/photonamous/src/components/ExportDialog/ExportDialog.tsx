@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ExportPreset, VersionId } from '@lopsy/photos-core/library/types';
 import {
   DEFAULT_EXPORT_SETTINGS,
@@ -27,6 +27,7 @@ import { currentVersions } from '../../app/commands';
 import { plural } from '../../import/import-summary';
 import { Button } from '../Button/Button';
 import { Modal } from '../Modal/Modal';
+import { focusedElement } from '../Modal/focus-trap';
 import styles from './ExportDialog.module.css';
 
 const TOKENS = ['{name}', '{date}', '{seq}', '{seq:3}', '{title}', '{version}', '{camera}'];
@@ -54,7 +55,12 @@ function sizeValue(size: SizeSpec): number {
   return size.mode === 'megapixels' ? size.mp : size.mode === 'original' ? 0 : size.px;
 }
 
-/** Spec 5.5: format, size, metadata, file names and where it goes, from a preset or by hand. */
+/**
+ * Spec 5.5: format, size, metadata, file names and where it goes, from a
+ * preset or by hand. Every field has a visible label; why Export is off is
+ * said in words (and read with the button); the export's start and end are
+ * announced, its failures as an alert.
+ */
 export function ExportDialog() {
   const session = useSession();
   const view = useLibraryView();
@@ -72,6 +78,8 @@ export function ExportDialog() {
   const [name, setName] = useState(defaultName);
   const running = progress !== null && !progress.finished;
   const format = settings.format;
+  const id = useId();
+  const doneRef = useRef<HTMLButtonElement>(null);
 
   const change = (patch: Partial<ExportSettings>, extrasPatch: Partial<ExportExtras> = {}) => {
     setState((s) => fit({ ...s.settings, ...patch }, { ...s.extras, ...extrasPatch }));
@@ -89,6 +97,20 @@ export function ExportDialog() {
   const problem = exportSettingsProblem(settings);
   const keepsLocation = locationKept(settings);
   const tiffBlocked = format === 'tiff' && !tiff;
+  const isBlocked = running || versionIds.length === 0 || problem !== null || tiffBlocked;
+  const finished = progress?.finished ?? false;
+
+  // Export goes from the footer when it finishes, with focus on it; Done takes its place.
+  useEffect(() => {
+    if (finished && focusedElement() === null) doneRef.current?.focus();
+  }, [finished]);
+  // Said once at the start and once at the end, not for every photo; worded apart from the progress line on screen.
+  const spoken =
+    progress === null
+      ? ''
+      : progress.finished
+        ? `Export finished: ${plural(progress.done - progress.failures.length, 'photo')} exported${progress.failures.length > 0 ? `, ${progress.failures.length} failed` : ''}.`
+        : `Export started: ${plural(progress.total, 'photo')}.`;
 
   // What the first file will be called.
   const sampleName = useMemo(() => {
@@ -139,13 +161,18 @@ export function ExportDialog() {
       onClose={close}
       footer={
         progress?.finished ? (
-          <Button variant="primary" onClick={close}>
+          <Button ref={doneRef} variant="primary" onClick={close}>
             Done
           </Button>
         ) : (
           <>
             <Button onClick={close}>{running ? 'Keep going in the background' : 'Cancel'}</Button>
-            <Button variant="primary" disabled={running || versionIds.length === 0 || problem !== null || tiffBlocked} onClick={start}>
+            <Button
+              variant="primary"
+              aria-disabled={isBlocked || undefined}
+              aria-describedby={[tiffBlocked ? `${id}-tiff` : '', problem ? `${id}-problem` : ''].filter(Boolean).join(' ') || undefined}
+              onClick={start}
+            >
               Export
             </Button>
           </>
@@ -153,11 +180,17 @@ export function ExportDialog() {
       }
     >
       <div className={styles.form}>
+        <p className={styles.srOnly} role="status">
+          {spoken}
+        </p>
         <div className={styles.columns}>
           <div className={styles.column}>
             <div className={styles.field}>
-              <span className={styles.legend}>Preset</span>
+              <label className={styles.legend} htmlFor={`${id}-preset`}>
+                Preset
+              </label>
           <ExportPresetBar
+            id={`${id}-preset`}
             presets={presets}
             selectedId={presetId}
             disabled={running}
@@ -217,8 +250,16 @@ export function ExportDialog() {
               TIFF, 16-bit <span className={styles.muted}>— for printing and further editing</span>
             </label>
           )}
-          {tiffBlocked && <p className={styles.warn}>This build cannot write TIFF yet. Choose JPEG or PNG.</p>}
-          {problem && <p className={styles.warn}>{problem}</p>}
+          {tiffBlocked && (
+            <p className={styles.warn} id={`${id}-tiff`} role="alert">
+              This build cannot write TIFF yet. Choose JPEG or PNG.
+            </p>
+          )}
+          {problem && (
+            <p className={styles.warn} id={`${id}-problem`} role="alert">
+              {problem}
+            </p>
+          )}
         </fieldset>
 
         <label className={styles.field}>
@@ -239,11 +280,13 @@ export function ExportDialog() {
         </label>
 
         <div className={styles.field}>
-          <span className={styles.legend}>Size</span>
+          <label className={styles.legend} htmlFor={`${id}-size`}>
+            Size
+          </label>
           <div className={styles.inline}>
             <select
+              id={`${id}-size`}
               className={styles.select}
-              aria-label="Size"
               disabled={running || format === 'tiff'}
               value={extras.size.mode}
               onChange={(e) => {
@@ -266,7 +309,7 @@ export function ExportDialog() {
                   type="number"
                   min={extras.size.mode === 'megapixels' ? 0.1 : 16}
                   step={extras.size.mode === 'megapixels' ? 0.1 : 1}
-                  aria-label={extras.size.mode === 'megapixels' ? 'Megapixels' : 'Pixels'}
+                  aria-label={extras.size.mode === 'megapixels' ? 'Megapixels (MP)' : 'Pixels (px)'}
                   disabled={running}
                   value={sizeValue(extras.size)}
                   onChange={(e) => {
@@ -315,44 +358,46 @@ export function ExportDialog() {
             </label>
           )}
           {keepsLocation && (
-            <p className={styles.warn} role="note">
+            <p className={styles.warn} role="alert">
               Location will be kept: these settings leave where each photo was taken in the exported files.
             </p>
           )}
           {settings.metadata !== 'none' && (
             <div className={styles.inline}>
-              <input
-                className={styles.text}
-                aria-label="Creator"
-                placeholder="Creator"
-                value={settings.creator ?? ''}
-                onChange={(e) => change({ creator: e.target.value })}
-              />
-              <input
-                className={styles.text}
-                aria-label="Copyright"
-                placeholder="© 2026 Your name"
-                value={settings.copyright ?? ''}
-                onChange={(e) => change({ copyright: e.target.value })}
-              />
+              <label className={styles.labelled}>
+                <span className={styles.legend}>Creator</span>
+                <input className={styles.text} value={settings.creator ?? ''} onChange={(e) => change({ creator: e.target.value })} />
+              </label>
+              <label className={styles.labelled}>
+                <span className={styles.legend}>Copyright</span>
+                <input
+                  className={styles.text}
+                  placeholder="© 2026 Your name"
+                  value={settings.copyright ?? ''}
+                  onChange={(e) => change({ copyright: e.target.value })}
+                />
+              </label>
             </div>
           )}
         </fieldset>
 
-        <label className={styles.field}>
-          <span className={styles.legend}>File names</span>
+        <div className={styles.field}>
+          <label className={styles.legend} htmlFor={`${id}-names`}>
+            File names
+          </label>
           <input
+            id={`${id}-names`}
             className={styles.text}
-            aria-label="File name template"
+            aria-describedby={`${id}-tokens`}
             disabled={running}
             value={settings.fileNameTemplate}
             onChange={(e) => change({ fileNameTemplate: e.target.value })}
           />
-          <span className={styles.muted}>
+          <span className={styles.muted} id={`${id}-tokens`}>
             {TOKENS.join(' ')}
             {sampleName && ` · ${sampleName}`}
           </span>
-        </label>
+        </div>
 
         <fieldset className={styles.group} disabled={running}>
           <legend className={styles.legend}>Save to</legend>
@@ -361,13 +406,10 @@ export function ExportDialog() {
             The Exports folder in {where}
           </label>
           {destination === 'library' && (
-            <input
-              className={styles.input}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              aria-label="Folder name"
-              placeholder="Folder name"
-            />
+            <label className={styles.named}>
+              <span className={styles.legend}>Folder name</span>
+              <input className={styles.input} value={name} onChange={(e) => setName(e.target.value)} />
+            </label>
           )}
           <label className={styles.option}>
             <input type="radio" name="dest" checked={destination === 'download'} onChange={() => setDestination('download')} />
@@ -380,13 +422,10 @@ export function ExportDialog() {
             </label>
           )}
           {destination === 'download' && versionIds.length > 1 && extras.zip && (
-            <input
-              className={styles.input}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              aria-label="Zip name"
-              placeholder="Zip name"
-            />
+            <label className={styles.named}>
+              <span className={styles.legend}>Zip name</span>
+              <input className={styles.input} value={name} onChange={(e) => setName(e.target.value)} />
+            </label>
           )}
         </fieldset>
         <p className={styles.muted}>Output sharpening for screen or print is not available yet.</p>
@@ -394,7 +433,7 @@ export function ExportDialog() {
         </div>
 
         {progress && (
-          <div className={styles.progress} aria-live="polite">
+          <div className={styles.progress}>
             <div
               className={styles.bar}
               role="progressbar"

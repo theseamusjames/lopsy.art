@@ -15,6 +15,7 @@
 }
 
 .sm {
+  min-height: 24px;
   padding: 2px var(--space-2);
   font-size: var(--font-size-sm);
 }
@@ -29,30 +30,32 @@
   font-size: var(--font-size-md);
 }
 
-.button:disabled {
+.button:disabled,
+.button[aria-disabled='true'] {
   opacity: 0.4;
   cursor: default;
   pointer-events: none;
 }
 
 .button:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--ph-focus-ring);
   outline-offset: 1px;
 }
 
 .primary {
-  background: var(--color-accent);
-  color: #fff;
-  border-color: var(--color-accent);
+  background: var(--ph-primary-bg);
+  color: var(--ph-primary-text);
+  border-color: var(--ph-primary-bg);
 }
 
 .primary:hover {
-  background: var(--color-accent-hover);
-  border-color: var(--color-accent-hover);
+  background: var(--ph-primary-bg-hover);
+  border-color: var(--ph-primary-bg-hover);
 }
 
 .primary:active {
-  background: var(--color-accent-active);
+  background: var(--ph-primary-bg-active);
+  border-color: var(--ph-primary-bg-active);
 }
 
 .secondary {
@@ -79,11 +82,12 @@
 }
 
 .danger {
-  background: var(--color-error);
-  color: #fff;
-  border-color: var(--color-error);
+  background: var(--ph-danger-bg);
+  color: var(--ph-danger-text);
+  border-color: var(--ph-danger-bg);
 }
 
 .danger:hover {
-  filter: brightness(0.92);
+  background: var(--ph-danger-bg-hover);
+  border-color: var(--ph-danger-bg-hover);
 }

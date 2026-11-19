@@ -45,7 +45,9 @@ export function EmptyState({ libraryEmpty, collection, searching }: EmptyStatePr
   }
   return (
     <div className={styles.empty}>
-      <p className={styles.hint}>{message(collection, searching)}</p>
+      <p className={styles.hint} role="status">
+        {message(collection, searching)}
+      </p>
     </div>
   );
 }

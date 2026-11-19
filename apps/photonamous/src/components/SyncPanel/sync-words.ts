@@ -59,3 +59,20 @@ export function describePreviewRefresh(progress: PreviewRefreshProgress): string
   const count = `${progress.pending.toLocaleString('en-US')} ${progress.pending === 1 ? 'preview' : 'previews'}`;
   return progress.paused ? `${count} to update after editing.${failed}` : `Updating ${count}.${failed}`;
 }
+
+/** What to announce when saving changes state; null while changes merely wait, which they do after every edit. */
+export function syncAnnouncement(status: SyncStatus): string | null {
+  if (status.state === 'idle') return status.pendingOps > 0 ? null : describeSync(status);
+  return describeSync(status);
+}
+
+/** What to announce about Keep originals: All. Only its state, not every original as it arrives. */
+export function downloadAnnouncement(progress: DownloadProgress): string {
+  return progress.state === 'running' ? 'Downloading originals…' : describeDownload(progress);
+}
+
+/** What to announce about background previews: only their state, not each one as it is made. */
+export function previewAnnouncement(progress: PreviewRefreshProgress): string | null {
+  if (progress.pending > 0 && !progress.paused && progress.failed === 0) return 'Updating previews…';
+  return describePreviewRefresh(progress);
+}

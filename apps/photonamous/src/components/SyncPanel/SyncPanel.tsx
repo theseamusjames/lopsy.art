@@ -4,12 +4,18 @@ import { getBackend } from '../../app/backend-registry';
 import { isSettled, useExportProgress, useImportProgress, useOriginalsDownload, usePreviewRefresh, useSession, useSyncStatus } from '../../app/hooks';
 import { useUi } from '../../app/store';
 import { formatBytes, plural } from '../../import/import-summary';
-import { describeDownload, describePreviewRefresh, describeSync, formatWhen } from './sync-words';
+import { describeDownload, describePreviewRefresh, describeSync, downloadAnnouncement, formatWhen, previewAnnouncement, syncAnnouncement } from './sync-words';
+import { useAnnouncement } from './use-announcement';
 import { Button } from '../Button/Button';
 import { ExportShare } from '../ExportShare/ExportShare';
 import styles from './SyncPanel.module.css';
 
-/** Pending changes, last sync, errors, imports and exports in progress, and storage used. */
+/**
+ * Pending changes, last sync, errors, imports and exports in progress, and
+ * storage used. Changes of state (Saving…, Everything is saved, Offline; a
+ * download or preview update starting and ending) are announced politely,
+ * once each has settled.
+ */
 export function SyncPanel() {
   const session = useSession();
   const status = useSyncStatus();
@@ -21,6 +27,17 @@ export function SyncPanel() {
   const previewsLine = previews ? describePreviewRefresh(previews) : null;
   const [quota, setQuota] = useState<StorageQuota | null>(null);
   const [quotaError, setQuotaError] = useState<string | null>(null);
+  const spokenSync = useAnnouncement(syncAnnouncement(status), 1500);
+  const spokenDownload = useAnnouncement(downloadProgress ? downloadAnnouncement(downloadProgress) : null, 2000);
+  const spokenPreviews = useAnnouncement(previews ? previewAnnouncement(previews) : null, 2000);
+  const downloadAction =
+    !download || !downloadProgress
+      ? null
+      : downloadProgress.state === 'running'
+        ? { label: 'Pause', run: () => download.pause() }
+        : downloadProgress.state === 'paused' || (downloadProgress.state === 'done' && downloadProgress.failed > 0)
+          ? { label: downloadProgress.state === 'paused' ? 'Resume' : 'Try again', run: () => void download.resume() }
+          : null;
 
   useEffect(() => {
     let live = true;
@@ -41,6 +58,15 @@ export function SyncPanel() {
 
   return (
     <div className={styles.panel}>
+      <p className={styles.srOnly} role="status">
+        {spokenSync}
+      </p>
+      <p className={styles.srOnly} role="status">
+        {spokenDownload}
+      </p>
+      <p className={styles.srOnly} role="status">
+        {spokenPreviews}
+      </p>
       <section className={styles.section}>
         <h3 className={styles.heading}>{describeSync(status)}</h3>
         <dl className={styles.facts}>
@@ -56,16 +82,14 @@ export function SyncPanel() {
             {status.error}
           </p>
         )}
-        <Button size="sm" disabled={status.state === 'syncing'} onClick={() => void session.syncNow()}>
+        <Button size="sm" aria-disabled={status.state === 'syncing' || undefined} onClick={() => void session.syncNow()}>
           {status.state === 'error' || status.state === 'offline' ? 'Try again' : 'Save now'}
         </Button>
       </section>
 
       {previewsLine && (
         <section className={styles.section}>
-          <p className={styles.muted} role="status">
-            {previewsLine}
-          </p>
+          <p className={styles.muted}>{previewsLine}</p>
         </section>
       )}
 
@@ -97,17 +121,10 @@ export function SyncPanel() {
       {download && downloadProgress && (
         <section className={styles.section}>
           <h3 className={styles.heading}>Originals on this device</h3>
-          <p className={styles.muted} role="status">
-            {describeDownload(downloadProgress)}
-          </p>
-          {downloadProgress.state === 'running' && (
-            <Button size="sm" onClick={() => download.pause()}>
-              Pause
-            </Button>
-          )}
-          {(downloadProgress.state === 'paused' || (downloadProgress.state === 'done' && downloadProgress.failed > 0)) && (
-            <Button size="sm" onClick={() => void download.resume()}>
-              {downloadProgress.state === 'paused' ? 'Resume' : 'Try again'}
+          <p className={styles.muted}>{describeDownload(downloadProgress)}</p>
+          {downloadAction && (
+            <Button size="sm" onClick={downloadAction.run}>
+              {downloadAction.label}
             </Button>
           )}
         </section>

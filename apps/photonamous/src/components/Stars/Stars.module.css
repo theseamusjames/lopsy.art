@@ -4,17 +4,25 @@
   gap: 1px;
 }
 
+.stars[role='radiogroup'] {
+  gap: 0;
+}
+
 .on {
   color: var(--star-on);
   fill: var(--star-on);
 }
 
 .off {
-  color: var(--color-text-disabled);
+  color: var(--ph-control-edge);
 }
 
 .button {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
   padding: 2px;
   border: none;
   background: transparent;
@@ -27,7 +35,8 @@
 }
 
 .button:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 1px;
 }
 
 .stars[data-mixed='true'] .on {

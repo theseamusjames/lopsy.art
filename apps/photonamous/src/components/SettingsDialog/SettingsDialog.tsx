@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { RepairReport } from '@lopsy/photos-core/library/repair';
 import type { KeepOriginals } from '@lopsy/photos-core/cache/keep-originals';
 import { getBackend } from '../../app/backend-registry';
@@ -10,6 +10,7 @@ import { describeHealth, loadDriveAddMode, saveDriveAddMode, type DriveAddMode }
 import { formatBytes, plural } from '../../import/import-summary';
 import { Button } from '../Button/Button';
 import { Modal } from '../Modal/Modal';
+import { focusedElement } from '../Modal/focus-trap';
 import { LeftoverAction } from '../LeftoverAction/LeftoverAction';
 import styles from './SettingsDialog.module.css';
 
@@ -19,7 +20,12 @@ const KEEP_CHOICES: readonly { readonly mode: KeepOriginals; readonly label: str
   { mode: 'none', label: 'None', hint: 'Only the photo you are editing.' },
 ];
 
-/** This device, adding from Drive, the library's health, and closing the library. */
+/**
+ * This device, adding from Drive, the library's health, and closing the
+ * library. It opens on its first heading rather than on a button that
+ * clears or changes something; Check library's progress and findings are
+ * announced.
+ */
 export function SettingsDialog() {
   const session = useSession();
   const openDialog = useUi((s) => s.openDialog);
@@ -30,6 +36,9 @@ export function SettingsDialog() {
   const [checking, setChecking] = useState(false);
   const [report, setReport] = useState<RepairReport | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cleared, setCleared] = useState('');
+  const checkRef = useRef<HTMLButtonElement>(null);
+  const driveHeadingId = useId();
   const isDrive = session.adapter.kind === 'google-drive';
   const [keep, setKeep] = useState<KeepOriginals | null>(() => getBackend().getKeepOriginals(session));
   const chooseKeep = (mode: KeepOriginals) => {
@@ -57,6 +66,8 @@ export function SettingsDialog() {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setChecking(false);
+      // A Restore or Move button that had focus may have gone with what it fixed.
+      if (focusedElement() === null) checkRef.current?.focus();
     }
   };
 
@@ -81,7 +92,9 @@ export function SettingsDialog() {
     <Modal title="Settings" width="md" onClose={() => openDialog(null)}>
       <div className={styles.sections}>
         <section className={styles.section}>
-          <h3 className={styles.heading}>This device</h3>
+          <h3 className={styles.heading} tabIndex={-1} data-autofocus>
+            This device
+          </h3>
           <dl className={styles.facts}>
             <dt>Name</dt>
             <dd>{device?.deviceName ?? '…'}</dd>
@@ -97,20 +110,30 @@ export function SettingsDialog() {
           {device?.cacheBytes !== null && (
             <Button
               size="sm"
-              disabled={clearing}
+              aria-disabled={clearing || undefined}
               onClick={async () => {
                 setClearing(true);
-                await getBackend()
+                const isCleared = await getBackend()
                   .clearDeviceCache(session)
-                  .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+                  .then(
+                    () => true,
+                    (e: unknown) => {
+                      setError(e instanceof Error ? e.message : String(e));
+                      return false;
+                    },
+                  );
                 clearPreviewCache();
                 setClearing(false);
+                if (isCleared) setCleared('Cleared this device’s copies.');
                 refreshDevice();
               }}
             >
               Clear this device’s copies
             </Button>
           )}
+          <p className={styles.srOnly} role="status">
+            {cleared}
+          </p>
           {keep !== null && (
             <fieldset className={styles.choices}>
               <legend className={styles.legend}>Keep originals on this device</legend>
@@ -134,60 +157,66 @@ export function SettingsDialog() {
 
         {isDrive && (
           <section className={styles.section}>
-            <h3 className={styles.heading}>Adding from Google Drive</h3>
-            <label className={styles.option}>
-              <input
-                type="radio"
-                name="drive-add"
-                checked={driveMode === 'move'}
-                onChange={() => {
-                  setDriveMode('move');
-                  saveDriveAddMode('move');
-                }}
-              />
-              Move them into the library’s Originals folder
-            </label>
-            <label className={styles.option}>
-              <input
-                type="radio"
-                name="drive-add"
-                checked={driveMode === 'leave'}
-                onChange={() => {
-                  setDriveMode('leave');
-                  saveDriveAddMode('leave');
-                }}
-              />
-              Leave them where they are in Drive
-            </label>
+            <h3 className={styles.heading} id={driveHeadingId}>
+              Adding from Google Drive
+            </h3>
+            <div className={styles.group} role="radiogroup" aria-labelledby={driveHeadingId}>
+              <label className={styles.option}>
+                <input
+                  type="radio"
+                  name="drive-add"
+                  checked={driveMode === 'move'}
+                  onChange={() => {
+                    setDriveMode('move');
+                    saveDriveAddMode('move');
+                  }}
+                />
+                Move them into the library’s Originals folder
+              </label>
+              <label className={styles.option}>
+                <input
+                  type="radio"
+                  name="drive-add"
+                  checked={driveMode === 'leave'}
+                  onChange={() => {
+                    setDriveMode('leave');
+                    saveDriveAddMode('leave');
+                  }}
+                />
+                Leave them where they are in Drive
+              </label>
+            </div>
           </section>
         )}
 
         <section className={styles.section}>
           <h3 className={styles.heading}>Library health</h3>
           <p className={styles.muted}>Checks that every photo’s original is still in storage and unchanged.</p>
-          <Button size="sm" disabled={checking} onClick={() => void check()}>
+          <Button ref={checkRef} size="sm" aria-disabled={checking || undefined} onClick={() => void check()}>
             {checking ? 'Checking…' : 'Check library'}
           </Button>
-          {report && (
-            <div className={styles.report} role="status">
-              {describeHealth(report).map((line) => (
-                <p key={line}>{line}</p>
-              ))}
-              <div className={styles.actions}>
-                {report.trashed.length > 0 && (
-                  <Button size="sm" variant="primary" disabled={checking} onClick={() => void restore()}>
-                    Restore {plural(report.trashed.length, 'original')} from the trash
-                  </Button>
-                )}
-                <LeftoverAction leftovers={report.leftovers} disabled={checking} onDone={() => void check()} />
-                {report.orphans.length > 0 && (
-                  <Button size="sm" variant="primary" onClick={addOrphans}>
-                    Add {plural(report.orphans.length, 'photo')} back to the library
-                  </Button>
-                )}
+          <div className={styles.reportRegion} role="status">
+            {report && (
+              <div className={styles.report}>
+                {describeHealth(report).map((line) => (
+                  <p key={line}>{line}</p>
+                ))}
+                <div className={styles.actions}>
+                  {report.trashed.length > 0 && (
+                    <Button size="sm" variant="primary" aria-disabled={checking || undefined} onClick={() => void restore()}>
+                      Restore {plural(report.trashed.length, 'original')} from the trash
+                    </Button>
+                  )}
+                  <LeftoverAction leftovers={report.leftovers} disabled={checking} onDone={() => void check()} />
+                  {report.orphans.length > 0 && (
+                    <Button size="sm" variant="primary" onClick={addOrphans}>
+                      Add {plural(report.orphans.length, 'photo')} back to the library
+                    </Button>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
           {error && (
             <p className={styles.error} role="alert">
               {error}

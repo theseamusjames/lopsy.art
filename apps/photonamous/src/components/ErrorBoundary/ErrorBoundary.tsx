@@ -30,14 +30,16 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     const { error } = this.state;
     if (!error) return this.props.children;
     return (
-      <div className={styles.screen} role="alert">
-        <h1 className={styles.title}>Something went wrong</h1>
-        <p className={styles.text}>Photonamous hit a problem it could not recover from. Your library is saved as you work; reloading opens it again.</p>
-        <p className={styles.detail}>{error.message}</p>
+      <main className={styles.screen}>
+        <div className={styles.message} role="alert">
+          <h1 className={styles.title}>Something went wrong</h1>
+          <p className={styles.text}>Photonamous hit a problem it could not recover from. Your library is saved as you work; reloading opens it again.</p>
+          <p className={styles.detail}>{error.message}</p>
+        </div>
         <Button variant="primary" onClick={() => window.location.reload()}>
           Reload
         </Button>
-      </div>
+      </main>
     );
   }
 }

@@ -9,7 +9,7 @@ import { Button } from '../Button/Button';
 import { Modal } from '../Modal/Modal';
 import styles from './DeleteDialog.module.css';
 
-/** Confirms moving photos to the trash, naming how many and how much space. */
+/** Confirms moving photos to the trash, naming how many and how much space. It opens on Keep, not on the button that deletes. */
 export function DeleteDialog() {
   const session = useSession();
   const view = useLibraryView();
@@ -68,7 +68,7 @@ export function DeleteDialog() {
           <Button onClick={() => askDelete([])} data-autofocus>
             {ids.length === 1 ? 'Keep it' : 'Keep them'}
           </Button>
-          <Button variant="danger" disabled={busy} onClick={() => void confirm()}>
+          <Button variant="danger" aria-disabled={busy || undefined} onClick={() => void confirm()}>
             Move to the trash
           </Button>
         </>

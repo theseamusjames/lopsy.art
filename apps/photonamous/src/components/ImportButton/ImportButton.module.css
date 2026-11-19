@@ -2,11 +2,24 @@
   position: relative;
 }
 
+.popup {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: var(--z-popover);
+  width: 278px;
+  padding: var(--space-2);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  text-align: left;
+}
+
 .menu {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  width: 260px;
 }
 
 .item {
@@ -27,7 +40,11 @@
 .item:hover,
 .item:focus-visible {
   background: var(--color-bg-hover);
-  outline: none;
+}
+
+.item:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: -2px;
 }
 
 .item svg {
@@ -45,7 +62,7 @@
 .itemDetail {
   display: block;
   font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
+  color: var(--ph-text-muted);
 }
 
 .hint {

@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pencil, Save, Trash2 } from 'lucide-react';
 import type { ExportPreset } from '@lopsy/photos-core/library/types';
 import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
+import { focusedElement } from '../Modal/focus-trap';
 import styles from './ExportPresetBar.module.css';
 
 interface ExportPresetBarProps {
@@ -14,12 +15,30 @@ interface ExportPresetBarProps {
   onSave: (name: string) => void;
   onRename: (id: string, name: string) => void;
   onDelete: (id: string) => void;
+  /** Given to the select, and to the name box while naming, so a <label htmlFor> beside the bar names either. */
+  id?: string;
 }
 
-/** Export presets: Lopsy's and the user's, pick one, save the current settings as one, rename or delete your own. */
-export function ExportPresetBar({ presets, selectedId, disabled, onPick, onSave, onRename, onDelete }: ExportPresetBarProps) {
+/**
+ * Export presets: Lopsy's and the user's, pick one, save the current
+ * settings as one, rename or delete your own. When naming ends, or the
+ * chosen preset is deleted, focus goes back to the select.
+ */
+export function ExportPresetBar({ presets, selectedId, disabled, onPick, onSave, onRename, onDelete, id }: ExportPresetBarProps) {
   const [mode, setMode] = useState<'idle' | 'saving' | 'renaming'>('idle');
   const [text, setText] = useState('');
+  const selectRef = useRef<HTMLSelectElement>(null);
+  const wasNaming = useRef(false);
+  useEffect(() => {
+    if (mode !== 'idle') {
+      wasNaming.current = true;
+      return;
+    }
+    if (!wasNaming.current) return;
+    wasNaming.current = false;
+    // The name box has gone with focus in it.
+    if (focusedElement() === null) selectRef.current?.focus();
+  }, [mode]);
   const selected = presets.find((p) => p.id === selectedId) ?? null;
   const own = selected !== null && !selected.builtIn;
 
@@ -37,6 +56,7 @@ export function ExportPresetBar({ presets, selectedId, disabled, onPick, onSave,
     return (
       <div className={styles.bar}>
         <input
+          id={id}
           className={styles.input}
           autoFocus
           value={text}
@@ -65,6 +85,8 @@ export function ExportPresetBar({ presets, selectedId, disabled, onPick, onSave,
   return (
     <div className={styles.bar}>
       <select
+        ref={selectRef}
+        id={id}
         className={styles.select}
         aria-label="Export preset"
         disabled={disabled}
@@ -110,7 +132,15 @@ export function ExportPresetBar({ presets, selectedId, disabled, onPick, onSave,
               setMode('renaming');
             }}
           />
-          <IconButton size="sm" label={`Delete ${selected.name}`} icon={<Trash2 size={12} />} onClick={() => onDelete(selected.id)} />
+          <IconButton
+            size="sm"
+            label={`Delete ${selected.name}`}
+            icon={<Trash2 size={12} />}
+            onClick={() => {
+              selectRef.current?.focus();
+              onDelete(selected.id);
+            }}
+          />
         </>
       )}
     </div>

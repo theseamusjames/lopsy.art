@@ -2,10 +2,10 @@ import { formatChord, shortcutGroups } from '../../shortcuts/registry';
 import { isMac } from '../../app/hooks';
 import styles from './ShortcutHelp.module.css';
 
-/** Every shortcut, listed from the registry. */
+/** Every shortcut, listed from the registry, in a list that scrolls and so takes focus (arrows and Page Up/Down scroll it). */
 export function ShortcutHelp() {
   return (
-    <div className={styles.help}>
+    <div className={styles.help} role="region" aria-label="Shortcut list" tabIndex={0}>
       {shortcutGroups().map(({ group, items }) => (
         <section key={group} className={styles.group}>
           <h3 className={styles.heading}>{group}</h3>

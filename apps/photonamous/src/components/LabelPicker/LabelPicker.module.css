@@ -1,56 +1,76 @@
 .picker {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
 }
 
+/* Each button is a 24px target around the 20px disc that shows, so the discs sit where they always did. */
 .swatch,
 .none {
-  width: 20px;
-  height: 20px;
-  border-radius: var(--radius-round);
-  border: 2px solid transparent;
-  cursor: pointer;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   padding: 0;
+  border: none;
+  border-radius: var(--radius-round);
+  background: transparent;
+  cursor: pointer;
 }
 
-.swatch[data-label='red'] {
+.swatch::before,
+.none::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-round);
+}
+
+.swatch[data-label='red']::before {
   background: var(--label-red);
 }
-.swatch[data-label='yellow'] {
+.swatch[data-label='yellow']::before {
   background: var(--label-yellow);
 }
-.swatch[data-label='green'] {
+.swatch[data-label='green']::before {
   background: var(--label-green);
 }
-.swatch[data-label='blue'] {
+.swatch[data-label='blue']::before {
   background: var(--label-blue);
 }
-.swatch[data-label='purple'] {
+.swatch[data-label='purple']::before {
   background: var(--label-purple);
 }
 
-.swatch[aria-checked='true'] {
+.swatch[aria-checked='true']::before {
   border-color: var(--color-text-primary);
   box-shadow: 0 0 0 2px var(--color-bg-secondary) inset;
 }
 
 .none {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border-color: var(--color-border-strong);
-  color: var(--color-text-secondary);
+  color: var(--ph-text-muted);
+}
+
+.none::before {
+  border-color: var(--ph-control-edge);
+}
+
+.none svg {
+  position: relative;
 }
 
 .none[aria-checked='true'] {
-  border-color: var(--color-text-primary);
   color: var(--color-text-primary);
+}
+
+.none[aria-checked='true']::before {
+  border-color: var(--color-text-primary);
 }
 
 .swatch:focus-visible,
 .none:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 1px;
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: -1px;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decimalsOf, dragValue, formatValue, fraction, keyValue, parseValue, snap } from './slider-math';
+import { decimalsOf, dragValue, formatValue, fraction, keyValue, parseValue, snap, valueText } from './slider-math';
 
 const EV = { min: -5, max: 5, step: 0.01 };
 const PCT = { min: -100, max: 100, step: 1 };
@@ -70,5 +70,12 @@ describe('fraction', () => {
     expect(fraction(0, PCT)).toBe(0.5);
     expect(fraction(-100, PCT)).toBe(0);
     expect(fraction(500, PCT)).toBe(1);
+  });
+});
+
+describe('valueText', () => {
+  it('says the readout with its unit, or the readout alone', () => {
+    expect(valueText(formatValue(0.5, EV), 'EV')).toBe('+0.50 EV');
+    expect(valueText('−12')).toBe('−12');
   });
 });

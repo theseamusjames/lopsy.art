@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { LibrarySession } from '@lopsy/photos-core/library/types';
 import type { ExportFolder } from '../../app/backend';
 import { Button } from '../Button/Button';
 import { Modal } from '../Modal/Modal';
+import { focusedElement } from '../Modal/focus-trap';
 import { shareWarning } from './share-words';
 import styles from './ExportShare.module.css';
 
@@ -25,10 +26,19 @@ type ShareState =
  * and Copy share link, which shares the export folder with anyone who has
  * the link only after the user confirms exactly that. Shown only for
  * storage that can do these (the adapter's optional webLink and shareLink).
+ * Whether the link was copied is announced; when the button that had focus
+ * goes (sharing, stopping), focus moves to the link or to Copy share link.
  */
 export function ExportShare({ session, folder, photoCount }: ExportShareProps) {
   const adapter = session.adapter;
   const [state, setState] = useState<ShareState>({ kind: 'idle' });
+  const shareRef = useRef<HTMLButtonElement>(null);
+  const linkRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (focusedElement() !== null) return;
+    if (state.kind === 'shared') linkRef.current?.focus();
+    else shareRef.current?.focus();
+  }, [state.kind]);
   const storageName = adapter.kind === 'google-drive' ? 'Drive' : 'storage';
   const canShare = typeof adapter.shareLink === 'function';
   if (folder.webLink === null && !canShare) return null;
@@ -68,7 +78,7 @@ export function ExportShare({ session, folder, photoCount }: ExportShareProps) {
           </Button>
         )}
         {canShare && state.kind !== 'shared' && (
-          <Button size="sm" disabled={state.kind === 'working'} onClick={() => setState({ kind: 'confirming' })}>
+          <Button ref={shareRef} size="sm" aria-disabled={state.kind === 'working' || undefined} onClick={() => setState({ kind: 'confirming' })}>
             Copy share link
           </Button>
         )}
@@ -78,11 +88,11 @@ export function ExportShare({ session, folder, photoCount }: ExportShareProps) {
           </Button>
         )}
       </div>
+      <p className={styles.note} role="status">
+        {state.kind === 'shared' ? (state.copied ? 'Link copied.' : 'Copy this link:') : ''}
+      </p>
       {state.kind === 'shared' && (
-        <p className={styles.note} role="status">
-          {state.copied ? 'Link copied. ' : 'Copy this link: '}
-          <input className={styles.link} readOnly value={state.link} aria-label="Share link" onFocus={(e) => e.currentTarget.select()} />
-        </p>
+        <input ref={linkRef} className={styles.link} readOnly value={state.link} aria-label="Share link" onFocus={(e) => e.currentTarget.select()} />
       )}
       {state.kind === 'error' && (
         <p className={styles.error} role="alert">

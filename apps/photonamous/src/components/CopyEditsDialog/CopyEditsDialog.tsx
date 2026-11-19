@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Button } from '../Button/Button';
 import { Modal } from '../Modal/Modal';
 import styles from './CopyEditsDialog.module.css';
@@ -21,6 +21,7 @@ interface CopyEditsDialogProps {
 /** Asks which groups of edits to copy. Used by the library and the Edit view. */
 export function CopyEditsDialog({ sourceName, groups, initial, onCopy, onClose }: CopyEditsDialogProps) {
   const [chosen, setChosen] = useState<ReadonlySet<string>>(() => new Set(initial));
+  const leadId = useId();
   const toggle = (id: string) =>
     setChosen((prev) => {
       const next = new Set(prev);
@@ -48,7 +49,9 @@ export function CopyEditsDialog({ sourceName, groups, initial, onCopy, onClose }
         </>
       }
     >
-      <p className={styles.lead}>Choose what to copy. Paste puts it on other photos without changing anything else.</p>
+      <p className={styles.lead} id={leadId}>
+        Choose what to copy. Paste puts it on other photos without changing anything else.
+      </p>
       <div className={styles.quick}>
         <button type="button" className={styles.link} onClick={() => setChosen(new Set(groups.map((g) => g.id)))}>
           All
@@ -57,7 +60,7 @@ export function CopyEditsDialog({ sourceName, groups, initial, onCopy, onClose }
           None
         </button>
       </div>
-      <div className={styles.groups} role="group" aria-label="Edits to copy">
+      <div className={styles.groups} role="group" aria-label="Edits to copy" aria-describedby={leadId}>
         {groups.map((g) => (
           <label key={g.id} className={styles.option}>
             <input type="checkbox" checked={chosen.has(g.id)} onChange={() => toggle(g.id)} />

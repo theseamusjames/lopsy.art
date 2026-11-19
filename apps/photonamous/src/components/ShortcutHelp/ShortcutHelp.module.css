@@ -1,11 +1,18 @@
+/* Two columns, or one on a narrow window, so the list never needs scrolling sideways. */
 .help {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: var(--space-3) var(--space-6);
-  width: 600px;
+  width: min(600px, calc(100vw - var(--space-8)));
   max-height: 70vh;
   overflow: auto;
   padding: var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.help:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: -2px;
 }
 
 .group {

@@ -1,5 +1,5 @@
 import { useId, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
-import { dragValue, formatValue, fraction, keyValue, parseValue, type SliderRange } from './slider-math';
+import { dragValue, formatValue, fraction, keyValue, parseValue, valueText, type SliderRange } from './slider-math';
 import styles from './Slider.module.css';
 
 export interface SliderProps {
@@ -20,6 +20,8 @@ export interface SliderProps {
    * itself (Temperature in Kelvin): the slider keeps its own units.
    */
   readonly display?: SliderDisplay;
+  /** Said after the value by screen readers ("EV" for "+0.50 EV"); the readout is unchanged. */
+  readonly unit?: string;
 }
 
 export interface SliderDisplay {
@@ -44,7 +46,7 @@ const ADJUST_KEYS = new Set(['ArrowRight', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 
  * plain click never changes it; double-click resets; arrows step (Shift
  * for ten steps); the readout takes a typed number.
  */
-export function Slider({ label, value, min, max, step, defaultValue, onChange, onCommit, isDisabled = false, display }: SliderProps) {
+export function Slider({ label, value, min, max, step, defaultValue, onChange, onCommit, isDisabled = false, display, unit }: SliderProps) {
   const range: SliderRange = { min, max, step };
   const id = useId();
   const trackRef = useRef<HTMLDivElement>(null);
@@ -165,7 +167,7 @@ export function Slider({ label, value, min, max, step, defaultValue, onChange, o
         aria-valuemin={min}
         aria-valuemax={max}
         aria-valuenow={value}
-        aria-valuetext={readout}
+        aria-valuetext={valueText(readout, unit)}
         aria-disabled={isDisabled || undefined}
         data-dragging={isDragging || undefined}
         style={

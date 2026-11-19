@@ -4,6 +4,14 @@
   margin-bottom: var(--space-2);
 }
 
+.label {
+  display: block;
+  margin-bottom: var(--space-1);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-ui);
+  color: var(--color-text-secondary);
+}
+
 .input {
   width: 100%;
   height: 30px;
@@ -14,5 +22,9 @@
   color: var(--color-text-primary);
   font-family: var(--font-ui);
   font-size: var(--font-size-md);
-  outline: none;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 1px;
 }

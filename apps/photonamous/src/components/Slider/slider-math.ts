@@ -69,6 +69,11 @@ export function formatValue(value: number, range: SliderRange): string {
   return magnitude;
 }
 
+/** What a screen reader says for the value: the readout, then the unit ("+0.50 EV"). */
+export function valueText(readout: string, unit?: string): string {
+  return unit ? `${readout} ${unit}` : readout;
+}
+
 /** Reads what the user typed; accepts '−', '+' and a decimal comma. Null when it is not a number. */
 export function parseValue(text: string, range: SliderRange): number | null {
   const cleaned = text.trim().replace(/−/g, '-').replace(',', '.');

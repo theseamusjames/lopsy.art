@@ -23,6 +23,7 @@ function Controlled({ disabled = false }: { disabled?: boolean }) {
         onChange={setValue}
         onCommit={setValue}
         isDisabled={disabled}
+        unit="EV"
         display={{ format: (v) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}`, parse: (t) => (Number.isFinite(Number(t)) ? Number(t) : null) }}
       />
     </div>
