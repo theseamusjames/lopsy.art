@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Button } from '../Button/Button';
 import { Modal } from '../Modal/Modal';
 import styles from './NewVersionDialog.module.css';
@@ -13,6 +13,7 @@ interface NewVersionDialogProps {
 /** Names a new version before it is made: another edit of the photo, the original untouched. */
 export function NewVersionDialog({ suggested, onCreate, onClose }: NewVersionDialogProps) {
   const [name, setName] = useState(suggested);
+  const id = useId();
   const create = () => onCreate(name.trim() || suggested);
   return (
     <Modal
@@ -28,10 +29,16 @@ export function NewVersionDialog({ suggested, onCreate, onClose }: NewVersionDia
         </>
       }
     >
-      <p className={styles.lead}>A new version starts from this one’s edits. The original is never changed.</p>
+      <p className={styles.lead} id={`${id}-lead`}>
+        A new version starts from this one’s edits. The original is never changed.
+      </p>
+      <label className={styles.label} htmlFor={`${id}-name`}>
+        Version name
+      </label>
       <input
+        id={`${id}-name`}
         className={styles.input}
-        aria-label="Version name"
+        aria-describedby={`${id}-lead`}
         value={name}
         data-autofocus
         onFocus={(e) => e.currentTarget.select()}

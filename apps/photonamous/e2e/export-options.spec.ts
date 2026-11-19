@@ -44,7 +44,7 @@ test('export two photos as one zip, named by a template and sized by short edge'
   await page.keyboard.press('Control+a');
 
   await page.getByRole('button', { name: /^Export 2/ }).click();
-  await page.getByRole('textbox', { name: 'File name template' }).fill('trip-{seq:3}-{name}');
+  await page.getByRole('textbox', { name: 'File names' }).fill('trip-{seq:3}-{name}');
   await page.getByRole('combobox', { name: 'Size' }).selectOption('short');
   await page.getByRole('spinbutton', { name: 'Pixels' }).fill('160');
   // Remove location is on and shown; the default keeps nothing that says where.
@@ -90,7 +90,7 @@ test('export two photos as one zip, named by a template and sized by short edge'
   await page.getByRole('combobox', { name: 'Size' }).selectOption('short');
   await page.getByRole('spinbutton', { name: 'Pixels' }).fill('160');
   await page.getByRole('radio', { name: 'None', exact: true }).check();
-  await page.getByRole('textbox', { name: 'File name template' }).fill('{date}-{name}');
+  await page.getByRole('textbox', { name: 'File names' }).fill('{date}-{name}');
   await page.getByRole('button', { name: 'Save these settings as a preset' }).click();
   await page.getByRole('textbox', { name: 'Preset name' }).fill('Small PNG');
   await page.keyboard.press('Enter');
@@ -103,5 +103,5 @@ test('export two photos as one zip, named by a template and sized by short edge'
   await expect(page.getByRole('combobox', { name: 'Size' })).toHaveValue('short');
   await expect(page.getByRole('spinbutton', { name: 'Pixels' })).toHaveValue('160');
   await expect(page.getByRole('radio', { name: 'None', exact: true })).toBeChecked();
-  await expect(page.getByRole('textbox', { name: 'File name template' })).toHaveValue('{date}-{name}');
+  await expect(page.getByRole('textbox', { name: 'File names' })).toHaveValue('{date}-{name}');
 });

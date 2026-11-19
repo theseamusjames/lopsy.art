@@ -32,7 +32,7 @@ export function LeftoverAction({ leftovers, disabled = false, onDone }: Leftover
     }
   };
   return (
-    <Button size="sm" variant="primary" disabled={disabled || busy} onClick={() => void run()}>
+    <Button size="sm" variant="primary" aria-disabled={disabled || busy || undefined} onClick={() => void run()}>
       Move {plural(leftovers.length, 'original')} of deleted photos to the trash
     </Button>
   );

@@ -30,7 +30,8 @@
   font-size: var(--font-size-md);
 }
 
-.button:disabled {
+.button:disabled,
+.button[aria-disabled='true'] {
   opacity: 0.4;
   cursor: default;
   pointer-events: none;

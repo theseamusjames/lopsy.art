@@ -1,7 +1,6 @@
 .share {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
   width: 100%;
 }
 
@@ -11,12 +10,19 @@
   gap: var(--space-2);
 }
 
+/* The status line stays on the page, empty, so "Link copied." is announced; it takes no room until then. */
 .note {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
+}
+
+.note:not(:empty),
+.error {
+  margin-top: var(--space-2);
+}
+
+.note + .link {
+  margin-top: var(--space-1);
 }
 
 .link {
