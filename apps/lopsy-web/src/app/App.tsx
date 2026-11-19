@@ -69,7 +69,6 @@ export function App() {
   const viewport = useEditorStore((s) => s.viewport);
   const layers = useEditorStore((s) => s.document.layers);
   const activeLayerId = useEditorStore((s) => s.document.activeLayerId);
-  const setActiveLayer = useEditorStore((s) => s.setActiveLayer);
 
   const documentReady = useEditorStore((s) => s.documentReady);
   const createDocument = useEditorStore((s) => s.createDocument);
@@ -163,7 +162,7 @@ export function App() {
   );
 
   // Canvas interaction (drawing tools)
-  const { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform, nudgeMove, nudgeSelection } = useCanvasInteraction(screenToCanvas, containerRef, screenToPixel);
+  const { handleToolDown, handleToolMove, handleToolUp, nudgeMove, nudgeSelection } = useCanvasInteraction(screenToCanvas, containerRef, screenToPixel);
 
   // Pre-warm brush GPU resources on paint-tool activation so the first
   // stroke on a large canvas doesn't pay a visible allocation cost.
@@ -179,7 +178,6 @@ export function App() {
   useKeyboardShortcuts({
     canvasRef,
     setPointerMode,
-    clearPersistentTransform,
     nudgeMove,
     nudgeSelection,
   });
@@ -194,11 +192,6 @@ export function App() {
     handleToolUp,
     updateHoveredHandle,
   });
-
-  const handleSelectLayer = useCallback((id: string) => {
-    clearPersistentTransform();
-    setActiveLayer(id);
-  }, [clearPersistentTransform, setActiveLayer]);
 
   const renderPanel = useCallback((panelId: string): ReactNode => {
     switch (panelId) {
@@ -217,11 +210,11 @@ export function App() {
       case 'text':
         return <TextPanel />;
       case 'layers':
-        return <LayerPanel onSelectLayer={handleSelectLayer} />;
+        return <LayerPanel />;
       default:
         return null;
     }
-  }, [handleSelectLayer]);
+  }, []);
 
   if (!hasWebGL2) {
     return <WebGL2Warning />;

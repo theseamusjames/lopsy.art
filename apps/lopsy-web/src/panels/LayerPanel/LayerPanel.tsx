@@ -9,16 +9,13 @@ import { hasCombinableSelection } from '../../app/interactions/selection-handler
 import { buildFlatDisplayList } from '../../layers/group-utils';
 import { useLayerDnd } from './useLayerDnd';
 import { addMaskAndEdit, removeMaskAndLeaveEdit } from './mask-actions';
+import { activateLayerFromPanel, selectLayerFromPanel } from '../../app/interactions/layer-activation';
 import { LayerRow } from './LayerRow';
 import { LayerContextMenu } from './LayerContextMenu';
 import { useState } from 'react';
 import styles from './LayerPanel.module.css';
 
-interface LayerPanelProps {
-  onSelectLayer: (id: string) => void;
-}
-
-export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
+export function LayerPanel() {
   const layers = useEditorStore((s) => s.document.layers);
   const activeLayerId = useEditorStore((s) => s.document.activeLayerId);
   const selectedLayerIds = useEditorStore((s) => s.document.selectedLayerIds);
@@ -79,10 +76,9 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
       e.preventDefault();
       selectLayerRange(activeLayerId, layerId);
     } else {
-      onSelectLayer(layerId);
-      setMaskEditMode(false);
+      activateLayerFromPanel(layerId);
     }
-  }, [toggleLayerSelection, selectLayerRange, onSelectLayer, activeLayerId, setMaskEditMode]);
+  }, [toggleLayerSelection, selectLayerRange, activeLayerId]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, layerId: string) => {
     if (isRootGroup(layerId)) return;
@@ -99,10 +95,10 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
     if (showEffectsDrawer && layerId === activeLayerId) {
       setShowEffectsDrawer(false);
     } else {
-      onSelectLayer(layerId);
+      selectLayerFromPanel(layerId);
       setShowEffectsDrawer(true);
     }
-  }, [showEffectsDrawer, activeLayerId, setShowEffectsDrawer, onSelectLayer]);
+  }, [showEffectsDrawer, activeLayerId, setShowEffectsDrawer]);
 
   const handleAddMask = useCallback((layerId: string) => {
     addMaskAndEdit(layerId);
@@ -192,7 +188,6 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
             onToggleVisibility={onToggleVisibility}
             onToggleGroupCollapsed={toggleGroupCollapsed}
             onThumbnailCmdClick={handleThumbnailCmdClick}
-            onSelectLayer={onSelectLayer}
             onSetMaskEditMode={setMaskEditMode}
             onToggleLock={toggleLayerLock}
             onRename={renameLayer}

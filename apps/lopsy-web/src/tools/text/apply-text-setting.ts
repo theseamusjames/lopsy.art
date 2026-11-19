@@ -114,11 +114,12 @@ export function endTextLayerHistory(): void {
 /**
  * Apply a one-shot setting change (a select or toggle) as its own history
  * entry. Unlike a slider drag it takes the synchronous re-render path, so a
- * Style change also loads the face it needs (#1152).
+ * Style change also loads the face it needs (#1152). Resolves once that face
+ * has loaded and the text was re-rendered with it.
  */
-export function applyDiscreteTextSetting<K extends keyof TextSettings>(key: K, value: TextSettings[K]): void {
+export function applyDiscreteTextSetting<K extends keyof TextSettings>(key: K, value: TextSettings[K]): Promise<void> {
   pushTextLayerHistory();
-  applyTextSetting(key, value);
+  return applyTextSetting(key, value);
 }
 
 /**
@@ -262,18 +263,21 @@ function refreshTextAfterFontLoad(
  * `endTextLayerHistory`) the GPU re-render is coalesced to one per animation
  * frame; the store still updates synchronously so React reflects the value
  * without lag.
+ *
+ * Resolves once a face a Style change needed has loaded and been rendered
+ * with (at once for every other setting).
  */
-export function applyTextSetting<K extends keyof TextSettings>(key: K, value: TextSettings[K]): void {
+export function applyTextSetting<K extends keyof TextSettings>(key: K, value: TextSettings[K]): Promise<void> {
   const previousAlign = useToolSettingsStore.getState().settings.text.align;
   useToolSettingsStore.getState().setTextSetting(key, value);
 
   const layerKey = (SETTING_TO_LAYER as Record<string, keyof TextLayer | undefined>)[key];
-  if (!layerKey) return;
+  if (!layerKey) return Promise.resolve();
   const layer = selectedCommittedTextLayer();
   if (!layer) {
-    if (key === 'fontStyle') refreshWhenStyleLoads(null);
+    const loading = key === 'fontStyle' ? refreshWhenStyleLoads(null) : Promise.resolve();
     if (key === 'align') keepEditedBlockInPlace(previousAlign, value as TextAlign);
-    return;
+    return loading;
   }
 
   const clamped = useToolSettingsStore.getState().settings.text[key];
@@ -288,15 +292,16 @@ export function applyTextSetting<K extends keyof TextSettings>(key: K, value: Te
     // 250 Hz pen tablet stops rasterizing multiple times per displayed frame.
     rerenderCoalesced(layer.id);
     if (key === 'fontStyle') {
-      refreshWhenStyleLoads({ id: layer.id, anchorX: dragAnchor.anchorX, anchorY: dragAnchor.anchorY });
+      return refreshWhenStyleLoads({ id: layer.id, anchorX: dragAnchor.anchorX, anchorY: dragAnchor.anchorY });
     }
-    return;
+    return Promise.resolve();
   }
 
   const anchor = rerenderLayer(layer, { ...layer, [layerKey]: clamped } as TextLayer);
   if (key === 'fontStyle') {
-    refreshWhenStyleLoads(anchor ? { id: layer.id, anchorX: anchor.anchorX, anchorY: anchor.anchorY } : null);
+    return refreshWhenStyleLoads(anchor ? { id: layer.id, anchorX: anchor.anchorX, anchorY: anchor.anchorY } : null);
   }
+  return Promise.resolve();
 }
 
 /**
@@ -325,10 +330,10 @@ function keepEditedBlockInPlace(from: TextAlign, to: TextAlign): void {
  * Google families only ship the upright binary until italic is asked for
  * (#951). Load it and re-render once it lands.
  */
-function refreshWhenStyleLoads(target: { id: string; anchorX: number; anchorY: number } | null): void {
+function refreshWhenStyleLoads(target: { id: string; anchorX: number; anchorY: number } | null): Promise<void> {
   const text = useToolSettingsStore.getState().settings.text;
   const { loading } = ensureWeightLoaded(text.fontFamily, text.fontWeight);
-  void loading.then((loaded) => {
+  return loading.then((loaded) => {
     if (loaded) refreshTextAfterFontLoad(target, text.fontFamily);
   });
 }
@@ -361,9 +366,10 @@ function ensureWeightLoaded(family: string, weight: number): { weight: number; l
  * Apply a font family: record it as recent, load the CSS/engine font, snap the
  * weight to an available one, apply to a selected committed layer, and re-render
  * once the (possibly freshly downloaded) binary is available so the text doesn't
- * linger on the Inter fallback.
+ * linger on the Inter fallback. Resolves after that re-render (or once the
+ * load failed).
  */
-export function applyTextFontFamily(family: string): void {
+export function applyTextFontFamily(family: string): Promise<void> {
   const ts = useToolSettingsStore.getState();
   ts.setTextSetting('fontFamily', family);
   const name = extractFamilyName(family);
@@ -380,7 +386,7 @@ export function applyTextFontFamily(family: string): void {
   }
 
   const targetId = layer?.id;
-  void loading.then((loaded) => {
+  return loading.then((loaded) => {
     if (!loaded) return;
     refreshTextAfterFontLoad(
       targetId && anchor ? { id: targetId, anchorX: anchor.anchorX, anchorY: anchor.anchorY } : null,
@@ -394,7 +400,7 @@ export function applyTextFontFamily(family: string): void {
  * available (same anchored async-refresh as {@link applyTextFontFamily}).
  * Pushes its own history entry for committed layers.
  */
-export function applyTextWeight(weight: number): void {
+export function applyTextWeight(weight: number): Promise<void> {
   const ts = useToolSettingsStore.getState();
   const family = ts.settings.text.fontFamily;
   const { weight: resolved, loading } = ensureWeightLoaded(family, weight);
@@ -408,7 +414,7 @@ export function applyTextWeight(weight: number): void {
   }
 
   const targetId = layer?.id;
-  void loading.then((loaded) => {
+  return loading.then((loaded) => {
     if (!loaded) return;
     refreshTextAfterFontLoad(
       targetId && anchor ? { id: targetId, anchorX: anchor.anchorX, anchorY: anchor.anchorY } : null,

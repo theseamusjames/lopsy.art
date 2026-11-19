@@ -10,6 +10,7 @@ import { isModalDialogOpen } from './shortcuts/modal-guard';
 import { dismissTopPopover } from './shortcuts/escape-dismiss';
 import { handleEditShortcut } from './shortcuts/edit-shortcuts';
 import { handleDeleteKey } from './delete-key';
+import { deselectAndCommit } from './interactions/deselect-and-commit';
 import { handleZoomShortcut } from './shortcuts/zoom-shortcuts';
 import { pasteOrOpenBlob, pasteInternalClipboard } from './paste-or-open';
 import {
@@ -23,10 +24,10 @@ import {
   deleteSelection,
   selectionRange,
   isCompositionKeyEvent,
-  insertInputText,
   type TextEditState,
 } from '../tools/text/text-input';
 import { isTextInputSink } from './text-input-sink';
+import { insertIntoEditedText } from './text-edit-buffer';
 import { makeTextGeometry } from '../tools/text/text-geometry';
 import { commitTextEditing, cancelTextEditing } from '../tools/text/text-interaction';
 import { POINTER_IDLE, POINTER_SPACE_HELD, type PointerMode } from './pointer-mode';
@@ -94,7 +95,6 @@ interface KeyboardShortcutDeps {
    * when space comes up mid-drag.
    */
   setPointerMode: (next: PointerMode | ((prev: PointerMode) => PointerMode)) => void;
-  clearPersistentTransform: () => void;
   nudgeMove: (dx: number, dy: number) => void;
   nudgeSelection: (dx: number, dy: number) => void;
 }
@@ -102,7 +102,6 @@ interface KeyboardShortcutDeps {
 export function useKeyboardShortcuts({
   canvasRef,
   setPointerMode,
-  clearPersistentTransform,
   nudgeMove,
   nudgeSelection,
 }: KeyboardShortcutDeps): void {
@@ -238,9 +237,7 @@ export function useKeyboardShortcuts({
         if (uiState.activeTool === 'path' && (uiState.pathDraft?.anchors.length ?? 0) > 0) {
           uiState.clearPath();
         } else {
-          useEditorStore.getState().clearSelection();
-          uiState.setTransform(null);
-          clearPersistentTransform();
+          deselectAndCommit();
         }
         return;
       }
@@ -271,7 +268,7 @@ export function useKeyboardShortcuts({
 
       if (e.metaKey || e.ctrlKey) {
         if (handleZoomShortcut(e, viewport.zoom, setZoom, setPan, canvasRef, docWidth, docHeight)) return;
-        handleEditShortcut(e, clearPersistentTransform);
+        handleEditShortcut(e);
       }
     };
 
@@ -307,16 +304,7 @@ export function useKeyboardShortcuts({
         e.preventDefault();
         preferredXRef.current = null;
         const raw = e.clipboardData?.getData('text/plain') ?? '';
-        if (raw) {
-          const next = insertInputText({
-            text: activeTextEdit.text,
-            cursorPos: activeTextEdit.cursorPos,
-            selectionAnchor: activeTextEdit.selectionAnchor,
-            preferredX: null,
-          }, raw);
-          useUIStore.getState().updateTextEditingSelection(next.text, next.cursorPos, next.selectionAnchor);
-          useEditorStore.getState().notifyRender();
-        }
+        if (raw) insertIntoEditedText(raw);
         return;
       }
 
@@ -396,5 +384,5 @@ export function useKeyboardShortcuts({
       window.removeEventListener('blur', invalidateInternalClipboardPriority);
       window.removeEventListener('blur', releaseAllNudgeKeys);
     };
-  }, [setZoom, setPan, viewport.zoom, docWidth, docHeight, canvasRef, setPointerMode, clearPersistentTransform, nudgeMove, nudgeSelection]);
+  }, [setZoom, setPan, viewport.zoom, docWidth, docHeight, canvasRef, setPointerMode, nudgeMove, nudgeSelection]);
 }

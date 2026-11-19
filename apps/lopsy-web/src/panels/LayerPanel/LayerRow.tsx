@@ -5,6 +5,7 @@ import { isGroupLayer } from '../../layers/group-utils';
 import { LayerThumbnail } from './LayerThumbnail';
 import { MaskThumbnail } from './MaskThumbnail';
 import { useEditorStore } from '../../app/editor-store';
+import { editLayerMaskFromPanel } from '../../app/interactions/layer-activation';
 import styles from './LayerPanel.module.css';
 
 function hasActiveEffects(layer: Layer): boolean {
@@ -48,7 +49,6 @@ export interface LayerRowProps {
   onToggleVisibility: (id: string) => void;
   onToggleGroupCollapsed: (id: string) => void;
   onThumbnailCmdClick: (e: React.MouseEvent, layerId: string) => void;
-  onSelectLayer: (id: string) => void;
   onSetMaskEditMode: (on: boolean) => void;
   onToggleLock: (id: string) => void;
   onRename: (id: string, name: string) => void;
@@ -70,7 +70,7 @@ export function LayerRow({
   isEditingOpacity, isMaskEditActive, showEffectsDrawer,
   onClick, onContextMenu, onGripDown,
   onToggleVisibility, onToggleGroupCollapsed, onThumbnailCmdClick,
-  onSelectLayer, onSetMaskEditMode, onToggleLock,
+  onSetMaskEditMode, onToggleLock,
   onRename, onUpdateOpacity, onSetEditingOpacity,
   onRemoveMask, onConvertMaskToMarquee, onToggleEffectsDrawer,
 }: LayerRowProps) {
@@ -285,8 +285,7 @@ export function LayerRow({
             ].filter(Boolean).join(' ')}
             onClick={(e) => {
               e.stopPropagation();
-              onSelectLayer(layer.id);
-              onSetMaskEditMode(true);
+              editLayerMaskFromPanel(layer.id);
             }}
             role="button"
             tabIndex={0}

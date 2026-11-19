@@ -2,132 +2,12 @@ import { useEditorStore } from '../../editor-store';
 import { useUIStore } from '../../ui-store';
 import { IconButton } from '../../../components/IconButton/IconButton';
 import { FlipHorizontal2, FlipVertical2 } from 'lucide-react';
-import type { TransformMode, TransformState } from '../../../tools/transform/transform';
-import {
-  flipTransform,
-  resolveLayerTransformTargets,
-  selectionWantsLayerTransform,
-} from '../../../tools/transform/multi-layer-transform';
-import type { TextMatrix } from '../../../tools/text/text-transform';
+import type { TransformMode } from '../../../tools/transform/transform';
 import type { TextTransformMode } from '../../ui-store';
-import { getTextTransformTarget, refusePartialTextMove } from '../../interactions/text-transform-handlers';
-import { refuseMaskEditSelectionMove } from '../../interactions/mask-edit-move-guard';
-import { transformTextLayerInDocument } from '../../text-layer-transform';
-import { createTransformState, isShapeChangingTransform, mapRectThroughInverse } from '../../../tools/transform/transform';
-import { getEngine } from '../../../engine-wasm/engine-state';
-import {
-  floatSelection,
-  compositeFloatAffine,
-  dropFloat,
-  hasFloat,
-  setSelectionMask,
-} from '../../../engine-wasm/wasm-bridge';
-import { reconcileLayerBoundsWithEngine } from '../../reconcile-layer-bounds';
-import { growFloatToCover } from '../../interactions/float-growth';
-import { selectLayerAlpha } from '../../../panels/LayerPanel/layer-selection';
-import { commitLiveFloat, withLiveFloatKept } from '../../interactions/live-float';
-import {
-  beginLayerTransformSession,
-  beginLayerTransformSessionWhenMeasured,
-  getLayerTransformBox,
-  isLayerTransformCurrent,
-  markLayerTransformDirty,
-  refuseTextInLayerTransform,
-  renderLayerTransform,
-} from '../../interactions/layer-transform';
+import { createTransformState } from '../../../tools/transform/transform';
+import { commitLiveFloat } from '../../interactions/live-float';
+import { flipFromMoveOptions, wantsLayerTransform } from '../../interactions/move-transform-buttons';
 import styles from './TransformControls.module.css';
-
-/**
- * Apply an instant GPU transform (flip/rotate) to the selected content:
- * 1. Float the selection on GPU
- * 2. Render with the given inverse matrix
- * 3. Drop float (commits to layer texture)
- * 4. Re-select from committed alpha (rebuilds mask cleanly)
- */
-export function applyGpuTransform(invMatrix: Float32Array): void {
-  const engine = getEngine();
-  if (!engine) return;
-  if (applyToLiveText(invMatrix)) return;
-  if (refuseMaskEditSelectionMove()) return;
-
-  const editorState = useEditorStore.getState();
-  const sel = editorState.selection;
-  if (!sel.active || !sel.bounds || !sel.mask) return;
-
-  const activeLayerId = editorState.document.activeLayerId;
-  if (!activeLayerId) return;
-
-  // The float, pending transform included, is handled below.
-  withLiveFloatKept(() => editorState.pushHistory('Transform'));
-
-  // A float left behind by a Move drag holds its lifted pixels at their
-  // pre-drag position, while the selection (and the pixels the user sees)
-  // have moved — the layer texture already holds that moved composite.
-  // Transforming the stale float about the moved selection's centre threw
-  // every pixel outside the float buffer (#822). Commit the moved result and
-  // lift the current selection afresh. A float carrying a pending
-  // rotate/scale is left alone.
-  const pending = useUIStore.getState().transform;
-  if (hasFloat(engine) && !(pending && isShapeChangingTransform(pending))) {
-    dropFloat(engine);
-  }
-
-  const isFreshFloat = !hasFloat(engine);
-  if (isFreshFloat) {
-    const maskBytes = new Uint8Array(sel.mask.buffer, sel.mask.byteOffset, sel.mask.byteLength);
-    setSelectionMask(engine, maskBytes, sel.maskWidth, sel.maskHeight);
-    floatSelection(engine, activeLayerId);
-    reconcileLayerBoundsWithEngine(engine, activeLayerId);
-  }
-
-  // A 90° turn can carry pixels past the float buffer (#818).
-  growFloatToCover(engine, activeLayerId, mapRectThroughInverse(sel.bounds, invMatrix));
-
-  // Apply transform centered on selection bounds
-  const cx = sel.bounds.x + sel.bounds.width / 2;
-  const cy = sel.bounds.y + sel.bounds.height / 2;
-  // A kept float's pixels needn't match the selection's rect, so only a
-  // fresh float passes its source rect for crisp axis-aligned edges.
-  const srcW = isFreshFloat ? sel.bounds.width : 0;
-  const srcH = isFreshFloat ? sel.bounds.height : 0;
-  compositeFloatAffine(engine, invMatrix, cx, cy, cx, cy, srcW, srcH);
-
-  // Drop float — layer texture now has the committed result
-  dropFloat(engine);
-
-  // Re-select from committed pixel alpha (handles JS data clearing + mask rebuild)
-  void selectLayerAlpha(activeLayerId);
-}
-
-/**
- * Flip / rotate a live text layer by editing its transform instead of lifting
- * its pixels. Returns true when the request was handled — applied, or
- * refused because the selection holds only part of the text.
- */
-function applyToLiveText(invMatrix: Float32Array): boolean {
-  const target = getTextTransformTarget();
-  if (target) {
-    // The buttons pass the inverse; flips and quarter turns are
-    // orthonormal, so the forward map is its transpose.
-    const forward: TextMatrix = {
-      a: invMatrix[0] ?? 1,
-      b: invMatrix[3] ?? 0,
-      c: invMatrix[1] ?? 0,
-      d: invMatrix[4] ?? 1,
-    };
-    transformTextLayerInDocument(target.layer.id, forward, 'Transform');
-    if (useEditorStore.getState().selection.active) void selectLayerAlpha(target.layer.id);
-    return true;
-  }
-  return refusePartialTextMove();
-}
-
-export function rotateSelection(dir: 'cw' | 'ccw'): void {
-  const matrix = dir === 'cw'
-    ? new Float32Array([0, -1, 0, 1, 0, 0, 0, 0, 1])
-    : new Float32Array([0, 1, 0, -1, 0, 0, 0, 0, 1]);
-  applyGpuTransform(matrix);
-}
 
 const MODES: { id: TransformMode; label: string }[] = [
   { id: 'free', label: 'Free' },
@@ -136,43 +16,12 @@ const MODES: { id: TransformMode; label: string }[] = [
   { id: 'perspective', label: 'Perspective' },
 ];
 
-/**
- * Run one instant step (flip, quarter turn) on the selected layers' shared
- * transform — on top of any pending scale or rotate — and bake it, as the
- * selection's flip buttons do. One "Transform" history row.
- */
-export function applyLayerTransformStep(step: (t: TransformState) => TransformState): void {
-  const box = getLayerTransformBox();
-  if (!box || refuseTextInLayerTransform(false)) return;
-  withLiveFloatKept(() => useEditorStore.getState().pushHistory('Transform'));
-  const applyStep = (): void => {
-    renderLayerTransform(step(useUIStore.getState().layerTransform ?? box));
-    markLayerTransformDirty();
-    commitLiveFloat();
-  };
-  if (!isLayerTransformCurrent()) {
-    commitLiveFloat();
-    const begun = beginLayerTransformSession(box);
-    if (begun === 'nothing') return;
-    if (begun === 'unmeasured') {
-      // The layers' content bounds are still being read; step when they are in.
-      void beginLayerTransformSessionWhenMeasured(box).then((isBegun) => {
-        if (isBegun) applyStep();
-      });
-      return;
-    }
-  }
-  applyStep();
-}
-
 /** Whether the Move tool frames the selected layers (no marquee, several layers or a group). */
 function useWantsLayerTransform(): boolean {
   const selectionActive = useEditorStore((s) => s.selection.active);
   const layers = useEditorStore((s) => s.document.layers);
   const selectedIds = useEditorStore((s) => s.document.selectedLayerIds);
-  if (selectionActive) return false;
-  const ids = selectedIds ?? [];
-  return selectionWantsLayerTransform(layers, ids) && resolveLayerTransformTargets(layers, ids).length > 0;
+  return wantsLayerTransform(selectionActive, layers, selectedIds ?? []);
 }
 
 const TEXT_MODES: { id: TextTransformMode; label: string }[] = [
@@ -219,13 +68,7 @@ export function TransformControls() {
   };
 
   const handleFlip = (axis: 'horizontal' | 'vertical') => {
-    if (isLayerBox) {
-      applyLayerTransformStep((t) => flipTransform(t, axis));
-      return;
-    }
-    applyGpuTransform(axis === 'horizontal'
-      ? new Float32Array([-1, 0, 0, 0, 1, 0, 0, 0, 1])
-      : new Float32Array([1, 0, 0, 0, -1, 0, 0, 0, 1]));
+    void flipFromMoveOptions(axis, isLayerBox);
   };
 
   return (

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo } from 'react';
 import {
   attachGestureSession,
   cancelHoldTimer,
-  clearPersistentTransform,
   gestureDown,
   gestureMove,
   gestureUp,
@@ -43,5 +42,5 @@ export function useCanvasInteraction(
   const handleToolMove = useCallback((e: ToolEvent) => gestureMove(e, env), [env]);
   const handleToolUp = useCallback((e: ToolEvent) => gestureUp(e, env), [env]);
 
-  return { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform, nudgeMove, nudgeSelection };
+  return { handleToolDown, handleToolMove, handleToolUp, nudgeMove, nudgeSelection };
 }

@@ -63,7 +63,7 @@ describe('LayerPanel', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
-    act(() => root!.render(createElement(LayerPanel, { onSelectLayer: () => {} })));
+    act(() => root!.render(createElement(LayerPanel)));
     largestPropertyList = 0;
     propertyListCount = 0;
 
@@ -92,7 +92,7 @@ describe('LayerPanel', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
-    act(() => root!.render(createElement(LayerPanel, { onSelectLayer: () => {} })));
+    act(() => root!.render(createElement(LayerPanel)));
 
     const addMask = container.querySelector<HTMLButtonElement>('[aria-label="Add Mask"]')!;
     act(() => addMask.click());

@@ -196,7 +196,7 @@ const ALLOWLIST = {
   // ──────────────────────────────────────────────────────────────────────
   // Transform matrices — Float32Array is the WebGL matrix shape.
   // ──────────────────────────────────────────────────────────────────────
-  'src/app/OptionsBar/tool-options/TransformControls.tsx': 4,
+  'src/app/interactions/move-transform-buttons.ts': 4,       // the Move options' flip and quarter-turn matrices
   'src/app/interactions/transform-handlers.ts': 2,
   'src/tools/transform/transform.ts': 2,
 };

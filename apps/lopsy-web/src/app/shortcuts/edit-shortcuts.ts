@@ -4,11 +4,9 @@ import { selectAll, invertSelectionAction } from '../selection-actions';
 import { applyAutoTone, applyAutoContrast, applyAutoColor } from '../image-actions';
 import { openLiquify } from '../MenuBar/liquify-actions';
 import { scheduleFallbackPaste } from '../useKeyboardShortcuts';
+import { deselectAndCommit } from '../interactions/deselect-and-commit';
 
-export function handleEditShortcut(
-  e: KeyboardEvent,
-  clearPersistentTransform: () => void,
-): boolean {
+export function handleEditShortcut(e: KeyboardEvent): boolean {
   // Cmd+Shift+X — open Liquify
   if ((e.key === 'x' || e.key === 'X') && e.shiftKey) {
     e.preventDefault();
@@ -57,9 +55,7 @@ export function handleEditShortcut(
   }
   if (e.key === 'd') {
     e.preventDefault();
-    useEditorStore.getState().clearSelection();
-    useUIStore.getState().setTransform(null);
-    clearPersistentTransform();
+    deselectAndCommit();
     return true;
   }
   if (e.key === "'") {
