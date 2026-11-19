@@ -10,6 +10,7 @@ import {
 import { flushLayerSync, resetTrackedState, syncDocumentSize, syncSelection } from '../../engine-wasm/engine-sync';
 import { smoothStroke, HOLD_TIMEOUT_MS } from '../../tools/smooth-line/smooth-line';
 import { brushDabBatchSymmetric } from './symmetric-dabs';
+import { isSymmetryOn } from '../../tools/symmetry';
 import { forgetLayerAlphaSelection } from './layer-alpha-selection';
 import { useToolSettingsStore } from '../tool-settings-store';
 
@@ -219,7 +220,7 @@ export function gestureDown(e: ToolEvent, env: GestureEnvironment): void {
   // Ctrl stands in for Cmd on Windows/Linux, where metaKey is the Super key.
   if (e.metaKey || e.ctrlKey) {
     const ts = useToolSettingsStore.getState();
-    if (ts.symmetryRadialSegments >= 2 || ts.symmetryHorizontal || ts.symmetryVertical) {
+    if (isSymmetryOn(ts)) {
       ts.setSymmetryCenter({ x: canvasPos.x, y: canvasPos.y });
       return;
     }

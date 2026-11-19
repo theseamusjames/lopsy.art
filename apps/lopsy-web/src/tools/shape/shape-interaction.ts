@@ -22,7 +22,8 @@ import { snapDragBox } from '../common/drag-snap';
 import { dragSnapOptions } from '../../app/interactions/drag-snap-options';
 import { canReceiveRasterPaint } from '../../layers/paint-target';
 
-const CLICK_THRESHOLD = 4;
+/** A drag shorter than this (layer pixels) is a click, which asks for the shape's size instead. */
+export const CLICK_THRESHOLD = 4;
 
 const SHAPE_TYPE_IDS: Record<ShapeMode, number> = { ellipse: 0, polygon: 1, rectangle: 2 };
 

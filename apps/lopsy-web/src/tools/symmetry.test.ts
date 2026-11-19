@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getMirroredPoints, mirrorBatchPoints, isSymmetryActive, getSymmetryMatrices, dabSampleMatrix } from './symmetry';
+import { getMirroredPoints, mirrorBatchPoints, isSymmetryActive, isSymmetryOn, getSymmetryMatrices, dabSampleMatrix } from './symmetry';
 import type { SymmetryConfig, SymmetryMatrix } from './symmetry';
 
 const config = (h: boolean, v: boolean, radial = 0): SymmetryConfig => ({
@@ -74,6 +74,21 @@ describe('isSymmetryActive', () => {
   it('returns true when either on', () => {
     expect(isSymmetryActive(config(true, false))).toBe(true);
     expect(isSymmetryActive(config(false, true))).toBe(true);
+  });
+});
+
+describe('isSymmetryOn', () => {
+  const off = { symmetryHorizontal: false, symmetryVertical: false, symmetryRadialSegments: 0 };
+
+  it('is off with no mirror and fewer than 2 radial segments', () => {
+    expect(isSymmetryOn(off)).toBe(false);
+    expect(isSymmetryOn({ ...off, symmetryRadialSegments: 1 })).toBe(false);
+  });
+
+  it('is on with either mirror or 2+ radial segments', () => {
+    expect(isSymmetryOn({ ...off, symmetryHorizontal: true })).toBe(true);
+    expect(isSymmetryOn({ ...off, symmetryVertical: true })).toBe(true);
+    expect(isSymmetryOn({ ...off, symmetryRadialSegments: 2 })).toBe(true);
   });
 });
 

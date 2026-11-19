@@ -21,6 +21,34 @@ import {
   layerContentGeneration,
 } from '../../engine-wasm/wasm-bridge';
 import { uploadLayerMaskIfChanged } from '../../engine-wasm/engine-sync';
+import type { Refusal } from '../../commands/refusal';
+import type { Point } from '../../types';
+
+/** The part of the selection a seed pixel is checked against. */
+export interface BucketSelection {
+  readonly active: boolean;
+  readonly mask: ArrayLike<number> | null;
+}
+
+/**
+ * Why a layer-pixel bucket click at `seed` fills nothing, or null when it
+ * fills. The tool is silent about both today.
+ */
+export function bucketSeedRefusal(seed: Point, docW: number, docH: number, selection: BucketSelection): Refusal | null {
+  // #811 — a click outside the canvas is a no-op, like Photoshop. Skip
+  // the empty-layer fast path (which would flood the whole layer) and
+  // don't push a history entry that clears redo for nothing.
+  if (seed.x < 0 || seed.x >= docW || seed.y < 0 || seed.y >= docH) {
+    return { reason: `(${seed.x}, ${seed.y}) is outside the ${docW}x${docH} document: a Paint Bucket click there fills nothing.`, notice: null };
+  }
+  if (selection.active && selection.mask) {
+    const idx = seed.y * docW + seed.x;
+    if (idx >= 0 && idx < selection.mask.length && (selection.mask[idx] ?? 0) < 1) {
+      return { reason: `(${seed.x}, ${seed.y}) is outside the selection: the Paint Bucket fills only inside it, and a click outside does nothing.`, notice: null };
+    }
+  }
+  return null;
+}
 
 /** Down handler for the bucket fill tool. Flood-fills from the click point,
  *  intersected with any active selection, and uploads to the GPU. */
@@ -88,20 +116,8 @@ export function handleFillDown(ctx: InteractionContext): void {
   const { width: docW, height: docH } = editorState.document;
   const { x: canvasX, y: canvasY } = seedPixel(ctx);
 
-  // #811 — a click outside the canvas is a no-op, like Photoshop. Skip
-  // the empty-layer fast path (which would flood the whole layer) and
-  // don't push a history entry that clears redo for nothing.
-  if (canvasX < 0 || canvasX >= docW || canvasY < 0 || canvasY >= docH) {
-    return;
-  }
-
   const { selection } = editorState;
-  if (selection.active && selection.mask) {
-    const idx = canvasY * docW + canvasX;
-    if (idx >= 0 && idx < selection.mask.length && (selection.mask[idx] ?? 0) < 1) {
-      return;
-    }
-  }
+  if (bucketSeedRefusal({ x: canvasX, y: canvasY }, docW, docH, selection)) return;
 
   editorState.pushHistory('Bucket Fill');
   toolSettings.addRecentColor(color);
