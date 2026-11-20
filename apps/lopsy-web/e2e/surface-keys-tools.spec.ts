@@ -472,7 +472,7 @@ test.describe('Unmodified keys and zoom (characterization)', () => {
     expect(await toasts(page)).toEqual([]);
   });
 
-  test('D4: Delete with the active row\'s own button focused removes one layer (its row unmounts first)', async ({ page }) => {
+  test('D4: Delete with the active row\'s own button focused removes one layer in Chromium (its row unmounts first), two in Firefox', async ({ page, browserName }) => {
     await page.locator('[aria-label="Add Layer"]').click();
     await settle(page);
     const before = await surfaceState(page);
@@ -482,6 +482,14 @@ test.describe('Unmodified keys and zoom (characterization)', () => {
     await settle(page, 300);
 
     const s = await surfaceState(page);
+    if (browserName === 'firefox') {
+      // Pinned as-is (a bug): Firefox still counts the panel as focused once
+      // the row is gone, so the panel's handler runs too and deletes the
+      // newly active Layer 1, as with a non-active row's button focused.
+      expect(s.orderNames).toEqual(['Background', 'Project']);
+      expect(await historyLabels(page)).toEqual(['New Document', 'Add Layer', 'Delete Layer', 'Delete Layers']);
+      return;
+    }
     expect(s.orderNames).toEqual(['Background', 'Layer 1', 'Project']);
     expect(await historyLabels(page)).toEqual(['New Document', 'Add Layer', 'Delete Layer']);
   });

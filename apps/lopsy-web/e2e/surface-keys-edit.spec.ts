@@ -209,7 +209,8 @@ test.describe('Cmd/Ctrl keys (characterization)', () => {
     expect((await getPixelAt(page, 50, 40, layer)).a).toBe(0);
   });
 
-  test('D2: Cmd+V with an empty internal clipboard and no clipboard permission does nothing', async ({ page, browser }) => {
+  test('D2: Cmd+V with an empty internal clipboard and no clipboard permission does nothing', async ({ page, browser, browserName }) => {
+    test.skip(browserName !== 'chromium', "Playwright's Firefox has no clipboard-read permission to grant");
     await pressKey(page, 'b');
     const before = await surfaceState(page);
     expect(before.clipboard).toBeNull();
@@ -258,7 +259,8 @@ test.describe('Cmd/Ctrl keys (characterization)', () => {
     expect(await toasts(page)).toEqual([]);
   });
 
-  test('D2: Cmd+V with an external image on the system clipboard opens it as a layer at 0,0 (the menu Paste cannot)', async ({ page, context }) => {
+  test('D2: Cmd+V with an external image on the system clipboard opens it as a layer at 0,0 (the menu Paste cannot)', async ({ page, context, browserName }) => {
+    test.skip(browserName !== 'chromium', "Playwright's Firefox has no clipboard-read permission to grant");
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await putExternalImageOnClipboard(page, 30, 20, '#00ff00');
     expect((await surfaceState(page)).clipboard).toBeNull();
@@ -278,7 +280,7 @@ test.describe('Cmd/Ctrl keys (characterization)', () => {
     expect(await toasts(page)).toEqual([]);
   });
 
-  test('D2: Cmd+Shift+V is not a paste shortcut', async ({ page }) => {
+  test('D2: Cmd+Shift+V has no handler of its own; only the browser decides whether it pastes', async ({ page, browserName }) => {
     await watchPasteEvents(page);
     await fillRect(page, 20, 20, 80, 60, RED);
     await dragMarquee(page, 10, 10, 50, 50);
@@ -287,9 +289,19 @@ test.describe('Cmd/Ctrl keys (characterization)', () => {
     await pressKey(page, 'ControlOrMeta+Shift+V', 600);
 
     const s = await surfaceState(page);
-    expect(await pasteEventCount(page)).toBe(0);
-    expect(await historyLabels(page)).toEqual(['New Document', 'Fill']);
-    expect(s.orderNames).toEqual(['Background', 'Layer 1', 'Project']);
+    if (browserName !== 'chromium' || process.platform === 'darwin') {
+      // macOS binds no paste to Cmd+Shift+V, and Firefox fires none for it
+      // outside an editable element: no paste event, nothing pasted.
+      expect(await pasteEventCount(page)).toBe(0);
+      expect(await historyLabels(page)).toEqual(['New Document', 'Fill']);
+      expect(s.orderNames).toEqual(['Background', 'Layer 1', 'Project']);
+      return;
+    }
+    // Chromium on Linux and Windows binds Ctrl+Shift+V to paste-as-plain-text:
+    // it fires the same paste event as Ctrl+V, and the paste handler takes it as one.
+    expect(await pasteEventCount(page)).toBe(1);
+    expect(await historyLabels(page)).toEqual(['New Document', 'Fill', 'Paste']);
+    expect(s.orderNames).toEqual(['Background', 'Layer 1', 'Pasted Layer', 'Project']);
   });
 
   // ---------------------------------------------------------------------------
@@ -611,7 +623,8 @@ test.describe('Cmd/Ctrl keys (characterization)', () => {
     expect(await getPixelAt(page, 50, 40, layer1)).toEqual(OPAQUE_RED);
   });
 
-  test('D2/D3: Cmd+V while editing text inserts the system clipboard text', async ({ page, context }) => {
+  test('D2/D3: Cmd+V while editing text inserts the system clipboard text', async ({ page, context, browserName }) => {
+    test.skip(browserName !== 'chromium', "Playwright's Firefox has no clipboard-read permission to grant");
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await startTextEditing(page, 100, 80, 'Hi');
 
