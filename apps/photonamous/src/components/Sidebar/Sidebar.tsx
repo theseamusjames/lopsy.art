@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { Album as AlbumIcon, CalendarDays, Clock, EyeOff, Images, Pencil, Plus, Search, Tag, Trash2, Upload } from 'lucide-react';
+import { Album as AlbumIcon, CalendarDays, Clock, Images, Pencil, Plus, Search, Tag, Trash2, Upload } from 'lucide-react';
+import { ImageX } from '../../icons/ImageX';
 import { useLibraryView, useSavedSearches, useSession } from '../../app/hooks';
 import { buildDateTree } from '@lopsy/photos-core/search/dates';
 import { writeSavedSearches } from '@lopsy/photos-core/search/rules';
@@ -113,7 +114,7 @@ export function Sidebar() {
       <div className={styles.section}>
         {item({ kind: 'all' }, <Images size={16} />, 'All photos', counts.all)}
         {item({ kind: 'recent' }, <Clock size={16} />, 'Recent imports', counts.recent)}
-        {item({ kind: 'set-aside' }, <EyeOff size={16} />, 'Set aside', counts.setAside)}
+        {item({ kind: 'set-aside' }, <ImageX size={16} />, 'Set aside', counts.setAside)}
       </div>
 
       <div className={styles.section}>

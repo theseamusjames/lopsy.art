@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { EyeOff, X } from 'lucide-react';
+import { X } from 'lucide-react';
+import { ImageX } from '../../icons/ImageX';
 import type { Asset, Rating } from '@lopsy/photos-core/library/types';
 import { useLibraryView, useOrderedIds, useSession } from '../../app/hooks';
 import { useUi } from '../../app/store';
@@ -95,7 +96,7 @@ export function InfoPanel() {
             <LabelPicker value={label} onChange={(l) => setLabel(l, orderedIds, targetIds)} />
           </div>
           <Button size="sm" variant={allAside ? 'primary' : 'secondary'} onClick={() => toggleSetAside(orderedIds, targetIds)}>
-            <EyeOff size={13} />
+            <ImageX size={13} />
             {allAside ? 'Bring back' : 'Set aside'}
           </Button>
         </section>

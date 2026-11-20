@@ -1,10 +1,11 @@
 import { useId, useRef, useState } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, EyeOff, Paintbrush, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Paintbrush, SlidersHorizontal } from 'lucide-react';
 import type { AssetId } from '@lopsy/photos-core/library/types';
 import { useAsset } from '../../app/hooks';
 import { useUi } from '../../app/store';
 import { parseItem } from '../../library/items';
 import { backOut, openEdit, openFocusedInLopsy, runCommand, setLabel, setRating, toggleSetAside } from '../../app/commands';
+import { ImageX } from '../../icons/ImageX';
 import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
 import { LabelPicker } from '../LabelPicker/LabelPicker';
@@ -143,7 +144,7 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
               </span>
             )}
             <Button size="sm" variant={asset.setAside ? 'primary' : 'secondary'} onClick={() => toggleSetAside(orderedIds, [asset.id])}>
-              <EyeOff size={14} />
+              <ImageX size={14} />
               {asset.setAside ? 'Bring back' : 'Set aside'}
             </Button>
           </div>
