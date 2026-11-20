@@ -4,6 +4,7 @@ import type { Version, VersionId } from '@lopsy/photos-core/library/types';
 import { useLibraryView, useSession } from '../../app/hooks';
 import { useUi } from '../../app/store';
 import { deleteVersionOf, newVersion, selectVersion } from '../../app/commands';
+import { plural } from '../../import/import-summary';
 import { itemForVersion, parseItem, versionsByAsset, type ItemId } from '../../library/items';
 import { selectOne } from '../../library/selection';
 import { Button } from '../Button/Button';
@@ -27,12 +28,12 @@ interface VersionStripProps {
  * A photo's versions. The selected one, which the photo uses in the grid,
  * albums and exports, has a box of its own marked Selected, with its
  * Rename and Delete (never the last version). The others are chips: the
- * chip shows that version (Edit then edits it), its check makes it the
- * selected version, putting the one it replaces back among the chips, and
- * its bin deletes it. A dot marks the chip of the version on screen. With
- * more than four versions, a dropdown of the others takes the chips'
- * place, with the same check and bin for the one it shows. New version
- * makes another, which becomes the selected one.
+ * chip shows that version (Edit then edits it), and while it is on screen
+ * it has a check that makes it the selected version, putting the one it
+ * replaces back among the chips, and a bin. The version on screen, box or
+ * chip, has a green outline. With more than four versions, a dropdown of
+ * the others takes the chips' place, with the same check and bin for the
+ * one it shows. New version makes another, which becomes the selected one.
  */
 export function VersionStrip({ itemId, className }: VersionStripProps) {
   const session = useSession();
@@ -42,7 +43,7 @@ export function VersionStrip({ itemId, className }: VersionStripProps) {
   const versions = useMemo(() => versionsByAsset(view).get(assetId) ?? [], [view, assetId]);
   const [renaming, setRenaming] = useState<VersionId | null>(null);
   const root = useRef<HTMLDivElement>(null);
-  const chips = useRef<HTMLDivElement>(null);
+  const chips = useRef<HTMLUListElement>(null);
   /** Set when a rename ends from the keyboard: focus goes back to that version. */
   const refocus = useRef<VersionId | null>(null);
   const cancelled = useRef(false);
@@ -122,7 +123,7 @@ export function VersionStrip({ itemId, className }: VersionStripProps) {
   const chip = (v: Version) => {
     const isOnScreen = v.id === shownId;
     return (
-      <span key={v.id} className={styles.version}>
+      <li key={v.id} className={styles.version} data-on-screen={isOnScreen}>
         <button
           type="button"
           className={styles.name}
@@ -132,11 +133,11 @@ export function VersionStrip({ itemId, className }: VersionStripProps) {
           onClick={() => show(v.id)}
           onDoubleClick={() => setRenaming(v.id)}
         >
-          {isOnScreen && <span className={styles.dot} aria-hidden="true" />}
           {v.name}
         </button>
-        {otherActions(v)}
-      </span>
+        {/* Its check and bin once it is on screen: the chips stay short until then. */}
+        {isOnScreen && otherActions(v)}
+      </li>
     );
   };
 
@@ -145,8 +146,14 @@ export function VersionStrip({ itemId, className }: VersionStripProps) {
       <label className={styles.srOnly} htmlFor={otherId}>
         Other versions
       </label>
-      <select id={otherId} className={styles.select} value={onScreen?.id ?? ''} onChange={(e) => e.target.value && show(e.target.value)}>
-        {!onScreen && <option value="">Other versions…</option>}
+      <select
+        id={otherId}
+        className={styles.select}
+        data-on-screen={onScreen !== null}
+        value={onScreen?.id ?? ''}
+        onChange={(e) => e.target.value && show(e.target.value)}
+      >
+        {!onScreen && <option value="">{plural(others.length, 'other version')}</option>}
         {others.map((v) => (
           <option key={v.id} value={v.id}>
             {v.name}
@@ -157,15 +164,15 @@ export function VersionStrip({ itemId, className }: VersionStripProps) {
     </span>
   ) : (
     others.length > 0 && (
-      <div ref={chips} className={styles.chips}>
-        {others.map((v) => (renaming === v.id ? renameField(v) : chip(v)))}
-      </div>
+      <ul ref={chips} className={styles.chips} aria-label="Other versions">
+        {others.map((v) => (renaming === v.id ? <li key={v.id}>{renameField(v)}</li> : chip(v)))}
+      </ul>
     )
   );
 
   return (
     <div ref={root} className={[styles.strip, className].filter(Boolean).join(' ')} role="group" aria-label="Versions">
-      <span className={styles.selected}>
+      <span className={styles.selected} data-on-screen={shownId === selected.id}>
         <span className={styles.label}>Selected</span>
         {renaming === selected.id ? (
           renameField(selected)

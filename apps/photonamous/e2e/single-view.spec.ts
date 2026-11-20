@@ -126,50 +126,60 @@ test('the selected version has a box; chips show the others, select them by thei
   test.setTimeout(240_000);
   const view = await openPhotoInSingleView(page, 'many.jpg');
   const strip = view.getByRole('group', { name: 'Versions' });
-  // A chip is a version that is not the selected one: it has a check that would select it.
-  const checks = strip.getByRole('button', { name: /^Make .+ the selected version$/ });
-  const chipNames = async () => (await checks.evaluateAll((els) => els.map((el) => el.getAttribute('aria-label') ?? ''))).map((n) => n.replace(/^Make (.+) the selected version$/, '$1'));
+  const chips = strip.getByRole('list', { name: 'Other versions' }).getByRole('listitem');
+  const chip = (name: string) => chips.filter({ has: page.getByRole('button', { name, exact: true }) });
+  const box = strip.getByText('Selected', { exact: true }).locator('..');
   const others = strip.getByRole('combobox', { name: 'Other versions' });
+  // The version on screen, which Edit edits, has the green outline (--color-success).
+  const GREEN = 'rgb(76, 175, 80)';
 
   // One version: the Selected box holds it, with Rename and no Delete (never the last); there are no chips.
-  await expect(strip.getByText('Selected', { exact: true })).toBeVisible();
+  await expect(box).toBeVisible();
   await expect(strip.getByRole('button', { name: 'Rename Original' })).toBeVisible();
   await expect(strip.getByRole('button', { name: 'Delete Original' })).toHaveCount(0);
-  await expect(checks).toHaveCount(0);
+  await expect(chips).toHaveCount(0);
 
-  // A new version becomes the selected one; the other is a chip, with its check and its bin.
+  // A new version becomes the selected one, on screen with the green outline; the other is a plain chip.
   await addVersion(page, 'Second');
   await expect(strip.getByRole('button', { name: 'Rename Second' })).toBeVisible();
-  expect(await chipNames()).toEqual(['Original']);
-  await expect(strip.getByRole('button', { name: 'Delete Original' })).toBeVisible();
+  await expect(box).toHaveCSS('border-top-color', GREEN);
+  await expect(chips).toHaveText(['Original']);
+  await expect(chip('Original')).not.toHaveCSS('border-top-color', GREEN);
+  await expect(strip.getByRole('button', { name: 'Make Original the selected version' })).toHaveCount(0);
 
-  // The chip itself shows that version, without selecting it: a dot marks it as the one on screen.
+  // The chip itself shows that version, without selecting it: the outline moves to it, and its check and bin appear.
   await strip.getByRole('button', { name: 'Original', exact: true }).click();
   await expect(strip.getByRole('button', { name: 'Original', exact: true })).toHaveAttribute('aria-current', 'true');
+  await expect(chip('Original')).toHaveCSS('border-top-color', GREEN);
+  await expect(box).not.toHaveCSS('border-top-color', GREEN);
   await expect(strip.getByRole('button', { name: 'Rename Second' })).toBeVisible();
+  await expect(strip.getByRole('button', { name: 'Delete Original' })).toBeVisible();
   // Its check selects it: it moves into the box, and the one it replaces becomes a chip again.
   await strip.getByRole('button', { name: 'Make Original the selected version' }).click();
   await expect(strip.getByRole('button', { name: 'Rename Original' })).toBeVisible();
-  expect(await chipNames()).toEqual(['Second']);
-  await expect(strip.locator('[aria-current="true"]')).toHaveText('Original');
+  await expect(chips).toHaveText(['Second']);
+  await expect(box).toHaveCSS('border-top-color', GREEN);
+  await expect(strip.getByRole('button', { name: 'Make Second the selected version' })).toHaveCount(0);
 
   // Up to four versions, the ones not selected are chips.
   for (const name of ['Third', 'Fourth']) await addVersion(page, name);
-  expect(await chipNames()).toEqual(['Original', 'Second', 'Third']);
+  await expect(chips).toHaveText(['Original', 'Second', 'Third']);
   await expect(others).toHaveCount(0);
 
-  // The fifth: a dropdown of the others takes the chips' place, showing none of them; New version stays.
+  // The fifth: a dropdown of the others, which counts them, takes the chips' place; New version stays.
   await addVersion(page, 'Fifth');
   await expect(strip.getByRole('button', { name: 'Rename Fifth' })).toBeVisible();
   await expect(others).toBeVisible();
-  await expect(checks).toHaveCount(0);
-  await expect(others.locator('option')).toHaveText(['Other versions…', 'Original', 'Second', 'Third', 'Fourth']);
+  await expect(chips).toHaveCount(0);
+  await expect(others.locator('option')).toHaveText(['4 other versions', 'Original', 'Second', 'Third', 'Fourth']);
   await expect(strip.getByRole('button', { name: 'New version' })).toBeVisible();
   await page.screenshot({ path: 'test-results/single-view-versions-dropdown.png' });
 
-  // Choosing one shows it, with its check and its bin beside the dropdown.
+  // Choosing one shows it, outlined, with its check and its bin beside the dropdown.
   await others.selectOption({ label: 'Second' });
   await expect(others.locator('option:checked')).toHaveText('Second');
+  await expect(others).toHaveCSS('border-top-color', GREEN);
+  await expect(box).not.toHaveCSS('border-top-color', GREEN);
   await expect(strip.getByRole('button', { name: 'Make Second the selected version' })).toBeVisible();
   await expect(strip.getByRole('button', { name: 'Delete Second' })).toBeVisible();
   await expect(strip.getByRole('button', { name: 'Rename Fifth' })).toBeVisible();
@@ -193,7 +203,7 @@ test('the selected version has a box; chips show the others, select them by thei
   await others.selectOption({ label: 'Third' });
   await strip.getByRole('button', { name: 'Delete Third' }).click();
   await expect(others).toHaveCount(0);
-  expect(await chipNames()).toEqual(['Original', 'Fourth', 'Fifth, warmer']);
+  await expect(chips).toHaveText(['Original', 'Fourth', 'Fifth, warmer']);
 
   // The grid's tile for the photo is its selected version; the others are the stack's other tiles.
   await view.getByRole('button', { name: 'Back to the grid' }).click();
@@ -211,7 +221,7 @@ test('at a narrow width the version chips scroll on their own and never cover Dr
   const strip = view.getByRole('group', { name: 'Versions' });
   // The newest is the selected one, in the box; the other three are chips.
   await expect(strip.getByRole('button', { name: 'Rename Black and white' })).toBeVisible();
-  await expect(strip.getByRole('button', { name: /^Make .+ the selected version$/ })).toHaveCount(3);
+  await expect(strip.getByRole('list', { name: 'Other versions' }).getByRole('listitem')).toHaveCount(3);
   const scroller = strip.locator('[class*="chips"]');
   const setAside = view.getByRole('button', { name: 'Drop', exact: true });
   await setAside.scrollIntoViewIfNeeded();

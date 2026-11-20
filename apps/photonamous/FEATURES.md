@@ -100,10 +100,12 @@ is `docs/photonamous-spec.md`; running and setup are in
   Escape keeps the old name) and Delete (never the last version; the next
   one becomes selected). Up to four versions, the others are chips beside
   it. A chip shows its version without selecting it (Edit then edits that
-  version), with a dot while it is on screen; its check makes it the
-  selected version, and the one it replaces becomes a chip again; its bin
-  deletes it. With five or more, a dropdown of the others takes the
-  chips' place, with the check and the bin of the one it shows. When the
+  version); while it is on screen it has a check, which makes it the
+  selected version and puts the one it replaces back among the chips, and
+  a bin. The version on screen, the box or a chip, has a green outline.
+  With five or more, a dropdown of the others ("4 other versions") takes
+  the chips' place, outlined while it shows one, with the check and the
+  bin of the one it shows. When the
   bar has no room for them, the chips scroll sideways on their own and
   never run under Drop. **New version** is there either way.
 - **Compare** (C): two to four selected photos side by side.

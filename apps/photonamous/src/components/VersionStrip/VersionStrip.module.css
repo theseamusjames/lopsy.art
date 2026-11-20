@@ -50,6 +50,7 @@
   max-width: max-content;
   margin: -3px;
   padding: 3px;
+  list-style: none;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: thin;
@@ -84,13 +85,11 @@
   outline-offset: -2px;
 }
 
-/* The version on screen, when it is not the selected one. */
-.dot {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
+/* The version on screen, the one Edit edits: the box or a chip, or the dropdown showing one. */
+.selected[data-on-screen='true'],
+.version[data-on-screen='true'],
+.select[data-on-screen='true'] {
+  border-color: var(--color-success);
 }
 
 .input {
