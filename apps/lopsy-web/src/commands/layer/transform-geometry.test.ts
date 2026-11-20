@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { createTransformState, computeRotation, computeScale } from '../../tools/transform/transform';
+import { createTransformState, computeRotation, computeScale, computeSkew } from '../../tools/transform/transform';
 import { hitTestBoxHandle } from '../../tools/transform/transform-handles';
 import {
   anchorAxes,
   handleForAnchor,
+  isConvexQuad,
   pressPoint,
   rotateRelease,
   rotationReached,
   scaleReached,
   scaleRelease,
+  skewAxis,
+  skewReached,
+  skewRelease,
   wrapAngle,
   type DragFrame,
 } from './transform-geometry';
@@ -113,5 +117,80 @@ describe('wrapAngle', () => {
     expect(wrapAngle(rad(200))).toBeCloseTo(rad(-160));
     expect(wrapAngle(rad(-200))).toBeCloseTo(rad(160));
     expect(wrapAngle(Math.PI)).toBeCloseTo(Math.PI);
+  });
+});
+
+describe('skewRelease', () => {
+  const skewBox = createTransformState(BOX, 'skew');
+
+  it('slides the edge opposite the anchor along itself, reaching what computeSkew reads', () => {
+    // The bottom edge is 40 px from the top: tan 0.5 slides it 20 px right.
+    const bottom = skewRelease(identity, 'bottom', { x: 130, y: 110 }, 0.5, LIMITS);
+    expect(bottom).toEqual({ point: { x: 150, y: 110 }, reached: 0.5 });
+    expect(Math.tan(computeSkew('bottom', { x: 130, y: 110 }, bottom!.point, skewBox).skewX)).toBeCloseTo(0.5, 12);
+    // The same shear with the bottom held slides the top edge the other way.
+    const top = skewRelease(identity, 'top', { x: 130, y: 70 }, 0.5, LIMITS);
+    expect(top!.point).toEqual({ x: 110, y: 70 });
+    expect(Math.tan(computeSkew('top', { x: 130, y: 70 }, top!.point, skewBox).skewX)).toBeCloseTo(0.5, 12);
+  });
+
+  it('shears along y from the left and right edges', () => {
+    // The right edge is 60 px from the left: tan 0.25 slides it 15 px down.
+    const right = skewRelease(identity, 'right', { x: 160, y: 90 }, 0.25, LIMITS);
+    expect(right).toEqual({ point: { x: 160, y: 105 }, reached: 0.25 });
+    expect(Math.tan(computeSkew('right', { x: 160, y: 90 }, right!.point, skewBox).skewY)).toBeCloseTo(0.25, 12);
+    const left = skewRelease(identity, 'left', { x: 100, y: 90 }, 0.25, LIMITS);
+    expect(left!.point).toEqual({ x: 100, y: 75 });
+    expect(Math.tan(computeSkew('left', { x: 100, y: 90 }, left!.point, skewBox).skewY)).toBeCloseTo(0.25, 12);
+  });
+
+  it('lands on the nearest whole pixel, and on the press itself for a shear under half a pixel', () => {
+    const found = skewRelease(identity, 'bottom', { x: 130, y: 110 }, Math.tan(rad(10)), LIMITS);
+    expect(found!.point).toEqual({ x: 137, y: 110 });
+    expect(found!.reached).toBe(7 / 40);
+    expect(skewRelease(identity, 'bottom', { x: 130, y: 110 }, 0.01, LIMITS)!.reached).toBe(0);
+  });
+
+  it('gives back the release of a whole-pixel drag for the shear that drag gave', () => {
+    const press = { x: 100, y: 90 };
+    const release = { x: 100, y: 69 };
+    const reached = skewReached(identity, 'left', press, release)!;
+    expect(skewRelease(identity, 'left', press, reached, LIMITS)).toEqual({ point: release, reached });
+  });
+
+  it('works in a turned box\'s own axes, and refuses a release outside the range', () => {
+    // A box turned a quarter: its own x runs down the document.
+    const turned: DragFrame = {
+      box: BOX,
+      toLocal: (p) => ({ x: PIVOT.x + (p.y - PIVOT.y), y: PIVOT.y - (p.x - PIVOT.x) }),
+      toDoc: (p) => ({ x: PIVOT.x - (p.y - PIVOT.y), y: PIVOT.y + (p.x - PIVOT.x) }),
+      pivot: PIVOT,
+    };
+    const press = turned.toDoc({ x: 130, y: 110 });
+    const found = skewRelease(turned, 'bottom', press, 0.5, LIMITS);
+    expect(found!.point).toEqual({ x: press.x, y: press.y + 20 });
+    expect(found!.reached).toBeCloseTo(0.5, 12);
+    expect(skewRelease(identity, 'bottom', { x: 130, y: 110 }, 0.5, { min: 0, max: 140 })).toBeNull();
+  });
+
+  it('knows which axis each anchor shears along', () => {
+    expect([skewAxis('top'), skewAxis('bottom'), skewAxis('left'), skewAxis('right')]).toEqual(['x', 'x', 'y', 'y']);
+  });
+});
+
+describe('isConvexQuad', () => {
+  const square = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }];
+
+  it('takes a convex quad in either winding', () => {
+    expect(isConvexQuad(square)).toBe(true);
+    expect(isConvexQuad([...square].reverse())).toBe(true);
+    expect(isConvexQuad([{ x: 3, y: 0 }, { x: 7, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }])).toBe(true);
+  });
+
+  it('refuses a dented quad, a crossed one, and three corners in a line', () => {
+    expect(isConvexQuad([{ x: 8, y: 8 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }])).toBe(false);
+    expect(isConvexQuad([{ x: 10, y: 0 }, { x: 0, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }])).toBe(false);
+    expect(isConvexQuad([{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 10, y: 0 }, { x: 0, y: 10 }])).toBe(false);
+    expect(isConvexQuad(square.slice(0, 3))).toBe(false);
   });
 });

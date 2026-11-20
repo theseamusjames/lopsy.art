@@ -441,7 +441,7 @@ Every command's summary names the UI control it matches and its history label.
 | --- | --- | --- |
 | `doc` | Documents and files | `doc.new`, `doc.info`, `doc.export`, `doc.save`, `doc.open` |
 | `view` | Looking at the result | `view.render`, `view.render-layer`, `view.sample` |
-| `layer` | The layer stack | `layer.add`, `layer.set` (name, opacity, blend mode, visibility), `layer.effects`, `layer.move`, `layer.duplicate`, `layer.group`, `layer.reorder` |
+| `layer` | The layer stack | `layer.add`, `layer.set` (name, opacity, blend mode, visibility), `layer.effects`, `layer.move`, `layer.transform` (turn, scale, skew, distort, perspective), `layer.duplicate`, `layer.group`, `layer.reorder` |
 | `color` | Foreground and background | `color.set`, `color.swap`, `color.reset` |
 | `tool` | Tool options | `tool.set`, `tool.describe`, `tool.options`, `tool.gesture` (raw canvas gestures) |
 | `select` | Selections | `select.rect`, `select.ellipse`, `select.polygon`, `select.none`, `select.modify`, `select.invert`, `select.from-layer` |
@@ -934,6 +934,17 @@ adjust those to grade the whole image. `filter.hue-saturation` and
   { "op": "layer.transform", "scale": { "x": 0.6, "y": 0.6 }, "anchor": "top-left" },
   { "op": "layer.move", "dx": 300, "dy": 230 },
 
+  { "op": "layer.duplicate", "layer": "Arrow" },
+  { "op": "layer.set", "name": "Leaning" },
+  { "op": "layer.transform", "skew": { "x": -20, "y": 0 }, "anchor": "bottom" },
+  { "op": "layer.move", "dx": 0, "dy": 190 },
+
+  { "op": "layer.duplicate", "layer": "Arrow" },
+  { "op": "layer.set", "name": "Receding" },
+  { "op": "layer.transform", "perspective": { "top": { "inset": 40 } } },
+  { "op": "layer.transform", "distort": { "bottom-right": { "x": 30, "y": 20 } } },
+  { "op": "layer.move", "dx": 170, "dy": 40 },
+
   { "op": "view.render", "maxSize": 600 }
 ]
 ```
@@ -957,6 +968,22 @@ pixel of what you asked, as a drag on whole pixels does. On one raster layer
 it selects the layer's pixels for the drag and drops the selection after,
 so `history.undo` brings that selection back: `select.none` with
 `commit: true` before the next move. Text stays live through all of them.
+
+`layer.transform` also reaches the Move tool's other three modes. `skew`
+shears by degrees along one axis (`{ "x": -20, "y": 0 }`): an edge slides
+along itself while the `anchor` edge opposite holds still, and a positive
+`x` leans the bottom to the right of the top, a positive `y` the right side
+below the left. `distort` moves corners of the box by pixel offsets, each on
+its own (`{ "bottom-right": { "x": 30, "y": 20 } }`), and the picture
+stretches to follow. `perspective` narrows or widens the top or bottom edge
+evenly about its middle: `{ "top": { "inset": 40 } }` moves both ends of the
+top edge 40 px inward, so the picture recedes upward. Offsets are in
+document pixels, from where the corners of the box round the layer's content
+are now, and the corners must stay a convex quad. `distort` and
+`perspective` add **one history step per corner or edge moved**, and the
+result's `corners` says how far each corner went; a text layer takes `skew`
+and stays live, but must be rasterized (`layer.rasterize`) for the other
+two.
 `layer.duplicate` puts the copy, named
 `<name> copy`, directly on top of the original and makes it active.
 
@@ -1123,9 +1150,6 @@ whole.
 
 These have no command. Don't hunt for them:
 
-- **Skew, distort and perspective.** `layer.transform` turns, scales and
-  flips; the Move tool's other transform modes have no command. Draw the
-  shape you need instead: a polygon selection can have any outline.
 - **The Spray tool** (it paints on a timer while the button is held) and
   **Liquify**.
 - **Colouring part of a text layer.** `text.set-color` recolours the whole

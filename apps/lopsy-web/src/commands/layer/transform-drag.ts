@@ -3,7 +3,7 @@ import { refusalError } from '../refusal';
 import { MAX_COORDINATE, MIN_COORDINATE } from '../context';
 import { checkGesturePress, runGesture, runHeldGesture } from '../gesture/run-gesture';
 import { useEditorStore } from '../../app/editor-store';
-import { useUIStore } from '../../app/ui-store';
+import { useUIStore, type TextTransformMode } from '../../app/ui-store';
 import { deselectAndCommit } from '../../app/interactions/deselect-and-commit';
 import { hitTestTransformHandle } from '../../app/interactions/transform-handlers';
 import { getTextTransformTarget } from '../../app/interactions/text-transform-handlers';
@@ -15,10 +15,20 @@ import {
   isLayerTransformLive,
   textInLayerTransformRefusal,
 } from '../../app/interactions/layer-transform';
+import { setTransformModeFromMoveOptions } from '../../app/interactions/move-transform-buttons';
 import { readLayerContentRectLocal } from '../../app/layer-content-rect';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { selectLayerAlpha } from '../../panels/LayerPanel/layer-selection';
-import { getTransformedBounds, type TransformHandle, type TransformState } from '../../tools/transform/transform';
+import {
+  computeDistort,
+  computePerspective,
+  getCornerPositions,
+  getTransformedBounds,
+  type CornerOffsets,
+  type TransformHandle,
+  type TransformMode,
+  type TransformState,
+} from '../../tools/transform/transform';
 import { getHandlePositions, hasRotateHandles } from '../../tools/transform/transform-handles';
 import {
   applyMatrix,
@@ -35,26 +45,47 @@ import { MAX_DOCUMENT_SIDE } from '../../utils/document-size';
 import type { Layer, Point } from '../../types';
 import {
   ROTATE_HANDLE,
-  anchorAxes,
   handleForAnchor,
+  isConvexQuad,
   pressPoint,
   rotateRelease,
   scaleRelease,
+  skewAxis,
+  skewRelease,
   wrapAngle,
+  type Corner,
   type DragFrame,
   type Limits,
   type ScaleAnchor,
+  type SkewAnchor,
 } from './transform-geometry';
 
-/** A rotate or scale request, in radians and factors. */
+/** One corner handle dragged by a whole-pixel offset, in Distort or Perspective mode. */
+export interface CornerDrag {
+  readonly handle: Corner;
+  readonly offset: Point;
+}
+
+/**
+ * A handle-drag request: a turn in radians, scale factors, a shear as the
+ * tangent of its angle, or corner handles dragged one after another.
+ */
 export type DragStep =
   | { readonly kind: 'rotate'; readonly angle: number }
-  | { readonly kind: 'scale'; readonly factor: Point; readonly anchor: ScaleAnchor };
+  | { readonly kind: 'scale'; readonly factor: Point; readonly anchor: ScaleAnchor }
+  | { readonly kind: 'skew'; readonly tan: number; readonly anchor: SkewAnchor }
+  | { readonly kind: 'corners'; readonly mode: 'distort' | 'perspective'; readonly drags: readonly CornerDrag[] };
 
-/** What a drag did: the angle turned (degrees) or the factors stretched by, read back from the editor. */
+/**
+ * What the drags did, read back from the editor: the angle turned (degrees),
+ * the factors stretched by, the shear (degrees, along x or y), or how far
+ * each corner of the box moved.
+ */
 export interface DragOutcome {
   rotate?: number;
   scale?: Point;
+  skew?: Point;
+  corners?: Record<Corner, Point>;
 }
 
 /** How far a drag's angle may be from the request: a whole-pixel release resolves it far more finely. */
@@ -134,19 +165,29 @@ function requireIdentity(state: TransformState): TransformState {
   return state;
 }
 
-/** Refuses a step the box's Move-options mode turns into something else. */
-function checkMode(mode: string, step: DragStep, isText: boolean): void {
-  if (step.kind === 'rotate') {
-    if (mode === 'distort' || mode === 'perspective') {
-      throw new CommandError('refused', `The Move options are in ${mode === 'distort' ? 'Distort' : 'Perspective'} mode, which has no rotate handles: choose Free in the Move options bar.`);
-    }
-    return;
-  }
-  if (mode === 'free') return;
-  const axes = anchorAxes(step.anchor);
-  if (isText && mode === 'skew' && axes.x && axes.y) return;
-  const name = mode === 'skew' ? 'Skew' : mode === 'distort' ? 'Distort' : 'Perspective';
-  throw new CommandError('refused', `The Move options are in ${name} mode, where this handle ${mode === 'skew' ? 'skews' : 'moves one corner'} instead of scaling: choose Free in the Move options bar.`);
+/** Steps that put things back when the command ends, run last-added first. */
+type Undo = Array<() => void>;
+
+/** The Move-options mode whose handles make `step`. */
+function modeFor(step: DragStep): TransformMode {
+  if (step.kind === 'skew') return 'skew';
+  return step.kind === 'corners' ? step.mode : 'free';
+}
+
+/** Presses the shared box's mode button for `mode`, and the one it found pressed when the command ends. */
+function pressBoxMode(mode: TransformMode, undo: Undo): void {
+  const previous = ui().layerTransformMode;
+  if (previous === mode) return;
+  setTransformModeFromMoveOptions(mode, true);
+  undo.push(() => setTransformModeFromMoveOptions(previous, true));
+}
+
+/** Presses a text layer's Free or Skew button, and the one it found pressed when the command ends. */
+function pressTextMode(mode: TextTransformMode, undo: Undo): void {
+  const previous = ui().textTransformMode;
+  if (previous === mode) return;
+  ui().setTextTransformMode(mode);
+  undo.push(() => ui().setTextTransformMode(previous));
 }
 
 function checkMaskMode(): void {
@@ -156,56 +197,61 @@ function checkMaskMode(): void {
 }
 
 /** Several layers or a group: the shared box the Move tool frames them with. */
-async function boxTarget(measure: () => Promise<void>, step: DragStep): Promise<Target> {
+async function boxTarget(measure: () => Promise<void>, step: DragStep, undo: Undo): Promise<Target> {
   checkMaskMode();
-  const refusal = textInLayerTransformRefusal(false);
+  const refusal = textInLayerTransformRefusal(step.kind === 'corners');
   if (refusal) throw refusalError(refusal);
-  checkMode(ui().layerTransformMode, step, false);
   // A transform the UI left pending is baked first, as Escape does, so the step applies to what is on screen.
   if (isLayerTransformLive()) deselectAndCommit();
+  pressBoxMode(modeFor(step), undo);
   await measure();
   const box = getLayerTransformBox();
   if (!box) throw new CommandError('refused', 'The selected layers have nothing to transform: they are empty or locked.');
+  undo.push(deselectAndCommit);
   const state = requireIdentity(box);
   return { kind: 'box', state, frame: boxFrame(state), matrix: IDENTITY };
 }
 
 /** One raster layer: its alpha loaded as the selection, as a Cmd-click on its thumbnail does, frames it with handles. */
-async function selectionTarget(layer: Layer): Promise<Target> {
+async function selectionTarget(layer: Layer, step: DragStep, undo: Undo): Promise<Target> {
   checkMaskMode();
   checkGesturePress('move', layer);
   await selectLayerAlpha(layer.id);
-  const state = ui().transform;
-  if (!useEditorStore.getState().selection.active || !state) {
+  if (!useEditorStore.getState().selection.active || !ui().transform) {
     throw new CommandError('refused', `"${layer.name}" has no pixels on the canvas to transform.`);
   }
+  undo.push(deselectAndCommit);
+  // The selection's box is new and in Free mode; its mode goes with it when the selection is dropped.
+  const mode = modeFor(step);
+  if (mode !== 'free') setTransformModeFromMoveOptions(mode, false);
+  const state = ui().transform;
+  if (!state || state.mode !== mode) throw new Error(`layer.transform: the selection's box did not take the ${mode} mode.`);
   return { kind: 'selection', state: requireIdentity(state), frame: boxFrame(state), matrix: IDENTITY };
 }
 
 /** One live text layer: its own handles, around its layout box. */
-function textTarget(layer: Layer, step: DragStep): Target {
+function textTarget(layer: Layer, step: DragStep, undo: Undo): Target {
   if (layer.type !== 'text') throw new Error('textTarget needs a text layer');
+  if (step.kind === 'corners') {
+    throw new CommandError('refused', `The Move tool offers a text layer only its Free and Skew modes: rasterize "${layer.name}" (layer.rasterize) to ${step.mode === 'distort' ? 'distort it' : 'give it perspective'}.`);
+  }
   if (layer.pathId) {
-    throw new CommandError('refused', `"${layer.name}" is text on a path, which has no transform handles: rasterize it (layer.rasterize) to turn or scale it.`);
+    throw new CommandError('refused', `"${layer.name}" is text on a path, which has no transform handles: rasterize it (layer.rasterize) to turn, scale or skew it.`);
   }
   checkGesturePress('move', layer);
   if (!layer.visible) throw new CommandError('refused', `"${layer.name}" is hidden, and the Move tool shows no handles for a hidden text layer: show it first (layer.set with visible: true).`);
   if (ui().maskMode === 'quickMask') checkMaskMode();
+  pressTextMode(step.kind === 'skew' ? 'skew' : 'free', undo);
   const target = getTextTransformTarget();
   if (!target || target.layer.id !== layer.id) throw new CommandError('refused', `The Move tool shows no handles for the text layer "${layer.name}" now.`);
-  checkMode(ui().textTransformMode, step, true);
   return { kind: 'text', state: target.state, frame: textFrame(target.frame), matrix: target.frame.matrix };
 }
 
-function hitTest(target: Target): (p: Point) => TransformHandle | null {
+/** The press on `handle` of the box in `state`, confirmed with the press's own hit test: a press beside it would drag the layers instead. */
+function press(state: TransformState, handle: TransformHandle): Point {
   const zoom = useEditorStore.getState().viewport.zoom;
-  return (p) => hitTestTransformHandle(p, target.state, zoom);
-}
-
-/** The press on `handle`, confirmed with the press's own hit test: a press beside it would drag the layers instead. */
-function press(target: Target, handle: TransformHandle): Point {
-  const at = getHandlePositions(target.state)[handle];
-  const point = pressPoint(at, handle, hitTest(target));
+  const at = getHandlePositions(state)[handle];
+  const point = pressPoint(at, handle, (p) => hitTestTransformHandle(p, state, zoom));
   if (!point) {
     throw new CommandError('refused', `No whole-pixel press lands on the box's ${handle} handle at this zoom, and a press beside it would drag the layers instead: change the zoom (ui.view.fit) and try again.`);
   }
@@ -214,8 +260,6 @@ function press(target: Target, handle: TransformHandle): Point {
 
 interface Drag {
   readonly points: readonly [Point, Point];
-  /** What the drag reaches before any snapping, for the snapping check. */
-  readonly expected: DragOutcome;
 }
 
 /** The angle, from the box's current one, that the rotate handler's 15° snap would land on. */
@@ -226,7 +270,7 @@ function snappedTurn(target: Target, reached: number): number {
 
 function rotateDrag(target: Target, angle: number): Drag {
   if (!hasRotateHandles(target.state)) throw new CommandError('refused', 'The box has no rotate handles in this mode: choose Free in the Move options bar.');
-  const from = press(target, ROTATE_HANDLE);
+  const from = press(target.state, ROTATE_HANDLE);
   const release = rotateRelease(target.frame.pivot, from, angle, LIMITS);
   if (!release) throw new CommandError('refused', 'No release point for this turn lies inside the coordinate range.');
   if (isSnapping()) {
@@ -238,7 +282,7 @@ function rotateDrag(target: Target, angle: number): Drag {
       );
     }
   }
-  return { points: [from, release.point], expected: { rotate: release.reached } };
+  return { points: [from, release.point] };
 }
 
 function checkScaleSize(target: Target, factor: Point): void {
@@ -257,7 +301,7 @@ function checkScaleSize(target: Target, factor: Point): void {
 function scaleDrag(target: Target, factor: Point, anchor: ScaleAnchor): Drag {
   checkScaleSize(target, factor);
   const handle = handleForAnchor(anchor);
-  const from = press(target, handle);
+  const from = press(target.state, handle);
   const release = scaleRelease(target.frame, handle, from, factor, LIMITS);
   if (!release) throw new CommandError('refused', 'The release point this scale needs lies outside the coordinate range: scale in smaller steps.');
   if (target.kind !== 'text' && isSnapping()) {
@@ -271,7 +315,75 @@ function scaleDrag(target: Target, factor: Point, anchor: ScaleAnchor): Drag {
       );
     }
   }
-  return { points: [from, release.point], expected: { scale: release.reached } };
+  return { points: [from, release.point] };
+}
+
+/** The distance (document pixels) a shear of tangent 1 slides the dragged edge. */
+function skewTravel(target: Target, anchor: SkewAnchor): number {
+  const { box } = target.frame;
+  return skewAxis(anchor) === 'x'
+    ? box.height * Math.hypot(target.matrix.a, target.matrix.b)
+    : box.width * Math.hypot(target.matrix.c, target.matrix.d);
+}
+
+function skewDrag(target: Target, tan: number, anchor: SkewAnchor): Drag {
+  const handle = handleForAnchor(anchor);
+  const from = press(target.state, handle);
+  const release = skewRelease(target.frame, handle, from, tan, LIMITS);
+  if (!release) throw new CommandError('refused', 'The release point this skew needs lies outside the coordinate range.');
+  if (release.reached === 0) {
+    throw new CommandError('refused', `This skew would slide the box's ${handle} edge by less than a pixel (the edge is ${round(skewTravel(target, anchor))} px from the one held), and a drag moves by whole pixels: skew by a larger angle.`);
+  }
+  return { points: [from, release.point] };
+}
+
+interface CornerPlan extends Drag {
+  /** The box's corner offsets once this drag is made. */
+  readonly corners: CornerOffsets;
+}
+
+function sameCorners(a: CornerOffsets, b: CornerOffsets): boolean {
+  return a.every((corner, i) => corner.x === b[i]?.x && corner.y === b[i]?.y);
+}
+
+function withinLimits(p: Point): boolean {
+  return p.x >= LIMITS.min && p.x <= LIMITS.max && p.y >= LIMITS.min && p.y <= LIMITS.max;
+}
+
+/**
+ * Where each corner drag presses and releases, worked out before the first
+ * press with the handlers' own corner maths: every drag after the first
+ * presses a handle the drags before it moved, and a later one that could not
+ * be made would leave the earlier ones applied.
+ */
+function planCorners(target: Target, mode: 'distort' | 'perspective', drags: readonly CornerDrag[]): CornerPlan[] {
+  const compute = mode === 'distort' ? computeDistort : computePerspective;
+  let state = target.state;
+  const plan: CornerPlan[] = [];
+  for (const { handle, offset } of drags) {
+    const from = press(state, handle);
+    const to = { x: from.x + offset.x, y: from.y + offset.y };
+    if (!withinLimits(to)) throw new CommandError('refused', `The release point for the ${handle} corner lies outside the coordinate range: move it less.`);
+    const { corners } = compute(handle, from, to, state);
+    state = { ...state, corners };
+    plan.push({ points: [from, to], corners });
+  }
+  checkQuad(getCornerPositions(state));
+  return plan;
+}
+
+function checkQuad(quad: readonly Point[]): void {
+  if (!isConvexQuad(quad)) {
+    const at = quad.map((p) => `(${p.x}, ${p.y})`).join(', ');
+    throw new CommandError('refused', `These offsets would fold the box: its corners would be at ${at} (clockwise from the top-left), which is not a convex quad. Move the corners less.`);
+  }
+  const xs = quad.map((p) => p.x);
+  const ys = quad.map((p) => p.y);
+  const width = Math.max(...xs) - Math.min(...xs);
+  const height = Math.max(...ys) - Math.min(...ys);
+  if (Math.max(width, height) > MAX_DOCUMENT_SIDE) {
+    throw new CommandError('refused', `The box would be ${width} × ${height} px, larger than the largest document side (${MAX_DOCUMENT_SIDE} px).`);
+  }
 }
 
 function textMatrixNow(layerId: string): TextMatrix | null {
@@ -279,25 +391,49 @@ function textMatrixNow(layerId: string): TextMatrix | null {
   return layer?.type === 'text' ? matrixOf(layer.transform) : null;
 }
 
-/** The turn or stretch the drag left, read back from the editor's own state. */
-function readBack(target: Target, step: DragStep, textLayerId: string | null): DragOutcome | null {
-  if (target.kind === 'text') {
-    const after = textLayerId ? textMatrixNow(textLayerId) : null;
-    const inverse = invertMatrix(target.matrix);
-    if (!after || !inverse) return null;
-    if (step.kind === 'rotate') {
-      const turn = multiplyMatrix(after, inverse);
-      return { rotate: Math.atan2(turn.b, turn.a) };
-    }
-    const stretch = multiplyMatrix(inverse, after);
-    return { scale: { x: stretch.a, y: stretch.d } };
-  }
-  const state = target.kind === 'box' ? ui().layerTransform : ui().transform;
-  if (!state) return null;
-  return step.kind === 'rotate' ? { rotate: state.rotation } : { scale: { x: state.scaleX, y: state.scaleY } };
+/** The box's pending transform as the editor holds it now. */
+function pendingState(kind: Kind): TransformState | null {
+  return kind === 'box' ? ui().layerTransform : ui().transform;
 }
 
-function checkReached(target: Target, step: DragStep, outcome: DragOutcome | null): DragOutcome {
+/** A text layer's own stretch or shear since the drag began: its matrix now, with the one it had divided out. */
+function textChange(target: Target, layerId: string | null): { turn: TextMatrix; stretch: TextMatrix } | null {
+  const after = layerId ? textMatrixNow(layerId) : null;
+  const inverse = invertMatrix(target.matrix);
+  if (!after || !inverse) return null;
+  return { turn: multiplyMatrix(after, inverse), stretch: multiplyMatrix(inverse, after) };
+}
+
+/** What the drag left, read back from the editor's own state: radians, factors, or the shear's tangent on its axis. */
+function readBack(target: Target, step: DragStep, textLayerId: string | null): DragOutcome | null {
+  if (step.kind === 'corners') return null;
+  if (target.kind === 'text') {
+    const change = textChange(target, textLayerId);
+    if (!change) return null;
+    if (step.kind === 'rotate') return { rotate: Math.atan2(change.turn.b, change.turn.a) };
+    if (step.kind === 'scale') return { scale: { x: change.stretch.a, y: change.stretch.d } };
+    return { skew: { x: change.stretch.c, y: change.stretch.b } };
+  }
+  const state = pendingState(target.kind);
+  if (!state) return null;
+  if (step.kind === 'rotate') return { rotate: state.rotation };
+  if (step.kind === 'scale') return { scale: { x: state.scaleX, y: state.scaleY } };
+  return { skew: { x: Math.tan(state.skewX), y: Math.tan(state.skewY) } };
+}
+
+function checkSkewReached(target: Target, step: Extract<DragStep, { kind: 'skew' }>, outcome: DragOutcome | null): DragOutcome {
+  const axis = skewAxis(step.anchor);
+  const reached = outcome?.skew?.[axis];
+  const travel = skewTravel(target, step.anchor);
+  if (reached === undefined || Math.abs(reached - step.tan) * travel > SCALE_TOLERANCE_PX) {
+    throw new Error(`layer.transform: the skew drag sheared by ${reached === undefined ? 'nothing' : `${degrees(Math.atan(reached))}°`}, not ${degrees(Math.atan(step.tan))}°.`);
+  }
+  const angle = round(degrees(Math.atan(reached)));
+  return { skew: axis === 'x' ? { x: angle, y: 0 } : { x: 0, y: angle } };
+}
+
+function checkReached(target: Target, step: Exclude<DragStep, { kind: 'corners' }>, outcome: DragOutcome | null): DragOutcome {
+  if (step.kind === 'skew') return checkSkewReached(target, step, outcome);
   if (step.kind === 'rotate') {
     const turned = outcome?.rotate;
     if (turned === undefined || Math.abs(wrapAngle(turned - step.angle)) > ROTATE_TOLERANCE) {
@@ -318,13 +454,55 @@ function checkReached(target: Target, step: DragStep, outcome: DragOutcome | nul
   return { scale: { x: round(reached.x), y: round(reached.y) } };
 }
 
+/** One handle drag through the canvas gesture dispatcher, refused when the press was not taken as a transform. */
+async function drag(kind: Kind, points: readonly [Point, Point]): Promise<void> {
+  const before = topEntry();
+  const input = { tool: 'move', points } as const;
+  if (kind === 'box') await runHeldGesture(input, sessionBegun);
+  else runGesture(input);
+  if (topEntry() === before) {
+    throw new CommandError('refused', 'The handle press was not taken as a transform: nothing changed.');
+  }
+}
+
+/** The corner drags, one after another on the same pending transform, each checked against the plan. */
+async function dragCorners(target: Target, step: Extract<DragStep, { kind: 'corners' }>): Promise<DragOutcome> {
+  let corners = target.state.corners;
+  const plan = planCorners(target, step.mode, step.drags);
+  for (const [index, planned] of plan.entries()) {
+    await drag(target.kind, planned.points).catch((error: unknown) => {
+      // Every press was checked against the plan, so a later one not taken is a bug, and the drags before it stay made.
+      if (index === 0 || !(error instanceof CommandError)) throw error;
+      throw new Error(`layer.transform: ${step.mode} drag ${index + 1} of ${plan.length} was not made (${error.message}) after ${index} before it were: history.undo with steps: ${index} takes those back.`);
+    });
+    const now = pendingState(target.kind)?.corners;
+    if (!now || !sameCorners(now, planned.corners)) {
+      throw new Error(`layer.transform: a ${step.mode} drag left the corners at ${JSON.stringify(now ?? null)}, not ${JSON.stringify(planned.corners)}.`);
+    }
+    corners = now;
+  }
+  const [topLeft, topRight, bottomRight, bottomLeft] = corners;
+  return { corners: { 'top-left': { ...topLeft }, 'top-right': { ...topRight }, 'bottom-right': { ...bottomRight }, 'bottom-left': { ...bottomLeft } } };
+}
+
+async function dragOnce(target: Target, step: Exclude<DragStep, { kind: 'corners' }>, textLayerId: string | null): Promise<DragOutcome> {
+  const planned = step.kind === 'rotate'
+    ? rotateDrag(target, step.angle)
+    : step.kind === 'scale'
+      ? scaleDrag(target, step.factor, step.anchor)
+      : skewDrag(target, step.tan, step.anchor);
+  await drag(target.kind, planned.points);
+  return checkReached(target, step, readBack(target, step, textLayerId));
+}
+
 /**
- * Performs `step` as a handle drag of the box the Move tool shows for the
- * selected layers, through the canvas gesture dispatcher, then ends it as
- * Escape does so nothing is left pending. `isBox` is whether the Move tool
- * frames the selection in one shared box (several layers, a group);
- * otherwise `layer` is the one active layer. `measure` waits for the
- * shared box's bounds.
+ * Performs `step` as handle drags of the box the Move tool shows for the
+ * selected layers, through the canvas gesture dispatcher, in the Move-options
+ * mode whose handles make it, then ends it as Escape does so nothing is left
+ * pending and puts the mode back. `isBox` is whether the Move tool frames
+ * the selection in one shared box (several layers, a group); otherwise
+ * `layer` is the one active layer. `measure` waits for the shared box's
+ * bounds.
  */
 export async function dragTransform(
   step: DragStep,
@@ -332,27 +510,22 @@ export async function dragTransform(
   layer: Layer,
   measure: () => Promise<void>,
 ): Promise<{ layers: string[]; outcome: DragOutcome }> {
-  const target = isBox
-    ? await boxTarget(measure, step)
-    : layer.type === 'text'
-      ? textTarget(layer, step)
-      : layer.type === 'raster'
-        ? await selectionTarget(layer)
-        : refuseSingle(layer);
-  const ids = target.kind === 'box' ? currentLayerTransformTargets() : [layer.id];
+  const undo: Undo = [];
   try {
-    const drag = step.kind === 'rotate' ? rotateDrag(target, step.angle) : scaleDrag(target, step.factor, step.anchor);
-    const before = topEntry();
-    const input = { tool: 'move', points: drag.points } as const;
-    if (target.kind === 'box') await runHeldGesture(input, sessionBegun);
-    else runGesture(input);
-    if (topEntry() === before) {
-      throw new CommandError('refused', 'The handle press was not taken as a transform: nothing changed.');
-    }
-    const outcome = checkReached(target, step, readBack(target, step, target.kind === 'text' ? layer.id : null));
+    const target = isBox
+      ? await boxTarget(measure, step, undo)
+      : layer.type === 'text'
+        ? textTarget(layer, step, undo)
+        : layer.type === 'raster'
+          ? await selectionTarget(layer, step, undo)
+          : refuseSingle(layer);
+    const ids = target.kind === 'box' ? currentLayerTransformTargets() : [layer.id];
+    const outcome = step.kind === 'corners'
+      ? await dragCorners(target, step)
+      : await dragOnce(target, step, target.kind === 'text' ? layer.id : null);
     return { layers: ids, outcome };
   } finally {
-    if (target.kind !== 'text') deselectAndCommit();
+    for (const put of undo.reverse()) put();
   }
 }
 

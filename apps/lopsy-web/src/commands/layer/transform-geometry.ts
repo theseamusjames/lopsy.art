@@ -230,3 +230,101 @@ export function pressPoint(
   candidates.sort((a, b) => Math.hypot(a.x - at.x, a.y - at.y) - Math.hypot(b.x - at.x, b.y - at.y));
   return candidates.find((p) => hitTest(p) === handle) ?? null;
 }
+
+/** The edge a skew keeps where it is: the handle of the edge opposite slides along itself. */
+export type SkewAnchor = 'top' | 'right' | 'bottom' | 'left';
+
+export const SKEW_ANCHORS: readonly SkewAnchor[] = ['top', 'right', 'bottom', 'left'];
+
+/** Whether a skew anchor's drag shears along x (a top or bottom edge slides sideways) or along y. */
+export function skewAxis(anchor: SkewAnchor): 'x' | 'y' {
+  return anchor === 'top' || anchor === 'bottom' ? 'x' : 'y';
+}
+
+interface SkewEdge {
+  /** Whether the dragged edge slides along the box's x axis. */
+  readonly slidesX: boolean;
+  /** Which side of the box centre the dragged edge is on: bottom and right are positive. */
+  readonly side: 1 | -1;
+  /** The distance between the dragged edge and the one held, in the box's own axes. */
+  readonly span: number;
+}
+
+function skewEdge(box: Rect, handle: TransformHandle): SkewEdge {
+  const slidesX = handle === 'top' || handle === 'bottom';
+  return {
+    slidesX,
+    side: handle === 'bottom' || handle === 'right' ? 1 : -1,
+    span: slidesX ? box.height : box.width,
+  };
+}
+
+/**
+ * The shear, as the tangent of its angle, that an edge-handle drag from
+ * `press` to `release` gives in Skew mode: the dragged edge follows the
+ * pointer along itself while the opposite edge holds, as the handlers
+ * compute it. Positive slides a bottom edge right or a right edge down.
+ */
+export function skewReached(frame: DragFrame, handle: TransformHandle, press: Point, release: Point): number | null {
+  const s = frame.toLocal(press);
+  const c = frame.toLocal(release);
+  const edge = skewEdge(frame.box, handle);
+  if (!s || !c || edge.span === 0) return null;
+  return (edge.side * (edge.slidesX ? c.x - s.x : c.y - s.y)) / edge.span;
+}
+
+/**
+ * The whole-pixel release, of the four around the exact one, whose drag of
+ * the edge `handle` from `press` shears nearest to `tan`; null when none is
+ * inside `limits`.
+ */
+export function skewRelease(
+  frame: DragFrame,
+  handle: TransformHandle,
+  press: Point,
+  tan: number,
+  limits: Limits,
+): { point: Point; reached: number } | null {
+  const s = frame.toLocal(press);
+  if (!s) return null;
+  const edge = skewEdge(frame.box, handle);
+  const travel = edge.side * edge.span * tan;
+  const exact = frame.toDoc({ x: s.x + (edge.slidesX ? travel : 0), y: s.y + (edge.slidesX ? 0 : travel) });
+  let best: { point: Point; reached: number; error: number } | null = null;
+  for (const x of new Set([Math.floor(exact.x), Math.ceil(exact.x)])) {
+    for (const y of new Set([Math.floor(exact.y), Math.ceil(exact.y)])) {
+      const point = { x, y };
+      if (!within(point, limits)) continue;
+      const reached = skewReached(frame, handle, press, point);
+      if (reached === null) continue;
+      const error = Math.abs(reached - tan);
+      if (!best || error < best.error) best = { point, reached, error };
+    }
+  }
+  return best ? { point: best.point, reached: best.reached } : null;
+}
+
+/** A corner of the box, in the order the editor keeps corner offsets: clockwise from the top-left. */
+export type Corner = 'top-left' | 'top-right' | 'bottom-right' | 'bottom-left';
+
+export const CORNERS: readonly Corner[] = ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
+
+/**
+ * Whether four corners, in order round the shape, outline a convex quad with
+ * no three in a line: the only quads a corner distortion maps a rectangle
+ * onto without folding it. Either winding counts, so a mirrored quad does.
+ */
+export function isConvexQuad(corners: readonly Point[]): boolean {
+  let sign = 0;
+  for (let i = 0; i < corners.length; i++) {
+    const a = corners[i];
+    const b = corners[(i + 1) % corners.length];
+    const c = corners[(i + 2) % corners.length];
+    if (!a || !b || !c) return false;
+    const cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+    if (cross === 0) return false;
+    if (sign !== 0 && Math.sign(cross) !== sign) return false;
+    sign = Math.sign(cross);
+  }
+  return corners.length === 4;
+}
