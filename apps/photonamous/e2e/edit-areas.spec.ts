@@ -24,6 +24,15 @@ async function canvasRedness(page: Page): Promise<number> {
   }, png.toString('base64'));
 }
 
+/** The photo is grey: only the selected mask's red overlay makes the screen redder than green. */
+async function expectMaskShown(page: Page): Promise<void> {
+  await expect.poll(() => canvasRedness(page), { timeout: 30_000 }).toBeGreaterThan(0.02);
+}
+
+async function expectMaskHidden(page: Page): Promise<void> {
+  await expect.poll(() => canvasRedness(page), { timeout: 30_000 }).toBeLessThan(0.005);
+}
+
 async function exportJpeg(page: Page): Promise<number> {
   const count = await page.evaluate(() => window.__photosHarness?.exports.length ?? 0);
   await page.getByRole('button', { name: 'Export' }).click();
@@ -116,31 +125,116 @@ test.describe('Masks', () => {
     await expect(page.getByTestId('crop-tool')).toHaveCount(0);
   });
 
-  test('a newly added mask is selected and shows red on screen, never in an export', async ({ page }) => {
+  test('with Show mask on, each new mask is selected and shows red on screen, never in an export', async ({ page }) => {
     await openHarness(page);
     await openFlatImage(page);
     await waitForReady(page);
     await waitForPreview(page, 0);
 
-    const steps = [
-      ['m', /^Linear\s*Mask 1$/],
-      ['Shift+M', /^Radial\s*Mask 2$/],
-    ] as const;
-    for (const [key, name] of steps) {
-      await page.locator('body').press(key);
-      await expect(page.getByRole('list', { name: 'Mask list' }).getByRole('button', { name })).toHaveAttribute('aria-current', 'true');
-      // The photo is grey: only the selected mask's red overlay makes the screen redder than green.
-      await expect.poll(() => canvasRedness(page), { timeout: 30_000 }).toBeGreaterThan(0.02);
-      // Still there once the histogram has been read and the previews rendered.
-      await page.waitForTimeout(2500);
-      expect(await canvasRedness(page)).toBeGreaterThan(0.02);
-    }
+    // M opens the Masks panel with a new linear mask, and O there turns Show mask on.
+    const list = page.getByRole('list', { name: 'Mask list' });
+    await page.locator('body').press('m');
+    await page.keyboard.press('o');
+    await expect(page.getByRole('button', { name: 'Show mask', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(list.getByRole('button', { name: /^Linear\s*Mask 1$/ })).toHaveAttribute('aria-current', 'true');
+    await expectMaskShown(page);
+    // Still there long after the moment a new mask shows for, the histogram and the previews.
+    await page.waitForTimeout(2500);
+    expect(await canvasRedness(page)).toBeGreaterThan(0.02);
+
+    await page.keyboard.press('Shift+M');
+    await expect(list.getByRole('button', { name: /^Radial\s*Mask 2$/ })).toHaveAttribute('aria-current', 'true');
+    await expectMaskShown(page);
+    await page.waitForTimeout(2500);
+    expect(await canvasRedness(page)).toBeGreaterThan(0.02);
 
     const index = await exportJpeg(page);
     const exported = await imageStats(page, { kind: 'export', index });
     expect(Math.abs(exported.red - exported.green)).toBeLessThan(3);
     // And back on screen after the export.
-    await expect.poll(() => canvasRedness(page), { timeout: 30_000 }).toBeGreaterThan(0.02);
+    await expectMaskShown(page);
+  });
+
+  test('without Show mask a new mask shows for a moment; Show mask, by its button or O, keeps it', async ({ page }) => {
+    await openHarness(page);
+    await openFlatImage(page);
+    await waitForReady(page);
+    await waitForPreview(page, 0);
+
+    const masks = page.getByRole('button', { name: 'Masks', exact: true });
+    await masks.click();
+    const panel = page.getByRole('region', { name: 'Masks' });
+    const showMask = panel.getByRole('button', { name: 'Show mask', exact: true });
+    await expect(showMask).toHaveAttribute('aria-pressed', 'false');
+    await expect(showMask).toHaveAttribute('title', 'Show mask (O)');
+    await panel.getByRole('button', { name: 'Radial' }).click();
+    // Out of the way of the adjustments once the moment that shows what it covers is over.
+    await expectMaskHidden(page);
+
+    await showMask.click();
+    await expect(showMask).toHaveAttribute('aria-pressed', 'true');
+    await expectMaskShown(page);
+    await page.waitForTimeout(2500);
+    expect(await canvasRedness(page)).toBeGreaterThan(0.02);
+
+    await page.keyboard.press('o');
+    await expect(showMask).toHaveAttribute('aria-pressed', 'false');
+    await expectMaskHidden(page);
+    await page.keyboard.press('o');
+    await expect(showMask).toHaveAttribute('aria-pressed', 'true');
+    await expectMaskShown(page);
+
+    // O is the Masks panel's: with the panel closed, no mask shows and the key changes nothing.
+    await masks.click();
+    await expect(panel).toHaveCount(0);
+    await expectMaskHidden(page);
+    await page.keyboard.press('o');
+    await masks.click();
+    await expect(showMask).toHaveAttribute('aria-pressed', 'true');
+    await expectMaskShown(page);
+  });
+
+  test('a mask shows while a handle drags it and a moment after, and hides while its Exposure is dragged', async ({ page }) => {
+    await openHarness(page);
+    await openFlatImage(page);
+    await waitForReady(page);
+    await waitForPreview(page, 0);
+    await page.getByRole('button', { name: 'Masks', exact: true }).click();
+    const panel = page.getByRole('region', { name: 'Masks' });
+    await panel.getByRole('button', { name: 'Radial' }).click();
+    await expectMaskHidden(page);
+
+    const handle = await page.locator('[data-handle="move"]').boundingBox();
+    if (!handle) throw new Error('no handle');
+    const x = handle.x + handle.width / 2;
+    const y = handle.y + handle.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 40, y + 10, { steps: 5 });
+    await expectMaskShown(page);
+    // Held still for longer than the moment: still shown, as the drag goes on.
+    await page.waitForTimeout(2000);
+    expect(await canvasRedness(page)).toBeGreaterThan(0.02);
+    await page.mouse.up();
+    await expectMaskHidden(page);
+    expect(await page.evaluate(() => window.__photosHarness?.steps)).toEqual(['Add radial mask', 'Mask: move']);
+
+    // Show mask shows it, but not while the mask's own Exposure is dragged.
+    await panel.getByRole('button', { name: 'Show mask', exact: true }).click();
+    await expectMaskShown(page);
+    const exposure = panel.getByRole('group', { name: 'Mask 1 adjustments' }).getByRole('slider', { name: 'Exposure', exact: true });
+    await exposure.scrollIntoViewIfNeeded();
+    const track = await exposure.boundingBox();
+    if (!track) throw new Error('no Exposure slider');
+    // Exposure is 0 of −4..4: its thumb is in the middle.
+    await page.mouse.move(track.x + track.width / 2, track.y + track.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(track.x + track.width / 2 + 30, track.y + track.height / 2, { steps: 5 });
+    await expectMaskHidden(page);
+    await page.mouse.up();
+    await expectMaskShown(page);
+    const steps = await page.evaluate(() => window.__photosHarness?.steps ?? []);
+    expect(steps[steps.length - 1]).toMatch(/^Mask 1 exposure \+/);
   });
 
   test('the pixel readout shows the colour under the pointer', async ({ page }) => {

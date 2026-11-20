@@ -26,6 +26,9 @@ export interface AreasPanelProps {
   readonly onShapeChange?: (areaId: string, geometry: LinearGeometry | RadialGeometry) => void;
   /** Once, when it is let go. */
   readonly onShapeCommit?: (areaId: string, geometry: LinearGeometry | RadialGeometry, label: string) => void;
+  /** Show mask (O): the selected mask in red on the photo, not only while its shape changes. */
+  readonly isMaskShown: boolean;
+  readonly onShowMask: (isShown: boolean) => void;
 }
 
 /** Where focus goes once a rename or a delete has re-rendered the list. */
@@ -54,6 +57,8 @@ export function AreasPanel({
   shapeFrame,
   onShapeChange,
   onShapeCommit,
+  isMaskShown,
+  onShowMask,
 }: AreasPanelProps) {
   const areas = liveAreas(recipe);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
@@ -126,21 +131,33 @@ export function AreasPanel({
     <section ref={panelRef} className={styles.panel} aria-label="Masks">
       <header className={styles.header}>
         <h2 className={styles.title}>Masks</h2>
-        <div className={styles.add}>
+        <div className={styles.actions}>
+          <div className={styles.add}>
+            <button
+              type="button"
+              className={styles.button}
+              disabled={isDisabled || isFull}
+              onClick={() => onAdd('linear')}
+              title="A gradient across the photo"
+              data-area-add
+            >
+              <Plus size={13} aria-hidden />
+              <span>Linear</span>
+            </button>
+            <button type="button" className={styles.button} disabled={isDisabled || isFull} onClick={() => onAdd('radial')} title="An ellipse">
+              <Circle size={13} aria-hidden />
+              <span>Radial</span>
+            </button>
+          </div>
           <button
             type="button"
             className={styles.button}
-            disabled={isDisabled || isFull}
-            onClick={() => onAdd('linear')}
-            title="A gradient across the photo"
-            data-area-add
+            aria-pressed={isMaskShown}
+            title="Show mask (O)"
+            disabled={isDisabled}
+            onClick={() => onShowMask(!isMaskShown)}
           >
-            <Plus size={13} aria-hidden />
-            <span>Linear</span>
-          </button>
-          <button type="button" className={styles.button} disabled={isDisabled || isFull} onClick={() => onAdd('radial')} title="An ellipse">
-            <Circle size={13} aria-hidden />
-            <span>Radial</span>
+            Show mask
           </button>
         </div>
       </header>

@@ -329,12 +329,16 @@ to the library**.
 - **Masks** (toolbar): add **Linear** (a gradient across the photo) or
   **Radial** (an ellipse) masks, up to eight, each with Amount, Invert, a
   name ("Mask 1" until it has its own), Delete, and its own Exposure,
-  Contrast, Highlights, Shadows, Temperature, Tint and Saturation. The
-  selected mask shows in red on screen, and handles on the image move it,
-  resize it, turn it and set its feather; each drag or slider release is
-  one history step ("Mask: move"). The recipe stores masks as `areas`, on
-  the unrotated photo, so they follow rotation, flips, straightening and
-  the crop.
+  Contrast, Highlights, Shadows, Temperature, Tint and Saturation.
+  Handles on the image move the selected mask, resize it, turn it and set
+  its feather; each drag or slider release is one history step ("Mask:
+  move"). The selected mask shows in red on screen (never in exports,
+  previews or the histogram) while its shape changes and for a second
+  after, and for a second after it is added, chosen or inverted; it hides
+  while its Amount or an adjustment slider is dragged. **Show mask** (O,
+  in the panel's header) shows it the rest of the time too. The recipe
+  stores masks as `areas`, on the unrotated photo, so they follow
+  rotation, flips, straightening and the crop.
 
 ## Export
 
@@ -546,7 +550,7 @@ Shown in the app with `?`. The one-key shortcuts below (digits, letters,
 
 In the Edit view: ⌘Z undo, ⇧⌘Z or ⌘Y redo, ⌘0 fit, ⌘1 full size (100%), ⇧⌘C and
 ⇧⌘V copy and paste edits, hold `\` for before, J for clipping, R crop,
-M a linear mask, ⇧M a radial mask, ← → the previous or next photo,
-Escape back to the library (or out of the tool in use), ? the Edit
-view's shortcuts. With the photo focused, the arrow keys move a zoomed
-photo and + and − zoom.
+M a linear mask, ⇧M a radial mask, O Show mask (with Masks open), ← →
+the previous or next photo, Escape back to the library (or out of the
+tool in use), ? the Edit view's shortcuts. With the photo focused, the
+arrow keys move a zoomed photo and + and − zoom.

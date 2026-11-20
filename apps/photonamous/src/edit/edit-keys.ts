@@ -14,7 +14,8 @@ export type EditShortcut =
   | 'help'
   | 'crop'
   | 'linearArea'
-  | 'radialArea';
+  | 'radialArea'
+  | 'showMask';
 
 export interface KeyInfo {
   readonly key: string;
@@ -43,6 +44,7 @@ export function shortcutFor(e: KeyInfo): EditShortcut | null {
   if (key === 'm') return e.shiftKey ? 'radialArea' : 'linearArea';
   if (e.shiftKey) return null;
   if (key === 'r') return 'crop';
+  if (key === 'o') return 'showMask';
   if (e.key === '\\') return 'before';
   if (e.key === 'ArrowLeft') return 'previous';
   if (e.key === 'ArrowRight') return 'next';
@@ -102,6 +104,7 @@ export const EDIT_SHORTCUTS: readonly { readonly keys: string; readonly action: 
   { keys: 'R', action: 'Crop, and Done' },
   { keys: 'M', action: 'Add a linear mask' },
   { keys: '⇧M', action: 'Add a radial mask' },
+  { keys: 'O', action: 'Show or hide the selected mask, with Masks open' },
   { keys: '← →', action: 'Previous or next photo in the filmstrip' },
   { keys: 'Esc', action: 'Back to the library, or cancel the tool in use' },
   { keys: '?', action: 'These shortcuts' },

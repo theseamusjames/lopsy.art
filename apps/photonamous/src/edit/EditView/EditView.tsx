@@ -3,7 +3,18 @@ import { ArrowLeft, Check, ClipboardPaste, Copy, Crop, Spline, Eye, FlipVertical
 import { ZoomReadout } from '@lopsy/ui/ZoomReadout';
 import { DEFAULT_RECIPE, recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Asset, HistoryStep, Json, Preset, PresetId, Version, VersionId } from '@lopsy/photos-core/library/types';
-import { DEFAULT_COPY_GROUPS, RECIPE_GROUPS, addArea, liveAreas, pickGroups, removeArea, type AreaKind, type RecipeGroupId } from '@lopsy/photos-core/library/recipe';
+import {
+  DEFAULT_COPY_GROUPS,
+  RECIPE_GROUPS,
+  addArea,
+  liveAreas,
+  pickGroups,
+  removeArea,
+  type AreaKind,
+  type LinearGeometry,
+  type RadialGeometry,
+  type RecipeGroupId,
+} from '@lopsy/photos-core/library/recipe';
 import type { CopiedEdits } from '../../library/recipe-copy';
 import { CopyEditsDialog } from '../../components/CopyEditsDialog/CopyEditsDialog';
 import { PresetsPanel } from '../PresetsPanel/PresetsPanel';
@@ -54,6 +65,7 @@ import { LoadStatus } from '../LoadStatus/LoadStatus';
 import { usePhotoEngine } from './use-photo-engine';
 import { usePreviews } from './use-previews';
 import { useSplitBefore } from './use-split-before';
+import { useMaskOverlay } from './use-mask-overlay';
 import { usePixelReadout } from './use-pixel-readout';
 import { useClippingWarningOnEngine } from '../clipping-warning';
 import { useGrainSeed } from '../grain-seed';
@@ -394,7 +406,7 @@ export function EditView({
     } else onPasteEdits?.();
   };
   // Set once the tools below are defined; the key handler reads it.
-  const toolShortcuts = useRef<(shortcut: 'crop' | 'linearArea' | 'radialArea') => void>(() => undefined);
+  const toolShortcuts = useRef<(shortcut: 'crop' | 'linearArea' | 'radialArea' | 'showMask') => void>(() => undefined);
   const isToolOpen = isCropping || isLevelling || isPickingWb || isCopyDialogOpen || isHelpOpen;
   const handlers = useRef({ onUndo: handleUndo, onRedo: handleRedo, engine, filmstrip, isCropping: false, onCopyPaste: handleCopyPaste, isToolOpen, leave: () => {}, openFromStrip });
   handlers.current = { onUndo: handleUndo, onRedo: handleRedo, engine, filmstrip, isCropping, onCopyPaste: handleCopyPaste, isToolOpen, leave: () => void handleClose(), openFromStrip };
@@ -414,7 +426,7 @@ export function EditView({
         h.openFromStrip(next);
         return;
       }
-      if (shortcut === 'crop' || shortcut === 'linearArea' || shortcut === 'radialArea') {
+      if (shortcut === 'crop' || shortcut === 'linearArea' || shortcut === 'radialArea' || shortcut === 'showMask') {
         e.preventDefault();
         toolShortcuts.current(shortcut);
         return;
@@ -554,9 +566,21 @@ export function EditView({
     return area ? areaLabel(area, index) : 'Mask';
   };
 
-  useEffect(() => {
-    engine?.setAreaOverlay(isAreasOpen && selectedAreaId ? selectedAreaId : null);
-  }, [engine, isAreasOpen, selectedAreaId]);
+  // The selected mask in red: with Show mask on, or while its shape changes and a moment after (mask-overlay.ts).
+  const [isMaskShown, setIsMaskShown] = useState(false);
+  const { flash: flashMask, endFlash: endMaskFlash } = useMaskOverlay(engine, selectedArea?.id ?? null, isMaskShown, draft);
+  const showMask = (isShown: boolean) => {
+    setIsMaskShown(isShown);
+    endMaskFlash();
+  };
+  const draftShape = (id: string, geometry: LinearGeometry | RadialGeometry) => {
+    setDraft({ [`areas.${id}.geometry`]: { ...geometry } });
+    flashMask();
+  };
+  const commitShape = (id: string, geometry: LinearGeometry | RadialGeometry, label: string) => {
+    commit({ [`areas.${id}.geometry`]: { ...geometry } }, label);
+    flashMask();
+  };
 
   const handleAddArea = (kind: AreaKind) => {
     const id = newId();
@@ -581,6 +605,10 @@ export function EditView({
       return;
     }
     if (isCropping) return;
+    if (shortcut === 'showMask') {
+      if (isAreasOpen) showMask(!isMaskShown);
+      return;
+    }
     setIsAreasOpen(true);
     handleAddArea(shortcut === 'linearArea' ? 'linear' : 'radial');
   };
@@ -595,8 +623,8 @@ export function EditView({
         frame={areaFrame}
         box={areaBox}
         docWidth={docSize.width}
-        onDraft={(geometry) => setDraft({ [`areas.${selectedArea.id}.geometry`]: { ...geometry } })}
-        onCommit={(geometry, label) => commit({ [`areas.${selectedArea.id}.geometry`]: { ...geometry } }, label)}
+        onDraft={(geometry) => draftShape(selectedArea.id, geometry)}
+        onCommit={(geometry, label) => commitShape(selectedArea.id, geometry, label)}
       />
     ) : null;
 
@@ -1048,16 +1076,25 @@ export function EditView({
               onAdd={handleAddArea}
               onSelect={setSelectedAreaId}
               onRename={(id, name) => commit({ [`areas.${id}.name`]: name }, 'Rename mask')}
-              onInvert={(id, isInverted) => commit({ [`areas.${id}.invert`]: isInverted }, `${labelOfArea(id)} ${isInverted ? 'inverted' : 'not inverted'}`)}
+              onInvert={(id, isInverted) => {
+                commit({ [`areas.${id}.invert`]: isInverted }, `${labelOfArea(id)} ${isInverted ? 'inverted' : 'not inverted'}`);
+                // Inverting changes what the mask covers: the selected one shows for a moment, as after a change of shape.
+                if (id === selectedArea?.id) flashMask();
+              }}
               onDelete={(id) => {
                 commit(removeArea(id), `Delete ${labelOfArea(id)}`);
                 if (selectedAreaId === id) setSelectedAreaId(null);
               }}
-              onChange={handleSliderChange}
+              onChange={(control, value) => {
+                endMaskFlash();
+                handleSliderChange(control, value);
+              }}
               onCommit={handleSliderCommit}
               shapeFrame={areaFrame && docSize ? { frame: areaFrame, doc: docSize } : null}
-              onShapeChange={(id, geometry) => setDraft({ [`areas.${id}.geometry`]: { ...geometry } })}
-              onShapeCommit={(id, geometry, label) => commit({ [`areas.${id}.geometry`]: { ...geometry } }, label)}
+              onShapeChange={draftShape}
+              onShapeCommit={commitShape}
+              isMaskShown={isMaskShown}
+              onShowMask={showMask}
             />
           )}
           {photoInfo && (

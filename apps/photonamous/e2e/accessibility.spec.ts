@@ -198,6 +198,12 @@ test('every view, as a user reaches it', async ({ page }) => {
     await edit.getByRole('button', { name: 'Radial' }).click();
   });
 
+  await step(page, 'edit view, masks, Show mask on', async () => {
+    const showMask = edit.getByRole('button', { name: 'Show mask', exact: true });
+    await showMask.click();
+    await expect(showMask).toHaveAttribute('aria-pressed', 'true');
+  });
+
   await step(page, 'edit view, split before and after', async () => {
     await edit.getByRole('button', { name: 'Split' }).click();
   });

@@ -27,6 +27,9 @@ describe('shortcutFor', () => {
     expect(shortcutFor(key('r'))).toBe('crop');
     expect(shortcutFor(key('m'))).toBe('linearArea');
     expect(shortcutFor(key('M', { shiftKey: true }))).toBe('radialArea');
+    expect(shortcutFor(key('o'))).toBe('showMask');
+    expect(shortcutFor(key('O', { shiftKey: true }))).toBeNull();
+    expect(shortcutFor(key('o', { metaKey: true }))).toBeNull();
     expect(shortcutFor(key('r', { altKey: true }))).toBeNull();
     expect(shortcutFor(key('?', { shiftKey: true }))).toBe('help');
   });

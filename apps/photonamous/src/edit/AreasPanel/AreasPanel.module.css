@@ -20,6 +20,11 @@
   color: var(--color-text-primary);
 }
 
+.actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
 .add {
   display: flex;
   gap: var(--space-1);
@@ -43,6 +48,13 @@
 .button:hover:not(:disabled) {
   background: var(--color-bg-hover);
   color: var(--color-text-primary);
+}
+
+/* Show mask, when on: filled, with an accent edge and text. */
+.button[aria-pressed='true'] {
+  background: var(--color-bg-active);
+  border-color: var(--ph-accent-text);
+  color: var(--ph-accent-text);
 }
 
 .button:disabled {
