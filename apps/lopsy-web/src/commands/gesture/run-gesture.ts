@@ -114,6 +114,46 @@ function toolEvent(point: Point, input: GestureInput, detail?: number): ToolEven
   };
 }
 
+interface Pressed {
+  readonly result: GestureResult;
+  readonly first: Point;
+  readonly rest: readonly Point[];
+}
+
+/** The checks before a press, then the press itself at the first point. */
+function press(input: GestureInput): Pressed {
+  const [first, ...rest] = input.points;
+  if (!first) throw new CommandError('invalid', 'A gesture needs at least one point.');
+  requireDocument();
+  requireEngine();
+  checkNoOpenSession();
+  const ui = useUIStore.getState();
+  if (input.tool && input.tool !== ui.activeTool) ui.setActiveTool(input.tool);
+  const tool = useUIStore.getState().activeTool;
+  const layer = activeLayer();
+  checkGesturePress(tool, layer);
+  gestureDown(toolEvent(first, input, input.clicks), documentEnvironment);
+  return { result: { tool, layer: layer.id }, first, rest };
+}
+
+/** One move per point; `delivered.at` follows the last point a move was delivered for, so a throw still releases there. */
+function moveThrough(input: GestureInput, points: readonly Point[], delivered: { at: Point }): void {
+  for (const point of points) {
+    gestureMove(toolEvent(point, input), documentEnvironment);
+    delivered.at = point;
+  }
+  const cursor = documentEnvironment.toCanvas(delivered.at.x, delivered.at.y);
+  if (cursor) useUIStore.getState().setCursorPosition(cursor);
+}
+
+function release(input: GestureInput, at: Point): void {
+  try {
+    gestureUp(toolEvent(at, input), documentEnvironment);
+  } finally {
+    useUIStore.getState().setIsInteracting(false);
+  }
+}
+
 /**
  * Performs a canvas gesture through the same dispatcher the pointer layer
  * calls (gesture-session.ts), synchronously: press at the first point, one
@@ -125,33 +165,34 @@ function toolEvent(point: Point, input: GestureInput, detail?: number): ToolEven
  * or session is left open; the error is then rethrown.
  */
 export function runGesture(input: GestureInput): GestureResult {
-  const [first, ...rest] = input.points;
-  if (!first) throw new CommandError('invalid', 'A gesture needs at least one point.');
-  requireDocument();
-  requireEngine();
-  checkNoOpenSession();
-  const ui = useUIStore.getState();
-  if (input.tool && input.tool !== ui.activeTool) ui.setActiveTool(input.tool);
-  const tool = useUIStore.getState().activeTool;
-  const layer = activeLayer();
-  checkGesturePress(tool, layer);
-
-  gestureDown(toolEvent(first, input, input.clicks), documentEnvironment);
-  let lastDelivered = first;
+  const pressed = press(input);
+  const delivered = { at: pressed.first };
   try {
     useUIStore.getState().setIsInteracting(true);
-    for (const point of rest) {
-      gestureMove(toolEvent(point, input), documentEnvironment);
-      lastDelivered = point;
-    }
-    const cursor = documentEnvironment.toCanvas(lastDelivered.x, lastDelivered.y);
-    if (cursor) useUIStore.getState().setCursorPosition(cursor);
+    moveThrough(input, pressed.rest, delivered);
   } finally {
-    try {
-      gestureUp(toolEvent(lastDelivered, input), documentEnvironment);
-    } finally {
-      useUIStore.getState().setIsInteracting(false);
-    }
+    release(input, delivered.at);
   }
-  return { tool, layer: layer.id };
+  return pressed.result;
+}
+
+/**
+ * runGesture with the button held still after the press until `hold`
+ * resolves, as a pointer that presses and waits before it moves: for a
+ * press whose handler finishes its work once a read it started is in (a
+ * multi-layer transform box whose content bounds are still being read
+ * begins its session then, and ignores moves until it has). The release
+ * still happens however the hold or a move ends.
+ */
+export async function runHeldGesture(input: GestureInput, hold: () => Promise<void>): Promise<GestureResult> {
+  const pressed = press(input);
+  const delivered = { at: pressed.first };
+  try {
+    useUIStore.getState().setIsInteracting(true);
+    await hold();
+    moveThrough(input, pressed.rest, delivered);
+  } finally {
+    release(input, delivered.at);
+  }
+  return pressed.result;
 }

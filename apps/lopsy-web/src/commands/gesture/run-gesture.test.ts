@@ -38,7 +38,7 @@ const { useEditorStore } = await import('../../app/editor-store');
 const { useUIStore } = await import('../../app/ui-store');
 const { useToolSettingsStore } = await import('../../app/tool-settings-store');
 const { CommandError } = await import('../command');
-const { docPointSpec, documentEnvironment, pointsSpec, runGesture } = await import('./run-gesture');
+const { docPointSpec, documentEnvironment, pointsSpec, runGesture, runHeldGesture } = await import('./run-gesture');
 const { validateParams } = await import('../params');
 
 type Layer = ReturnType<typeof useEditorStore.getState>['document']['layers'][number];
@@ -202,6 +202,27 @@ describe('runGesture', () => {
     } finally {
       useUIStore.setState({ [field]: null } as unknown as Partial<ReturnType<typeof useUIStore.getState>>);
     }
+  });
+});
+
+describe('runHeldGesture', () => {
+  it('holds still after the press until the hold resolves, then moves and releases', async () => {
+    const hold = vi.fn(() => {
+      calls.push(`hold interacting=${useUIStore.getState().isInteracting}`);
+      return Promise.resolve();
+    });
+    await expect(runHeldGesture({ tool: 'move', points: [{ x: 1, y: 1 }, { x: 3, y: 3 }] }, hold)).resolves.toEqual({ tool: 'move', layer: activeId() });
+    expect(calls).toEqual(['down interacting=false', 'hold interacting=true', 'move', 'up interacting=true']);
+    expect(gesture.up).toHaveBeenCalledWith(event(3, 3), documentEnvironment);
+    expect(useUIStore.getState().isInteracting).toBe(false);
+  });
+
+  it('releases at the press, with no move, when the hold rejects, then rethrows', async () => {
+    const bug = new Error('hold failed');
+    await expect(runHeldGesture({ points: [{ x: 1, y: 1 }, { x: 3, y: 3 }] }, () => Promise.reject(bug))).rejects.toThrow(bug);
+    expect(gesture.move).not.toHaveBeenCalled();
+    expect(gesture.up).toHaveBeenCalledWith(event(1, 1), documentEnvironment);
+    expect(useUIStore.getState().isInteracting).toBe(false);
   });
 });
 

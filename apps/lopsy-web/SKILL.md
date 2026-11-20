@@ -905,21 +905,37 @@ adjust those to grade the whole image. `filter.hue-saturation` and
   { "op": "layer.move", "dx": 0, "dy": 160 },
   { "op": "layer.nudge", "dx": 3, "dy": 0 },
 
+  { "op": "layer.duplicate", "layer": "Arrow" },
+  { "op": "layer.set", "name": "Tilted" },
+  { "op": "layer.transform", "rotate": -30 },
+  { "op": "layer.transform", "scale": { "x": 0.6, "y": 0.6 }, "anchor": "top-left" },
+  { "op": "layer.move", "dx": 300, "dy": 230 },
+
   { "op": "view.render", "maxSize": 600 }
 ]
 ```
 
-**Moving, flipping and quarter-turning.** `layer.move` moves a layer by
+**Moving, flipping, turning and scaling.** `layer.move` moves a layer by
 (dx, dy) as a Move-tool drag would, and returns where its content is
 afterwards. It is **refused while a selection is active** (a drag would lift
 the selected pixels instead), so `select.none` first. `image.flip-layer`
 mirrors one layer about its own content (`image.rotate` turns the whole
-image); `layer.transform` turns layers a quarter turn (`rotate: 90` or `-90`)
-or flips several layers together about the centre of their content. Text
-stays live through all of them. `layer.duplicate` puts the copy, named
-`<name> copy`, directly on top of the original and makes it active. There is
-no arbitrary-angle rotation or scaling command: see
-[What the API does not offer](#what-the-api-does-not-offer).
+image). `layer.transform` turns layers by any angle (`rotate`, degrees
+clockwise), scales them (`scale: { "x": …, "y": … }`), or flips several
+layers together, about their content. `rotate: 90` and `-90` are exact
+quarter turns; any other angle, and every scale, drags the Move tool's
+transform handles for you and resamples the pixels, so turn and scale once
+rather than in many small steps. A scale keeps its `anchor` still and drags the
+handle opposite it (default `"top-left"`: the bottom-right corner moves;
+`"left"`, `"right"`, `"top"` and `"bottom"` scale one axis): there is no scaling about the
+centre, so follow it with `layer.move` when the centre matters. The result
+gives the angle or factors reached, which land within 0.01° and half a
+pixel of what you asked, as a drag on whole pixels does. On one raster layer
+it selects the layer's pixels for the drag and drops the selection after,
+so `history.undo` brings that selection back: `select.none` with
+`commit: true` before the next move. Text stays live through all of them.
+`layer.duplicate` puts the copy, named
+`<name> copy`, directly on top of the original and makes it active.
 
 <!-- recipe: duplicate-and-group -->
 ```json
@@ -1084,12 +1100,9 @@ whole.
 
 These have no command. Don't hunt for them:
 
-- **Arbitrary-angle rotation and scaling, distort and perspective.** Only
-  quarter turns and flips (`layer.transform`, `image.flip-layer`,
-  `image.rotate`) and whole-image resizing (`image.size`). `tool.gesture`
-  can drag the Move tool's transform handles, but you would have to compute
-  where the handles are yourself. Draw at the angle and size you need
-  instead: a polygon selection can have any orientation.
+- **Skew, distort and perspective.** `layer.transform` turns, scales and
+  flips; the Move tool's other transform modes have no command. Draw the
+  shape you need instead: a polygon selection can have any outline.
 - **The Spray tool** (it paints on a timer while the button is held),
   **Liquify**, **Tilt-Shift** and **Mesh Warp**.
 - **Changing the colour of an existing text layer.** `text.add` uses the
