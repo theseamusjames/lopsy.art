@@ -192,7 +192,7 @@ export interface DevelopEngine {
   setInteractive(isInteractive: boolean): void;
   /** How the document sits on the source image, for Areas' handles; null before a load. */
   areaFrame(): AreaFrame | null;
-  /** Shows an area's mask in red on screen (not in exports); null for none. */
+  /** Shows an area's mask in red on screen (never in exports, previews or the histogram); null for none. */
   setAreaOverlay(areaId: string | null): void;
   getView(): View;
   /** Called after every view change (zoom, pan, fit, resize). */
@@ -371,7 +371,10 @@ class PhotoEngine implements DevelopEngine {
   /** The crop's corner in framed pixels: where the document starts. */
   private cropOrigin = { x: 0, y: 0 };
   private areasKey: string | null = null;
+  /** The area the Edit view asks to show in red; it shows while no read holds the screen-only views off. */
   private overlayAreaId: string | null = null;
+  /** Reads under way with the screen-only views off (withScreenViewsOff). */
+  private screenReads = 0;
   /** The working image's width over the full image's: 1 at full resolution. */
   private pixelScale = 1;
   /** The document and layer placement last pushed, to skip unchanged layouts. */
@@ -862,21 +865,22 @@ class PhotoEngine implements DevelopEngine {
   setAreaOverlay(areaId: string | null): void {
     if (this.overlayAreaId === areaId) return;
     this.overlayAreaId = areaId;
-    this.areasKey = null;
     this.applyAreas();
   }
 
-  /** The recipe's areas in document pixels: re-sent whenever they or the framing change. */
+  /** The recipe's areas in document pixels: re-sent whenever they, the framing or the overlay shown change. */
   private applyAreas(): void {
     const frame = this.areaFrame();
     if (!frame) return;
     const out = areaValues(this.recipe, frame);
-    const key = out ? `${Array.from(out.values).join(',')}|${this.overlayAreaId ?? ''}` : 'none';
+    // A read under way keeps the overlay off; the last one to end shows what was asked for meanwhile.
+    const overlay = this.screenReads > 0 ? null : this.overlayAreaId;
+    const key = out ? `${Array.from(out.values).join(',')}|${overlay ?? ''}` : 'none';
     if (key === this.areasKey) return;
     this.areasKey = key;
     if (out) setImageAreas(this.engine, out.values);
     else clearImageAreas(this.engine);
-    const index = out && this.overlayAreaId ? out.ids.indexOf(this.overlayAreaId) : -1;
+    const index = out && overlay ? out.ids.indexOf(overlay) : -1;
     setImageAreaOverlay(this.engine, index);
     this.invalidate();
   }
@@ -942,28 +946,36 @@ class PhotoEngine implements DevelopEngine {
 
   /**
    * Runs `work` with the screen-only views (clipping warning, sharpening
-   * mask, the selected area's red overlay) off, for anything that reads the
+   * mask, the selected mask's red overlay) off, for anything that reads the
    * rendered frame: exports and previews draw it, and the histogram and
-   * Auto tone count it. Costs nothing while none is on.
+   * Auto tone count it. The overlay stays off until the last read ends,
+   * even when the Edit view shows or hides it meanwhile (it does on a
+   * timer), and then follows the last request. Costs nothing while no view
+   * is on.
    */
   private async withScreenViewsOff<T>(work: () => Promise<T>): Promise<T> {
     const { shadows, highlights } = this.clippingWarning;
     const isMask = this.isDetailMaskView;
-    const overlay = this.overlayAreaId;
-    if (!shadows && !highlights && !isMask && !overlay) return work();
-    this.isFrameCurrent = false;
-    if (shadows || highlights) engineSetClippingWarning(this.engine, false, false);
-    if (isMask) setImageDetailMaskView(this.engine, false);
-    if (overlay) this.setAreaOverlay(null);
+    const isOverlay = this.overlayAreaId !== null;
+    const isAnyOn = shadows || highlights || isMask || isOverlay;
+    this.screenReads += 1;
+    if (isAnyOn) {
+      this.isFrameCurrent = false;
+      if (shadows || highlights) engineSetClippingWarning(this.engine, false, false);
+      if (isMask) setImageDetailMaskView(this.engine, false);
+      if (isOverlay) this.applyAreas();
+    }
     try {
       return await work();
     } finally {
+      this.screenReads -= 1;
       if (!this.isDisposed) {
-        engineSetClippingWarning(this.engine, this.clippingWarning.shadows, this.clippingWarning.highlights);
-        setImageDetailMaskView(this.engine, this.isDetailMaskView);
-        // Unless another area was selected meanwhile.
-        if (overlay && this.overlayAreaId === null) this.setAreaOverlay(overlay);
-        this.invalidate();
+        if (isAnyOn) {
+          engineSetClippingWarning(this.engine, this.clippingWarning.shadows, this.clippingWarning.highlights);
+          setImageDetailMaskView(this.engine, this.isDetailMaskView);
+          this.invalidate();
+        }
+        if (this.screenReads === 0 && (isOverlay || this.overlayAreaId !== null)) this.applyAreas();
       }
     }
   }
