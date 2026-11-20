@@ -25,6 +25,13 @@ export interface GestureInput {
   readonly meta?: boolean;
   /** MouseEvent.detail of the press: 2 for a double-click. */
   readonly clicks?: number;
+  /**
+   * The open canvas session this gesture is for, given only by the command
+   * that opened it: the press is meant for that session, not a tool. A
+   * gesture without it is refused while any session is open; one with it is
+   * refused unless exactly that session is.
+   */
+  readonly session?: 'liquify';
 }
 
 export const MAX_GESTURE_POINTS = 10_000;
@@ -90,6 +97,13 @@ export function checkNoOpenSession(): void {
   if (refusal) throw new CommandError('refused', refusal);
 }
 
+/** Throws `refused` unless the Liquify session a gesture is for is open: its press would go to a tool instead. */
+function checkSessionOpen(): void {
+  if (!useUIStore.getState().liquify) {
+    throw new CommandError('refused', 'No Liquify session is open, and the press would go to the active tool instead.');
+  }
+}
+
 /** Throws for a press gestureDown would drop without acting, using the same predicates it does. */
 export function checkGesturePress(tool: ToolId, layer: Layer): void {
   if (layer.locked && !toolIgnoresLayerLock(tool)) {
@@ -126,7 +140,8 @@ function press(input: GestureInput): Pressed {
   if (!first) throw new CommandError('invalid', 'A gesture needs at least one point.');
   requireDocument();
   requireEngine();
-  checkNoOpenSession();
+  if (input.session) checkSessionOpen();
+  else checkNoOpenSession();
   const ui = useUIStore.getState();
   if (input.tool && input.tool !== ui.activeTool) ui.setActiveTool(input.tool);
   const tool = useUIStore.getState().activeTool;

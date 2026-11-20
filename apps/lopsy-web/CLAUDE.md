@@ -270,7 +270,9 @@ the tools. Do not add per-call overrides of them.
 pointer uses. Never call a tool's handlers directly. `runGesture` refuses
 while a Liquify, Tilt-Shift or Mesh Warp session is open (they would take
 the press), and once the press has landed it always releases and clears
-the interacting flag, even when a move throws. Document coordinates and
+the interacting flag, even when a move throws. A command that opens a
+session and drags in it (`filter.liquify`) passes `session`, which is
+refused unless that session is open; no command takes it as a param. Document coordinates and
 offsets in params use the shared specs in `context.ts`
 (`coordinateSpec`, `boundedPointSpec`, `offsetSpec`, `extentSpec`), which
 bound them to the largest document's side beyond each edge: an unbounded

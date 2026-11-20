@@ -30,7 +30,7 @@ export interface MeshWarpResult extends SessionFilterResult {
 }
 
 /** The active layer, refused as the session's start refuses it (with the toast it shows), with the engine running. */
-function requireSessionTarget(): string {
+export function requireSessionTarget(): string {
   const doc = requireDocument();
   checkNoOpenSession();
   const layer = doc.layers.find((l) => l.id === doc.activeLayerId);

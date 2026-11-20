@@ -447,7 +447,7 @@ Every command's summary names the UI control it matches and its history label.
 | `select` | Selections | `select.rect`, `select.ellipse`, `select.polygon`, `select.none`, `select.modify`, `select.invert`, `select.from-layer` |
 | `paint` | Putting pixels down | `paint.fill`, `paint.stroke`, `paint.gradient`, `paint.shape`, `paint.clear`, `paint.bucket` |
 | `text` | Live text layers | `text.fonts`, `text.set-font`, `text.add`, `text.style`, `text.set-color`, `text.edit` |
-| `filter` | Destructive filters | `filter.gaussian-blur`, `filter.add-noise`, `filter.texture`, `filter.clouds`, `filter.halftone`, `filter.tilt-shift`, `filter.mesh-warp`… (35) |
+| `filter` | Destructive filters | `filter.gaussian-blur`, `filter.add-noise`, `filter.texture`, `filter.clouds`, `filter.halftone`, `filter.tilt-shift`, `filter.mesh-warp`, `filter.liquify`… (36) |
 | `adjust` | Non-destructive adjustments on a group | `adjust.add`, `adjust.set`, `adjust.list` |
 | `mask` | Layer masks | `mask.add`, `mask.edit`, `mask.clear`, `mask.remove` |
 | `image` | The whole canvas | `image.canvas-size`, `image.size`, `image.crop`, `image.rotate`, `image.flip-layer`, `image.border` |
@@ -791,6 +791,15 @@ makes active first (here Badge, while Neon was active).
   { "op": "filter.halftone", "dotSize": 10 },
   { "op": "select.none" },
   { "op": "filter.mesh-warp", "gridSize": 3, "points": [{ "col": 1, "row": 1, "dx": 0, "dy": -40 }] },
+  { "op": "filter.liquify", "strokes": [
+    { "mode": "push", "size": 120, "pressure": 60, "points": [
+      { "x": 150, "y": 290 }, { "x": 160, "y": 286 }, { "x": 170, "y": 282 }, { "x": 180, "y": 278 },
+      { "x": 190, "y": 274 }, { "x": 200, "y": 270 }, { "x": 210, "y": 266 }, { "x": 220, "y": 262 } ] },
+    { "mode": "twirl-cw", "size": 140, "pressure": 70, "points": [
+      { "x": 430, "y": 290 }, { "x": 430, "y": 290 }, { "x": 430, "y": 290 }, { "x": 430, "y": 290 },
+      { "x": 430, "y": 290 }, { "x": 430, "y": 290 }, { "x": 430, "y": 290 }, { "x": 430, "y": 290 },
+      { "x": 430, "y": 290 }, { "x": 430, "y": 290 }, { "x": 430, "y": 290 }, { "x": 430, "y": 290 } ] }
+  ] },
   { "op": "layer.set", "blendMode": "multiply", "opacity": 80 },
 
   { "op": "layer.add", "name": "Grain" },
@@ -820,8 +829,20 @@ Clouds): `focusPosition` and `focusWidth` are fractions of the document, 0
 the top at `angle` 0. `mesh-warp` bends the layer by moving points of a grid
 laid over the selection's box, or the whole document (here it lifts the
 middle of the Dots band 40 px): each point is `{ col, row, dx, dy }`, offsets
-in pixels. Filters refuse text and group layers. `clouds`, `fibers`,
-`smoke` and `add-noise` draw a new random seed on every run.
+in pixels. `liquify` warps the layer with brush strokes, as the Liquify
+brush does by hand: each stroke has a `mode`, a brush `size` (its diameter)
+and a `pressure` (percent), and `points`, the first a press and every
+further one a pointer move that makes **one dab**. A `push` dab shoves the
+pixels under the brush along the way the pointer came from the point before
+it, so give a push stroke points a few pixels apart, a quarter of the brush
+size or less (here it smears the left of the Dots up and to the right).
+`twirl-cw`, `twirl-ccw`, `bloat` and `pinch` turn, swell or shrink what is
+under the brush a little with every dab, wherever the pointer came from, so
+repeat a point to work on one spot (the twelve dabs at 430, 290); at 10%
+pressure or less a twirl hardly builds up however many dabs it gets, so use
+more pressure rather than more dabs. All the strokes of one call are one history step. Filters
+refuse text and group layers. `clouds`, `fibers`, `smoke` and `add-noise`
+draw a new random seed on every run.
 
 <!-- recipe: masks -->
 ```json
@@ -1150,8 +1171,7 @@ whole.
 
 These have no command. Don't hunt for them:
 
-- **The Spray tool** (it paints on a timer while the button is held) and
-  **Liquify**.
+- **The Spray tool** (it paints on a timer while the button is held).
 - **Colouring part of a text layer.** `text.set-color` recolours the whole
   layer; colours on ranges of the text need it open for editing.
 - **Anything that needs the system clipboard or a file picker.** A browser

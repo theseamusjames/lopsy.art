@@ -62,6 +62,7 @@ const LABELS: Record<string, string> = {
   'filter.pattern-fill': 'Pattern Fill',
   'filter.mesh-warp': 'Mesh Warp',
   'filter.tilt-shift': 'Tilt-Shift Blur',
+  'filter.liquify': 'Liquify',
 };
 
 async function paintLayer(page: Page): Promise<void> {
@@ -380,8 +381,12 @@ test.describe('the Filter menu and the filter commands', () => {
 
     const ids = (await describe(page)).map((c) => c.id).filter((id) => id.startsWith('filter.'));
     expect(ids.sort()).toEqual(Object.keys(LABELS).sort());
+    // Liquify has no default stroke: a session with none would apply nothing.
+    const required: Record<string, Record<string, unknown>> = {
+      'filter.liquify': { strokes: [{ points: [{ x: 60, y: 75 }, { x: 70, y: 75 }, { x: 80, y: 75 }] }] },
+    };
     for (const op of ids) {
-      const result = await run<FilterResult>(page, { op });
+      const result = await run<FilterResult>(page, { op, ...required[op] });
       expect(result.target, op).toBe('pixels');
       expect(await historyLabels(page), op).toEqual([...base, LABELS[op]]);
       await run(page, { op: 'history.undo' });
