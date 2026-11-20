@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gpuArgs, isHardwareGpu } from './e2e/gpu-args';
+import type { ApiOptions } from './e2e/api/harness';
 
 /**
  * `reuseExistingServer` only checks that *something* listens on the port, not
@@ -18,7 +19,34 @@ const checkoutRoot = dirname(fileURLToPath(import.meta.url));
 const portOffset = createHash('sha256').update(checkoutRoot).digest().readUInt16BE(0) % 1000;
 const port = Number(process.env.VITE_PORT ?? 41000 + portOffset);
 
-export default defineConfig({
+/**
+ * LOPSY_PREVIEW=1 (npm run test:e2e:preview, which builds first) also serves
+ * the production build with `vite preview` and adds the `preview` project,
+ * which runs e2e/agent-preview.spec.ts against it: the agent page's
+ * window.lopsy and the multi-page build exist for real only there. Without
+ * it the config has no preview server or project.
+ */
+const isPreview = process.env.LOPSY_PREVIEW === '1';
+const previewPort = port + 1000;
+
+const devServer = {
+  command: `npx vite --port ${port}`,
+  port,
+  // Never adopt a server we did not start: if something else holds the port,
+  // it is not this checkout's build, and reusing it would test the wrong
+  // code. Failing to start is the loud, correct outcome.
+  reuseExistingServer: false,
+};
+
+const chromium = {
+  ...devices['Desktop Chrome'],
+  ...(isHardwareGpu ? { channel: 'chromium' } : {}),
+  launchOptions: { args: gpuArgs },
+};
+
+const PREVIEW_SPEC = /agent-preview\.spec\.ts/;
+
+export default defineConfig<ApiOptions>({
   testDir: './e2e',
   timeout: 600000,
   workers: 2,
@@ -31,16 +59,19 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: {
-        ...devices['Desktop Chrome'],
-        ...(isHardwareGpu ? { channel: 'chromium' } : {}),
-        launchOptions: { args: gpuArgs },
-      },
+      testIgnore: PREVIEW_SPEC,
+      use: chromium,
+    },
+    {
+      // The command-API specs again, on the agent page (the canvas alone, no editor UI).
+      name: 'agent',
+      testMatch: /e2e[\\/]api[\\/].*\.spec\.ts$/,
+      use: { ...chromium, apiPage: '/agent/' },
     },
     {
       name: 'firefox',
       // The command-API specs test the commands, not the browser: one engine is enough.
-      testIgnore: /e2e[\\/]api[\\/]/,
+      testIgnore: [/e2e[\\/]api[\\/]/, /agent-page\.spec\.ts/, PREVIEW_SPEC],
       use: {
         ...devices['Desktop Firefox'],
         launchOptions: {
@@ -62,13 +93,15 @@ export default defineConfig({
         launchOptions: { args: gpuArgs },
       },
     },
+    ...(isPreview
+      ? [{
+          name: 'preview',
+          testMatch: PREVIEW_SPEC,
+          use: { ...chromium, baseURL: `http://localhost:${previewPort}` },
+        }]
+      : []),
   ],
-  webServer: {
-    command: `npx vite --port ${port}`,
-    port,
-    // Never adopt a server we did not start: if something else holds the port,
-    // it is not this checkout's build, and reusing it would test the wrong
-    // code. Failing to start is the loud, correct outcome.
-    reuseExistingServer: false,
-  },
+  webServer: isPreview
+    ? [devServer, { command: `npx vite preview --port ${previewPort} --strictPort`, port: previewPort, reuseExistingServer: false }]
+    : devServer,
 });
