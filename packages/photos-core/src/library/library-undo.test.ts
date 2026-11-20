@@ -126,7 +126,7 @@ describe('library undo', () => {
     b.deleteVersion(photo1.versionId);
     await b.syncNow();
     await a.syncNow();
-    // 'Show version' would bring back the deleted V1: it is skipped, and the step before is undone.
+    // 'Select version' would bring back the deleted V1: it is skipped, and the step before is undone.
     expect(a.undoLibrary()).toBe('Rating');
     expect(a.getView().assets.get(photo1.assetId)).toMatchObject({ primaryVersionId: v2, rating: 0 });
     expect(a.libraryHistory().canUndo).toBe(false);

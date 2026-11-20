@@ -1,10 +1,10 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ClipboardCopy, ClipboardPaste, CopyPlus, Download, Maximize, Paintbrush, SlidersHorizontal, Star, Trash2 } from 'lucide-react';
+import { CircleCheck, ClipboardCopy, ClipboardPaste, CopyPlus, Download, Maximize, Paintbrush, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { parseItem, type ItemId } from '../../library/items';
 import { useAsset } from '../../app/hooks';
 import { useUi } from '../../app/store';
-import { askDeleteTargets, makeShownVersion, newVersion, openEdit, openFocusedInLopsy, runCommand } from '../../app/commands';
+import { askDeleteTargets, newVersion, openEdit, openFocusedInLopsy, runCommand, selectVersion } from '../../app/commands';
 import { useMenuKeys } from '@lopsy/ui/a11y/use-menu-keys';
 import styles from './TileMenu.module.css';
 
@@ -69,7 +69,7 @@ export function TileMenu({ x, y, orderedIds, onClose }: TileMenuProps) {
       {!isDocument && item('Edit', <SlidersHorizontal size={14} />, openEdit, !single)}
       {item('New version', <CopyPlus size={14} />, newVersion, !single)}
       {focusedVersion &&
-        item('Show this version for the photo', <Star size={14} />, () => makeShownVersion(focusedVersion.assetId, focusedVersion.versionId), !single)}
+        item('Make this the selected version', <CircleCheck size={14} />, () => selectVersion(focusedVersion.assetId, focusedVersion.versionId), !single)}
       {item(
         'Edit in Lopsy',
         <Paintbrush size={14} />,

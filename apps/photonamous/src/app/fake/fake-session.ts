@@ -366,7 +366,7 @@ export class FakeSession implements LibrarySession {
   }
 
   setPrimaryVersion(assetId: AssetId, versionId: VersionId): void {
-    this.track('Show version', () => {
+    this.track('Select version', () => {
       const v = this.versions.get(versionId);
       if (!v || v.deleted || v.assetId !== assetId) throw new Error(`${versionId} is not a live version of ${assetId}`);
       const a = this.assets.get(assetId);

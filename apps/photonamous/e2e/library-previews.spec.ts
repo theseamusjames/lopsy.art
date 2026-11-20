@@ -29,27 +29,28 @@ test('a preset from the grid and a new version get their own thumbnails', async 
   const imported = (await first.getAttribute('data-preview-hash')) ?? '';
   expect(imported).not.toBe('');
 
-  // A new version shows a thumbnail at once (the same recipe reuses the photo's previews)...
+  // A new version becomes the selected one, the photo's own tile, and shows a thumbnail at once (the same recipe
+  // reuses the photo's previews)...
   await first.click({ button: 'right' });
   await page.getByRole('menu', { name: 'Photo actions' }).getByRole('menuitem', { name: 'New version' }).click();
   await page.getByRole('dialog', { name: 'New version' }).getByRole('button', { name: 'Create' }).click();
-  const version = page.locator('[role="gridcell"][title="first.jpg (Version 2)"]');
-  await expect(version).toBeVisible();
-  await expect(version).toHaveAttribute('data-preview-hash', imported, { timeout: 60_000 });
-  await expect.poll(() => shownImage(version), { timeout: 30_000 }).toBe(true);
+  const original = page.locator('[role="gridcell"][title="first.jpg (Original)"]');
+  await expect(original).toBeVisible();
+  await expect(first).toHaveAttribute('data-preview-hash', imported, { timeout: 60_000 });
+  await expect.poll(() => shownImage(first), { timeout: 30_000 }).toBe(true);
 
   // ...and its own after a preset from the grid, rendered in the background.
-  await applyPreset(page, version, 'Punchy');
-  await expect(version).not.toHaveAttribute('data-preview-hash', imported, { timeout: 60_000 });
-  const versionHash = (await version.getAttribute('data-preview-hash')) ?? '';
-  expect(versionHash).not.toBe('');
-  await expect.poll(() => shownImage(version), { timeout: 30_000 }).toBe(true);
-
-  // The photo itself, with another preset.
-  await applyPreset(page, first, 'Monochrome');
+  await applyPreset(page, first, 'Punchy');
   await expect(first).not.toHaveAttribute('data-preview-hash', imported, { timeout: 60_000 });
   const firstHash = (await first.getAttribute('data-preview-hash')) ?? '';
-  expect(firstHash).not.toBe(versionHash);
+  expect(firstHash).not.toBe('');
+  await expect.poll(() => shownImage(first), { timeout: 30_000 }).toBe(true);
+
+  // The original, the stack's other tile, with another preset.
+  await applyPreset(page, original, 'Monochrome');
+  await expect(original).not.toHaveAttribute('data-preview-hash', imported, { timeout: 60_000 });
+  const originalHash = (await original.getAttribute('data-preview-hash')) ?? '';
+  expect(originalHash).not.toBe(firstHash);
 
   // The sync panel has nothing left to update, and all of it survives a reload.
   await page.getByRole('button', { name: /Saved/ }).click({ timeout: 30_000 });
@@ -58,6 +59,6 @@ test('a preset from the grid and a new version get their own thumbnails', async 
   await page.reload();
   await expect(first).toHaveAttribute('data-preview-hash', firstHash, { timeout: 30_000 });
   await first.getByRole('button', { name: '2 versions' }).click();
-  await expect(version).toHaveAttribute('data-preview-hash', versionHash);
-  await expect.poll(() => shownImage(version), { timeout: 30_000 }).toBe(true);
+  await expect(original).toHaveAttribute('data-preview-hash', originalHash);
+  await expect.poll(() => shownImage(original), { timeout: 30_000 }).toBe(true);
 });

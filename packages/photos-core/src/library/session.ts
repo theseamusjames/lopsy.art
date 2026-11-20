@@ -629,7 +629,7 @@ class Session implements PhotosLibrarySession {
     if (!version || version.deleted || version.assetId !== assetId) {
       throw new Error(`${versionId} is not a live version of ${assetId}`);
     }
-    this.recordLibrary('Show version', [{ t: 'set', kind: 'asset', id: assetId, fields: { primaryVersionId: versionId } }]);
+    this.recordLibrary('Select version', [{ t: 'set', kind: 'asset', id: assetId, fields: { primaryVersionId: versionId } }]);
   }
 
   editRecipe(versionId: VersionId, changes: Readonly<Record<string, Json>>, label: string): void {

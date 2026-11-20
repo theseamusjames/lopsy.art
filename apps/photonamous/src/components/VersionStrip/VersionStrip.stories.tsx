@@ -35,7 +35,7 @@ export const ScrollingChips: Story = {
   ],
 };
 
-/** More than four: a dropdown, with the chosen version's actions beside it. */
+/** More than four: the Selected box holds a dropdown of them all, with the selected one's Rename and Delete. */
 export const Dropdown: Story = {
   args: { itemId: third ?? '' },
   loaders: [() => withVersions(third ?? '', 6)],

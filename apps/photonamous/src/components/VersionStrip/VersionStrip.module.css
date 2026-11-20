@@ -8,16 +8,45 @@
   font-size: var(--font-size-sm);
 }
 
-.title {
+/* The selected version's box: the word, the version (or the dropdown of them all), its Rename and Delete. */
+.selected {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 2px 0 var(--space-2);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-subtle);
+}
+
+.label {
   flex: none;
-  color: var(--color-text-secondary);
+  margin-right: var(--space-1);
+  color: var(--ph-accent-text);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.selectedName {
+  min-width: 0;
+  padding: 0 var(--space-1);
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /*
- * The chips take the room the row has, at least about one chip's, and
- * scroll sideways on their own when that is not enough. The padding keeps
- * their focus rings inside the scroller's clip; the margin takes it back
- * out of the layout.
+ * The other versions take the room the row has, at least about one chip's,
+ * and scroll sideways on their own when that is not enough. The padding
+ * keeps their focus rings inside the scroller's clip; the margin takes it
+ * back out of the layout.
  */
 .chips {
   display: flex;
@@ -34,36 +63,38 @@
   scrollbar-color: var(--color-border-strong) transparent;
 }
 
-.version {
+.chip {
   display: inline-flex;
   flex: none;
   align-items: center;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-round);
-  padding-right: 2px;
-  white-space: nowrap;
-}
-
-.version[data-current='true'] {
-  border-color: var(--color-accent);
-  background: var(--color-accent-subtle);
-}
-
-.name {
+  gap: var(--space-1);
   min-height: 24px;
-  border: none;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-round);
   background: transparent;
   color: var(--color-text-primary);
   font-family: var(--font-ui);
   font-size: var(--font-size-sm);
-  padding: 2px var(--space-2);
+  white-space: nowrap;
   cursor: pointer;
 }
 
-.name:focus-visible {
+.chip:hover {
+  background: var(--color-bg-hover);
+}
+
+.chip:focus-visible {
   outline: 2px solid var(--ph-focus-ring);
   outline-offset: -2px;
+}
+
+/* The version on screen, when it is not the selected one. */
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .input {
@@ -85,27 +116,11 @@
   outline-offset: 1px;
 }
 
-.shown {
-  font-size: var(--font-size-xs);
-  color: var(--ph-accent-text);
-  padding: 0 var(--space-1);
-}
-
-/* More versions than chips: the dropdown, then the chosen version's actions. The dropdown narrows before New version moves down. */
-.current {
-  display: inline-flex;
-  flex: 1 1 160px;
-  align-items: center;
-  gap: 2px;
-  min-width: 0;
-  max-width: max-content;
-}
-
 /* The arrow and the right padding are the app's for every select. */
 .select {
   min-width: 6rem;
   max-width: 16rem;
-  height: 26px;
+  height: 24px;
   padding-left: var(--space-2);
   margin-right: var(--space-1);
   border: 1px solid var(--ph-control-edge);

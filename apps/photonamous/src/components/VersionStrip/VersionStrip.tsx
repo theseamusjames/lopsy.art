@@ -1,16 +1,14 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { CopyPlus, Pencil, Star, Trash2 } from 'lucide-react';
-import type { Version, VersionId } from '@lopsy/photos-core/library/types';
+import { CopyPlus, Pencil, Trash2 } from 'lucide-react';
+import type { Version } from '@lopsy/photos-core/library/types';
 import { useLibraryView, useSession } from '../../app/hooks';
-import { useUi } from '../../app/store';
-import { deleteVersionOf, makeShownVersion, newVersion } from '../../app/commands';
-import { itemForVersion, parseItem, versionsByAsset, type ItemId } from '../../library/items';
-import { selectOne } from '../../library/selection';
+import { deleteVersionOf, newVersion, selectVersion } from '../../app/commands';
+import { parseItem, versionsByAsset, type ItemId } from '../../library/items';
 import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
 import styles from './VersionStrip.module.css';
 
-/** Up to this many versions show as chips; more are chosen from a dropdown. */
+/** Up to this many versions, the ones not selected are chips beside the box; more are chosen from a dropdown in it. */
 const MAX_VERSION_CHIPS = 4;
 
 /** How far past a chip's edge the chips scroll to bring it into sight, so its focus ring shows too. */
@@ -24,10 +22,14 @@ interface VersionStripProps {
 }
 
 /**
- * A photo's versions: switch between them, choose the shown one, add, rename
- * and delete (never the last). Up to four are chips, which scroll sideways
- * on their own when there is no room; more are a dropdown with the chosen
- * version's actions beside it.
+ * A photo's versions. The selected one, which the photo uses in the grid,
+ * albums and exports, has a box of its own with its Rename and Delete
+ * (never the last version); the others are chips, and picking one makes
+ * it the selected version and shows it. With more than four versions the
+ * box holds a dropdown of them all instead. New version makes another,
+ * which becomes the selected one. A version on screen that is not the
+ * selected one (opened from the grid's stack, or left there by the Edit
+ * view) has its chip marked with a dot.
  */
 export function VersionStrip({ itemId, className }: VersionStripProps) {
   const session = useSession();
@@ -35,38 +37,38 @@ export function VersionStrip({ itemId, className }: VersionStripProps) {
   const { assetId, versionId } = parseItem(itemId);
   const asset = view.assets.get(assetId);
   const versions = useMemo(() => versionsByAsset(view).get(assetId) ?? [], [view, assetId]);
-  const [renaming, setRenaming] = useState<VersionId | null>(null);
+  const [isRenaming, setIsRenaming] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const chips = useRef<HTMLDivElement>(null);
-  /** Set when a rename ends from the keyboard: focus goes back to that version. */
-  const refocus = useRef<VersionId | null>(null);
+  /** Set when a rename ends from the keyboard: focus goes back to the dropdown or to Rename. */
+  const refocus = useRef(false);
   const cancelled = useRef(false);
   const selectId = useId();
-  const current = versionId ?? asset?.primaryVersionId ?? null;
+  const hintId = useId();
+  const selected = versions.find((v) => v.id === asset?.primaryVersionId) ?? versions[0];
+  const shownId = versionId ?? selected?.id ?? null;
   const isMenu = versions.length > MAX_VERSION_CHIPS;
 
-  // The chosen chip stays in sight when the chips scroll. Only the chips scroll: scrollIntoView would move the page too.
+  // The chip of the version on screen stays in sight when the chips scroll. Only the chips scroll: scrollIntoView would move the page too.
   useEffect(() => {
     const box = chips.current;
-    const chip = box?.querySelector<HTMLElement>('[data-current="true"]');
+    const chip = box?.querySelector<HTMLElement>('[aria-current="true"]');
     if (!box || !chip) return;
     const outer = box.getBoundingClientRect();
     const inner = chip.getBoundingClientRect();
     if (inner.left < outer.left) box.scrollLeft -= outer.left - inner.left + SCROLL_MARGIN;
     else if (inner.right > outer.right) box.scrollLeft += inner.right - outer.right + SCROLL_MARGIN;
-  }, [current, versions.length, isMenu]);
+  }, [shownId, versions.length, isMenu]);
 
   useEffect(() => {
-    const id = refocus.current;
-    if (renaming !== null || id === null) return;
-    refocus.current = null;
-    const target = isMenu ? root.current?.querySelector('select') : root.current?.querySelector(`[data-version-id="${CSS.escape(id)}"]`);
+    if (isRenaming || !refocus.current) return;
+    refocus.current = false;
+    const target = isMenu ? root.current?.querySelector('select') : root.current?.querySelector('[data-rename]');
     if (target instanceof HTMLElement) target.focus();
-  }, [renaming, isMenu]);
+  }, [isRenaming, isMenu]);
 
-  if (!asset || current === null) return null;
-  const choose = (id: VersionId) => useUi.getState().setSelection(selectOne(itemForVersion(view, asset.id, id)));
-  const chosen = versions.find((v) => v.id === current);
+  if (!asset || !selected) return null;
+  const others = versions.filter((v) => v.id !== selected.id);
 
   const renameField = (v: Version) => (
     <input
@@ -79,7 +81,7 @@ export function VersionStrip({ itemId, className }: VersionStripProps) {
         const name = e.target.value.trim();
         if (!cancelled.current && name !== '' && name !== v.name) session.renameVersion(v.id, name);
         cancelled.current = false;
-        setRenaming(null);
+        setIsRenaming(false);
       }}
       onKeyDown={(e) => {
         if (e.key !== 'Enter' && e.key !== 'Escape') return;
@@ -88,81 +90,67 @@ export function VersionStrip({ itemId, className }: VersionStripProps) {
           e.stopPropagation();
           cancelled.current = true;
         }
-        refocus.current = v.id;
+        refocus.current = true;
         e.currentTarget.blur();
       }}
     />
   );
 
-  const actions = (v: Version) => (
-    <>
-      <IconButton size="sm" label={`Rename ${v.name}`} icon={<Pencil size={11} />} onClick={() => setRenaming(v.id)} />
-      {v.id === asset.primaryVersionId ? (
-        <span className={styles.shown} title="The photo shows this version in the grid and in albums">
-          Shown
-        </span>
-      ) : (
-        <IconButton
-          size="sm"
-          label={`Show ${v.name} for this photo`}
-          icon={<Star size={11} />}
-          onClick={() => makeShownVersion(asset.id, v.id)}
-        />
-      )}
-      {versions.length > 1 && (
-        <IconButton size="sm" label={`Delete ${v.name}`} icon={<Trash2 size={11} />} onClick={() => deleteVersionOf(asset.id, v.id)} />
-      )}
-    </>
-  );
-
-  const chip = (v: Version) => (
-    <span key={v.id} className={styles.version} data-current={v.id === current}>
-      <button
-        type="button"
-        className={styles.name}
-        aria-pressed={v.id === current}
-        data-version-id={v.id}
-        onClick={() => choose(v.id)}
-        onDoubleClick={() => setRenaming(v.id)}
-      >
-        {v.name}
-      </button>
-      {actions(v)}
+  const choice = isMenu ? (
+    <select id={selectId} className={styles.select} value={selected.id} onChange={(e) => selectVersion(asset.id, e.target.value)}>
+      {versions.map((v) => (
+        <option key={v.id} value={v.id}>
+          {v.name}
+        </option>
+      ))}
+    </select>
+  ) : (
+    <span className={styles.selectedName} onDoubleClick={() => setIsRenaming(true)}>
+      {selected.name}
     </span>
   );
 
-  const chipList = (
-    <div ref={chips} className={styles.chips}>
-      {versions.map((v) => (renaming === v.id ? renameField(v) : chip(v)))}
-    </div>
-  );
-
-  const dropdown =
-    chosen && renaming === chosen.id ? (
-      renameField(chosen)
-    ) : (
-      <span className={styles.current}>
-        <select id={selectId} className={styles.select} value={current} onChange={(e) => choose(e.target.value)}>
-          {versions.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.name}
-            </option>
-          ))}
-        </select>
-        {chosen && actions(chosen)}
-      </span>
-    );
-
   return (
     <div ref={root} className={[styles.strip, className].filter(Boolean).join(' ')} role="group" aria-label="Versions">
-      {isMenu ? (
-        <label className={styles.title} htmlFor={selectId}>
-          Versions
-        </label>
-      ) : (
-        <span className={styles.title}>Versions</span>
+      <span className={styles.selected}>
+        {isMenu ? (
+          <label className={styles.label} htmlFor={selectId}>
+            Selected
+          </label>
+        ) : (
+          <span className={styles.label}>Selected</span>
+        )}
+        {isRenaming ? renameField(selected) : choice}
+        <IconButton size="sm" label={`Rename ${selected.name}`} icon={<Pencil size={11} />} onClick={() => setIsRenaming(true)} data-rename />
+        {versions.length > 1 && (
+          <IconButton size="sm" label={`Delete ${selected.name}`} icon={<Trash2 size={11} />} onClick={() => deleteVersionOf(asset.id, selected.id)} />
+        )}
+      </span>
+      {!isMenu && others.length > 0 && (
+        <div ref={chips} className={styles.chips}>
+          {others.map((v) => {
+            const isOnScreen = v.id === shownId;
+            return (
+              <button
+                key={v.id}
+                type="button"
+                className={styles.chip}
+                aria-current={isOnScreen ? 'true' : undefined}
+                aria-describedby={hintId}
+                title={isOnScreen ? 'On screen; select it to make the photo use it' : 'Select it: the photo uses it in the grid, albums and exports'}
+                data-version-id={v.id}
+                onClick={() => selectVersion(asset.id, v.id)}
+              >
+                {isOnScreen && <span className={styles.dot} aria-hidden="true" />}
+                {v.name}
+              </button>
+            );
+          })}
+        </div>
       )}
-      {isMenu ? dropdown : chipList}
+      <span id={hintId} hidden>
+        Selecting a version makes the photo use it in the grid, albums and exports.
+      </span>
       <Button size="sm" variant="ghost" className={styles.add} onClick={newVersion}>
         <CopyPlus size={13} />
         New version

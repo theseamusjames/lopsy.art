@@ -6,7 +6,7 @@
 import type { AssetId, ColorLabel, LibraryHistory, LibrarySession, Rating, VersionId } from '@lopsy/photos-core/library/types';
 import { getBackend } from './backend-registry';
 import { openInLopsy } from './lopsy-handoff';
-import { itemAssets, itemForVersion, itemVersionId, nextVersionName, parseItem, versionItemId, versionsByAsset, type ItemId } from '../library/items';
+import { itemAssets, itemForVersion, itemVersionId, nextVersionName, parseItem, versionsByAsset, type ItemId } from '../library/items';
 import type { CommandId } from '../shortcuts/registry';
 import { useUi, type ViewMode } from './store';
 import { showErrorToast, showToast } from './toasts';
@@ -150,11 +150,14 @@ export function openFocusedInLopsy(): void {
   if (target !== undefined) openInLopsy(session(), target.assetId, target.versionId);
 }
 
-/** Makes the version the one its photo shows (in the grid, albums, exports of the photo), and keeps it selected. */
-export function makeShownVersion(assetId: AssetId, versionId: VersionId): void {
+/**
+ * Makes the version its photo's selected one, the one the grid, albums and
+ * exports of the photo use, and shows it: the photo's own tile, which is
+ * that version now, becomes the focus.
+ */
+export function selectVersion(assetId: AssetId, versionId: VersionId): void {
   const s = session();
-  if (s.getView().assets.get(assetId)?.primaryVersionId === versionId) return;
-  s.setPrimaryVersion(assetId, versionId);
+  if (s.getView().assets.get(assetId)?.primaryVersionId !== versionId) s.setPrimaryVersion(assetId, versionId);
   useUi.getState().setSelection(selectOne(assetId));
 }
 
@@ -199,7 +202,11 @@ export function suggestedVersionName(): string {
   return nextVersionName(names);
 }
 
-/** Makes the version New version asked for: the focused tile's edits under `name`; opens its stack and selects it. */
+/**
+ * Makes the version New version asked for: the focused tile's edits under
+ * `name`, as the photo's selected version (one undo step for both), and
+ * shows it with the photo's stack open.
+ */
 export function createNamedVersion(name: string): void {
   const ui = useUi.getState();
   ui.openDialog(null);
@@ -209,10 +216,15 @@ export function createNamedVersion(name: string): void {
   const { assetId } = parseItem(id);
   const from = itemVersionId(id, view);
   const source = from === null ? undefined : view.versions.get(from);
-  const versionId = session().createVersion(assetId, name.trim() || suggestedVersionName(), source?.recipe);
+  const s = session();
+  const versionId = s.libraryStep('New version', () => {
+    const id = s.createVersion(assetId, name.trim() || suggestedVersionName(), source?.recipe);
+    if (id) s.setPrimaryVersion(assetId, id);
+    return id;
+  });
   if (!versionId) return;
   if (!ui.expandedBursts.has(assetId)) ui.toggleBurst(assetId);
-  ui.setSelection(selectOne(versionItemId(assetId, versionId)));
+  ui.setSelection(selectOne(assetId));
 }
 
 /** The next photo after `id` in display order, or the previous one at the end. */

@@ -65,13 +65,13 @@ is `docs/photonamous-spec.md`; running and setup are in
 - **Selection.** Click selects one; ⌘/Ctrl-click adds or removes; Shift
   extends; ⌘A selects every photo shown and ⌘D selects none. Arrow keys
   move the focus; Shift+←/→ grows the selection.
-- **Versions as tiles.** A photo's tile shows its *shown* version; its
-  version badge opens the others as tiles of their own right after it,
-  each with its own preview, and folds them back. **Show this version for
-  the photo** (a version tile's menu) makes that version the one the
-  photo shows in the grid and in albums.
+- **Versions as tiles.** A photo's tile shows its *selected* version;
+  its version badge opens the others as tiles of their own right after
+  it, each with its own preview, and folds them back. **Make this the
+  selected version** (a version tile's menu) makes that version the one
+  the photo uses in the grid, albums and exports.
 - **Photo actions** (a tile's right-click menu): Look at it large, Edit,
-  New version, Show this version for the photo (on a version's tile),
+  New version, Make this the selected version (on a version's tile),
   Edit in Lopsy, Copy edits…, Paste edits, Export…, Move to the trash….
   A Lopsy document's menu has no Edit: it is edited in Lopsy.
 - **Drag** photos onto an album in the sidebar to add them; dragging a
@@ -92,13 +92,17 @@ is `docs/photonamous-spec.md`; running and setup are in
   Space or Escape goes back to the grid. In a narrow window the bars wrap
   rather than overlap: the edit buttons go under the labels and stars, and
   Set aside under the versions.
-- **Versions in Single view**: up to four are chips (choose one; rename it
-  with its pencil or a double-click, Enter saves and Escape keeps the old
-  name; **Show** it for the photo; delete it, never the last). When the
-  bar has no room for them, the chips scroll sideways on their own and
-  never run under Set aside. With five or more, a dropdown chooses the
-  version and the chosen one's Rename, Show and Delete sit beside it.
-  **New version** is there either way.
+- **Versions in Single view**: the **Selected** box holds the version the
+  photo uses in the grid, albums and exports, with its Rename (or a
+  double-click on its name; Enter saves and Escape keeps the old name) and
+  Delete (never the last version; the next one becomes selected). Up to
+  four versions, the others are chips beside it, and picking one makes it
+  the selected version and shows it. With five or more, the box holds a
+  dropdown of them all instead. When the view shows a version that is not
+  the selected one (opened from the grid's stack), its chip has a dot.
+  When the bar has no room for them, the chips scroll sideways on their
+  own and never run under Set aside. **New version** is there either
+  way.
 - **Compare** (C): two to four selected photos side by side.
 - **Cull** (F): full screen, one photo at a time, laid out as Single view,
   with the keys' hint beside Set aside; rating (1–5) or setting aside (X)
@@ -137,11 +141,12 @@ is `docs/photonamous-spec.md`; running and setup are in
 ### Versions, copying edits and presets
 
 - **New version**: asks for a name ("Version 2" offered, selected), then
-  makes another edit of the same photo starting from the current one; the
-  original file is untouched. The photo's stack opens to show its
-  versions as their own tiles. Single view lists them, as chips or, past
-  four, a dropdown: switch, rename, **Show** (the one the photo shows
-  everywhere), delete (the shown one too, when another is left).
+  makes another edit of the same photo starting from the current one, as
+  the photo's selected version (one undo step); the original file is
+  untouched. The photo's stack opens to show the other versions as their
+  own tiles. Single view has the selected one in a box and the others as
+  chips or, past four, a dropdown: select, rename, delete (the selected
+  one too, when another is left).
 - **Albums** hold whole photos or single versions: with a version's tile
   selected, the details panel adds that version.
 - **Copy edits…** (⇧⌘C) asks which groups to copy; **Paste edits**
