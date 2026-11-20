@@ -31,6 +31,8 @@ export interface BooleanSpec extends BaseSpec<boolean> {
 
 export interface ColorSpec extends BaseSpec<string> {
   readonly type: 'color';
+  /** Only "#rgb" and "#rrggbb": a "#rrggbbaa" value is invalid. */
+  readonly opaque?: boolean;
 }
 
 export interface PointSpec extends BaseSpec<Readonly<Point>> {
@@ -168,7 +170,7 @@ export function expectedText(spec: ParamSpec): string {
     case 'boolean':
       return 'a boolean';
     case 'color':
-      return 'a colour "#rgb", "#rrggbb" or "#rrggbbaa"';
+      return spec.opaque ? 'an opaque colour "#rgb" or "#rrggbb" (no alpha)' : 'a colour "#rgb", "#rrggbb" or "#rrggbbaa"';
     case 'point':
       return `a point {x, y} of finite numbers${rangeText(spec.min, spec.max)}`;
     case 'array':
@@ -209,6 +211,7 @@ const COLOR_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 function validateColor(ctx: Context, spec: ColorSpec, value: unknown, path: string): string {
   if (typeof value !== 'string' || !COLOR_PATTERN.test(value)) fail(ctx, path, spec, value);
   const hex = value.slice(1).toLowerCase();
+  if (spec.opaque && hex.length === 8) fail(ctx, path, spec, value);
   if (hex.length !== 3) return `#${hex}`;
   return `#${[...hex].map((digit) => digit + digit).join('')}`;
 }

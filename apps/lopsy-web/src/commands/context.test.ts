@@ -24,7 +24,8 @@ vi.mock('../engine-wasm/engine-state', async (importOriginal) => {
 
 const { useEditorStore } = await import('../app/editor-store');
 const { CommandError } = await import('./command');
-const { MAX_ENCODED_BYTES, decodeBase64, encodeBase64, gpuContextPreflight, layerSummary, requireDocument, requireEngine, resolveLayer, waitForEditorState } = await import('./context');
+const { useUIStore } = await import('../app/ui-store');
+const { MAX_ENCODED_BYTES, actOnLayer, afterActivation, decodeBase64, encodeBase64, gpuContextPreflight, layerSummary, requireDocument, requireEngine, resolveLayer, waitForEditorState } = await import('./context');
 
 function store() {
   return useEditorStore.getState();
@@ -115,6 +116,78 @@ describe('resolveLayer', () => {
     expect(caught(() => resolveLayer('Nope')).code).toBe('not-found');
     useEditorStore.setState({ document: { ...store().document, activeLayerId: null } });
     expect(caught(() => resolveLayer()).code).toBe('not-found');
+  });
+});
+
+describe('actOnLayer / afterActivation', () => {
+  function layerNamed(name: string) {
+    return store().document.layers.find((l) => l.name === name)!;
+  }
+
+  function deferredWait() {
+    let release: () => void = () => {};
+    let fail: (error: unknown) => void = () => {};
+    const wait = vi.fn(() => new Promise<void>((resolve, reject) => {
+      release = resolve;
+      fail = reject;
+    }));
+    return { wait, release: () => release(), fail: (error: unknown) => fail(error) };
+  }
+
+  it('acts at once, in the caller\'s tick, when the layer is already active', () => {
+    const active = store().document.activeLayerId!;
+    const wait = vi.fn(() => Promise.resolve());
+    const act = vi.fn(() => 'done');
+    expect(actOnLayer(active, act, wait)).toBe('done');
+    expect(act).toHaveBeenCalledTimes(1);
+    expect(wait).not.toHaveBeenCalled();
+  });
+
+  it('activates another layer as a row click does, waits, and only then acts', async () => {
+    const bg = layerNamed('Background');
+    useUIStore.getState().setMaskEditMode(true);
+    const { wait, release } = deferredWait();
+    const act = vi.fn(() => store().document.activeLayerId);
+    const pending = actOnLayer(bg.id, act, wait);
+    expect(store().document.activeLayerId).toBe(bg.id);
+    expect(useUIStore.getState().maskMode).not.toBe('layerMask');
+    expect(wait).toHaveBeenCalledTimes(1);
+    expect(act).not.toHaveBeenCalled();
+    expect(pending).toBeInstanceOf(Promise);
+    release();
+    await expect(pending).resolves.toBe(bg.id);
+    expect(act).toHaveBeenCalledTimes(1);
+  });
+
+  it('propagates a failure during the wait without acting', async () => {
+    const bg = layerNamed('Background');
+    const { wait, fail } = deferredWait();
+    const act = vi.fn();
+    const pending = actOnLayer(bg.id, act, wait);
+    const error = new CommandError('unavailable', 'The graphics context is lost');
+    fail(error);
+    await expect(pending).rejects.toBe(error);
+    expect(act).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the active layer changes again during the wait', async () => {
+    const bg = layerNamed('Background');
+    const layer1 = layerNamed('Layer 1');
+    const { wait, release } = deferredWait();
+    const act = vi.fn();
+    const pending = actOnLayer(bg.id, act, wait);
+    store().setActiveLayer(layer1.id);
+    release();
+    await expect(pending).rejects.toMatchObject({ code: 'refused' });
+    expect(act).not.toHaveBeenCalled();
+  });
+
+  it('stays synchronous when the activation leaves the active layer as it was', () => {
+    const wait = vi.fn(() => Promise.resolve());
+    const activate = vi.fn(() => useUIStore.getState().setMaskEditMode(true));
+    expect(afterActivation(activate, () => 7, wait)).toBe(7);
+    expect(activate).toHaveBeenCalledTimes(1);
+    expect(wait).not.toHaveBeenCalled();
   });
 });
 

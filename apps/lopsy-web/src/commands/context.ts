@@ -1,5 +1,6 @@
 import { CommandError } from './command';
 import { hasOwnKey } from './params';
+import { settled } from './settled';
 import { useEditorStore, type EditorState } from '../app/editor-store';
 import { activateLayerFromPanel, editLayerMaskFromPanel } from '../app/interactions/layer-activation';
 import { getEngine, isGpuContextLost } from '../engine-wasm/engine-state';
@@ -140,9 +141,44 @@ export function enterMaskEdit(id: string): void {
   editLayerMaskFromPanel(id);
 }
 
-/** A row click on `id` unless it is already the active layer, as commands that act on the active layer need. */
-export function activateIfOther(id: string): void {
-  if (useEditorStore.getState().document.activeLayerId !== id) selectReplace(id);
+function activeLayerId(): string | null {
+  return useEditorStore.getState().document.activeLayerId;
+}
+
+/**
+ * Runs `activate` (a row click, a mask-thumbnail click, a change of the
+ * selected layers), then `act`. When the active layer is the same after
+ * `activate` as before, `act` runs at once, in the caller's tick. When it
+ * changed, `act` runs once the engine has settled: in the editor the render
+ * loop draws a frame between the click on a row and the next press, and in
+ * it expands the layer switched to (cropped to its content while it was
+ * inactive), schedules the crop of the layer left and syncs both to the
+ * engine. Acting in the click's tick would act on the cropped layer, and
+ * that frame's expansion would then land on the result. `wait` is the
+ * settle wait, replaceable for tests.
+ */
+export function afterActivation<T>(
+  activate: () => void,
+  act: () => T | Promise<T>,
+  wait: () => Promise<void> = settled,
+): T | Promise<T> {
+  const before = activeLayerId();
+  activate();
+  const switchedTo = activeLayerId();
+  if (switchedTo === before) return act();
+  return wait().then(() => {
+    if (activeLayerId() !== switchedTo) {
+      throw new CommandError('refused', 'The active layer changed while the switch to the named layer was being drawn: nothing else was done.');
+    }
+    return act();
+  });
+}
+
+/** `act` on layer `id` as the active layer: a row click on it first unless it is active already (see afterActivation). */
+export function actOnLayer<T>(id: string, act: () => T | Promise<T>, wait?: () => Promise<void>): T | Promise<T> {
+  return afterActivation(() => {
+    if (activeLayerId() !== id) selectReplace(id);
+  }, act, wait);
 }
 
 export interface LayerSummary {

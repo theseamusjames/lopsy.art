@@ -20,6 +20,16 @@ const mocks = vi.hoisted(() => ({
   clearActiveLayerMask: vi.fn(() => true),
 }));
 
+// A named layer that is not active is acted on once the engine has settled (context.ts actOnLayer); there is no render loop here.
+const settle = vi.hoisted(() => ({ calls: 0 }));
+vi.mock('../settled', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../settled')>()),
+  settled: () => {
+    settle.calls++;
+    return Promise.resolve();
+  },
+}));
+
 // The layer row click commits the Move float first; there is none here, and the fake engine cannot answer.
 vi.mock('../../app/interactions/gesture-session', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../app/interactions/gesture-session')>();

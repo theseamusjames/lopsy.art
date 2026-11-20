@@ -17,6 +17,16 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
 
 const mocks = vi.hoisted(() => ({ engine: null as object | null }));
 
+// A named layer that is not active is acted on once the engine has settled (context.ts actOnLayer); there is no render loop here.
+const settle = vi.hoisted(() => ({ calls: 0 }));
+vi.mock('../settled', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../settled')>()),
+  settled: () => {
+    settle.calls++;
+    return Promise.resolve();
+  },
+}));
+
 // The layer row click commits the Move float first; there is none here, and the fake engine cannot answer.
 vi.mock('../../app/interactions/gesture-session', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../app/interactions/gesture-session')>();
@@ -103,15 +113,30 @@ afterEach(() => {
 });
 
 describe('layer.rasterize', () => {
-  it('makes the text layer active and calls rasterizeTextLayer before its first await', async () => {
+  it('makes the text layer active and calls rasterizeTextLayer once the engine has settled', async () => {
     const rasterize = fakeRasterize();
     useEditorStore.setState({ rasterizeTextLayer: rasterize });
     const id = addText('Words');
     useUIStore.getState().setMaskEditMode(true);
+    const settles = settle.calls;
     const pending = runCommand('layer.rasterize', { layer: 'Words' });
-    expect(rasterize).toHaveBeenCalledTimes(1);
     expect(store().document.activeLayerId).toBe(id);
     expect(useUIStore.getState().maskMode).toBe('off');
+    expect(settle.calls).toBe(settles + 1);
+    expect(rasterize).not.toHaveBeenCalled();
+    expect(await pending).toEqual({ id, name: 'Words', type: 'raster' });
+    expect(rasterize).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls rasterizeTextLayer before its first await when the text layer is active', async () => {
+    const rasterize = fakeRasterize();
+    useEditorStore.setState({ rasterizeTextLayer: rasterize });
+    const id = addText('Words');
+    store().setActiveLayer(id);
+    const settles = settle.calls;
+    const pending = runCommand('layer.rasterize', {});
+    expect(rasterize).toHaveBeenCalledTimes(1);
+    expect(settle.calls).toBe(settles);
     expect(await pending).toEqual({ id, name: 'Words', type: 'raster' });
   });
 
@@ -139,15 +164,30 @@ describe('layer.rasterize', () => {
 });
 
 describe('layer.rasterize-style', () => {
-  it('makes the layer active and calls rasterizeLayerStyle before its first await', async () => {
+  it('makes the layer active and calls rasterizeLayerStyle once the engine has settled', async () => {
     const rasterize = fakeRasterize();
     useEditorStore.setState({ rasterizeLayerStyle: rasterize });
     const background = layerNamed('Background').id;
     replaceLayer(background, (l) => ({ ...l, effects: { ...DEFAULT_EFFECTS, stroke: { ...DEFAULT_EFFECTS.stroke, enabled: true } } }));
+    const settles = settle.calls;
     const pending = runCommand('layer.rasterize-style', { layer: background });
-    expect(rasterize).toHaveBeenCalledTimes(1);
     expect(store().document.activeLayerId).toBe(background);
+    expect(settle.calls).toBe(settles + 1);
+    expect(rasterize).not.toHaveBeenCalled();
     expect(await pending).toEqual({ id: background, name: 'Background', type: 'raster' });
+    expect(rasterize).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls rasterizeLayerStyle before its first await when the layer is active', async () => {
+    const rasterize = fakeRasterize();
+    useEditorStore.setState({ rasterizeLayerStyle: rasterize });
+    const layer1 = layerNamed('Layer 1').id;
+    replaceLayer(layer1, (l) => ({ ...l, effects: { ...DEFAULT_EFFECTS, stroke: { ...DEFAULT_EFFECTS.stroke, enabled: true } } }));
+    const settles = settle.calls;
+    const pending = runCommand('layer.rasterize-style', {});
+    expect(rasterize).toHaveBeenCalledTimes(1);
+    expect(settle.calls).toBe(settles);
+    expect(await pending).toEqual({ id: layer1, name: 'Layer 1', type: 'raster' });
   });
 
   it('refuses a layer with no enabled effects, as the button is disabled', async () => {

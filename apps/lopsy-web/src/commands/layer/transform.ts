@@ -1,7 +1,7 @@
 import { CommandError } from '../command';
 import { defineCommand } from '../registry';
 import { refusalError } from '../refusal';
-import { layerRefSpec, requireDocument, requireEngine, resolveLayer, selectReplace } from '../context';
+import { afterActivation, layerRefSpec, requireDocument, requireEngine, resolveLayer, selectReplace } from '../context';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import {
@@ -156,11 +156,12 @@ export const layerTransform = defineCommand({
         'A marquee is active, and the Move buttons would transform the selected pixels instead of the layers: deselect first (select.none with commit: true), or transform the selection with tool.gesture and the move tool.',
       );
     }
-    selectLayers(layers);
-    if (useUIStore.getState().activeTool !== 'move') useUIStore.getState().setActiveTool('move');
-    const before = topEntry();
-    const ids = wantsBox() ? await boxStep(engine, step) : await singleStep(step);
-    if (topEntry() === before) throw new CommandError('refused', 'Nothing was transformed: the layers have no content to turn or flip.');
-    return { layers: ids };
+    return afterActivation(() => selectLayers(layers), async () => {
+      if (useUIStore.getState().activeTool !== 'move') useUIStore.getState().setActiveTool('move');
+      const before = topEntry();
+      const ids = wantsBox() ? await boxStep(engine, step) : await singleStep(step);
+      if (topEntry() === before) throw new CommandError('refused', 'Nothing was transformed: the layers have no content to turn or flip.');
+      return { layers: ids };
+    });
   },
 });

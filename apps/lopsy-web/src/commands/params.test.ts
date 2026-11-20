@@ -126,6 +126,15 @@ describe('validateParams: color', () => {
     }
     expect(invalidMessage(schema, { color: 0xff8800 })).toContain('got 16746496');
   });
+
+  it('with opaque, rejects an alpha form and names only the forms it takes', () => {
+    const opaque = { color: { type: 'color', opaque: true } } as const;
+    expect(validateParams('test.cmd', opaque, { color: '#ABC' }).color).toBe('#aabbcc');
+    expect(validateParams('test.cmd', opaque, { color: '#FF8800' }).color).toBe('#ff8800');
+    for (const bad of ['#ff880080', 'red']) {
+      expect(invalidMessage(opaque, { color: bad })).toBe(`test.cmd: color must be an opaque colour "#rgb" or "#rrggbb" (no alpha), got "${bad}"`);
+    }
+  });
 });
 
 describe('validateParams: point', () => {

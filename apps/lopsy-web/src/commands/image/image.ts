@@ -1,7 +1,7 @@
 import { CommandError } from '../command';
 import { defineCommand } from '../registry';
 import { refusalError } from '../refusal';
-import { activateIfOther, coordinateSpec, extentSpec, layerRefSpec, parseHexColor, requireDocument, requireEngine, resolveLayer } from '../context';
+import { actOnLayer, coordinateSpec, extentSpec, layerRefSpec, parseHexColor, requireDocument, requireEngine, resolveLayer } from '../context';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { layerCreationRefusal } from '../../app/store/document-slice';
@@ -244,12 +244,13 @@ export const imageFlipLayer = defineCommand({
     requireEngine();
     const refusal = flipRefusal(layer, doc.layers);
     if (refusal) throw refusalError(refusal);
-    activateIfOther(layer.id);
-    const before = topEntry();
-    return flipActiveLayer(axis).then(() => {
-      if (topEntry() === before) throw new CommandError('refused', `"${layer.name}" has nothing to flip.`);
-      return { layer: layer.id };
-    });
+    return Promise.resolve(actOnLayer(layer.id, () => {
+      const before = topEntry();
+      return flipActiveLayer(axis).then(() => {
+        if (topEntry() === before) throw new CommandError('refused', `"${layer.name}" has nothing to flip.`);
+        return { layer: layer.id };
+      });
+    }));
   },
 });
 

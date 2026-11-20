@@ -1,6 +1,6 @@
 import { CommandError } from '../command';
 import { defineCommand } from '../registry';
-import { activateIfOther, coordinateSpec, extentSpec, layerRefSpec, ownEntry, requireDocument, requireEngine, resolveLayer } from '../context';
+import { actOnLayer, coordinateSpec, extentSpec, layerRefSpec, ownEntry, requireDocument, requireEngine, resolveLayer } from '../context';
 import { documentEnvironment, gestureNote, runGesture } from '../gesture/run-gesture';
 import { TOOL_OPTIONS, checkOption } from '../tool/tool-options';
 import { hasOwnKey } from '../params';
@@ -163,7 +163,7 @@ function requireTextLayer(layer: Layer): TextLayer {
 export const textEdit = defineCommand({
   id: 'text.edit',
   summary:
-    'Replaces a text layer\'s text as a user would: a Text-tool click inside it opens it for editing (its font, size and colour become the Text options, as the click does), Cmd+A selects all of it, `text` is typed over it and committed, as Tab does. One history step ("Text"); a layer still named after its old text is renamed after the new one. Refused while text is being edited, and for a layer a click cannot reach (hidden, locked, empty or covered by another text layer). Returns the layer\'s id and name, and fontLoaded. ' + FONT_WAIT_NOTE + gestureNote('the Text tool'),
+    'Replaces a text layer\'s text as a user would: a Text-tool click inside it makes it the active layer and opens it for editing, which, as the click does, loads the layer\'s style into the Text options (font, weight, style, size, alignment, underline, strikethrough, line height, letter and paragraph spacing, vertical) and sets the foreground colour to the text\'s colour; both stay so after the edit, so set the colour again before painting. Cmd+A selects all of it, `text` is typed over it and committed, as Tab does. One history step ("Text"); a layer still named after its old text is renamed after the new one. Refused while text is being edited, and for a layer a click cannot reach (hidden, locked, empty or covered by another text layer). Returns the layer\'s id and name, and fontLoaded. ' + FONT_WAIT_NOTE + gestureNote('the Text tool'),
   surface: 'document',
   params: {
     layer: layerRefSpec,
@@ -270,13 +270,14 @@ export const textStyle = defineCommand({
     checkStyleOptions(options);
     const layer = requireTextLayer(resolveLayer(ref));
     checkNotEditing();
-    activateIfOther(layer.id);
-    const loads: Promise<void>[] = [];
-    for (const name of Object.keys(TEXT_OPTIONS)) {
-      if (!hasOwnKey(options, name) || TEXT_OPTIONS[name]?.read() === options[name]) continue;
-      loads.push(applyStyleOption(name as keyof TextSettings, options[name]));
-    }
-    await Promise.all(loads);
-    return { id: layer.id, name: textLayer(layer.id).name, options: styleValues() };
+    return actOnLayer(layer.id, async () => {
+      const loads: Promise<void>[] = [];
+      for (const name of Object.keys(TEXT_OPTIONS)) {
+        if (!hasOwnKey(options, name) || TEXT_OPTIONS[name]?.read() === options[name]) continue;
+        loads.push(applyStyleOption(name as keyof TextSettings, options[name]));
+      }
+      await Promise.all(loads);
+      return { id: layer.id, name: textLayer(layer.id).name, options: styleValues() };
+    });
   },
 });

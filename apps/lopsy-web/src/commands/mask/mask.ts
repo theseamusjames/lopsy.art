@@ -1,6 +1,6 @@
 import { CommandError } from '../command';
 import { defineCommand } from '../registry';
-import { activateIfOther, enterMaskEdit, layerRefSpec, requireDocument, resolveLayer, selectReplace } from '../context';
+import { actOnLayer, enterMaskEdit, layerRefSpec, requireDocument, resolveLayer, selectReplace } from '../context';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { addMaskAndEdit, removeMaskAndLeaveEdit } from '../../panels/LayerPanel/mask-actions';
@@ -57,13 +57,14 @@ export const maskAdd = defineCommand({
     'Adds a layer mask and enters mask edit mode, as the Layers panel\'s Add Mask button does ("Add Mask"): with a pixel selection the mask reveals only the selection and the selection is dropped, otherwise it reveals everything. A `layer` other than the active one is made active first, as a click on its row would. Returns the mask state.',
   surface: 'document',
   params: { layer: layerRefSpec },
-  run({ layer: ref }): MaskState {
+  run({ layer: ref }): MaskState | Promise<MaskState> {
     requireDocument();
     const layer = resolveLayer(ref);
     if (layer.mask) refuse(`"${layer.name}" already has a mask: the Add Mask button is hidden while the active layer has one.`);
-    activateIfOther(layer.id);
-    addMaskAndEdit(layer.id);
-    return maskState(layer.id);
+    return actOnLayer(layer.id, () => {
+      addMaskAndEdit(layer.id);
+      return maskState(layer.id);
+    });
   },
 });
 

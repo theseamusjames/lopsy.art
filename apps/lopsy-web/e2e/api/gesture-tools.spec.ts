@@ -145,6 +145,17 @@ test.describe('the gesture commands against the same mouse gesture', () => {
     });
   });
 
+  test('paint.shape keeps a fillColor that tool.set chose before the Shape tool was first active on the page', async ({ page }) => {
+    await run(page, [
+      { op: 'doc.new', width: 200, height: 150 },
+      { op: 'color.set', foreground: '#00ff00' },
+      { op: 'tool.set', tool: 'shape', options: { mode: 'rectangle', output: 'pixels', fillColor: '#c81e78' } },
+      { op: 'paint.shape', from: { x: 100, y: 75 }, to: { x: 150, y: 110 } },
+    ]);
+    expect(await run(page, { op: 'tool.options', tool: 'shape' })).toMatchObject({ options: { fillColor: '#c81e78' } });
+    expect(await run(page, { op: 'view.sample', x: 100, y: 75 })).toEqual({ hex: '#c81e78', alpha: 1 });
+  });
+
   test('paint.shape with path output adds a path and returns its id', async ({ page }) => {
     const results: Array<{ path: string | null; output: string }> = [];
     const { api: after } = await compareUiAndApi(page, {

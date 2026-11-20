@@ -25,17 +25,12 @@ function panelColor(hex: string, current: Color): Color {
   return convertColorToDocMode({ ...parsed, a: current.a }, doc.colorMode, doc.indexedPalette);
 }
 
-function rejectAlpha(name: string, hex: string | undefined): void {
-  if (hex !== undefined && hex.length > 7) {
-    throw new CommandError('invalid', `color.set: ${name} must be "#rrggbb": the Color panel's hex field cannot set alpha`);
-  }
-}
-
 const hexSpec = (which: string) =>
   ({
     type: 'color',
     optional: true,
-    description: `The ${which} colour as "#rrggbb" (or "#rgb"), as typed into the Color panel's hex field: its alpha is kept, and in a Grayscale or Indexed document it is held to the mode as the panel holds it.`,
+    opaque: true,
+    description: `The ${which} colour as "#rrggbb" (or "#rgb"), as typed into the Color panel's hex field, which takes no alpha ("#rrggbbaa" is invalid): the colour's own alpha is kept, and in a Grayscale or Indexed document it is held to the mode as the panel holds it.`,
   }) as const;
 
 export const colorSet = defineCommand({
@@ -49,8 +44,6 @@ export const colorSet = defineCommand({
     if (foreground === undefined && background === undefined) {
       throw new CommandError('invalid', 'color.set: pass foreground, background or both');
     }
-    rejectAlpha('foreground', foreground);
-    rejectAlpha('background', background);
     const store = useToolSettingsStore.getState();
     if (foreground !== undefined) store.setForegroundColor(panelColor(foreground, store.foregroundColor));
     if (background !== undefined) store.setBackgroundColor(panelColor(background, store.backgroundColor));

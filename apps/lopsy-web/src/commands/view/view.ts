@@ -135,7 +135,7 @@ const sampleCoordinateSpec = (axis: string) =>
 export const viewSample = defineCommand({
   id: 'view.sample',
   summary:
-    'Reads the colour the Eyedropper would pick at a document point: one pixel of the flattened document, in the document\'s colour mode decoded to RGB. Unlike the Eyedropper it leaves the foreground colour alone. Returns the colour as hex and its opacity 0-1.',
+    'Reads the colour the Eyedropper would pick at a document point: one pixel of the composite the canvas shows, in the document\'s colour mode decoded to RGB. That is what the Eyedropper reads, so in mask edit mode it includes the translucent mask overlay and the edited layer unmasked; view.render or doc.export give the image itself. Unlike the Eyedropper it leaves the foreground colour alone. Returns the colour as hex and its opacity 0-1.',
   surface: 'document',
   settles: 'before',
   check: requireDocument,

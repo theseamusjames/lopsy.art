@@ -6,6 +6,7 @@ import { useUIStore } from '../../app/ui-store';
 import { applyTextSetting } from '../../tools/text/apply-text-setting';
 import { textSizeTypedMax } from '../../tools/text/text-settings';
 import { setCropMode } from '../../tools/crop/crop-mode';
+import { markShapeFillChosen } from '../../tools/tool-registry';
 import { docScaledMax } from '../../utils/slider-ranges';
 import { MAX_ASPECT_RATIO_TERM, MIN_ASPECT_RATIO_TERM } from '../../utils/aspect-ratio';
 import type { TextSettings } from '../../tools/text/text-settings';
@@ -185,7 +186,10 @@ export const TOOL_OPTIONS: Readonly<Record<ToolId, Readonly<Record<string, ToolO
     polygonSides: num({ min: 3, max: 64 }, () => slices().shape.polygonSides, (v) => ts().setShapeSetting('polygonSides', v)),
     cornerRadius: num({ min: 0, max: 200, note: 'Pixels.' }, () => slices().shape.cornerRadius, (v) => ts().setShapeSetting('cornerRadius', v)),
     ...aspectRatio,
-    fillColor: shapeColor(() => slices().shape.fillColor, (v) => ts().setShapeSetting('fillColor', v)),
+    fillColor: shapeColor(() => slices().shape.fillColor, (v) => {
+      markShapeFillChosen();
+      ts().setShapeSetting('fillColor', v);
+    }),
     strokeColor: shapeColor(() => slices().shape.strokeColor, (v) => ts().setShapeSetting('strokeColor', v)),
     strokeWidth: num({ min: 1, max: 50, note: 'Pixels.' }, () => slices().shape.strokeWidth, (v) => ts().setShapeSetting('strokeWidth', v)),
   },

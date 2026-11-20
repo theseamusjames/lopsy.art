@@ -2,7 +2,8 @@ import { CommandError } from '../command';
 import { defineCommand } from '../registry';
 import { refusalError } from '../refusal';
 import {
-  activateIfOther,
+  actOnLayer,
+  afterActivation,
   layerRefSpec,
   layerSummary,
   requireDocument,
@@ -131,7 +132,7 @@ function refuse(reason: string): never {
 export const layerAdd = defineCommand({
   id: 'layer.add',
   summary:
-    'Adds an empty raster layer above the active layer, inside its group, and makes it active, as the Layers panel\'s Add Layer button and Layer > New Layer do: a pending stroke is finalized first, even in an Indexed document, where no layer is added and the command is refused with the text the UI toasts. A `name` renames it afterwards as a rename in the panel does (a second "Rename Layer" history step). Returns its id.',
+    'Adds an empty raster layer directly above the active layer, in the active layer\'s group, and makes it active, as the Layers panel\'s Add Layer button and Layer > New Layer do; with a group active (one not collapsed in the panel) the new layer goes inside that group, at its top. A pending stroke is finalized first, even in an Indexed document, where no layer is added and the command is refused with the text the UI toasts. A `name` renames it afterwards as a rename in the panel does (a second "Rename Layer" history step). Returns its id.',
   surface: 'document',
   params: { name: nameSpec('new layer') },
   run({ name }): CreatedLayer {
@@ -148,7 +149,7 @@ export const layerAdd = defineCommand({
 export const layerAddGroup = defineCommand({
   id: 'layer.add-group',
   summary:
-    'Adds an empty group above the active layer, inside its group, and makes it active, as the Layers panel\'s New Group button does (no history step, as there). Returns its id.',
+    'Adds an empty group directly above the active layer, in the active layer\'s group, and makes it active, as the Layers panel\'s New Group button does (no history step, as there); with a group active (one not collapsed in the panel) the new group goes inside that group, at its top. Returns its id.',
   surface: 'document',
   params: { name: { ...nameSpec('new group'), description: 'The new group\'s name; "Group" when omitted. Surrounding spaces are trimmed.' } },
   run({ name }): CreatedLayer {
@@ -322,14 +323,15 @@ export const layerDuplicate = defineCommand({
     'Duplicates a layer (a group with everything in it) as "<name> copy" directly above it, as the Layers panel\'s Duplicate Layer button does; a `layer` other than the active one is made active first, as a click on its row would, and the copy then becomes active. Returns the copy\'s id.',
   surface: 'document',
   params: { layer: layerRefSpec },
-  run({ layer: ref }): CreatedLayer {
+  run({ layer: ref }): CreatedLayer | Promise<CreatedLayer> {
     const doc = requireDocument();
     const layer = resolveLayer(ref);
     if (isRootGroup(doc, layer)) refuse('The root group cannot be duplicated: the Duplicate Layer button is disabled while it is active.');
     assertCanCreateLayer(doc);
-    activateIfOther(layer.id);
-    store().duplicateLayer();
-    return createdActiveLayer();
+    return actOnLayer(layer.id, () => {
+      store().duplicateLayer();
+      return createdActiveLayer();
+    });
   },
 });
 
@@ -342,16 +344,17 @@ export const layerMergeDown = defineCommand({
   enabled(): boolean {
     return canMergeDown(currentDocument());
   },
-  run({ layer: ref }): CreatedLayer {
+  run({ layer: ref }): CreatedLayer | Promise<CreatedLayer> {
     const doc = requireDocument();
     const layer = resolveLayer(ref);
     const refusal = mergeDownRefusal({ ...doc, activeLayerId: layer.id });
     if (refusal && layer.id !== doc.activeLayerId) throw refusalError(refusal);
-    activateIfOther(layer.id);
-    // As Cmd+E, mergeDown runs even when it cannot merge: it flushes pending layer data first.
-    store().mergeDown();
-    if (refusal) throw refusalError(refusal);
-    return createdActiveLayer();
+    return actOnLayer(layer.id, () => {
+      // As Cmd+E, mergeDown runs even when it cannot merge: it flushes pending layer data first.
+      store().mergeDown();
+      if (refusal) throw refusalError(refusal);
+      return createdActiveLayer();
+    });
   },
 });
 
@@ -442,12 +445,15 @@ export const layerGroup = defineCommand({
       description: 'Layer ids or exact names. Omitted means the selected layers.',
     },
   },
-  run({ layers: refs }): CreatedLayer {
+  run({ layers: refs }): CreatedLayer | Promise<CreatedLayer> {
     const doc = requireDocument();
     const ids = refs === undefined ? undefined : resolveDistinctLayers(doc, refs);
     assertCanCreateLayer(doc);
-    if (ids) store().setLayerSelection(ids);
-    store().groupSelectedLayers();
-    return createdActiveLayer();
+    return afterActivation(() => {
+      if (ids) store().setLayerSelection(ids);
+    }, () => {
+      store().groupSelectedLayers();
+      return createdActiveLayer();
+    });
   },
 });

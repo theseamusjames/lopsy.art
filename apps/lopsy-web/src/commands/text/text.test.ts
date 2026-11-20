@@ -17,6 +17,16 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
   });
 }
 
+// A named layer that is not active is acted on once the engine has settled (context.ts actOnLayer); there is no render loop here.
+const settle = vi.hoisted(() => ({ calls: 0 }));
+vi.mock('../settled', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../settled')>()),
+  settled: () => {
+    settle.calls++;
+    return Promise.resolve();
+  },
+}));
+
 const engine = { current: {} as unknown };
 vi.mock('../../engine-wasm/engine-state', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../engine-wasm/engine-state')>();
@@ -277,17 +287,31 @@ describe('text.set-font', () => {
 });
 
 describe('text.style', () => {
-  it('makes the layer active and applies each changed option as its control does', async () => {
+  it('makes the layer active, and once the engine has settled applies each changed option as its control does', async () => {
     const layer = addText('Hello');
     useEditorStore.getState().setActiveLayer(useEditorStore.getState().document.layers[1]!.id);
+    const settles = settle.calls;
     const pending = runCommand('text.style', { layer: 'Hello', options: { fontSize: 50, align: 'center', underline: false } });
     expect(useEditorStore.getState().document.activeLayerId).toBe(layer.id);
+    expect(settle.calls).toBe(settles + 1);
+    expect(settings.begin).not.toHaveBeenCalled();
+    await pending;
     expect(settings.begin).toHaveBeenCalledTimes(1);
     expect(settings.apply).toHaveBeenCalledWith('fontSize', 50);
     expect(settings.end).toHaveBeenCalledTimes(1);
     expect(settings.discrete).toHaveBeenCalledWith('align', 'center');
     expect(settings.discrete).not.toHaveBeenCalledWith('underline', false);
     await expect(pending).resolves.toMatchObject({ id: layer.id, name: 'Hello' });
+  });
+
+  it('applies the options in the caller\'s tick, with no wait, when the layer is already active', async () => {
+    const layer = addText('Hello');
+    useEditorStore.getState().setActiveLayer(layer.id);
+    const settles = settle.calls;
+    const pending = runCommand('text.style', { options: { fontSize: 50 } });
+    expect(settings.apply).toHaveBeenCalledWith('fontSize', 50);
+    expect(settle.calls).toBe(settles);
+    await expect(pending).resolves.toMatchObject({ id: layer.id });
   });
 
   it('is invalid for names Object.prototype has, which are no options', async () => {

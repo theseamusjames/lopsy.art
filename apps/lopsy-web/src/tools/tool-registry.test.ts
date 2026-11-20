@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   toolRegistry,
   PAINT_TOOLS,
@@ -98,5 +98,36 @@ describe('tool registry', () => {
       if (exceptions.has(id)) continue;
       expect(GPU_TOOLS.has(id)).toBe(true);
     }
+  });
+});
+
+describe('shape fill seed', () => {
+  async function freshModules() {
+    vi.resetModules();
+    const registry = await import('./tool-registry');
+    const { useToolSettingsStore } = await import('../app/tool-settings-store');
+    return { registry, tools: () => useToolSettingsStore.getState() };
+  }
+
+  const GREEN = { r: 0, g: 255, b: 0, a: 1 };
+  const PURPLE = { r: 120, g: 0, b: 200, a: 1 };
+
+  it('copies the foreground into the fill on the first activation only', async () => {
+    const { registry, tools } = await freshModules();
+    tools().setForegroundColor(GREEN);
+    registry.toolRegistry.shape.onActivate?.();
+    expect(tools().settings.shape.fillColor).toEqual(GREEN);
+    tools().setShapeSetting('fillColor', PURPLE);
+    registry.toolRegistry.shape.onActivate?.();
+    expect(tools().settings.shape.fillColor).toEqual(PURPLE);
+  });
+
+  it('keeps a fill chosen before the first activation once markShapeFillChosen has been called', async () => {
+    const { registry, tools } = await freshModules();
+    tools().setForegroundColor(GREEN);
+    registry.markShapeFillChosen();
+    tools().setShapeSetting('fillColor', PURPLE);
+    registry.toolRegistry.shape.onActivate?.();
+    expect(tools().settings.shape.fillColor).toEqual(PURPLE);
   });
 });

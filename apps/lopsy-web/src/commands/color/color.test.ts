@@ -81,8 +81,11 @@ describe('color.set', () => {
 
   it('is invalid with no colour, an alpha hex, or a malformed hex', async () => {
     expect((await failure(runCommand('color.set', {}))).message).toBe('color.set: pass foreground, background or both');
-    expect((await failure(runCommand('color.set', { foreground: '#ff000080' }))).message).toContain('cannot set alpha');
-    expect((await failure(runCommand('color.set', { background: 'red' }))).code).toBe('invalid');
+    const opaqueOnly = 'must be an opaque colour "#rgb" or "#rrggbb" (no alpha)';
+    expect((await failure(runCommand('color.set', { foreground: '#ff000080' }))).message).toBe(`color.set: foreground ${opaqueOnly}, got "#ff000080"`);
+    const malformed = await failure(runCommand('color.set', { background: 'red' }));
+    expect([malformed.code, malformed.message]).toEqual(['invalid', `color.set: background ${opaqueOnly}, got "red"`]);
+    expect(malformed.message).not.toContain('rrggbbaa');
     expect(colors().foregroundColor).toEqual({ r: 0, g: 0, b: 0, a: 1 });
   });
 });

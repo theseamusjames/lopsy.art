@@ -49,6 +49,15 @@ import { useToolSettingsStore } from '../app/tool-settings-store';
 let shapeFillSeededFromForeground = false;
 
 /**
+ * Counts an explicit fill choice as the seed having happened, so the Shape
+ * tool's first activation keeps it. The options bar only offers the fill once
+ * the tool is active, after the seed; `tool.set` can set it before.
+ */
+export function markShapeFillChosen(): void {
+  shapeFillSeededFromForeground = true;
+}
+
+/**
  * Single source of truth for every tool. Adding a new tool is a single-file
  * change: append a descriptor here. The router, options bar, keyboard
  * shortcut map, paint-tool set, and GPU-tool set all derive from this.

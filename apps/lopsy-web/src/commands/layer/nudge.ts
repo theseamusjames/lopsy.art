@@ -1,7 +1,7 @@
 import { CommandError } from '../command';
 import { defineCommand } from '../registry';
 import { refusalError } from '../refusal';
-import { activateIfOther, layerRefSpec, offsetSpec as boundedOffsetSpec, requireDocument, requireEngine, resolveLayer } from '../context';
+import { actOnLayer, layerRefSpec, offsetSpec as boundedOffsetSpec, requireDocument, requireEngine, resolveLayer } from '../context';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { nudgeMove, nudgeSelection } from '../../app/interactions/gesture-session';
@@ -77,19 +77,20 @@ export const layerNudge = defineCommand({
     dx: offsetSpec('Horizontal', 'right'),
     dy: offsetSpec('Vertical', 'down'),
   },
-  run({ layer: ref, dx, dy }): LayerNudgeResult {
+  run({ layer: ref, dx, dy }): LayerNudgeResult | Promise<LayerNudgeResult> {
     requireDocument();
     requireEngine();
     const layer = resolveLayer(ref);
     checkOffset('layer.nudge', dx, dy);
     if (layer.locked) throw new CommandError('refused', `"${layer.name}" is locked: the arrow keys do not move it.`);
     checkNoHeldKey();
-    activateIfOther(layer.id);
-    if (useUIStore.getState().activeTool !== 'move') useUIStore.getState().setActiveTool('move');
-    checkNudgeable('move');
-    nudgeBurst('move', dx, dy);
-    const after = useEditorStore.getState().document.layers.find((l) => l.id === layer.id);
-    return { layer: layer.id, x: after?.x ?? layer.x, y: after?.y ?? layer.y, selection: selectionBounds() };
+    return actOnLayer(layer.id, () => {
+      if (useUIStore.getState().activeTool !== 'move') useUIStore.getState().setActiveTool('move');
+      checkNudgeable('move');
+      nudgeBurst('move', dx, dy);
+      const after = useEditorStore.getState().document.layers.find((l) => l.id === layer.id);
+      return { layer: layer.id, x: after?.x ?? layer.x, y: after?.y ?? layer.y, selection: selectionBounds() };
+    });
   },
 });
 

@@ -1,6 +1,6 @@
 import { CommandError } from '../command';
 import { defineCommand } from '../registry';
-import { activateIfOther, layerRefSpec, offsetSpec, requireDocument, requireEngine, resolveLayer } from '../context';
+import { actOnLayer, layerRefSpec, offsetSpec, requireDocument, requireEngine, resolveLayer } from '../context';
 import { checkGesturePress, checkNoOpenSession, gestureNote, runGesture } from '../gesture/run-gesture';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
@@ -107,11 +107,12 @@ export const layerMove = defineCommand({
     checkMovable(dx, dy);
     checkNoOpenSession();
     checkGesturePress('move', layer);
-    activateIfOther(layer.id);
-    if (useUIStore.getState().activeTool !== 'move') useUIStore.getState().setActiveTool('move');
-    const from = pressPoint();
-    runGesture({ tool: 'move', points: [from, { x: from.x + dx, y: from.y + dy }] });
-    await heldPressDone(engine);
-    return position(layer.id);
+    return actOnLayer(layer.id, async () => {
+      if (useUIStore.getState().activeTool !== 'move') useUIStore.getState().setActiveTool('move');
+      const from = pressPoint();
+      runGesture({ tool: 'move', points: [from, { x: from.x + dx, y: from.y + dy }] });
+      await heldPressDone(engine);
+      return position(layer.id);
+    });
   },
 });

@@ -16,6 +16,16 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
   });
 }
 
+// A named layer that is not active is acted on once the engine has settled (context.ts actOnLayer); there is no render loop here.
+const settle = vi.hoisted(() => ({ calls: 0 }));
+vi.mock('../settled', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../settled')>()),
+  settled: () => {
+    settle.calls++;
+    return Promise.resolve();
+  },
+}));
+
 const engine = { current: {} as unknown };
 vi.mock('../../engine-wasm/engine-state', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../engine-wasm/engine-state')>();
