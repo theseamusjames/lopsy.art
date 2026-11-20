@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent } from 'react';
-import { ArrowLeft, Check, ClipboardPaste, Copy, Crop, Spline, Eye, FlipVertical2, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2, X } from 'lucide-react';
+import { ArrowLeft, Check, ClipboardPaste, Copy, Crop, Spline, Eye, FlipVertical2, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcwSquare, RotateCwSquare, SplitSquareHorizontal, Undo2, X } from 'lucide-react';
+import { ZoomReadout } from '@lopsy/ui/ZoomReadout';
 import { DEFAULT_RECIPE, recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Asset, HistoryStep, Json, Preset, PresetId, Version, VersionId } from '@lopsy/photos-core/library/types';
 import { DEFAULT_COPY_GROUPS, RECIPE_GROUPS, addArea, liveAreas, pickGroups, removeArea, type AreaKind, type RecipeGroupId } from '@lopsy/photos-core/library/recipe';
@@ -800,14 +801,6 @@ export function EditView({
           {asset.fileName}
         </h1>
         <div className={styles.toolGroup}>
-          <button type="button" className={styles.iconButton} aria-label="Undo" title="Undo (⌘Z)" aria-keyshortcuts="Meta+Z Control+Z" onClick={handleUndo}>
-            <Undo2 size={16} aria-hidden />
-          </button>
-          <button type="button" className={styles.iconButton} aria-label="Redo" title="Redo (⇧⌘Z)" aria-keyshortcuts="Meta+Shift+Z Control+Shift+Z" onClick={handleRedo}>
-            <Redo2 size={16} aria-hidden />
-          </button>
-        </div>
-        <div className={styles.toolGroup}>
           <button
             type="button"
             className={styles.iconButton}
@@ -816,7 +809,7 @@ export function EditView({
             disabled={!canEdit || isBefore || isCropping}
             onClick={() => onSetRecipe(rotateRecipe(savedRecipe, false), 'Rotate left')}
           >
-            <RotateCcw size={16} aria-hidden />
+            <RotateCcwSquare size={16} aria-hidden />
           </button>
           <button
             type="button"
@@ -826,7 +819,7 @@ export function EditView({
             disabled={!canEdit || isBefore || isCropping}
             onClick={() => onSetRecipe(rotateRecipe(savedRecipe, true), 'Rotate right')}
           >
-            <RotateCw size={16} aria-hidden />
+            <RotateCwSquare size={16} aria-hidden />
           </button>
           <button
             type="button"
@@ -875,62 +868,12 @@ export function EditView({
           </button>
         </div>
         <div className={styles.toolGroup}>
-          <button
-            type="button"
-            className={styles.toolButton}
-            aria-pressed={isBeforeToggled}
-            title="Before and after (hold \)"
-            onClick={() => setIsBeforeToggled((v) => !v)}
-            disabled={!canEdit}
-          >
-            <Eye size={16} aria-hidden />
-            <span>Before</span>
+          <button type="button" className={styles.iconButton} aria-label="Undo" title="Undo (⌘Z)" aria-keyshortcuts="Meta+Z Control+Z" onClick={handleUndo}>
+            <Undo2 size={16} aria-hidden />
           </button>
-          <button
-            type="button"
-            className={styles.toolButton}
-            aria-pressed={isSplit}
-            title="Before and after side by side"
-            onClick={() => setIsSplit((v) => !v)}
-            disabled={!canEdit || isCropping}
-          >
-            <SplitSquareHorizontal size={16} aria-hidden />
-            <span>Split</span>
+          <button type="button" className={styles.iconButton} aria-label="Redo" title="Redo (⇧⌘Z)" aria-keyshortcuts="Meta+Shift+Z Control+Shift+Z" onClick={handleRedo}>
+            <Redo2 size={16} aria-hidden />
           </button>
-        </div>
-        <div className={styles.toolGroup}>
-          <button
-            type="button"
-            className={styles.toolButton}
-            aria-pressed={view?.isFit ?? true}
-            onClick={() => engine?.fit()}
-            disabled={!canEdit}
-          >
-            Fit
-          </button>
-          <button
-            type="button"
-            className={styles.toolButton}
-            aria-pressed={!view?.isFit && zoomPercent === 100}
-            onClick={() => engine?.setZoom(1 / workingScale)}
-            disabled={!canEdit}
-          >
-            100%
-          </button>
-          <span
-            className={styles.zoomReadout}
-            data-testid="zoom-readout"
-            title={
-              view?.isFit
-                ? `Fit: the whole photo, shown at ${zoomPercent}% of its full size`
-                : `${zoomPercent}% of the photo's full size`
-            }
-          >
-            {zoomPercent}%
-          </span>
-        </div>
-        {(onCopyEdits || onPasteEdits) && (
-          <div className={styles.toolGroup}>
             {onCopyEdits && (
               <button type="button" className={styles.iconButton} aria-label="Copy edits" title="Copy edits (⇧⌘C)" disabled={!canEdit || isCropping} onClick={() => handleCopyPaste('copyEdits')}>
                 <Copy size={16} aria-hidden />
@@ -948,8 +891,7 @@ export function EditView({
                 <ClipboardPaste size={16} aria-hidden />
               </button>
             )}
-          </div>
-        )}
+        </div>
         {onEditInLopsy && (
           <button type="button" className={styles.toolButton} onClick={handleEditInLopsy} disabled={!isReady} aria-disabled={isBusy || undefined}>
             <SquarePen size={16} aria-hidden />
@@ -1031,6 +973,63 @@ export function EditView({
                 </button>
               </div>
             )}
+          </div>
+          <div className={styles.stageBar} role="group" aria-label="View">
+            <div className={styles.toolGroup}>
+              <button
+                type="button"
+                className={styles.toolButton}
+                aria-pressed={view?.isFit ?? true}
+                title="Fit the whole photo in the window"
+                onClick={() => engine?.fit()}
+                disabled={!canEdit}
+              >
+                Fit
+              </button>
+              <button
+                type="button"
+                className={styles.toolButton}
+                aria-pressed={!view?.isFit && zoomPercent === 100}
+                title="Full size: one pixel of the photo to one pixel of the screen (100%)"
+                onClick={() => engine?.setZoom(1 / workingScale)}
+                disabled={!canEdit}
+              >
+                Full
+              </button>
+              <ZoomReadout
+                zoom={view ? view.zoom * workingScale : 1}
+                onZoom={(next) => engine?.setZoom(next / workingScale)}
+                onReset={() => engine?.setZoom(1 / workingScale)}
+                disabled={!canEdit}
+                className={styles.zoomReadout}
+                hint={view?.isFit ? 'The whole photo fits. Drag left or right to zoom; double-click for full size, 100%' : "Of the photo's full size. Drag left or right to zoom; double-click for full size, 100%"}
+                data-testid="zoom-readout"
+              />
+            </div>
+            <div className={styles.toolGroup}>
+              <button
+                type="button"
+                className={styles.iconButton}
+                aria-label="Before"
+                aria-pressed={isBeforeToggled}
+                title="Before and after (hold \)"
+                onClick={() => setIsBeforeToggled((v) => !v)}
+                disabled={!canEdit}
+              >
+                <Eye size={16} aria-hidden />
+              </button>
+              <button
+                type="button"
+                className={styles.iconButton}
+                aria-label="Split"
+                aria-pressed={isSplit}
+                title="Before and after side by side"
+                onClick={() => setIsSplit((v) => !v)}
+                disabled={!canEdit || isCropping}
+              >
+                <SplitSquareHorizontal size={16} aria-hidden />
+              </button>
+            </div>
           </div>
           <p id={stageHintId} className={styles.srOnly}>
             Arrow keys move a zoomed photo, Shift by more; plus and minus zoom in and out.

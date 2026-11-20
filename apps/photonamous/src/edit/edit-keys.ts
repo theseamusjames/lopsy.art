@@ -94,7 +94,7 @@ export const EDIT_SHORTCUTS: readonly { readonly keys: string; readonly action: 
   { keys: '⇧⌘C', action: 'Copy edits' },
   { keys: '⇧⌘V', action: 'Paste edits' },
   { keys: '⌘0', action: 'Fit' },
-  { keys: '⌘1', action: '100 %' },
+  { keys: '⌘1', action: 'Full size (100 %)' },
   { keys: '+ −', action: 'Zoom in or out, with the photo focused' },
   { keys: '← → ↑ ↓', action: 'Move a zoomed photo, with the photo focused' },
   { keys: 'J', action: 'Clipping warnings' },

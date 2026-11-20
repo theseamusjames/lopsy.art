@@ -107,7 +107,7 @@ test.describe('Edit view on a RAF', () => {
     await page.getByTestId('harness-file').setInputFiles(sample ?? '');
     await waitForReady(page, 60_000);
     const started = Date.now();
-    await page.getByRole('button', { name: '100%' }).click();
+    await page.getByRole('button', { name: 'Full', exact: true }).click();
     await expect(page.getByTestId('loading-badge')).toHaveText('Loading full resolution…', { timeout: 30_000 });
     await expect(page.getByTestId('loading-badge')).toHaveCount(0, { timeout: 10 * 60_000 });
     console.log(`RAF full resolution after ${Date.now() - started} ms`);

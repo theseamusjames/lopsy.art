@@ -118,16 +118,20 @@
   min-height: 0;
 }
 
+/* The photo, and under it the bar with the zoom, Before and Split. */
 .main {
   display: flex;
+  flex-direction: column;
   flex: 1;
   min-width: 0;
+  min-height: 0;
 }
 
 .stage {
   position: relative;
   flex: 1;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
   background: var(--color-bg-canvas);
   cursor: grab;
@@ -281,4 +285,17 @@
 .primaryButton:focus-visible {
   outline: 2px solid var(--ph-focus-ring);
   outline-offset: 2px;
+}
+
+/* Under the photo: Fit, Full and the zoom level at the left, Before and Split at the right. */
+.stageBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-bg-secondary);
+  border-top: 1px solid var(--color-border-subtle);
 }

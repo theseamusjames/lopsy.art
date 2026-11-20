@@ -76,12 +76,56 @@ test.describe('Edit view on a JPEG', () => {
     await expect(before).toHaveAttribute('aria-pressed', 'false');
   });
 
-  test('zooms to 100% and back to fit', async ({ page }) => {
-    const readout = page.getByTestId('zoom-readout');
-    await page.getByRole('button', { name: '100%' }).click();
+  test('the bar under the photo: Full, Fit, and a zoom level that drags, steps and double-clicks', async ({ page }) => {
+    const bar = page.getByRole('group', { name: 'View' });
+    const readout = bar.getByTestId('zoom-readout');
+    const fit = bar.getByRole('button', { name: 'Fit', exact: true });
+    // Before and Split are icons only, named for screen readers.
+    await expect(bar.getByRole('button', { name: 'Before', exact: true })).toHaveText('');
+    await expect(bar.getByRole('button', { name: 'Split', exact: true })).toHaveText('');
+    // The bar sits under the photo.
+    const stage = (await page.getByRole('group', { name: 'Photo' }).boundingBox())!;
+    expect((await bar.boundingBox())!.y).toBeGreaterThanOrEqual(stage.y + stage.height - 1);
+
+    await bar.getByRole('button', { name: 'Full', exact: true }).click();
     await expect(readout).toHaveText('100%');
-    await page.getByRole('button', { name: 'Fit' }).click();
-    await expect(page.getByRole('button', { name: 'Fit' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(readout).toHaveAccessibleName('Zoom 100%');
+
+    // Dragging left on the level zooms out, 1 % a pixel.
+    const box = (await readout.boundingBox())!;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(box.x + box.width / 2, y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 - 15, y, { steps: 3 });
+    await page.mouse.move(box.x + box.width / 2 - 30, y, { steps: 3 });
+    await page.mouse.up();
+    await expect(readout).toHaveText('70%');
+
+    // From the keyboard the arrows step by 10 % and Enter is the double-click.
+    await readout.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(readout).toHaveText('80%');
+    await page.keyboard.press('Enter');
+    await expect(readout).toHaveText('100%');
+
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowLeft');
+    await expect(readout).toHaveText('80%');
+    await readout.dblclick();
+    await expect(readout).toHaveText('100%');
+
+    await fit.click();
+    await expect(fit).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('undo and redo sit after the tools, not beside rotate', async ({ page }) => {
+    const undo = (await page.getByRole('button', { name: 'Undo', exact: true }).boundingBox())!;
+    const redo = (await page.getByRole('button', { name: 'Redo', exact: true }).boundingBox())!;
+    const rotate = (await page.getByRole('button', { name: 'Rotate right', exact: true }).boundingBox())!;
+    const crop = (await page.getByRole('button', { name: 'Crop', exact: true }).boundingBox())!;
+    expect(undo.x).toBeGreaterThan(crop.x);
+    expect(undo.x).toBeGreaterThan(rotate.x);
+    expect(redo.x).toBeGreaterThan(undo.x);
   });
 
   test('exports a full-size JPEG of the edit', async ({ page }) => {
@@ -327,7 +371,7 @@ test.describe('Working image and keys', () => {
     await openHarness(page);
     await openGeneratedImage(page, 4000, 3000);
     await waitForReady(page);
-    await page.getByRole('button', { name: '100%' }).click();
+    await page.getByRole('button', { name: 'Full', exact: true }).click();
     await expect(page.getByTestId('zoom-readout')).toHaveText('100%');
     await expect(page.getByTestId('loading-badge')).toHaveCount(0, { timeout: 60_000 });
     await expect(page.getByTestId('zoom-readout')).toHaveText('100%');

@@ -233,12 +233,17 @@ to the library**.
   the grid shows each version as a tile of its own (named "<file>
   (<version>)", with that version's preview), which opens that version.
   Lopsy documents are left out.
-- **Toolbar.** Library (back), Undo / Redo (⌘Z, ⇧⌘Z or ⌘Y), Rotate left,
-  Rotate right, Flip, Flip vertical, **Crop**, **Areas**, **Before** (or
-  hold `\`), **Split** (before and after side by side, with a divider to
-  drag), Fit (⌘0), 100% (⌘1) with a zoom readout, Copy edits / Paste edits
-  (⇧⌘C, ⇧⌘V), **Edit in Lopsy** and **Export**. The image pans by
-  dragging and zooms with the wheel.
+- **Toolbar.** Library (back), Rotate left, Rotate right, Flip, Flip
+  vertical, **Crop**, **Areas**; then Undo / Redo (⌘Z, ⇧⌘Z or ⌘Y) beside
+  Copy edits / Paste edits (⇧⌘C, ⇧⌘V), away from the rotations; **Edit in
+  Lopsy** and **Export**. The image pans by dragging and zooms with the
+  wheel.
+- **The bar under the photo.** On the left, **Fit** (⌘0), **Full** (⌘1:
+  one pixel of the photo to one pixel of the screen) and the zoom level,
+  which works as Lopsy's does: drag left or right on it to zoom out or in
+  (1 % a pixel, 10 % to 400 %), and double-click it for 100 %. On the
+  right, two icon buttons: **Before** (or hold `\`) and **Split** (before
+  and after side by side, with a divider to drag).
 - **Pixel readout**: the rendered colour under the pointer (R G B,
   0–255).
 - **Histogram** of the rendered edit, updated as it changes. Its shadow
@@ -480,6 +485,9 @@ best-practice rules at each step; the `a11y-*.spec.ts` and
   - With the photo focused, the arrow keys move a zoomed photo and + and
     − zoom. The before/after divider takes the arrow, Page, Home and End
     keys.
+  - The zoom level under the photo is a button: Enter or Space gives
+    100 %, and the arrow keys step to the next 10 % (Right and Up in,
+    Left and Down out) without changing photo.
   - The histogram's clipping markers are outlined, or filled when that
     end clips; its channels are solid, dashed and dotted lines, named in
     a key. The current history step and version are marked by a bar as
@@ -510,7 +518,7 @@ Shown in the app with `?`. The one-key shortcuts below (digits, letters,
 | Escape | Go back |
 | ? | Show the shortcuts |
 
-In the Edit view: ⌘Z undo, ⇧⌘Z or ⌘Y redo, ⌘0 fit, ⌘1 100%, ⇧⌘C and
+In the Edit view: ⌘Z undo, ⇧⌘Z or ⌘Y redo, ⌘0 fit, ⌘1 full size (100%), ⇧⌘C and
 ⇧⌘V copy and paste edits, hold `\` for before, J for clipping, R crop,
 M a linear area, ⇧M a radial area, ← → the previous or next photo,
 Escape back to the library (or out of the tool in use), ? the Edit
