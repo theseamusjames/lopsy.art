@@ -81,7 +81,12 @@ test.describe('Masks', () => {
     await page.getByRole('button', { name: 'Masks', exact: true }).click();
     const panel = page.getByRole('region', { name: 'Masks' });
     await panel.getByRole('button', { name: 'Radial' }).click();
-    await panel.getByRole('button', { name: 'Invert Mask 1' }).click();
+    // A toggle that says what it does, in words.
+    const invert = panel.getByRole('button', { name: 'Invert Mask 1' });
+    await expect(invert).toHaveText('Invert');
+    await expect(invert).toHaveAttribute('aria-pressed', 'false');
+    await invert.click();
+    await expect(invert).toHaveAttribute('aria-pressed', 'true');
     await setMaskValue(page, 'Mask 1', 'Exposure', '-2');
     expect(await page.evaluate(() => window.__photosHarness?.steps)).toEqual(['Add radial mask', 'Mask 1 inverted', 'Mask 1 exposure −2.00']);
 
@@ -109,6 +114,47 @@ test.describe('Masks', () => {
     const recipe = await page.evaluate(() => window.__photosHarness?.recipe);
     const area = Object.values((recipe as { areas: Record<string, { geometry: { cx: number } }> }).areas)[0];
     expect(area?.geometry.cx).toBeGreaterThan(0.55);
+  });
+
+  test('the panel puts Amount and the adjustments first, and the shape under Position, closed', async ({ page }) => {
+    await openHarness(page);
+    await openFlatImage(page);
+    await waitForReady(page);
+    await page.getByRole('button', { name: 'Masks', exact: true }).click();
+    const panel = page.getByRole('region', { name: 'Masks' });
+    await panel.getByRole('button', { name: 'Radial' }).click();
+
+    // Amount, then the seven adjustments; nothing of the shape yet.
+    const sliders = panel.getByRole('slider');
+    await expect(sliders).toHaveCount(8);
+    await expect(sliders.nth(0)).toHaveAccessibleName('Amount');
+    await expect(sliders.nth(1)).toHaveAccessibleName('Exposure');
+    const position = panel.getByRole('button', { name: 'Position', exact: true });
+    await expect(position).toHaveAttribute('aria-expanded', 'false');
+    const adjustments = await panel.getByRole('group', { name: 'Mask 1 adjustments' }).boundingBox();
+    const closed = await position.boundingBox();
+    if (!adjustments || !closed) throw new Error('no adjustments or Position');
+    expect(closed.y).toBeGreaterThanOrEqual(adjustments.y + adjustments.height);
+
+    await position.click();
+    await expect(position).toHaveAttribute('aria-expanded', 'true');
+    const shape = panel.getByRole('group', { name: 'Mask 1 position' });
+    await expect(shape).toHaveAttribute('id', (await position.getAttribute('aria-controls')) ?? 'none');
+    await expect(sliders).toHaveCount(14);
+    await expect(sliders.nth(8)).toHaveAccessibleName('Center X');
+
+    // Its sliders move the mask as its handles do, one history step each.
+    const centreX = shape.getByLabel('Center X value', { exact: true });
+    await centreX.fill('30');
+    await centreX.press('Enter');
+    expect(await page.evaluate(() => window.__photosHarness?.steps)).toEqual(['Add radial mask', 'Mask: move']);
+    const recipe = await page.evaluate(() => window.__photosHarness?.recipe);
+    const mask = Object.values((recipe as { areas: Record<string, { geometry: { cx: number } }> }).areas)[0];
+    expect(mask?.geometry.cx).toBeCloseTo(0.3, 2);
+
+    await position.click();
+    await expect(position).toHaveAttribute('aria-expanded', 'false');
+    await expect(sliders).toHaveCount(8);
   });
 
   test('M adds a linear mask, Shift+M a radial one, and R toggles Crop', async ({ page }) => {

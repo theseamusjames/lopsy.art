@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Circle, FlipVertical, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { ChevronDown, ChevronRight, Circle, Pencil, Plus, Trash2 } from 'lucide-react';
 import { MAX_AREAS, liveAreas, type Area, type AreaKind, type LinearGeometry, type RadialGeometry, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { AreaFrame } from '../../engine/areas';
 import { AREA_SLIDERS, areaLabel } from '../area-edit';
@@ -41,7 +41,9 @@ const READOUTS: Readonly<Record<ShapeUnit, SliderReadout>> = {
 
 /**
  * Masks (spec 5.4; areas in the recipe and the code): the list, adding
- * and removing, and the chosen mask's shape and its own sliders.
+ * and removing, then the chosen mask's Amount and adjustments, and under
+ * a closed Position its shape sliders, the keyboard's way to do what
+ * dragging its handles does (WCAG 2.1.1, 2.5.7).
  */
 export function AreasPanel({
   recipe,
@@ -63,6 +65,8 @@ export function AreasPanel({
   const areas = liveAreas(recipe);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [focusAfter, setFocusAfter] = useState<FocusTarget | null>(null);
+  const [isPositionOpen, setIsPositionOpen] = useState(false);
+  const positionId = useId();
   const panelRef = useRef<HTMLElement>(null);
   const isFull = areas.length >= MAX_AREAS;
   const selectedIndex = areas.findIndex((a) => a.id === selectedId);
@@ -219,14 +223,14 @@ export function AreasPanel({
               )}
               <button
                 type="button"
-                className={styles.icon}
+                className={styles.button}
                 aria-label={`Invert ${label}`}
                 aria-pressed={area.invert}
-                title="Invert"
+                title="Adjust the rest of the photo instead"
                 disabled={isDisabled}
                 onClick={() => onInvert(area.id, !area.invert)}
               >
-                <FlipVertical size={13} aria-hidden />
+                Invert
               </button>
               <button type="button" className={styles.icon} aria-label={`Delete ${label}`} title="Delete" disabled={isDisabled} onClick={() => handleDelete(i)}>
                 <Trash2 size={13} aria-hidden />
@@ -235,11 +239,6 @@ export function AreasPanel({
           );
         })}
       </ul>
-      {selected && shapeFrame && (
-        <div className={styles.controls} aria-label={`${areaLabel(selected, selectedIndex)} shape`} role="group">
-          {shapeControls(selected).map((control) => shapeSlider(selected, shapeFrame.frame, shapeFrame.doc, control))}
-        </div>
-      )}
       {selected && (
         <div className={styles.controls} aria-label={`${areaLabel(selected, selectedIndex)} adjustments`} role="group">
           {slider({ path: `areas.${selected.id}.amount`, label: 'Amount', historyLabel: `${areaLabel(selected, selectedIndex)} amount` })}
@@ -250,6 +249,31 @@ export function AreasPanel({
               historyLabel: `${areaLabel(selected, selectedIndex)} ${s.label.toLowerCase()}`,
             }),
           )}
+        </div>
+      )}
+      {selected && shapeFrame && (
+        <div className={styles.position}>
+          <h3 className={styles.subheading}>
+            <button
+              type="button"
+              className={styles.disclosure}
+              aria-expanded={isPositionOpen}
+              aria-controls={positionId}
+              onClick={() => setIsPositionOpen((v) => !v)}
+            >
+              {isPositionOpen ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
+              <span>Position</span>
+            </button>
+          </h3>
+          <div
+            id={positionId}
+            className={styles.shape}
+            role="group"
+            aria-label={`${areaLabel(selected, selectedIndex)} position`}
+            hidden={!isPositionOpen}
+          >
+            {isPositionOpen && shapeControls(selected).map((control) => shapeSlider(selected, shapeFrame.frame, shapeFrame.doc, control))}
+          </div>
         </div>
       )}
     </section>

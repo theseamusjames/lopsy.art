@@ -50,7 +50,7 @@
   color: var(--color-text-primary);
 }
 
-/* Show mask, when on: filled, with an accent edge and text. */
+/* A toggle that is on (Show mask, Invert): filled, with an accent edge and text. */
 .button[aria-pressed='true'] {
   background: var(--color-bg-active);
   border-color: var(--ph-accent-text);
@@ -150,11 +150,6 @@
   color: var(--color-text-primary);
 }
 
-.icon[aria-pressed='true'] {
-  background: var(--color-bg-active);
-  color: var(--ph-accent-text);
-}
-
 .rename {
   display: flex;
   flex: 1;
@@ -181,6 +176,55 @@
   border-top: 1px solid var(--color-border-subtle);
 }
 
+/* Position: a heading whose button opens the selected mask's shape sliders below it. */
+.position {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.subheading {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+/* Its chevron lines up with the sliders' names; the hover fill reaches a little past them. */
+.disclosure {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: calc(100% + 2 * var(--space-1));
+  min-height: 24px;
+  margin: 0 calc(-1 * var(--space-1));
+  padding: var(--space-1);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.disclosure:hover {
+  background: var(--color-bg-hover);
+}
+
+.shape {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.shape[hidden] {
+  display: none;
+}
+
 .button:focus-visible,
 .icon:focus-visible,
 .input:focus-visible {
@@ -188,7 +232,8 @@
   outline-offset: 2px;
 }
 
-.area:focus-visible {
+.area:focus-visible,
+.disclosure:focus-visible {
   outline: 2px solid var(--ph-focus-ring);
   outline-offset: -2px;
 }

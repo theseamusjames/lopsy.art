@@ -168,10 +168,17 @@ test('a radial mask is added, shaped and renamed by keyboard', async ({ page }) 
   await expect(row).toBeFocused();
   await expect(row).toHaveAttribute('aria-current', 'true');
 
-  const shape = panel.getByRole('group', { name: 'Mask 1 shape' });
+  // The shape sliders wait under Position, closed until it is pressed; Tab goes on into them.
+  const position = panel.getByRole('button', { name: 'Position', exact: true });
+  await expect(position).toHaveAttribute('aria-expanded', 'false');
+  await position.focus();
+  await page.keyboard.press('Enter');
+  await expect(position).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('Tab');
+  const shape = panel.getByRole('group', { name: 'Mask 1 position' });
   const centreX = shape.getByRole('slider', { name: 'Center X' });
+  await expect(centreX).toBeFocused();
   await expect(centreX).toHaveAttribute('aria-valuetext', '50 %');
-  await centreX.focus();
   await holdKey(page, 'ArrowRight', 10);
   await expect(centreX).toHaveAttribute('aria-valuetext', '60 %');
   await shape.getByRole('slider', { name: 'Width' }).focus();

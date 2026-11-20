@@ -327,18 +327,21 @@ to the library**.
   top or the bottom. The next crop on this device opens with them where
   they were put, in the same corner when the window is another size.
 - **Masks** (toolbar): add **Linear** (a gradient across the photo) or
-  **Radial** (an ellipse) masks, up to eight, each with Amount, Invert, a
-  name ("Mask 1" until it has its own), Delete, and its own Exposure,
-  Contrast, Highlights, Shadows, Temperature, Tint and Saturation.
-  Handles on the image move the selected mask, resize it, turn it and set
-  its feather; each drag or slider release is one history step ("Mask:
-  move"). The selected mask shows in red on screen (never in exports,
-  previews or the histogram) while its shape changes and for a second
-  after, and for a second after it is added, chosen or inverted; it hides
-  while its Amount or an adjustment slider is dragged. **Show mask** (O,
-  in the panel's header) shows it the rest of the time too. The recipe
-  stores masks as `areas`, on the unrotated photo, so they follow
-  rotation, flips, straightening and the crop.
+  **Radial** (an ellipse) masks, up to eight. Each row of the list has
+  the mask's name ("Mask 1" until it has its own), Rename, **Invert** (a
+  toggle: the adjustments go to the rest of the photo) and Delete. Under
+  the list come the selected mask's Amount and its own Exposure,
+  Contrast, Highlights, Shadows, Temperature, Tint and Saturation, then
+  **Position**, closed at first, which opens to the mask's shape
+  sliders. Handles on the image move the selected mask, resize it, turn
+  it and set its feather; each drag or slider release is one history
+  step ("Mask: move"). The selected mask shows in red on screen (never
+  in exports, previews or the histogram) while its shape changes and for
+  a second after, and for a second after it is added, chosen or
+  inverted; it hides while its Amount or an adjustment slider is
+  dragged. **Show mask** (O, in the panel's header) shows it the rest of
+  the time too. The recipe stores masks as `areas`, on the unrotated
+  photo, so they follow rotation, flips, straightening and the crop.
 
 ## Export
 
@@ -506,9 +509,11 @@ best-practice rules at each step; the `a11y-*.spec.ts` and
     options' grip ("Move crop options", next after the edges) takes the
     arrow keys, 10 px a press or 50 px with Shift, and Enter or Space
     sends the options to the top or the bottom without applying the crop.
-  - *Masks*: the selected mask's shape sliders set Start and End X and Y
-    (linear), or Center X and Y, Width, Height, Turn and Feather
-    (radial), in percent of the photo as shown. Each row has Rename.
+  - *Masks*: under **Position**, a button that opens and closes, the
+    selected mask's shape sliders set Start and End X and Y (linear), or
+    Center X and Y, Width, Height, Turn and Feather (radial), in percent
+    of the photo as shown. Each row has Rename, and Invert says whether
+    it is on.
   - *Curves*: points are sliders. Up and Down change the output, Left and
     Right the input (Shift for ten levels), Delete removes a point, and
     Add point adds one in the widest gap.

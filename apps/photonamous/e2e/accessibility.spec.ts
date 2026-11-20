@@ -204,6 +204,12 @@ test('every view, as a user reaches it', async ({ page }) => {
     await expect(showMask).toHaveAttribute('aria-pressed', 'true');
   });
 
+  await step(page, 'edit view, masks, Position open', async () => {
+    const position = edit.getByRole('button', { name: 'Position', exact: true });
+    await position.click();
+    await expect(position).toHaveAttribute('aria-expanded', 'true');
+  });
+
   await step(page, 'edit view, split before and after', async () => {
     await edit.getByRole('button', { name: 'Split' }).click();
   });
