@@ -104,7 +104,7 @@ export default defineConfig({
       baseCss: resolve(__dirname, 'src/site/tutorials/tutorials.css'),
       blogCss: resolve(__dirname, 'src/site/blog/blog.css'),
     }),
-    agentDocsPlugin({ root: resolve(__dirname), files: ['SKILL.md', 'SKILL-UI.md', 'FEATURES.md'] }),
+    agentDocsPlugin({ root: resolve(__dirname), files: ['SKILL.md', 'FEATURES.md'] }),
   ],
   server: {
     fs: {

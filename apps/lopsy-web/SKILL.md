@@ -38,9 +38,6 @@ Related resources:
 - **Feature catalog:** <https://lopsy.art/FEATURES.md>. It's long and
   exhaustive: every tool, filter, effect and adjustment, and exactly how each
   behaves. The commands do what the editor's UI does, so it describes them too.
-- **Driving the editor's UI instead:** <https://lopsy.art/SKILL-UI.md>, for
-  testing the UI as a person uses it and for the few things the command API
-  does not offer.
 - **Index for agents:** <https://lopsy.art/llms.txt>
 - **Tutorials** (step-by-step compositions made in Lopsy): <https://lopsy.art/tutorials/>
 - **Source:** <https://github.com/theseamusjames/lopsy.art>. Open issues list
@@ -1111,9 +1108,6 @@ These have no command. Don't hunt for them:
   `doc.export-psd`), and `clipboard.*` is the editor's own clipboard.
 - **A list of available fonts.** `text.set-font` takes any family the
   editor's font picker lists (the Google Fonts catalogue), by its exact name.
-
-The UI guide, <https://lopsy.art/SKILL-UI.md>, covers all of these by driving
-the full editor at <https://lopsy.art/>.
 
 ## Behaviours worth knowing
 

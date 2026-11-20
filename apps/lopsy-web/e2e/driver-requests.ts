@@ -1,6 +1,6 @@
 /**
- * Helpers for the specs that run the drivers published in SKILL.md and
- * SKILL-UI.md: start one as a child process, and send it requests whose
+ * Helpers for the spec that runs the driver published in SKILL.md: start
+ * it as a child process, and send it requests whose
  * headers `fetch` will not let a test set (Host, Origin, Sec-Fetch-Site).
  */
 import { spawn, type ChildProcess } from 'node:child_process';

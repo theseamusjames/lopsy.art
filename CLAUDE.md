@@ -23,9 +23,6 @@ What you may be looking for:
   `apps/lopsy-web/SKILL.md` (published at `/SKILL.md`). Its driver and
   recipes are tested against the agent page (`e2e/skill-recipes.spec.ts`):
   update it when a command it names changes.
-- **The guide for agents that drive the UI**: `apps/lopsy-web/SKILL-UI.md`
-  (published at `/SKILL-UI.md`). Update it when a label, aria-label or flow
-  it relies on changes.
 - **How to write e2e tests**: `apps/lopsy-web/e2e/GUIDE.md`. Read it before
   writing one.
 - **The command registry the menus, keys and panels run through**: the

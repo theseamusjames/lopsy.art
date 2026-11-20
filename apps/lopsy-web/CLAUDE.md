@@ -11,15 +11,11 @@ Read `SPEC.md` for the full product specification.
 - `e2e/GUIDE.md` — read this before writing any e2e tests.
 - `SKILL.md` — public guide for agents that create images through the
   agent page's command API (published at `/SKILL.md`, along with
-  `SKILL-UI.md` and `FEATURES.md`; indexed by `public/llms.txt`).
+  `FEATURES.md`; indexed by `public/llms.txt`).
   `e2e/skill-recipes.spec.ts` runs its driver and every recipe against the
   agent page and checks that every command id it names exists, so update
   it in the same change when you rename a command or change what a recipe
   relies on (a param, a refusal, an ambient-state rule).
-- `SKILL-UI.md` — public guide for agents that drive the editor's UI with
-  Playwright (published at `/SKILL-UI.md`). Its driver and selectors are
-  tested against lopsy.art, so update it when you change a label,
-  aria-label or flow it relies on.
 - `FEATURES.md` — the feature catalog. Describe current behaviour only: no
   bug tracking ("Known defect" notes, issue/PR numbers, "fixed in #N"
   history). Bugs live in GitHub issues; fix history lives in commits and PRs.

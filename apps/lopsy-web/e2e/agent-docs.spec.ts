@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { test, expect } from './fixtures';
 
-// The agent-facing documents (SKILL.md, SKILL-UI.md, FEATURES.md, llms.txt) are
+// The agent-facing documents (SKILL.md, FEATURES.md, llms.txt) are
 // published at the site root, linked from Help → Agents and announced, with the
 // agent page, in a comment at the top of <body> on the editor and the agent page.
 
@@ -24,8 +24,8 @@ test.describe('agent docs', () => {
     await expect(menuBar).toBeVisible();
   });
 
-  test('serves SKILL.md, SKILL-UI.md, FEATURES.md and llms.txt, and announces them in <body>', async ({ page, request }) => {
-    for (const doc of ['SKILL.md', 'SKILL-UI.md', 'FEATURES.md']) {
+  test('serves SKILL.md, FEATURES.md and llms.txt, and announces them in <body>', async ({ page, request }) => {
+    for (const doc of ['SKILL.md', 'FEATURES.md']) {
       const response = await request.get(`/${doc}`);
       expect(response.headers()['content-type'], doc).toContain('text/markdown');
       expect(await response.text(), doc).toBe(readFileSync(doc, 'utf8'));
@@ -35,7 +35,7 @@ test.describe('agent docs', () => {
     const llmsText = await llms.text();
     expect(llmsText.startsWith('# Lopsy')).toBe(true);
     expect(llmsText).toContain('https://lopsy.art/SKILL.md');
-    expect(llmsText).toContain('https://lopsy.art/SKILL-UI.md');
+    expect(llmsText).not.toContain('SKILL-UI');
     expect(llmsText).toContain('https://lopsy.art/FEATURES.md');
     expect(llmsText).toContain('https://lopsy.art/agent/');
     expect(llmsText).toContain('window.lopsy');
@@ -52,7 +52,6 @@ test.describe('agent docs', () => {
     expect(firstBodyComment).toContain('window.lopsy');
     expect(firstBodyComment).toContain('/llms.txt');
     expect(firstBodyComment).toContain('/SKILL.md');
-    expect(firstBodyComment).toContain('/SKILL-UI.md');
     expect(firstBodyComment).toContain('/FEATURES.md');
     expect(firstBodyComment).toContain('https://github.com/theseamusjames/lopsy.art');
     expect(firstBodyComment).toContain('We accept pull');
@@ -64,7 +63,7 @@ test.describe('agent docs', () => {
       const node = Array.from(document.body.childNodes).find((n) => n.nodeType !== Node.TEXT_NODE);
       return node?.nodeType === Node.COMMENT_NODE ? node.textContent ?? '' : '';
     });
-    for (const doc of ['/llms.txt', '/SKILL.md', '/SKILL-UI.md', '/FEATURES.md']) {
+    for (const doc of ['/llms.txt', '/SKILL.md', '/FEATURES.md']) {
       expect(firstBodyComment, doc).toContain(doc);
     }
   });
