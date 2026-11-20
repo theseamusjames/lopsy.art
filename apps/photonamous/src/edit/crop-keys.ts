@@ -143,6 +143,9 @@ export function cropWithField(rect: Rect, field: CropField, pixels: number, size
 /** How far in from the stage's top and bottom the options bar reaches, beyond its own height: its margin and half a handle. */
 export const BAR_CLEARANCE = 24;
 
+/** The gap between the stage's edge and the options bar in its own place (--space-3). */
+export const BAR_EDGE_GAP = 12;
+
 /**
  * Whether the crop's options bar goes at the top of the stage instead of
  * the bottom, so it never hides the edge in use (WCAG 2.4.11): when it

@@ -72,6 +72,7 @@ import { useGrainSeed } from '../grain-seed';
 import { useAltDragViews } from '../alt-drag-views';
 import { editPageTitle, useDocumentTitle, useFocusKept, useFocusOnOpen, useFocusReturn } from '../edit-page';
 import styles from './EditView.module.css';
+import { NO_INSETS } from '../../engine/viewport';
 
 export interface EditViewProps {
   readonly asset: Asset;
@@ -207,6 +208,11 @@ export function EditView({
   const [isLevelling, setIsLevelling] = useState(false);
   const [cropDraft, setCropDraft] = useState<Rect | null>(null);
   const isCropping = cropDraft !== null;
+  // While Crop is open, a fitted photo leaves room under it for Crop's options.
+  const [cropRoom, setCropRoom] = useState(0);
+  useEffect(() => {
+    engine?.setFitInsets(isCropping && cropRoom > 0 ? { ...NO_INSETS, bottom: cropRoom } : NO_INSETS);
+  }, [engine, isCropping, cropRoom]);
   const cropButtonRef = useRef<HTMLButtonElement>(null);
   useFocusReturn(isCropping, cropButtonRef);
   const isReady = status.kind === 'ready';
@@ -989,6 +995,7 @@ export function EditView({
                 onChange={setCropDraft}
                 onDone={() => finishCrop(true)}
                 onCancel={() => finishCrop(false)}
+                onBarRoom={setCropRoom}
               />
             )}
             {isBefore && canEdit && <span className={styles.beforeBadge}>Before</span>}

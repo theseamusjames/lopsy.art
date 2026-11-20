@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampPan, fitView, fitZoom, limitSize, panBy, zoomAround, type View } from './viewport';
+import { NO_INSETS, clampPan, fitView, fitZoom, limitSize, panBy, zoomAround, type View } from './viewport';
 
 const VIEW = { width: 1000, height: 800 };
 
@@ -55,5 +55,32 @@ describe('limitSize', () => {
     expect(limitSize({ width: 4000, height: 3000 }, 512)).toEqual({ width: 512, height: 384 });
     expect(limitSize({ width: 300, height: 200 }, 512)).toEqual({ width: 300, height: 200 });
     expect(limitSize({ width: 300, height: 200 }, undefined)).toEqual({ width: 300, height: 200 });
+  });
+});
+
+describe('fitView with insets', () => {
+  const view = { width: 1000, height: 800 };
+  const image = { width: 4000, height: 3000 };
+
+  it('fits the image in the room the insets leave, centred in it', () => {
+    const plain = fitView(image, view);
+    const fitted = fitView(image, view, { ...NO_INSETS, bottom: 120 });
+    // The height decides: 800 - 120 - 2 × 24 of 3000.
+    expect(fitted.zoom).toBeCloseTo((800 - 120 - 48) / 3000);
+    expect(fitted.zoom).toBeLessThan(plain.zoom);
+    // Centred in the 680 px above the inset: 60 px up from the view's centre.
+    expect(fitted.panY).toBe(-60);
+    expect(fitted.panX).toBe(0);
+    expect(fitted.isFit).toBe(true);
+  });
+
+  it('keeps the bottom of the image clear of the inset', () => {
+    const fitted = fitView(image, view, { ...NO_INSETS, bottom: 120 });
+    const bottom = view.height / 2 + fitted.panY + (image.height * fitted.zoom) / 2;
+    expect(bottom).toBeLessThanOrEqual(view.height - 120);
+  });
+
+  it('drops insets that would leave the image less than half the view', () => {
+    expect(fitView(image, view, { ...NO_INSETS, bottom: 500 })).toEqual(fitView(image, view));
   });
 });

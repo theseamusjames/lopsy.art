@@ -71,9 +71,10 @@
   bottom: var(--space-3);
   transform: translateX(-50%);
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   gap: var(--space-2);
+  /* As wide as its rows, up to the stage's width: placed from the centre line, it would otherwise wrap at half of it. */
+  width: max-content;
   max-width: calc(100% - var(--space-6));
   padding: var(--space-2);
   background: var(--color-bg-secondary);
@@ -95,12 +96,14 @@
   transform: translateX(var(--bar-shift));
 }
 
+/* The grip's own column, the full height of the options beside it. */
 .grip {
   display: inline-flex;
+  flex: none;
   align-items: center;
   justify-content: center;
   width: 24px;
-  height: 28px;
+  min-height: 28px;
   padding: 0;
   background: transparent;
   border: none;
@@ -117,6 +120,15 @@
 
 .grip:active {
   cursor: grabbing;
+}
+
+/* The options' column: their rows one under the other, centred in it. */
+.controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .row {

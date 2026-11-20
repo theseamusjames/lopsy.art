@@ -27,16 +27,38 @@ export function clampZoom(zoom: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
 }
 
-/** The zoom that shows the whole image, never enlarging it. */
-export function fitZoom(image: Size, view: Size, padding = FIT_PADDING): number {
-  if (image.width <= 0 || image.height <= 0 || view.width <= 0 || view.height <= 0) return 1;
-  const pad = Math.min(padding, view.width / 4, view.height / 4);
-  const zoom = Math.min((view.width - pad * 2) / image.width, (view.height - pad * 2) / image.height, 1);
+/** Room a fitted image leaves clear at the view's edges, in CSS pixels, besides FIT_PADDING: Crop's options take the bottom. */
+export interface Insets {
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+  readonly left: number;
+}
+
+export const NO_INSETS: Insets = { top: 0, right: 0, bottom: 0, left: 0 };
+
+/** Insets that leave the image less than half the view either way are not kept: a short window keeps its photo. */
+function usableInsets(view: Size, insets: Insets): Insets {
+  const width = view.width - insets.left - insets.right;
+  const height = view.height - insets.top - insets.bottom;
+  return width >= view.width / 2 && height >= view.height / 2 ? insets : NO_INSETS;
+}
+
+/** The zoom that shows the whole image in the view less `insets`, never enlarging it. */
+export function fitZoom(image: Size, view: Size, padding = FIT_PADDING, insets: Insets = NO_INSETS): number {
+  const room = usableInsets(view, insets);
+  const width = view.width - room.left - room.right;
+  const height = view.height - room.top - room.bottom;
+  if (image.width <= 0 || image.height <= 0 || width <= 0 || height <= 0) return 1;
+  const pad = Math.min(padding, width / 4, height / 4);
+  const zoom = Math.min((width - pad * 2) / image.width, (height - pad * 2) / image.height, 1);
   return clampZoom(zoom);
 }
 
-export function fitView(image: Size, view: Size): View {
-  return { zoom: fitZoom(image, view), panX: 0, panY: 0, isFit: true };
+/** The whole image, centred in the room `insets` leave. */
+export function fitView(image: Size, view: Size, insets: Insets = NO_INSETS): View {
+  const room = usableInsets(view, insets);
+  return { zoom: fitZoom(image, view, FIT_PADDING, room), panX: (room.left - room.right) / 2, panY: (room.top - room.bottom) / 2, isFit: true };
 }
 
 /**

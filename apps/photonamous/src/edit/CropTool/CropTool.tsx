@@ -11,7 +11,7 @@ import {
   type CropHandle,
   type Rect,
 } from '../../engine/crop';
-import { BAR_CLEARANCE, CROP_EDGES, cropAfterEdgeKey, cropWithField, edgePosition, edgeValueText, isBarOnTop, type CropEdge, type CropField, type PixelSize } from '../crop-keys';
+import { BAR_CLEARANCE, BAR_EDGE_GAP, CROP_EDGES, cropAfterEdgeKey, cropWithField, edgePosition, edgeValueText, isBarOnTop, type CropEdge, type CropField, type PixelSize } from '../crop-keys';
 import { barOffset, isBarDrag, isBarHigh, loadBarPlace, otherEnd, placeAfterKey, placeAt, saveBarPlace, type BarPlace, type Size } from '../crop-bar';
 import styles from './CropTool.module.css';
 
@@ -25,6 +25,8 @@ export interface CropToolProps {
   readonly onChange: (rect: Rect) => void;
   readonly onDone: () => void;
   readonly onCancel: () => void;
+  /** The room, in CSS pixels, the options want clear under the photo: kept for the whole crop, 0 when they start where the user put them. */
+  readonly onBarRoom?: (bottom: number) => void;
 }
 
 const CORNERS: readonly Exclude<CropHandle, 'move' | CropEdge>[] = ['nw', 'ne', 'se', 'sw'];
@@ -84,7 +86,7 @@ const isSameSize = (a: Size, b: Size): boolean => a.width === b.width && a.heigh
  * the stage (crop-bar.ts). Each edge is also a slider for the keyboard.
  * Enter or Done commits, Esc cancels.
  */
-export function CropTool({ imageBox, imageSize, rect, onChange, onDone, onCancel }: CropToolProps) {
+export function CropTool({ imageBox, imageSize, rect, onChange, onDone, onCancel, onBarRoom }: CropToolProps) {
   const imageAspect = imageSize.height > 0 ? imageSize.width / imageSize.height : 1;
   const [aspect, setAspect] = useState<AspectId>('free');
   const [isPortrait, setIsPortrait] = useState(imageAspect < 1);
@@ -94,6 +96,9 @@ export function CropTool({ imageBox, imageSize, rect, onChange, onDone, onCancel
   const [sizes, setSizes] = useState<{ readonly stage: Size; readonly bar: Size }>({ stage: { width: 0, height: 0 }, bar: { width: 0, height: 0 } });
   // Null until the user moves the bar: it then stays where they put it, on this device.
   const [barPlace, setBarPlace] = useState<BarPlace | null>(loadBarPlace);
+  // A crop that opens with the bar in its own place keeps room for it under the photo until it closes, moved or not,
+  // so the photo neither sits under the bar nor jumps when the grip moves it.
+  const [isKeepingRoom] = useState(() => barPlace === null);
   const drag = useRef<Drag | null>(null);
   const gripDrag = useRef<GripDrag | null>(null);
   const isAfterGripDrag = useRef(false);
@@ -124,6 +129,14 @@ export function CropTool({ imageBox, imageSize, rect, onChange, onDone, onCancel
     observer.observe(bar);
     return () => observer.disconnect();
   }, []);
+
+  const room = isKeepingRoom && sizes.bar.height > 0 ? sizes.bar.height + BAR_EDGE_GAP : 0;
+  const onBarRoomRef = useRef(onBarRoom);
+  onBarRoomRef.current = onBarRoom;
+  useEffect(() => {
+    onBarRoomRef.current?.(room);
+  }, [room]);
+  useEffect(() => () => onBarRoomRef.current?.(0), []);
 
   const keys = useRef({ onDone, onCancel });
   keys.current = { onDone, onCancel };
@@ -332,87 +345,90 @@ export function CropTool({ imageBox, imageSize, rect, onChange, onDone, onCancel
         data-place={barPlace ? 'moved' : isBarAtTop ? 'top' : 'bottom'}
         style={barStyle}
       >
-        <div className={styles.row}>
-          <button
-            type="button"
-            className={styles.grip}
-            aria-label="Move crop options"
-            aria-describedby={gripHintId}
-            title={`Drag to move the crop options, or click to move them to the ${clickSendsBarTo}`}
-            onPointerDown={handleGripPointerDown}
-            onPointerMove={handleGripPointerMove}
-            onPointerUp={handleGripPointerEnd}
-            onPointerCancel={handleGripPointerEnd}
-            onClick={handleGripClick}
-            onKeyDown={handleGripKey}
-          >
-            <GripVertical size={16} aria-hidden />
-          </button>
-          <select
-            className={styles.select}
-            aria-label="Aspect"
-            value={aspect}
-            onChange={(e) => applyAspect(e.currentTarget.value as AspectId, isPortrait)}
-          >
-            {ASPECT_PRESETS.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
+        {/* Two columns: the grip, the full height of the options, and the options themselves, centred in theirs. */}
+        <button
+          type="button"
+          className={styles.grip}
+          aria-label="Move crop options"
+          aria-describedby={gripHintId}
+          title={`Drag to move the crop options, or click to move them to the ${clickSendsBarTo}`}
+          onPointerDown={handleGripPointerDown}
+          onPointerMove={handleGripPointerMove}
+          onPointerUp={handleGripPointerEnd}
+          onPointerCancel={handleGripPointerEnd}
+          onClick={handleGripClick}
+          onKeyDown={handleGripKey}
+        >
+          <GripVertical size={16} aria-hidden />
+        </button>
+        <div className={styles.controls}>
+          <div className={styles.row}>
+            <select
+              className={styles.select}
+              aria-label="Aspect"
+              value={aspect}
+              onChange={(e) => applyAspect(e.currentTarget.value as AspectId, isPortrait)}
+            >
+              {ASPECT_PRESETS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className={styles.iconButton}
+              aria-label={isPortrait ? 'Make landscape' : 'Make portrait'}
+              title={isPortrait ? 'Landscape' : 'Portrait'}
+              disabled={aspect === 'free' || aspect === '1:1'}
+              onClick={() => applyAspect(aspect, !isPortrait)}
+            >
+              {isPortrait ? <RectangleVertical size={16} aria-hidden /> : <RectangleHorizontal size={16} aria-hidden />}
+            </button>
+            <button
+              type="button"
+              className={styles.button}
+              onClick={() => {
+                setAspect('free');
+                onChange(FULL_RECT);
+              }}
+            >
+              <RotateCcw size={14} aria-hidden />
+              <span>Reset</span>
+            </button>
+            <button type="button" className={styles.button} onClick={onCancel}>
+              <X size={14} aria-hidden />
+              <span>Cancel</span>
+            </button>
+            <button type="button" className={styles.primary} onClick={onDone}>
+              <Check size={14} aria-hidden />
+              <span>Done</span>
+            </button>
+          </div>
+          <fieldset className={styles.fields}>
+            <legend className={styles.srOnly}>Crop in pixels</legend>
+            {FIELDS.map((f) => (
+              <label key={f.id} className={styles.field}>
+                <span>{f.label}</span>
+                <input
+                  className={styles.number}
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={f.id === 'x' || f.id === 'width' ? imageSize.width : imageSize.height}
+                  step={1}
+                  value={field?.id === f.id ? field.text : String(pixels[f.id])}
+                  onFocus={() => setField({ id: f.id, text: String(pixels[f.id]) })}
+                  onChange={(e) => handleFieldChange(f.id, e.currentTarget.value)}
+                  onBlur={() => setField(null)}
+                />
+              </label>
             ))}
-          </select>
-          <button
-            type="button"
-            className={styles.iconButton}
-            aria-label={isPortrait ? 'Make landscape' : 'Make portrait'}
-            title={isPortrait ? 'Landscape' : 'Portrait'}
-            disabled={aspect === 'free' || aspect === '1:1'}
-            onClick={() => applyAspect(aspect, !isPortrait)}
-          >
-            {isPortrait ? <RectangleVertical size={16} aria-hidden /> : <RectangleHorizontal size={16} aria-hidden />}
-          </button>
-          <button
-            type="button"
-            className={styles.button}
-            onClick={() => {
-              setAspect('free');
-              onChange(FULL_RECT);
-            }}
-          >
-            <RotateCcw size={14} aria-hidden />
-            <span>Reset</span>
-          </button>
-          <button type="button" className={styles.button} onClick={onCancel}>
-            <X size={14} aria-hidden />
-            <span>Cancel</span>
-          </button>
-          <button type="button" className={styles.primary} onClick={onDone}>
-            <Check size={14} aria-hidden />
-            <span>Done</span>
-          </button>
+            <span className={styles.unit} aria-hidden="true">
+              px
+            </span>
+          </fieldset>
         </div>
-        <fieldset className={styles.fields}>
-          <legend className={styles.srOnly}>Crop in pixels</legend>
-          {FIELDS.map((f) => (
-            <label key={f.id} className={styles.field}>
-              <span>{f.label}</span>
-              <input
-                className={styles.number}
-                type="number"
-                inputMode="numeric"
-                min={0}
-                max={f.id === 'x' || f.id === 'width' ? imageSize.width : imageSize.height}
-                step={1}
-                value={field?.id === f.id ? field.text : String(pixels[f.id])}
-                onFocus={() => setField({ id: f.id, text: String(pixels[f.id]) })}
-                onChange={(e) => handleFieldChange(f.id, e.currentTarget.value)}
-                onBlur={() => setField(null)}
-              />
-            </label>
-          ))}
-          <span className={styles.unit} aria-hidden="true">
-            px
-          </span>
-        </fieldset>
       </div>
     </div>
   );

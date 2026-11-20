@@ -97,7 +97,7 @@ import { finishKey, finishValues } from './finish-controls';
 import { renderCounts, type RenderKind } from './render-counts';
 import { areaValues, type AreaFrame } from './areas';
 import { colorControlsKey, colorGradeValues, colorMixerValues, curvesLut } from './color-controls';
-import { clampZoom, fitView, limitSize, panBy, zoomAround, type Size, type View } from './viewport';
+import { NO_INSETS, clampZoom, fitView, limitSize, panBy, zoomAround, type Insets, type Size, type View } from './viewport';
 import { decodeRafInWorkers, DecodeAbortedError } from './raf/raf-decode';
 import { parseRawDevelopSettings, rawSettingsFor, rawSettingsJson, temperatureTintFor, type RawDevelopSettings } from './raw-develop';
 import { parseDevelopProfiles, profilesFor, type DevelopProfile } from './profiles';
@@ -198,6 +198,8 @@ export interface DevelopEngine {
   /** Called after every view change (zoom, pan, fit, resize). */
   onViewChange(listener: (view: View) => void): () => void;
   fit(): void;
+  /** Room a fit leaves clear at the canvas's edges, besides its padding (Crop's options); a fitted view refits. */
+  setFitInsets(insets: Insets): void;
   /** `anchor` is in CSS pixels from the canvas's top-left. */
   setZoom(zoom: number, anchor?: { x: number; y: number }): void;
   /** CSS pixels. */
@@ -391,6 +393,7 @@ class PhotoEngine implements DevelopEngine {
   private recipe: Recipe = DEFAULT_RECIPE;
   private applied: EngineAdjustments | null = null;
   private view: View = { zoom: 1, panX: 0, panY: 0, isFit: true };
+  private fitInsets: Insets = NO_INSETS;
   /** The canvas's CSS size and device pixel ratio. */
   private cssSize: Size = { width: 0, height: 0 };
   private pixelRatio = 1;
@@ -1137,7 +1140,14 @@ class PhotoEngine implements DevelopEngine {
 
   fit(): void {
     const image = this.imageSize();
-    this.setView(image ? fitView(image, this.cssSize) : { zoom: 1, panX: 0, panY: 0, isFit: true });
+    this.setView(image ? fitView(image, this.cssSize, this.fitInsets) : { zoom: 1, panX: 0, panY: 0, isFit: true });
+  }
+
+  setFitInsets(insets: Insets): void {
+    const now = this.fitInsets;
+    if (now.top === insets.top && now.right === insets.right && now.bottom === insets.bottom && now.left === insets.left) return;
+    this.fitInsets = insets;
+    if (this.view.isFit) this.fit();
   }
 
   setZoom(zoom: number, anchor?: { x: number; y: number }): void {

@@ -321,11 +321,14 @@ to the library**.
 - **Crop** tool: drag the frame; **Aspect** Free, Original, 1 : 1,
   4 : 5, 3 : 2 or 16 : 9, made landscape or portrait; Reset, Done (Enter)
   or Cancel (Escape). The crop follows rotation and flips. These options
-  sit at the bottom of the photo, or at the top when they would hide the
-  crop's bottom edge, until they are moved: dragging the grip at their
-  left puts them anywhere on the photo, and clicking it sends them to the
-  top or the bottom. The next crop on this device opens with them where
-  they were put, in the same corner when the window is another size.
+  sit at the bottom of the stage, and while Crop is open a fitted photo
+  is fitted above them, so they do not hide its bottom edge (when a
+  zoomed photo would put that edge under them, they go to the top). Their
+  grip has a column of its own at their left: dragging it puts them
+  anywhere on the photo, and clicking it sends them to the top or the
+  bottom. The next crop on this device opens with them where they were
+  put, in the same corner when the window is another size, and the photo
+  at its usual size.
 - **Masks** (toolbar): add **Linear** (a gradient across the photo) or
   **Radial** (an ellipse) masks, up to eight. Each row of the list has
   the mask's name ("Mask 1" until it has its own), Rename, **Invert** (a

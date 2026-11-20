@@ -75,11 +75,13 @@ test('the options start below the photo, and dragging the grip moves them by the
   await expectEdge(bar, 'bottom', stage.bottom - OWN_MARGIN);
   const frame = await edgesOf(page.getByTestId('crop-rect'));
   const start = await edgesOf(bar);
+  // The photo leaves them room: the crop's bottom edge, its handle included (12 px below it), is clear of them.
+  expect(frame.bottom + 12).toBeLessThanOrEqual(start.top);
 
   const g = await edgesOf(grip);
-  await dragGrip(page, grip, g.centreX - 150, g.centreY - 200);
+  await dragGrip(page, grip, g.centreX - 100, g.centreY - 200);
   // Moved by the drag, and not sent on to the top by the click that ends it.
-  await expectEdge(bar, 'left', start.left - 150);
+  await expectEdge(bar, 'left', start.left - 100);
   await expectEdge(bar, 'top', start.top - 200);
   // Moving the options moves nothing else.
   expect(await edgesOf(page.getByTestId('crop-rect'))).toEqual(frame);
