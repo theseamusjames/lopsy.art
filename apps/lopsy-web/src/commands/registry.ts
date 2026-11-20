@@ -53,21 +53,30 @@ export interface StartOptions {
   readonly settle?: boolean;
 }
 
+export interface RunOptions {
+  /**
+   * Only commands on this surface are callable: any other id is answered as
+   * an unknown command, with suggestions drawn from this surface alone. The
+   * agent page offers 'document', since a 'ui' command needs the editor's UI.
+   */
+  readonly surface?: CommandSurface;
+}
+
 export interface Registry {
   define<const S extends ParamSchema, R>(command: CommandDefinition<S, R>): Command<InferParams<S>, R>;
   get(id: string): Command | undefined;
   has(id: string): boolean;
   list(surface?: CommandSurface): Command[];
   describe(surface?: CommandSurface): CommandDescription[];
-  run(id: string, params?: unknown): Promise<unknown>;
+  run(id: string, params?: unknown, options?: RunOptions): Promise<unknown>;
   /**
    * As run, but what fails before `run` returns (an unknown id, invalid
    * params, a refusal or a bug in its synchronous part) is thrown in the
    * caller's tick instead of rejecting, as a menu action's own throw was.
    */
   start(id: string, params?: unknown, options?: StartOptions): Promise<unknown>;
-  runInvocation(invocation: unknown): Promise<unknown>;
-  runAll(invocations: readonly unknown[]): Promise<unknown[]>;
+  runInvocation(invocation: unknown, options?: RunOptions): Promise<unknown>;
+  runAll(invocations: readonly unknown[], options?: RunOptions): Promise<unknown[]>;
   setSettle(settle: SettleFn): void;
   /** Checked by run, runInvocation and runAll, never by start: the UI's path does not refuse on it. */
   setPreflight(preflight: PreflightFn): void;
@@ -201,9 +210,17 @@ export function createRegistry(): Registry {
     return startCommand(id, rawParams, options.settle ?? true, false);
   }
 
-  function startCommand(id: string, rawParams: unknown, shouldSettle: boolean, isApiCall: boolean): Promise<unknown> {
+  function startCommand(
+    id: string,
+    rawParams: unknown,
+    shouldSettle: boolean,
+    isApiCall: boolean,
+    surface?: CommandSurface,
+  ): Promise<unknown> {
     const command = commands.get(id);
-    if (!command) throw notFound(String(id), [...commands.keys()]);
+    if (!command || (surface !== undefined && command.surface !== surface)) {
+      throw notFound(String(id), sorted(surface).map((candidate) => candidate.id));
+    }
     const params = validateParams(id, command.params, rawParams);
     if (isApiCall) preflight?.();
     if (command.settles === 'before') {
@@ -213,31 +230,31 @@ export function createRegistry(): Registry {
     return finish(command, command.run(params), shouldSettle);
   }
 
-  function run(id: string, rawParams?: unknown): Promise<unknown> {
+  function run(id: string, rawParams?: unknown, options: RunOptions = {}): Promise<unknown> {
     try {
-      return startCommand(id, rawParams, true, true);
+      return startCommand(id, rawParams, true, true, options.surface);
     } catch (error) {
       return Promise.reject(error);
     }
   }
 
-  function runInvocation(invocation: unknown): Promise<unknown> {
+  function runInvocation(invocation: unknown, options: RunOptions = {}): Promise<unknown> {
     try {
       const { op, params } = splitInvocation(invocation);
-      return run(op, params);
+      return run(op, params, options);
     } catch (error) {
       return Promise.reject(error);
     }
   }
 
-  async function runAll(invocations: readonly unknown[]): Promise<unknown[]> {
+  async function runAll(invocations: readonly unknown[], options: RunOptions = {}): Promise<unknown[]> {
     if (!Array.isArray(invocations)) {
       throw new CommandError('invalid', 'runAll expects an array of invocations');
     }
     const results: unknown[] = [];
     for (const [index, invocation] of invocations.entries()) {
       try {
-        results.push(await runInvocation(invocation));
+        results.push(await runInvocation(invocation, options));
       } catch (error) {
         throw withIndex(error, index, opOf(invocation), results);
       }

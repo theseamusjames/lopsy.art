@@ -615,3 +615,58 @@ describe('errors across a serialisation boundary', () => {
     expect(roundTripped).toMatchObject({ code: 'not-found' });
   });
 });
+
+describe('run: one surface only', () => {
+  function mixed() {
+    const registry = createRegistry();
+    let uiRuns = 0;
+    registry.define(noop('layer.add'));
+    registry.define(noop('layer.remove'));
+    registry.define({
+      ...noop('ui.layer-properties'),
+      surface: 'ui',
+      run: () => {
+        uiRuns++;
+        return undefined;
+      },
+    });
+    return { registry, uiRuns: () => uiRuns };
+  }
+
+  it('answers an id on another surface as unknown, without running it', async () => {
+    const { registry, uiRuns } = mixed();
+    const options = { surface: 'document' } as const;
+    for (const pending of [
+      registry.run('ui.layer-properties', {}, options),
+      registry.runInvocation({ op: 'ui.layer-properties' }, options),
+    ]) {
+      const error = await rejection(pending);
+      expect(error.code).toBe('not-found');
+      expect(error.message).toContain('Unknown command "ui.layer-properties"');
+    }
+    expect(uiRuns()).toBe(0);
+  });
+
+  it('draws suggestions from that surface alone', async () => {
+    const { registry } = mixed();
+    const error = await rejection(registry.run('layer.ad', {}, { surface: 'document' }));
+    expect(error.message).toContain('Did you mean: layer.add');
+    const scoped = await rejection(registry.run('ui.layer-propertie', {}, { surface: 'document' }));
+    expect(scoped.message).not.toContain('ui.layer-properties');
+    // Without the option the same typo is offered the ui command.
+    const unscoped = await rejection(registry.run('ui.layer-propertie'));
+    expect(unscoped.message).toContain('ui.layer-properties');
+  });
+
+  it('runs commands on that surface, and applies to every step of runAll', async () => {
+    const { registry, uiRuns } = mixed();
+    await expect(registry.run('layer.add', {}, { surface: 'document' })).resolves.toBeUndefined();
+    const error = await rejection(
+      registry.runAll([{ op: 'layer.add' }, { op: 'ui.layer-properties' }], { surface: 'document' }),
+    );
+    expect(error.code).toBe('not-found');
+    expect(error.completed).toEqual([undefined]);
+    expect(error.message).toMatch(/^\[1\] ui\.layer-properties: /);
+    expect(uiRuns()).toBe(0);
+  });
+});
