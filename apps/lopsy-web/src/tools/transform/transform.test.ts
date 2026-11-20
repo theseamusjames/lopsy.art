@@ -21,6 +21,7 @@ import {
   applyTransformToMask,
   translateTransform,
   mapRectThroughAffine,
+  affineSourceRect,
 } from './transform';
 
 describe('createTransformState', () => {
@@ -665,5 +666,36 @@ describe('mapRectThroughAffine (#1785)', () => {
     expect(r.x).toBeCloseTo(650);
     expect(r.width).toBeCloseTo(225);
     expect(r.x + r.width).toBeCloseTo(875);
+  });
+});
+
+describe('affineSourceRect', () => {
+  const canvas = { width: 600, height: 400 };
+  const box = { x: 350, y: 150, width: 150, height: 100 };
+
+  it('is the box when there is no whole-layer lift', () => {
+    expect(affineSourceRect(box, null, canvas)).toEqual(box);
+  });
+
+  it('is the box when the whole layer lies inside the canvas', () => {
+    expect(affineSourceRect(box, { x: 0, y: 0, width: 600, height: 400 }, canvas)).toEqual(box);
+  });
+
+  it('adds the strip of the layer past the right edge', () => {
+    const whole = { x: 500, y: 100, width: 300, height: 200 };
+    expect(affineSourceRect({ x: 500, y: 100, width: 100, height: 200 }, whole, canvas))
+      .toEqual({ x: 500, y: 100, width: 300, height: 200 });
+  });
+
+  it('adds overhangs on several sides, spanning the layer along each edge', () => {
+    const whole = { x: -50, y: -20, width: 200, height: 100 };
+    expect(affineSourceRect({ x: 0, y: 0, width: 40, height: 30 }, whole, canvas))
+      .toEqual({ x: -50, y: -20, width: 200, height: 100 });
+  });
+
+  it('keeps a box that reaches beyond the overhang strip', () => {
+    const whole = { x: 550, y: 200, width: 100, height: 50 };
+    expect(affineSourceRect({ x: 100, y: 100, width: 500, height: 200 }, whole, canvas))
+      .toEqual({ x: 100, y: 100, width: 550, height: 200 });
   });
 });
