@@ -12,6 +12,7 @@
  * Nothing runs while the Edit view is open (it owns the GPU).
  */
 
+import { isDevelopable } from '../library/develop-source';
 import { recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Asset, LibraryView, PreviewRef, Version, VersionId } from '@lopsy/photos-core/library/types';
 import type { EditPreviews } from './backend';
@@ -34,7 +35,10 @@ export function cachedRecipeHash(recipe: Recipe): string {
 }
 
 function renderable(asset: Asset | undefined): asset is Asset {
-  return asset !== undefined && !asset.deleted && asset.kind === 'original' && asset.originalStatus !== 'missing';
+  if (asset === undefined || asset.deleted) return false;
+  // A Lopsy document renders from its flattened render (developSource).
+  if (asset.kind === 'document') return isDevelopable(asset);
+  return asset.kind === 'original' && asset.originalStatus !== 'missing';
 }
 
 export function isStale(version: Version, hash: string): boolean {

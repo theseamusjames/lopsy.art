@@ -92,7 +92,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { id: 'move-down', chords: [{ key: 'ArrowDown' }], description: 'Photo below', group: 'Moving around', contexts: ['grid'] },
   { id: 'extend-left', chords: [{ key: 'ArrowLeft', shift: true }], description: 'Grow the selection left', group: 'Selection', contexts: ['grid'] },
   { id: 'extend-right', chords: [{ key: 'ArrowRight', shift: true }], description: 'Grow the selection right', group: 'Selection', contexts: ['grid'] },
-  { id: 'open-edit', chords: [{ key: 'Enter' }], description: 'Edit the photo (a Lopsy document opens in Lopsy)', group: 'Views', contexts: ['grid', 'single', 'cull'] },
+  { id: 'open-edit', chords: [{ key: 'Enter' }], description: 'Edit the photo', group: 'Views', contexts: ['grid', 'single', 'cull'] },
   { id: 'open-single', chords: [{ key: ' ' }], description: 'Look at one photo large, and back', group: 'Views', contexts: ['grid', 'single'] },
   { id: 'open-compare', chords: [{ key: 'c' }], description: 'Compare the selected photos', group: 'Views', contexts: ['grid', 'single'] },
   { id: 'open-cull', chords: [{ key: 'f' }], description: 'Sort through full screen (marking moves on)', group: 'Views', contexts: ['grid', 'single'] },

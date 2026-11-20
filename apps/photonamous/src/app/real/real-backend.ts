@@ -67,6 +67,7 @@ import { trashAssets, untrashAssets } from './trash-assets';
 import { showErrorToast, showToast } from '../toasts';
 import { downloadBlob } from '../download';
 import { loadKeepOriginals, saveKeepOriginals } from '../device-settings';
+import { developSource } from '../../library/develop-source';
 
 /** What a session needs beyond the LibrarySession itself. */
 interface SessionExtras {
@@ -458,6 +459,12 @@ export class RealBackend implements PhotosBackend {
   }
 
   loadOriginal(session: LibrarySession, asset: Asset, options: LoadOriginalOptions = {}): Promise<Blob> {
+    // A Lopsy document develops from its flattened render. The library records no checksum for the
+    // render, which the originals cache verifies against, so it is read from storage each time.
+    if (asset.kind === 'document') {
+      const { signal, onProgress } = options;
+      return session.adapter.readContent(developSource(asset).fileId, { ...(signal ? { signal } : {}), ...(onProgress ? { onProgress } : {}) });
+    }
     const caches = this.extras.get(session)?.caches;
     if (caches) return caches.originals.readOriginal(session.adapter, asset, options);
     return session.adapter.readContent(asset.fileId, options.signal ? { signal: options.signal } : {});

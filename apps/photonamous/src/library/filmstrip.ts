@@ -1,12 +1,14 @@
 /**
  * The Edit view's filmstrip (spec 5.4) in the library's terms: the grid's
  * tiles in its order, each resolved to the photo and the version it shows.
- * A photo's tile shows its shown (primary) version; a version's own tile,
- * there while the photo's stack is open, shows that version. Lopsy
- * documents are left out: they open in Lopsy, never in the Edit view. Pure.
+ * A photo's tile shows its selected (primary) version; a version's own
+ * tile, there while the photo's stack is open, shows that version. A Lopsy
+ * document is in it, edited on its flattened render; one saved without a
+ * render opens only in Lopsy and is left out. Pure.
  */
 
 import type { AssetId, LibraryView, PreviewRef, VersionId } from '@lopsy/photos-core/library/types';
+import { isDevelopable } from './develop-source';
 import { itemForVersion, parseItem, type ItemId } from './items';
 
 /** A photo and one of its versions: what the Edit view opens. */
@@ -24,18 +26,18 @@ export interface StripEntry extends PhotoVersion {
   readonly thumb: PreviewRef | null;
 }
 
-/** The photo and version a tile opens in the Edit view; null for a Lopsy document, or a tile whose photo or version is gone. */
+/** The photo and version a tile opens in the Edit view; null for a document without a render, or a tile whose photo or version is gone. */
 export function editTargetOf(view: LibraryView, id: ItemId): PhotoVersion | null {
   const { assetId, versionId } = parseItem(id);
   const asset = view.assets.get(assetId);
-  if (!asset || asset.deleted || asset.kind === 'document') return null;
+  if (!asset || asset.deleted || !isDevelopable(asset)) return null;
   const target = versionId ?? asset.primaryVersionId;
   const version = view.versions.get(target);
   if (!version || version.deleted || version.assetId !== assetId) return null;
   return { assetId, versionId: target };
 }
 
-/** The filmstrip's tiles: the grid's, in order, without documents. */
+/** The filmstrip's tiles: the grid's, in order, without what the Edit view cannot open. */
 export function filmstripEntries(orderedIds: readonly ItemId[], view: LibraryView): StripEntry[] {
   const out: StripEntry[] = [];
   for (const id of orderedIds) {

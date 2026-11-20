@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import type { Asset } from '@lopsy/photos-core/library/types';
 import { createDevelopEngine, DecodeAbortedError, type DevelopEngine, type LoadProgress } from '../../engine/develop-engine';
 import type { View } from '../../engine/viewport';
+import { developSource } from '../../library/develop-source';
 
 export type EngineStatus =
   | { readonly kind: 'starting' }
@@ -62,7 +63,7 @@ export function usePhotoEngine(
   useEffect(() => {
     if (!engine) return;
     let isCancelled = false;
-    const current = assetRef.current;
+    const current = developSource(assetRef.current);
     setStatus({ kind: 'loading', progress: null });
     loadOriginalRef
       .current(current)
@@ -82,7 +83,8 @@ export function usePhotoEngine(
     return () => {
       isCancelled = true;
     };
-  }, [engine, asset.id]);
+    // A Lopsy document saved again from Lopsy keeps its id and gets a new render, and a new sha256.
+  }, [engine, asset.id, asset.sha256]);
 
   return { engine, status, view };
 }

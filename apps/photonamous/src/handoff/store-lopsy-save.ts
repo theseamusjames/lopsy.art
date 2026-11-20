@@ -101,8 +101,9 @@ async function renderPreviews(
   versionId: VersionId,
   png: Blob,
 ): Promise<void> {
-  const version = session.getView().versions.get(versionId);
-  const hash = recipeHash(version ? version.recipe : DEFAULT_RECIPE);
+  // The render as Lopsy saved it is the document with no edits: the previews say so, so that a version with
+  // edits of its own is re-rendered with them in the background rather than showing the bare render.
+  const hash = recipeHash(DEFAULT_RECIPE);
   const unused: FileId[] = [];
   for (const size of ['screen', 'thumb'] as const) {
     const before = session.getView().versions.get(versionId)?.[size]?.fileId ?? null;

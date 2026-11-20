@@ -18,6 +18,7 @@ import { showErrorToast, showToast } from '../toasts';
 import { formatBytes } from '../../import/import-summary';
 import { downloadBlob } from '../download';
 import styles from './EditSlot.module.css';
+import { isDevelopable } from '../../library/develop-source';
 
 export interface EditSlotProps {
   assetId: AssetId;
@@ -52,7 +53,7 @@ export function EditSlot({ assetId, versionId, onClose }: EditSlotProps) {
   const storedPreviewUrl = usePreviewUrl(version?.screen ?? null, 'screen');
   const abort = useRef<AbortController | null>(null);
 
-  // Keep the original in the device cache while it is open here (a Lopsy document never is).
+  // Keep the original in the device cache while it is open here (a Lopsy document's render is never cached).
   const pinned = asset && asset.kind !== 'document' ? asset : null;
   useEffect(() => {
     if (!pinned) return;
@@ -147,8 +148,8 @@ export function EditSlot({ assetId, versionId, onClose }: EditSlotProps) {
     return <EditNotice heading="This photo is no longer in the library" documentTitle="Not in the library – Photonamous" onClose={onClose} />;
   }
 
-  // Nothing opens a Lopsy document here (openEdit sends it to Lopsy, the filmstrip leaves it out); a stale request says so.
-  if (asset.kind === 'document') {
+  // A Lopsy document is edited on its flattened render; one saved without a render opens only in Lopsy.
+  if (!isDevelopable(asset)) {
     return (
       <EditNotice
         heading={asset.fileName}
@@ -163,7 +164,7 @@ export function EditSlot({ assetId, versionId, onClose }: EditSlotProps) {
           },
         }}
       >
-        This is a Lopsy document. It opens in Lopsy, not in the Edit view.
+        This Lopsy document was saved without a flattened picture to edit here. Open it in Lopsy and save it to Photonamous again.
       </EditNotice>
     );
   }

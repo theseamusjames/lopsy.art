@@ -73,7 +73,8 @@ is `docs/photonamous-spec.md`; running and setup are in
 - **Photo actions** (a tile's right-click menu): Look at it large, Edit,
   New version, Make this the selected version (on a version's tile),
   Edit in Lopsy, Copy edits…, Paste edits, Export…, Move to the trash….
-  A Lopsy document's menu has no Edit: it is edited in Lopsy.
+  On a Lopsy document, Edit edits its flattened render and Edit in Lopsy
+  sends its `.lopsy`.
 - **Drag** photos onto an album in the sidebar to add them; dragging a
   version's own tile adds just that version, which the album then shows
   as its own tile.
@@ -86,9 +87,10 @@ is `docs/photonamous-spec.md`; running and setup are in
   the file name, centred, and its place in the list; then the colour
   labels at the left, the stars in the centre and **Edit in Lopsy** and
   **Edit** at the right, as icons named for screen readers and in their
-  tooltips. A Lopsy document has **Open in Lopsy** there instead, as it
-  opens in Lopsy, not in the Edit view. Below the photo, a bar with its versions and, at the right end,
-  **Set aside / Bring back**; then the Lopsy documents made from it.
+  tooltips. On a Lopsy document the first is **Open in Lopsy**, which
+  sends its `.lopsy`, and Edit edits its flattened render here. Below the
+  photo, a bar with its versions and, at the right end, **Set aside /
+  Bring back**; then the Lopsy documents made from it.
   Space or Escape goes back to the grid. In a narrow window the bars wrap
   rather than overlap: the edit buttons go under the labels and stars, and
   Set aside under the versions.
@@ -216,10 +218,16 @@ are saved to the version as they are made, and previews are rendered when
 the edit settles (never during a slider drag), on leaving, and before the
 filmstrip opens another photo.
 
-Lopsy documents are edited in Lopsy, never here: Enter on one opens it in
-Lopsy instead (as Edit in Lopsy does), and the filmstrip and ← → go past
-them. Should the Edit view be asked for one all the same, it names the
-document, says it opens in Lopsy, and offers **Open in Lopsy** and **Back
+A Lopsy document opens here on its flattened render, the PNG Lopsy saves
+beside the `.lopsy`: its edits, versions, presets, copy and paste and
+exports work as a photo's do, on top of that render, and the `.lopsy`
+itself is untouched (Edit in Lopsy still sends it as it is). When Lopsy
+saves the document again, its edits here apply to the new render, and
+its previews are rendered again with them. The render is read from
+storage each time a document opens: it is not kept in the device's cache
+of originals. A document without a render opens only in Lopsy: should the
+Edit view be asked for one, it names the document, says it was saved
+without a picture to edit here, and offers **Open in Lopsy** and **Back
 to the library**.
 
 - **Loading and working size.** RAF decodes on a pool of workers into the
@@ -239,7 +247,7 @@ to the library**.
   moves between them, in the grid's order: a photo whose stack is open in
   the grid shows each version as a tile of its own (named "<file>
   (<version>)", with that version's preview), which opens that version.
-  Lopsy documents are left out.
+  Lopsy documents are in it too.
 - **Toolbar.** Library (back), Rotate left, Rotate right, Flip, Flip
   vertical, **Crop**, **Areas**; then Undo / Redo (⌘Z, ⇧⌘Z or ⌘Y) beside
   Copy edits / Paste edits (⇧⌘C, ⇧⌘V), away from the rotations; **Edit in
@@ -355,13 +363,14 @@ Photonamous and Lopsy talk over `window.postMessage` (`packages/handoff`); Lopsy
 never talks to Google. Lopsy's side is in `apps/lopsy-web/FEATURES.md`
 (Photonamous Round Trip).
 
-- **Edit in Lopsy** (grid toolbar, tile menu, Single view, Edit view; on a
-  Lopsy document, Enter too): opens Lopsy in its tab (`lopsy-editor`)
+- **Edit in Lopsy** (grid toolbar, tile menu, Single view, Edit view):
+  opens Lopsy in its tab (`lopsy-editor`)
   from the click or key press. A photo goes as
   its developed full-size 16-bit PNG with its source (library, asset,
   version, recipe hash) and a camera summary; a Lopsy document goes as its
   `.lopsy` with the file's current revision (read until stable). In Single
-  view a document's button is **Open in Lopsy**, and it has no Edit.
+  view a document's button is **Open in Lopsy**, beside Edit, which edits
+  its flattened render here (see the Edit view).
 - **Save to Photonamous** (in Lopsy): the `.lopsy` and a flattened 16-bit
   PNG come back and are stored in `Lopsy documents/` as a document
   asset, stacked behind the photo it was made from, with previews. Saving
@@ -475,8 +484,9 @@ best-practice rules at each step; the `a11y-*.spec.ts` and
 - **Edit view.** The photo is the page's main content with its file name
   as the heading, and the page title is "<file> – Edit – Photonamous".
   Opening it focuses the heading and closing it gives focus back. Asked
-  for a Lopsy document, it shows the document's name as a focused heading
-  instead, and Escape goes back as it does from the Edit view.
+  for a Lopsy document without a render, it shows the document's name as
+  a focused heading instead, and Escape goes back as it does from the
+  Edit view.
   Screen readers hear when the photo is ready, export progress, and what
   Undo or Redo did; errors also show on screen with Dismiss.
   - *Crop*: each edge is a slider. The arrow keys move the focused edge,
@@ -515,7 +525,7 @@ Shown in the app with `?`. The one-key shortcuts below (digits, letters,
 | ← → ↑ ↓ | Move between photos (↑ ↓ in the grid) |
 | Shift+← → | Grow the selection |
 | ⌘A / ⌘D | Select all shown / none |
-| Enter | Edit the photo (a Lopsy document opens in Lopsy) |
+| Enter | Edit the photo |
 | Space | One photo large, and back |
 | C | Compare the selected photos |
 | F | Sort through full screen |

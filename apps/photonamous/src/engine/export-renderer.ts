@@ -9,6 +9,7 @@ import type { ExportRenderer, ExportSettings } from '@lopsy/photos-core/export/t
 import type { Asset, Version } from '@lopsy/photos-core/library/types';
 import type { DevelopEngine } from './develop-engine';
 import { extrasOf, outputSize } from '../library/export-size';
+import { developSource } from '../library/develop-source';
 import { grainSeed } from './finish-controls';
 
 export interface EngineExportRendererOptions {
@@ -99,9 +100,10 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
     checkSignal(signal);
     if (loadedAssetId !== asset.id) {
       loadedAssetId = null;
-      const original = await options.loadOriginal(asset, signal);
+      const source = developSource(asset);
+      const original = await options.loadOriginal(source, signal);
       checkSignal(signal);
-      await e.load(original, asset.format, undefined, { resolution });
+      await e.load(original, source.format, undefined, { resolution });
       loadedAssetId = asset.id;
       checkSignal(signal);
     } else if (resolution === 'full' && !e.isFullResolution()) {

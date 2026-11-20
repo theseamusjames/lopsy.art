@@ -61,7 +61,15 @@ describe('Edit (Enter, and Edit in the tile menu and Single view)', () => {
     expect(useUi.getState().editing).toEqual({ assetId, versionId: second });
   });
 
-  it('sends a Lopsy document to Lopsy instead, and leaves the Edit view closed', () => {
+  it('opens a Lopsy document with its flattened render in the Edit view', () => {
+    const { assetId, versionId } = session.addAsset({ ...lopsyDocument('poster.lopsy'), renderFileId: 'render-poster' });
+    useUi.getState().setSelection(selectOne(assetId));
+    runCommand('open-edit', [assetId]);
+    expect(useUi.getState().editing).toEqual({ assetId, versionId });
+    expect(openInLopsy).not.toHaveBeenCalled();
+  });
+
+  it('sends a Lopsy document saved without a render to Lopsy instead, and leaves the Edit view closed', () => {
     const { assetId } = session.addAsset(lopsyDocument('poster.lopsy'));
     useUi.getState().setSelection(selectOne(assetId));
     runCommand('open-edit', [assetId]);

@@ -3,6 +3,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Paintbrush, SlidersHorizontal } f
 import type { AssetId } from '@lopsy/photos-core/library/types';
 import { useAsset } from '../../app/hooks';
 import { useUi } from '../../app/store';
+import { isDevelopable } from '../../library/develop-source';
 import { parseItem } from '../../library/items';
 import { backOut, openEdit, openFocusedInLopsy, runCommand, setLabel, setRating, toggleSetAside } from '../../app/commands';
 import { ImageX } from '../../icons/ImageX';
@@ -77,29 +78,23 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
             <Stars rating={asset.rating} size={18} onChange={(r) => setRating(r, orderedIds, [asset.id])} />
           </div>
           <div className={styles.edit}>
-            {asset.kind === 'document' ? (
-              // A Lopsy document is edited in Lopsy, as its .lopsy: the Edit view cannot open it.
+            {/* A Lopsy document opens in Lopsy as its .lopsy; Edit works on its flattened render. */}
+            <IconButton
+              size="sm"
+              label={asset.kind === 'document' ? 'Open in Lopsy' : 'Edit in Lopsy'}
+              icon={<Paintbrush size={16} />}
+              onClick={openFocusedInLopsy}
+            />
+            {isDevelopable(asset) ? (
               <IconButton
                 size="sm"
                 className={styles.editButton}
-                label="Open in Lopsy"
-                title="Open in Lopsy (Enter)"
-                icon={<Paintbrush size={16} />}
-                onClick={openFocusedInLopsy}
+                label="Edit"
+                title="Edit (Enter)"
+                icon={<SlidersHorizontal size={16} />}
+                onClick={openEdit}
               />
-            ) : (
-              <>
-                <IconButton size="sm" label="Edit in Lopsy" icon={<Paintbrush size={16} />} onClick={openFocusedInLopsy} />
-                <IconButton
-                  size="sm"
-                  className={styles.editButton}
-                  label="Edit"
-                  title="Edit (Enter)"
-                  icon={<SlidersHorizontal size={16} />}
-                  onClick={openEdit}
-                />
-              </>
-            )}
+            ) : null}
           </div>
         </div>
       )}

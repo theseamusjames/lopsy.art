@@ -9,7 +9,7 @@ import { generatedJpeg, importFiles } from './library';
  * bar below it with Set aside at its right end, the selected one in a box
  * of its own and the others as chips that scroll on their own up to four
  * versions, and as a dropdown in the box beyond; and a Lopsy document,
- * which opens in Lopsy and has no Edit button.
+ * which opens in Lopsy as its .lopsy and is edited here on its render.
  */
 
 test.use({ actionTimeout: 15_000 });
@@ -281,7 +281,7 @@ async function standInForLopsy(context: BrowserContext, photosOrigin: string): P
   );
 }
 
-test('a Lopsy document has no Edit button: it opens in Lopsy, as its .lopsy', async ({ page, context }) => {
+test('a Lopsy document has Open in Lopsy, which sends its .lopsy, and Edit, for its flattened render', async ({ page, context }) => {
   test.setTimeout(240_000);
   const view = await openPhotoInSingleView(page, 'source.jpg');
   await standInForLopsy(context, new URL(page.url()).origin);
@@ -292,7 +292,7 @@ test('a Lopsy document has no Edit button: it opens in Lopsy, as its .lopsy', as
   await lopsy.evaluate(() => (window as unknown as { saveToPhotonamous: (name: string) => Promise<void> }).saveToPhotonamous('Poster'));
   await expect(lopsy).toHaveTitle('Saved', { timeout: 60_000 });
 
-  // The document joins the photo's stack; opened in Single view, it has no Edit and no Edit in Lopsy, but Open in Lopsy.
+  // The document joins the photo's stack; opened in Single view, it has Open in Lopsy in place of Edit in Lopsy, and Edit.
   await view.getByRole('button', { name: 'Back to the grid' }).click();
   const photo = page.locator('[role="gridcell"][title="source.jpg"]');
   await photo.getByRole('button', { name: '1 Lopsy document', exact: true }).click();
@@ -300,7 +300,7 @@ test('a Lopsy document has no Edit button: it opens in Lopsy, as its .lopsy', as
   await documentTile.dblclick();
   const documentView = page.getByRole('region', { name: 'Poster.lopsy' });
   await expect(documentView.getByRole('button', { name: 'Open in Lopsy' })).toBeVisible();
-  await expect(documentView.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
+  await expect(documentView.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
   await expect(documentView.getByRole('button', { name: 'Edit in Lopsy' })).toHaveCount(0);
   await page.screenshot({ path: 'test-results/single-view-document.png' });
 

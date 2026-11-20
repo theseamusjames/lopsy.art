@@ -19,10 +19,11 @@ const version = (id: string, assetId: string, name: string, extra: Partial<Versi
   ...extra,
 });
 
-// A Lopsy document made from photo a, with a version of its own.
+// A Lopsy document made from photo a, with a version of its own, saved without a render; and one saved with its render.
 const doc = makeAsset('doc', { kind: 'document', fileName: 'a.lopsy', format: 'lopsy', source: { assetId: 'a', versionId: 'v-a', recipeHash: 'h' } });
+const rendered = makeAsset('rendered', { kind: 'document', fileName: 'r.lopsy', format: 'lopsy', renderFileId: 'r-png' });
 const view = makeView(
-  [makeAsset('a'), makeAsset('b'), doc, makeAsset('trashed', { deleted: true })],
+  [makeAsset('a'), makeAsset('b'), doc, rendered, makeAsset('trashed', { deleted: true })],
   [],
   [
     version('v2', 'a', 'Version 2', { thumb: thumb('thumb-v2') }),
@@ -35,9 +36,9 @@ const A2 = versionItemId('a', 'v2');
 const A3 = versionItemId('a', 'v3');
 
 describe('the Edit view’s filmstrip', () => {
-  it('leaves Lopsy documents out, their version tiles too', () => {
-    const ids = ['a', 'doc', versionItemId('doc', 'dv2'), 'b'];
-    expect(filmstripEntries(ids, view).map((e) => e.id)).toEqual(['a', 'b']);
+  it('has a Lopsy document with its render, edited on that render; leaves one without a render out, its version tiles too', () => {
+    const ids = ['a', 'doc', versionItemId('doc', 'dv2'), 'rendered', 'b'];
+    expect(filmstripEntries(ids, view).map((e) => e.id)).toEqual(['a', 'rendered', 'b']);
   });
 
   it('shows a photo’s open versions as their own tiles: named, with their own thumbnail, opening that version', () => {
@@ -57,9 +58,10 @@ describe('the Edit view’s filmstrip', () => {
     expect(filmstripEntries(ids, view).map((e) => e.id)).toEqual(['a']);
   });
 
-  it('opens what a tile shows, and never a document', () => {
+  it('opens what a tile shows, and never a document without its render', () => {
     expect(editTargetOf(view, 'a')).toEqual({ assetId: 'a', versionId: 'v-a' });
     expect(editTargetOf(view, A2)).toEqual({ assetId: 'a', versionId: 'v2' });
+    expect(editTargetOf(view, 'rendered')).toEqual({ assetId: 'rendered', versionId: 'v-rendered' });
     expect(editTargetOf(view, 'doc')).toBeNull();
     expect(editTargetOf(view, versionItemId('doc', 'dv2'))).toBeNull();
     expect(editTargetOf(view, 'missing')).toBeNull();

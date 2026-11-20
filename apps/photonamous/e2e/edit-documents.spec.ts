@@ -1,11 +1,12 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { waitForReady } from './harness';
+import { raiseExposure, waitForReady } from './harness';
 import { generatedJpeg, importFiles } from './library';
 
 /**
- * A Lopsy document never opens in the Edit view: Enter on it opens Lopsy
- * with its .lopsy instead, the tile menu offers Edit in Lopsy and no Edit,
- * and the Edit view's filmstrip and ← → go around it.
+ * A Lopsy document is edited in Photonamous on its flattened render, the
+ * PNG Lopsy saves with it: Enter and the tile menu's Edit open it in the
+ * Edit view, the filmstrip and ← → include it, and its edit shows on its
+ * tile. Edit in Lopsy still sends the document itself, as its .lopsy.
  *
  * Lopsy is played by a page served here at Lopsy's address (the dev
  * server's default, http://localhost:5173), which speaks the handoff
@@ -71,7 +72,7 @@ async function lopsyTab(context: BrowserContext, open: () => Promise<void>): Pro
   return { tab, kind: (await received()) ?? '' };
 }
 
-test('a Lopsy document opens in Lopsy, never in the Edit view', async ({ page, context }) => {
+test('a Lopsy document is edited on its flattened render, and goes to Lopsy as its .lopsy', async ({ page, context }) => {
   test.setTimeout(300_000);
   await standInForLopsy(context);
   await page.goto('/');
@@ -109,45 +110,41 @@ test('a Lopsy document opens in Lopsy, never in the Edit view', async ({ page, c
     'beta.jpg',
   ]);
 
-  // The tile menu offers Edit in Lopsy for it, and no Edit (a photo has both).
+  // The tile menu offers Edit in Lopsy and Edit for it, as for a photo; Edit in Lopsy sends the document itself.
   await documentTile.click();
   await documentTile.click({ button: 'right' });
-  await expect(menu.getByRole('menuitem', { name: 'Edit in Lopsy' })).toBeVisible();
-  await expect(menu.getByRole('menuitem', { name: 'Edit', exact: true })).toHaveCount(0);
-  await page.keyboard.press('Escape');
-  await alpha.click();
-  await alpha.click({ button: 'right' });
   await expect(menu.getByRole('menuitem', { name: 'Edit', exact: true })).toBeVisible();
-  await page.keyboard.press('Escape');
-
-  // Enter on the document opens Lopsy with its .lopsy; the Edit view stays closed.
-  await documentTile.click();
-  const reopened = await lopsyTab(context, () => page.keyboard.press('Enter'));
+  const reopened = await lopsyTab(context, () => menu.getByRole('menuitem', { name: 'Edit in Lopsy' }).click());
   expect(reopened.kind).toBe('lopsy');
-  await expect(page.getByTestId('edit-view')).toHaveCount(0);
-  await expect(page.getByTestId('edit-notice')).toHaveCount(0);
   await reopened.tab.close();
   await page.bringToFront();
 
-  // In the Edit view on alpha, the filmstrip leaves the document out, and → goes past it to beta.
-  await alpha.click();
+  // Enter on the document opens the Edit view, on its flattened render.
+  await documentTile.click();
+  const unedited = (await documentTile.getAttribute('data-preview-hash')) ?? '';
   await page.keyboard.press('Enter');
   await waitForReady(page, 60_000);
   const edit = page.getByTestId('edit-view');
   const title = edit.getByRole('heading', { level: 1 });
-  await expect(title).toHaveText('alpha.jpg');
-  const strip = edit.getByRole('navigation', { name: 'Filmstrip' });
-  await expect(strip.getByRole('button')).toHaveCount(2);
-  await expect(strip.getByRole('button', { name: 'alpha.jpg' })).toHaveAttribute('aria-current', 'true');
-  await expect(strip.getByRole('button', { name: 'beta.jpg' })).toBeVisible();
-  await expect(strip.getByRole('button', { name: /lopsy/ })).toHaveCount(0);
+  await expect(title).toHaveText('alpha.lopsy');
+  await expect(page.getByTestId('edit-notice')).toHaveCount(0);
 
+  // The filmstrip has it between the two photos, and ← → go through it.
+  const strip = edit.getByRole('navigation', { name: 'Filmstrip' });
+  await expect(strip.getByRole('button')).toHaveCount(3);
+  await expect(strip.getByRole('button', { name: 'alpha.lopsy' })).toHaveAttribute('aria-current', 'true');
   await page.locator('body').press('ArrowRight');
   await expect(title).toHaveText('beta.jpg');
   await waitForReady(page, 60_000);
-  await expect(strip.getByRole('button', { name: 'beta.jpg' })).toHaveAttribute('aria-current', 'true');
-  await page.screenshot({ path: 'test-results/edit-documents-filmstrip.png' });
   await page.locator('body').press('ArrowLeft');
-  await expect(title).toHaveText('alpha.jpg');
+  await expect(title).toHaveText('alpha.lopsy');
   await waitForReady(page, 60_000);
+  await page.screenshot({ path: 'test-results/edit-documents-filmstrip.png' });
+
+  // An edit on it is kept, and its tile shows it.
+  await raiseExposure(page, 5);
+  await expect(page.getByLabel('Exposure value')).toHaveValue('+0.50');
+  await edit.getByRole('button', { name: 'Library', exact: true }).click();
+  await expect(documentTile).toHaveAttribute('data-edited', 'true');
+  await expect(documentTile).not.toHaveAttribute('data-preview-hash', unedited, { timeout: 60_000 });
 });

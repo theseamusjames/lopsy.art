@@ -307,6 +307,7 @@ export class FakeBackend implements PhotosBackend {
   }
 
   async loadOriginal(session: LibrarySession, asset: Asset): Promise<Blob> {
+    if (asset.kind === 'document' && asset.renderFileId) return session.adapter.readContent(asset.renderFileId);
     const file = importedFileOf(asset.id);
     if (file) return file;
     const screen = session.getView().versions.get(asset.primaryVersionId)?.screen;

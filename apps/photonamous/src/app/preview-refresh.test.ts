@@ -100,6 +100,42 @@ describe('background previews', () => {
     expect(staleVersions(session.getView()).map((t) => t.versionId)).toEqual([versionId]);
   });
 
+  it('finds a Lopsy document edited on its flattened render, but not one saved without a render', async () => {
+    const { session } = await library();
+    const lopsyDocument = (fileName: string, renderFileId: string | null) =>
+      session.addAsset({
+        kind: 'document',
+        fileId: `${fileName}-file`,
+        sha256: fileName,
+        fileName,
+        byteSize: 3,
+        format: 'lopsy',
+        mimeType: 'application/x-lopsy',
+        capturedAt: null,
+        importedAt: '2026-01-02T00:00:00Z',
+        importId: 'lopsy',
+        width: 3,
+        height: 2,
+        orientation: 1,
+        camera: null,
+        lens: null,
+        exposure: null,
+        gps: null,
+        pairedWith: null,
+        source: null,
+        renderFileId,
+      }).versionId;
+    const rendered = lopsyDocument('poster.lopsy', 'poster-render');
+    const bare = lopsyDocument('old.lopsy', null);
+    for (const versionId of [rendered, bare]) {
+      for (const size of ['thumb', 'screen'] as const) {
+        session.setPreview(versionId, size, { fileId: `${versionId}-${size}`, recipeHash: recipeHash(DEFAULT_RECIPE), width: 3, height: 2 });
+      }
+      session.editRecipe(versionId, { 'tone.exposure': 0.5 }, 'Exposure');
+    }
+    expect(staleVersions(session.getView()).map((t) => t.versionId)).toEqual([rendered]);
+  });
+
   it('renders a version changed outside Edit and stores previews for its new recipe', async () => {
     const { session, versionId } = await library();
     const h = harness(session);

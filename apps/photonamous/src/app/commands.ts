@@ -6,6 +6,7 @@
 import type { AssetId, ColorLabel, LibraryHistory, LibrarySession, Rating, VersionId } from '@lopsy/photos-core/library/types';
 import { getBackend } from './backend-registry';
 import { openInLopsy } from './lopsy-handoff';
+import { isDevelopable } from '../library/develop-source';
 import { itemAssets, itemForVersion, itemVersionId, nextVersionName, parseItem, versionsByAsset, type ItemId } from '../library/items';
 import type { CommandId } from '../shortcuts/registry';
 import { useUi, type ViewMode } from './store';
@@ -316,7 +317,8 @@ export function openEdit(): void {
   const asset = view.assets.get(assetId);
   const versionId = itemVersionId(id, view);
   if (!asset || versionId === null) return;
-  if (asset.kind === 'document') return openInLopsy(s, assetId);
+  // A Lopsy document is edited on its flattened render; one saved without a render can only open in Lopsy.
+  if (!isDevelopable(asset)) return openInLopsy(s, assetId);
   useUi.getState().setEditing({ assetId, versionId });
 }
 

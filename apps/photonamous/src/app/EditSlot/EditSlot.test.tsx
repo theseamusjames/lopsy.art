@@ -127,7 +127,16 @@ describe('the Edit view’s filmstrip', () => {
   });
 });
 
-describe('a Lopsy document asked for in the Edit view', () => {
+describe('a Lopsy document with its flattened render', () => {
+  it('opens in the Edit view like a photo', () => {
+    const poster = session.addAsset({ ...lopsyDocument('poster.lopsy', 2), renderFileId: 'render-poster' });
+    show(poster.assetId, poster.versionId);
+    expect(rendered.props?.asset.id).toBe(poster.assetId);
+    expect(rendered.props?.version.id).toBe(poster.versionId);
+  });
+});
+
+describe('a Lopsy document saved without a render, asked for in the Edit view', () => {
   function showPoster(): AssetId {
     const poster = session.addAsset(lopsyDocument('DSCF8534 (1).lopsy', 2));
     show(poster.assetId, poster.versionId);
@@ -141,7 +150,7 @@ describe('a Lopsy document asked for in the Edit view', () => {
     const heading = host.querySelector('h1');
     expect(heading?.textContent).toBe('DSCF8534 (1).lopsy');
     expect(document.activeElement).toBe(heading);
-    expect(host.textContent).toContain('This is a Lopsy document. It opens in Lopsy, not in the Edit view.');
+    expect(host.textContent).toContain('This Lopsy document was saved without a flattened picture to edit here.');
     expect(document.title).toBe('DSCF8534 (1).lopsy – Lopsy document – Photonamous');
   });
 
