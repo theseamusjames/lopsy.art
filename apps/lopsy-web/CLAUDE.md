@@ -9,11 +9,13 @@ Read `SPEC.md` for the full product specification.
 
 ## Additional Guides
 - `e2e/GUIDE.md` — read this before writing any e2e tests.
-- `SKILL.md` — public guide for agents that create images by driving the
-  UI (published at `/SKILL.md`, along with `FEATURES.md`; indexed by
-  `public/llms.txt`). Its driver and selectors are tested against
-  lopsy.art, so update it when you change a label, aria-label or flow it
-  relies on.
+- `SKILL.md` — public guide for agents that create images through the
+  agent page's command API (published at `/SKILL.md`, along with
+  `FEATURES.md`; indexed by `public/llms.txt`).
+  `e2e/skill-recipes.spec.ts` runs its driver and every recipe against the
+  agent page and checks that every command id it names exists, so update
+  it in the same change when you rename a command or change what a recipe
+  relies on (a param, a refusal, an ambient-state rule).
 - `FEATURES.md` — the feature catalog. Describe current behaviour only: no
   bug tracking ("Known defect" notes, issue/PR numbers, "fixed in #N"
   history). Bugs live in GitHub issues; fix history lives in commits and PRs.
@@ -46,6 +48,8 @@ src/
     interactions/
       gesture-session.ts  # Canvas pointer down/move/up state machine, shared by
                           # the canvas hook and the gesture commands
+  agent/            # The agent page (agent/index.html, served at /agent/):
+                    # the canvas alone, with the command API as window.lopsy
   commands/         # Command registry and the commands, one directory per
                     # family (layer/, filter/, ui/, ...); see Commands below
   components/       # Reusable UI components (Button, Slider, etc.)
@@ -231,7 +235,9 @@ When the wait after a command's own work times out, the work has
 happened: the registry rejects with code `'unsettled'`, the command's
 result on the error's `result`, and a message saying not to run it
 again. `runAll` puts the results of the steps that completed before a
-failure on the error's `completed`.
+failure on the error's `completed`; when a step throws something that is
+not a `CommandError` (a bug), it rejects with a `StepFailure` carrying the
+same, the step's `index` and the original as `cause`.
 
 **Wrap, never re-implement.** A command calls the same function the UI
 calls, so the two cannot drift; when that function lives in a component

@@ -3,7 +3,8 @@
  * options-bar buttons (Rotate 90° CW / CCW, Flip Horizontal / Vertical)
  * followed by Cmd+D, for one layer with off-centre content and a mask, for
  * two layers selected together, and for a live text layer; then the
- * refusals.
+ * refusals. Other angles and scaling are handle drags:
+ * layer-transform-drag.spec.ts and layer-transform-drag-ui.spec.ts.
  */
 import { test, expect, run, runError, compareUiAndApi, type Page } from './harness';
 import { docToScreen } from '../helpers';
@@ -158,9 +159,8 @@ test.describe('layer.transform on its own', () => {
   });
 
   test('refusals', async ({ page }) => {
-    expect(await runError(page, { op: 'layer.transform' })).toEqual({ code: 'invalid', message: 'layer.transform: pass exactly one of rotate or flip.' });
-    expect(await runError(page, { op: 'layer.transform', rotate: 90, flip: 'vertical' })).toEqual({ code: 'invalid', message: 'layer.transform: pass exactly one of rotate or flip.' });
-    expect(await runError(page, { op: 'layer.transform', rotate: 45 })).toMatchObject({ code: 'invalid' });
+    expect(await runError(page, { op: 'layer.transform' })).toEqual({ code: 'invalid', message: 'layer.transform: pass exactly one of rotate, flip or scale.' });
+    expect(await runError(page, { op: 'layer.transform', rotate: 90, flip: 'vertical' })).toEqual({ code: 'invalid', message: 'layer.transform: pass exactly one of rotate, flip or scale.' });
     expect(await runError(page, { op: 'layer.transform', layer: 'Layer 1', layers: ['Layer 1', 'Layer 1'], rotate: 90 })).toMatchObject({ code: 'invalid' });
     expect(await runError(page, { op: 'layer.transform', flip: 'horizontal' })).toEqual({
       code: 'refused',

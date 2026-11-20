@@ -27,7 +27,7 @@ import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
 import { useCanvasInteraction } from './useCanvasInteraction';
 import { useBrushPrewarm } from './useBrushPrewarm';
-import { useCanvasRendering } from './useCanvasRendering';
+import { CanvasRenderer } from './CanvasRenderer';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import { useCanvasCursor } from './useCanvasCursor';
 import { useContextMenu } from './useContextMenu';
@@ -45,17 +45,6 @@ import { useDockedPanelAnchor } from './hooks/useDockedPanelAnchor';
 import { useReleaseToolbarButtonFocus } from './toolbar-button-focus';
 import { openProjectFromQuery } from '../io/project-url';
 import styles from './App.module.css';
-
-// Isolated component for canvas rendering — prevents renderVersion and
-// cursorPosition changes from re-rendering the entire App tree.
-function CanvasRenderer({ canvasRef, containerRef, overlayCanvasRef }: {
-  canvasRef: React.RefObject<HTMLCanvasElement | null>;
-  containerRef: React.RefObject<HTMLDivElement | null>;
-  overlayCanvasRef: React.RefObject<HTMLCanvasElement | null>;
-}) {
-  useCanvasRendering(canvasRef, containerRef, overlayCanvasRef);
-  return null;
-}
 
 export function App() {
   const [hasWebGL2] = useState(() => checkWebGL2Support());

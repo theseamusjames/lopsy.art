@@ -82,6 +82,13 @@ vi.mock('../../tools/text/apply-text-setting', () => ({
   endTextLayerHistory: settings.end,
 }));
 
+const color = vi.hoisted(() => ({ apply: vi.fn(), begin: vi.fn(), end: vi.fn() }));
+vi.mock('../../tools/text/apply-text-color', () => ({
+  applyTextColor: color.apply,
+  beginTextColorPick: color.begin,
+  endTextColorPick: color.end,
+}));
+
 vi.mock('../../app/interactions/gesture-session', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../app/interactions/gesture-session')>();
   return { ...actual, clearPersistentTransform: vi.fn() };
@@ -152,6 +159,7 @@ beforeEach(() => {
   for (const fn of [settings.family, settings.weight, settings.discrete, settings.apply]) fn.mockReset().mockResolvedValue(undefined);
   settings.begin.mockReset();
   settings.end.mockReset();
+  for (const fn of [color.apply, color.begin, color.end]) fn.mockReset();
 });
 
 describe('text.add', () => {
@@ -331,5 +339,107 @@ describe('text.style', () => {
       code: 'invalid',
       message: expect.stringMatching(/^text\.style: options\.fontSize must be from 1 to /),
     });
+  });
+});
+
+describe('text.style with the Text panel\'s sliders', () => {
+  it('brackets lineHeight, letterSpacing and paragraphSpacing each in its own history, as the sliders do', async () => {
+    const layer = addText('Hello');
+    useEditorStore.getState().setActiveLayer(layer.id);
+    const order: string[] = [];
+    settings.begin.mockImplementation(() => order.push('begin'));
+    settings.apply.mockImplementation((...args: unknown[]) => {
+      order.push(`apply ${args.join(' ')}`);
+      return Promise.resolve();
+    });
+    settings.end.mockImplementation(() => order.push('end'));
+    await runCommand('text.style', { options: { lineHeight: 2, letterSpacing: -4.5, paragraphSpacing: 30 } });
+    expect(order).toEqual([
+      'begin', 'apply lineHeight 2', 'end',
+      'begin', 'apply letterSpacing -4.5', 'end',
+      'begin', 'apply paragraphSpacing 30', 'end',
+    ]);
+    expect(settings.discrete).not.toHaveBeenCalled();
+  });
+
+  it('takes the sliders\' ranges', async () => {
+    const layer = addText('Hello');
+    useEditorStore.getState().setActiveLayer(layer.id);
+    for (const options of [{ lineHeight: 0.4 }, { lineHeight: 4.1 }, { letterSpacing: -21 }, { letterSpacing: 201 }, { paragraphSpacing: -1 }, { paragraphSpacing: 201 }]) {
+      expect((await failure(runCommand('text.style', { options }))).code).toBe('invalid');
+    }
+    expect(settings.apply).not.toHaveBeenCalled();
+  });
+});
+
+describe('text.set-color', () => {
+  it('makes the layer active, then picks the colour once as the text colour control does, leaving the foreground alone', async () => {
+    const layer = addText('Hello');
+    useEditorStore.getState().setActiveLayer(useEditorStore.getState().document.layers[1]!.id);
+    const { useToolSettingsStore } = await import('../../app/tool-settings-store');
+    const foreground = useToolSettingsStore.getState().foregroundColor;
+    const order: string[] = [];
+    color.begin.mockImplementation(() => order.push('begin'));
+    color.apply.mockImplementation((c: unknown) => {
+      order.push('apply');
+      expect(useEditorStore.getState().document.activeLayerId).toBe(layer.id);
+      useEditorStore.getState().updateTextLayerProperties(layer.id, { color: c as TextLayer['color'] });
+    });
+    color.end.mockImplementation(() => order.push('end'));
+    const result = await runCommand('text.set-color', { layer: 'Hello', color: '#ff8000' });
+    expect(order).toEqual(['begin', 'apply', 'end']);
+    expect(color.apply).toHaveBeenCalledWith({ r: 255, g: 128, b: 0, a: 1 });
+    expect(result).toEqual({ id: layer.id, name: 'Hello', color: '#ff8000' });
+    expect(useToolSettingsStore.getState().foregroundColor).toEqual(foreground);
+  });
+
+  it('does nothing when the layer already has the colour throughout, and picks when ranges hold others', async () => {
+    const layer = addText('Hello');
+    useEditorStore.getState().setActiveLayer(layer.id);
+    expect(await runCommand('text.set-color', { color: '#000' })).toMatchObject({ color: '#000000' });
+    expect(color.begin).not.toHaveBeenCalled();
+    useEditorStore.getState().updateTextLayerProperties(layer.id, { colorSpans: [{ start: 0, end: 2, color: { r: 255, g: 0, b: 0, a: 1 } }] });
+    await runCommand('text.set-color', { color: '#000000' });
+    expect(color.apply).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a raster layer and text being edited, and rejects a colour that is not hex', async () => {
+    expect(await failure(runCommand('text.set-color', { color: '#ffffff' }))).toMatchObject({ code: 'refused', message: '"Layer 1" is not a text layer.' });
+    const layer = addText('Hello');
+    startEditing(layer.id, false);
+    expect(await failure(runCommand('text.set-color', { layer: 'Hello', color: '#ffffff' }))).toMatchObject({
+      code: 'refused', message: 'Text is being edited: commit it first (for example with tool.select).',
+    });
+    expect((await failure(runCommand('text.set-color', { layer: 'Hello', color: 'red' }))).code).toBe('invalid');
+    expect(color.apply).not.toHaveBeenCalled();
+  });
+});
+
+describe('text.fonts', () => {
+  it('lists the picker\'s catalogue alphabetically with the total, and works with no document open', async () => {
+    const { FONT_CATALOG } = await import('../../utils/font-catalog');
+    useEditorStore.setState({ documentReady: false });
+    const all = (await runCommand('text.fonts', { limit: FONT_CATALOG.length })) as { total: number; fonts: Array<{ family: string }> };
+    expect(all.total).toBe(FONT_CATALOG.length);
+    const families = all.fonts.map((f) => f.family);
+    expect(families).toEqual([...families].sort((a, b) => a.localeCompare(b)));
+    const first = (await runCommand('text.fonts', {})) as { total: number; fonts: unknown[] };
+    expect([first.total, first.fonts.length]).toEqual([FONT_CATALOG.length, 50]);
+  });
+
+  it('filters by category and a case-insensitive substring, and gives each family\'s weights and italic', async () => {
+    const result = (await runCommand('text.fonts', { query: 'MONTSERRAT', category: 'sans-serif' })) as {
+      total: number;
+      fonts: Array<{ family: string; category: string; weights: number[]; hasItalic: boolean }>;
+    };
+    expect(result.fonts.map((f) => f.family)).toContain('Montserrat');
+    expect(result.total).toBe(result.fonts.length);
+    for (const font of result.fonts) {
+      expect(font.family.toLowerCase()).toContain('montserrat');
+      expect(font.category).toBe('sans-serif');
+    }
+    expect(result.fonts.find((f) => f.family === 'Montserrat')).toMatchObject({ hasItalic: true, weights: expect.arrayContaining([400, 700]) });
+    expect(((await runCommand('text.fonts', { query: 'no such family' })) as { total: number }).total).toBe(0);
+    expect((await failure(runCommand('text.fonts', { category: 'script' }))).code).toBe('invalid');
   });
 });

@@ -60,6 +60,8 @@ const LABELS: Record<string, string> = {
   'filter.desaturate': 'Desaturate',
   'filter.color-lut': 'Color LUT',
   'filter.pattern-fill': 'Pattern Fill',
+  'filter.mesh-warp': 'Mesh Warp',
+  'filter.tilt-shift': 'Tilt-Shift Blur',
 };
 
 async function paintLayer(page: Page): Promise<void> {

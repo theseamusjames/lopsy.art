@@ -70,6 +70,31 @@ export class SettleTimeoutError extends CommandError {
   }
 }
 
+/**
+ * From runAll: a step threw something that is not a CommandError (a bug in a
+ * command). Like runAll's CommandError it says which step failed and carries
+ * the results of the steps before it; the original is its `cause`.
+ */
+export class StepFailure extends Error {
+  readonly cause: unknown;
+  readonly index: number;
+  readonly completed: readonly unknown[];
+
+  constructor(cause: unknown, index: number, label: string, completed: readonly unknown[]) {
+    super(`[${index}] ${label}: ${describeThrown(cause)}`);
+    this.name = 'StepFailure';
+    this.cause = cause;
+    this.index = index;
+    this.completed = completed;
+  }
+}
+
+/** "TypeError: message" for an Error, the value itself otherwise. */
+export function describeThrown(value: unknown): string {
+  if (value instanceof Error) return `${value.name}: ${value.message}`;
+  return String(value);
+}
+
 export function isCommandErrorCode(value: unknown): value is CommandErrorCode {
   return typeof value === 'string' && (ERROR_CODES as readonly string[]).includes(value);
 }

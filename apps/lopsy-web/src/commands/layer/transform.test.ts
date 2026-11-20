@@ -60,6 +60,8 @@ vi.mock('../../app/interactions/layer-transform', () => ({
   textInLayerTransformRefusal: () => box.textRefusal,
 }));
 const read = vi.hoisted(() => vi.fn(() => Promise.resolve(null)));
+const drag = vi.hoisted(() => ({ run: vi.fn() }));
+vi.mock('./transform-drag', () => ({ dragTransform: drag.run }));
 vi.mock('../../app/layer-content-rect', () => ({ readLayerContentRectLocal: read }));
 
 const { useEditorStore } = await import('../../app/editor-store');
@@ -104,6 +106,10 @@ beforeEach(() => {
   box.targets = [];
   box.textRefusal = null;
   read.mockClear();
+  drag.run.mockReset().mockImplementation((step: { kind: string }, _isBox: boolean, layer: { id: string }) => Promise.resolve({
+    layers: [layer.id],
+    outcome: step.kind === 'rotate' ? { rotate: 30 } : { scale: { x: 2, y: 2 } },
+  }));
 });
 
 describe('layer.transform', () => {
@@ -150,10 +156,53 @@ describe('layer.transform', () => {
     expect(buttons.flip).not.toHaveBeenCalled();
   });
 
-  it('takes exactly one quarter turn or flip', async () => {
+  it('takes exactly one of rotate, flip or scale', async () => {
     expect((await failure(runCommand('layer.transform', {}))).code).toBe('invalid');
     expect((await failure(runCommand('layer.transform', { rotate: 90, flip: 'horizontal' }))).code).toBe('invalid');
-    expect((await failure(runCommand('layer.transform', { rotate: 180 }))).code).toBe('invalid');
+    expect((await failure(runCommand('layer.transform', { rotate: 30, scale: { x: 2, y: 2 } }))).code).toBe('invalid');
+    expect((await failure(runCommand('layer.transform', { rotate: 0 }))).message).toBe('layer.transform: rotate 0 turns nothing.');
+    expect((await failure(runCommand('layer.transform', { rotate: 360 }))).code).toBe('invalid');
+    expect((await failure(runCommand('layer.transform', { rotate: 361 }))).code).toBe('invalid');
+    expect((await failure(runCommand('layer.transform', { scale: { x: 0.01, y: 1 } }))).code).toBe('invalid');
+    expect((await failure(runCommand('layer.transform', { scale: { x: 1, y: 1 } }))).code).toBe('invalid');
+    expect((await failure(runCommand('layer.transform', { scale: { x: 2, y: 2 }, anchor: 'top' }))).message).toContain('scales only y');
+    expect((await failure(runCommand('layer.transform', { rotate: 30, anchor: 'top' }))).message).toBe('layer.transform: anchor goes with scale only.');
     expect((await failure(runCommand('layer.transform', { layer: 'Layer 1', layers: ['a', 'b'], rotate: 90 }))).code).toBe('invalid');
+    expect(drag.run).not.toHaveBeenCalled();
+  });
+
+  it('drags a handle for any other angle, in radians, with the Move tool selected', async () => {
+    const id = useEditorStore.getState().document.activeLayerId;
+    await expect(runCommand('layer.transform', { rotate: 180 })).resolves.toEqual({ layers: [id], rotate: 30 });
+    expect(useUIStore.getState().activeTool).toBe('move');
+    const [step, isBox, layer] = drag.run.mock.calls[0]!;
+    expect(step).toEqual({ kind: 'rotate', angle: Math.PI });
+    expect(isBox).toBe(false);
+    expect(layer).toMatchObject({ id });
+    expect(buttons.rotate).not.toHaveBeenCalled();
+  });
+
+  it('drags a scale handle, from the top-left by default, and through the shared box for several layers', async () => {
+    await runCommand('layer.transform', { scale: { x: 2, y: 0.5 } });
+    expect(drag.run.mock.calls[0]![0]).toEqual({ kind: 'scale', factor: { x: 2, y: 0.5 }, anchor: 'top-left' });
+    useEditorStore.getState().addLayer();
+    const [first, second] = ids();
+    buttons.wantsBox.mockReturnValue(true);
+    box.targets = [first!, second!];
+    box.current = createTransformState({ x: 0, y: 0, width: 10, height: 10 });
+    await runCommand('layer.transform', { layers: [first!, second!], scale: { x: 1, y: 3 }, anchor: 'bottom' });
+    const [step, isBox, , measure] = drag.run.mock.calls[1]!;
+    expect(step).toEqual({ kind: 'scale', factor: { x: 1, y: 3 }, anchor: 'bottom' });
+    expect(isBox).toBe(true);
+    await (measure as () => Promise<void>)();
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses a drag while a marquee is active, as it refuses the buttons', async () => {
+    const { width, height } = useEditorStore.getState().document;
+    useEditorStore.getState().setSelection({ x: 0, y: 0, width: 4, height: 4 }, Uint8ClampedArray.from({ length: width * height }, () => 255), width, height);
+    expect(await failure(runCommand('layer.transform', { rotate: 45 }))).toMatchObject({ code: 'refused', message: expect.stringContaining('A marquee is active') });
+    expect(await failure(runCommand('layer.transform', { scale: { x: 2, y: 2 } }))).toMatchObject({ code: 'refused' });
+    expect(drag.run).not.toHaveBeenCalled();
   });
 });
