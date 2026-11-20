@@ -491,7 +491,8 @@ best-practice rules at each step; the `a11y-*.spec.ts` and
 - **Rating stars and colour labels** are one Tab stop each; the arrow
   keys choose, Space on the chosen star clears the rating, and every
   label is named in words ("Red label").
-- **Toasts.** Errors are announced at once and other messages politely. A
+- **Toasts.** They sit at the bottom right, clear of the panels that float
+  over the photo. Errors are announced at once and other messages politely. A
   toast stays while it is hovered or focused, Escape dismisses it, and
   its Undo also dismisses it.
 - **Announcements.** Saving state, originals downloads, Check library's
