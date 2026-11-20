@@ -4,6 +4,7 @@ import { formatDimension, toPixels, type DimensionUnit } from '../../utils/dimen
 import styles from './ImageSizeModal.module.css';
 import { clampDocumentSide } from '../../utils/document-size';
 import { getMaxDocumentSide } from '../../engine-wasm/gpu-limits';
+import { invokeFromUi } from '../../commands/invoke-from-ui';
 
 interface ImageSizeModalProps {
   onClose: () => void;
@@ -12,7 +13,6 @@ interface ImageSizeModalProps {
 export function ImageSizeModal({ onClose }: ImageSizeModalProps) {
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
-  const resizeImage = useEditorStore((s) => s.resizeImage);
 
   const [unit, setUnit] = useState<DimensionUnit>('px');
   const [dpi, setDpi] = useState('72');
@@ -74,9 +74,9 @@ export function ImageSizeModal({ onClose }: ImageSizeModalProps) {
     const maxSide = getMaxDocumentSide();
     const w = clampDocumentSide(pxW, maxSide);
     const h = clampDocumentSide(pxH, maxSide);
-    resizeImage(w, h);
+    invokeFromUi('image.size', { width: w, height: h });
     onClose();
-  }, [width, height, unit, dpi, docWidth, docHeight, resizeImage, onClose]);
+  }, [width, height, unit, dpi, docWidth, docHeight, onClose]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {

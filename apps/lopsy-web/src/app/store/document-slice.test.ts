@@ -16,6 +16,8 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
 }
 
 const { useEditorStore } = await import('../editor-store');
+const { useNotificationsStore } = await import('../notifications-store');
+const { layerCreationRefusal } = await import('./document-slice');
 
 function getState() {
   return useEditorStore.getState();
@@ -206,5 +208,40 @@ describe('document-slice action orchestration', () => {
     getState().addLayer();
     const labels = undoLabels();
     expect(labels.filter((l) => l === 'Add Layer').length).toBe(2);
+  });
+});
+
+describe('layerCreationRefusal', () => {
+  const INDEXED_REASON = 'Indexed mode does not support layers. Convert to RGB first.';
+
+  beforeEach(() => {
+    getState().createDocument(10, 10, false);
+    useNotificationsStore.setState({ notifications: [] });
+  });
+
+  it('null for every mode that keeps a layer stack', () => {
+    for (const colorMode of ['rgb', 'grayscale', 'lab', 'cmyk'] as const) {
+      expect(layerCreationRefusal({ colorMode }), colorMode).toBeNull();
+    }
+  });
+
+  it('pins the Indexed toast and has no side effects', () => {
+    expect(layerCreationRefusal({ colorMode: 'indexed' })).toEqual({ reason: INDEXED_REASON, notice: 'info' });
+    expect(useNotificationsStore.getState().notifications).toHaveLength(0);
+  });
+
+  it('addLayer in an Indexed document refuses with exactly one info toast', () => {
+    useEditorStore.setState({ document: { ...getState().document, colorMode: 'indexed' } });
+    const before = layerCount();
+    getState().addLayer();
+    expect(layerCount()).toBe(before);
+    expect(useNotificationsStore.getState().notifications.map((n) => [n.level, n.message])).toEqual([
+      ['info', INDEXED_REASON],
+    ]);
+  });
+
+  it('addLayer in an RGB document shows no toast', () => {
+    getState().addLayer();
+    expect(useNotificationsStore.getState().notifications).toHaveLength(0);
   });
 });

@@ -1,7 +1,7 @@
 import { Slider } from '../../components/Slider/Slider';
 import type { GlowEffect } from '../../types';
 import { useEditorStore } from '../../app/editor-store';
-import { docScaledMax } from '../../utils/slider-ranges';
+import { effectSliderLimits } from './effect-list';
 import { EffectColorInput } from './EffectColorInput';
 import styles from './LayerEffectsPanel.module.css';
 
@@ -15,8 +15,9 @@ interface GlowFormProps {
 export function GlowForm({ glow, onChange, onColorEditStart, onDragStart }: GlowFormProps) {
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
-  const sizeMax = docScaledMax(docWidth, docHeight, 100);
-  const spreadMax = docScaledMax(docWidth, docHeight, 100);
+  const limits = effectSliderLimits(docWidth, docHeight);
+  const sizeMax = limits.glowSizeMax;
+  const spreadMax = limits.glowSpreadMax;
 
   return (
     <>

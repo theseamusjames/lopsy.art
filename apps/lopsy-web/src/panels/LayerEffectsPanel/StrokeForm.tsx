@@ -1,7 +1,7 @@
 import { Slider } from '../../components/Slider/Slider';
 import type { StrokeEffect } from '../../types';
 import { useEditorStore } from '../../app/editor-store';
-import { docScaledMax } from '../../utils/slider-ranges';
+import { effectSliderLimits } from './effect-list';
 import { EffectColorInput } from './EffectColorInput';
 import styles from './LayerEffectsPanel.module.css';
 
@@ -15,7 +15,7 @@ interface StrokeFormProps {
 export function StrokeForm({ stroke, onChange, onColorEditStart, onDragStart }: StrokeFormProps) {
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
-  const widthMax = docScaledMax(docWidth, docHeight, 50);
+  const widthMax = effectSliderLimits(docWidth, docHeight).strokeWidthMax;
 
   return (
     <>

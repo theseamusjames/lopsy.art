@@ -403,6 +403,18 @@ export function commitTextEditing(): void {
   editorState.notifyRender();
 }
 
+/** The text layer a Text-tool click at `canvasPos` (outside an edit) would enter editing on, or null when it would create one. */
+export function textLayerAt(canvasPos: Point): TextLayer | null {
+  const engine = getEngine();
+  return hitTestTextLayer(
+    useEditorStore.getState().document.layers,
+    canvasPos,
+    engine ? engineRenderedSize(engine) : undefined,
+    engine ? (layer) => measureTextFrame(engine, layer) : undefined,
+    getPathTextGlyphBoxes,
+  );
+}
+
 export function handleTextDown(ctx: InteractionContext): InteractionState | undefined {
   const { canvasPos, activeLayerId, activeLayer } = ctx;
   const uiState = useUIStore.getState();
@@ -472,14 +484,7 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
   }
 
   // Click on an existing text layer enters edit mode for it.
-  const hitEngine = getEngine();
-  const hitLayer = hitTestTextLayer(
-    editorState.document.layers,
-    canvasPos,
-    hitEngine ? engineRenderedSize(hitEngine) : undefined,
-    hitEngine ? (layer) => measureTextFrame(hitEngine, layer) : undefined,
-    getPathTextGlyphBoxes,
-  );
+  const hitLayer = textLayerAt(canvasPos);
   if (hitLayer) {
     loadTextSettingsFromLayer(hitLayer);
     useToolSettingsStore.getState().setForegroundColor(hitLayer.color);

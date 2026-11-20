@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react';
-import type { ToolEvent } from '../useCanvasInteraction';
+import type { ToolEvent } from '../interactions/gesture-session';
 import { useEditorStore } from '../editor-store';
 import { useUIStore } from '../ui-store';
 import { isPanning, POINTER_IDLE, type PointerMode } from '../pointer-mode';

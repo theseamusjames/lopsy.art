@@ -67,16 +67,20 @@ function draftAnchorsInDocSpace(anchors: readonly PathAnchor[]): PathAnchor[] {
 /** Commit the current ephemeral path to the paths store. */
 export function commitCurrentPath(): void {
   const uiState = useUIStore.getState();
-  const editorState = useEditorStore.getState();
   const draft = uiState.pathDraft;
   if (!draft || draft.anchors.length < 2) {
     uiState.clearPath();
     return;
   }
-  const docAnchors = draftAnchorsInDocSpace(draft.anchors);
-  editorState.pushHistoryMetadata('Add Path');
-  editorState.addPath(docAnchors, draft.closed);
+  addPathWithHistory(draftAnchorsInDocSpace(draft.anchors), draft.closed);
   uiState.clearPath();
+}
+
+/** Store a path (anchors in document space) as committing a Pen draft does: "Add Path", and it becomes the selected path. */
+export function addPathWithHistory(docAnchors: readonly PathAnchor[], closed: boolean): void {
+  const editorState = useEditorStore.getState();
+  editorState.pushHistoryMetadata('Add Path');
+  editorState.addPath(docAnchors, closed);
 }
 
 function strokeOntoLayer(layerId: string, docAnchors: readonly PathAnchor[], closed: boolean): void {

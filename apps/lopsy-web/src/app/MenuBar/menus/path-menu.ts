@@ -1,77 +1,14 @@
-import { useEditorStore } from '../../editor-store';
-import { booleanOp } from '../../../tools/path/boolean-ops';
-import type { BooleanOp } from '../../../tools/path/boolean-ops';
+import { commandItem } from './command-item';
 import type { MenuDef } from './types';
-
-export type { BooleanOp };
-
-const BOOLEAN_OP_LABELS: Record<BooleanOp, string> = {
-  union: 'Unite Paths',
-  subtract: 'Subtract Paths',
-  intersect: 'Intersect Paths',
-  exclude: 'Exclude Paths',
-};
-
-/**
- * Apply a boolean path operation between the selected path and the most
- * recently created other path. The two source paths are removed and replaced
- * by the result path.
- *
- * Requires: at least 2 paths exist and one is selected.
- */
-export function applyBooleanOp(op: BooleanOp): void {
-  const state = useEditorStore.getState();
-  const { paths, selectedPathId } = state;
-
-  if (paths.length < 2 || selectedPathId === null) return;
-
-  const pathA = paths.find((p) => p.id === selectedPathId);
-  if (!pathA) return;
-
-  // Use the most recently added path that isn't pathA as pathB
-  const otherPaths = paths.filter((p) => p.id !== selectedPathId);
-  const pathB = otherPaths[otherPaths.length - 1];
-  if (!pathB) return;
-
-  const result = booleanOp(
-    { anchors: pathA.anchors, closed: true },
-    { anchors: pathB.anchors, closed: true },
-    op,
-  );
-
-  if (!result.hasArea || result.paths.length === 0) return;
-
-  state.pushHistoryMetadata(BOOLEAN_OP_LABELS[op]);
-  state.removePath(pathA.id, true);
-  state.removePath(pathB.id, true);
-
-  // Paths hold a single contour, so a hole or a second island becomes its
-  // own path, as Selection → Path does. addPath selects each new path.
-  for (const anchors of result.paths) {
-    state.addPath(anchors, true);
-  }
-}
 
 export function createPathMenu(): MenuDef {
   return {
     label: 'Path',
     items: [
-      {
-        label: 'Unite Paths',
-        action: () => applyBooleanOp('union'),
-      },
-      {
-        label: 'Subtract Paths',
-        action: () => applyBooleanOp('subtract'),
-      },
-      {
-        label: 'Intersect Paths',
-        action: () => applyBooleanOp('intersect'),
-      },
-      {
-        label: 'Exclude Paths',
-        action: () => applyBooleanOp('exclude'),
-      },
+      commandItem('Unite Paths', 'path.unite'),
+      commandItem('Subtract Paths', 'path.subtract'),
+      commandItem('Intersect Paths', 'path.intersect'),
+      commandItem('Exclude Paths', 'path.exclude'),
     ],
   };
 }

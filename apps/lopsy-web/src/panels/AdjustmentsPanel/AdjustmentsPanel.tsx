@@ -22,45 +22,13 @@ import { NODE_CONTROLS_MAP } from './controls/node-controls-map';
 import { createRepeatPressDetector } from '../../utils/repeat-press';
 import { placeAddMenu, type AddMenuPlacement } from './add-menu-placement';
 import { useEscapeDismiss } from '../../app/shortcuts/escape-dismiss';
+import { ADD_MENU_TYPES, adjustmentsPanelGroup } from './adjustments-panel-target';
 import styles from './AdjustmentsPanel.module.css';
-
-/** Node types available in the Add menu. New types (color-balance, etc.) are
- *  listed with a "(coming soon)" suffix but are still addable — their controls
- *  will show a placeholder until GPU shaders are wired up. */
-const ADD_MENU_TYPES: AdjustmentNodeType[] = [
-  'exposure',
-  'contrast',
-  'highlights-shadows',
-  'saturation',
-  'vignette',
-  'curves',
-  'levels',
-  'hue-saturation',
-  'color-balance',
-  'color-grading',
-  'invert',
-  'black-white',
-  'photo-filter',
-  'channel-mixer',
-  'gradient-map',
-];
 
 const LEGACY_ONLY_TYPES = new Set<AdjustmentNodeType>();
 
 function useActiveGroup(): GroupLayer | null {
-  return useEditorStore((s) => {
-    const activeId = s.document.activeLayerId;
-    if (activeId) {
-      const active = s.document.layers.find((l) => l.id === activeId);
-      if (active?.type === 'group') return active as GroupLayer;
-    }
-    const rootId = s.document.rootGroupId;
-    if (rootId) {
-      const root = s.document.layers.find((l) => l.id === rootId);
-      if (root?.type === 'group') return root as GroupLayer;
-    }
-    return null;
-  });
+  return useEditorStore((s) => adjustmentsPanelGroup(s.document));
 }
 
 interface AdjustmentsPanelProps {

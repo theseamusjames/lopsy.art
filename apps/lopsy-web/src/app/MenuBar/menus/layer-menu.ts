@@ -1,34 +1,18 @@
-import { useEditorStore } from '../../editor-store';
-import { useUIStore } from '../../ui-store';
-import { canMergeDown } from '../../store/actions/merge-down';
+import { commandItem } from './command-item';
 import type { MenuDef } from './types';
 
 export function createLayerMenu(): MenuDef {
-  const disableMergeDown = !canMergeDown(useEditorStore.getState().document);
   return {
     label: 'Layer',
     items: [
-      { label: 'New Layer', shortcut: '\u21E7\u2318N', action: () => useEditorStore.getState().addLayer() },
-      { label: 'Duplicate Layer', shortcut: '\u2318J', action: () => useEditorStore.getState().duplicateLayer() },
-      { label: 'Group Layers', shortcut: '\u2318G', action: () => useEditorStore.getState().groupSelectedLayers() },
+      commandItem('New Layer', 'layer.add', undefined, '⇧⌘N'),
+      commandItem('Duplicate Layer', 'ui.layer.duplicate', undefined, '⌘J'),
+      commandItem('Group Layers', 'layer.group', undefined, '⌘G'),
       { separator: true, label: '' },
-      {
-        label: 'Adjustment Layer\u2026',
-        action: () => {
-          const rootGroupId = useEditorStore.getState().document.rootGroupId;
-          if (rootGroupId) useEditorStore.getState().setActiveLayer(rootGroupId);
-          useUIStore.getState().setShowEffectsDrawer(true);
-          useUIStore.getState().openModal({ kind: 'adjustmentLayerInfo' });
-        },
-      },
+      commandItem('Adjustment Layer…', 'ui.layer.adjustment-layer'),
       { separator: true, label: '' },
-      {
-        label: 'Merge Down',
-        shortcut: '\u2318E',
-        action: () => useEditorStore.getState().mergeDown(),
-        disabled: disableMergeDown,
-      },
-      { label: 'Flatten Image', action: () => void useEditorStore.getState().flattenImage() },
+      commandItem('Merge Down', 'layer.merge-down', undefined, '⌘E'),
+      commandItem('Flatten Image', 'layer.flatten'),
     ],
   };
 }

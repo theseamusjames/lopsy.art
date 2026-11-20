@@ -103,7 +103,7 @@ vi.mock('../../app/tool-settings-store', () => ({
   useToolSettingsStore: { getState: () => ts },
 }));
 
-import { handleFillDown } from './fill-interaction';
+import { bucketSeedRefusal, handleFillDown } from './fill-interaction';
 import { isMaskDataStale, materializeAllMaskData, __resetMaskDataSyncForTest } from '../../app/mask-data-sync';
 import type { InteractionContext } from '../../app/interactions/interaction-types';
 
@@ -415,5 +415,32 @@ describe('bucket fill — layer mask mode', () => {
     expect(editorState.pushHistory).toHaveBeenCalledWith('Bucket Fill');
     expect(fillMask).not.toHaveBeenCalled();
     expect(floodFill).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('bucketSeedRefusal', () => {
+  const none = { active: false, mask: null };
+
+  it('fills any pixel inside the document when nothing is selected', () => {
+    expect(bucketSeedRefusal({ x: 0, y: 0 }, 4, 3, none)).toBeNull();
+    expect(bucketSeedRefusal({ x: 3, y: 2 }, 4, 3, none)).toBeNull();
+  });
+
+  it('silently refuses a pixel outside the document', () => {
+    expect(bucketSeedRefusal({ x: 4, y: 0 }, 4, 3, none)).toEqual({
+      reason: '(4, 0) is outside the 4x3 document: a Paint Bucket click there fills nothing.',
+      notice: null,
+    });
+    expect(bucketSeedRefusal({ x: 0, y: -1 }, 4, 3, none)?.notice).toBeNull();
+  });
+
+  it('silently refuses a pixel the selection does not cover, and fills one it partly covers', () => {
+    const selection = { active: true, mask: Uint8ClampedArray.from([0, 1, 255, 0]) };
+    expect(bucketSeedRefusal({ x: 0, y: 0 }, 2, 2, selection)).toEqual({
+      reason: '(0, 0) is outside the selection: the Paint Bucket fills only inside it, and a click outside does nothing.',
+      notice: null,
+    });
+    expect(bucketSeedRefusal({ x: 1, y: 0 }, 2, 2, selection)).toBeNull();
+    expect(bucketSeedRefusal({ x: 0, y: 0 }, 2, 2, { active: false, mask: selection.mask })).toBeNull();
   });
 });

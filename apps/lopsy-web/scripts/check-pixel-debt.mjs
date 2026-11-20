@@ -147,7 +147,8 @@ const ALLOWLIST = {
   // ──────────────────────────────────────────────────────────────────────
   // File I/O — produce raw buffers for encoders / parsers / loaders.
   // ──────────────────────────────────────────────────────────────────────
-  'src/app/MenuBar/menus/file-menu.ts': 2,                   // PNG export + JPEG export
+  'src/app/MenuBar/menus/file-menu.ts': 1,                   // Export dialog preview composite
+  'src/io/export-image.ts': 1,                               // export composite (PNG/JPEG/WebP/BMP), moved from file-menu.ts
   'src/io/project-load.ts': 1,                               // .lopsy project unpack
   'src/io/psd.ts': 2,                                        // leaf + group mask unpack
 
@@ -197,7 +198,7 @@ const ALLOWLIST = {
   // ──────────────────────────────────────────────────────────────────────
   // Transform matrices — Float32Array is the WebGL matrix shape.
   // ──────────────────────────────────────────────────────────────────────
-  'src/app/OptionsBar/tool-options/TransformControls.tsx': 4,
+  'src/app/interactions/move-transform-buttons.ts': 4,       // the Move options' flip and quarter-turn matrices
   'src/app/interactions/transform-handlers.ts': 2,
   'src/tools/transform/transform.ts': 2,
 };

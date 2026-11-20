@@ -83,6 +83,11 @@ export async function defineBrush(asColor: boolean = false): Promise<void> {
   const name = prompt('Brush name:');
   if (!name) return;
 
+  addBrushPreset(tip, name);
+}
+
+/** A custom preset from `tip`, added to the presets and made active, as Define Brush... does once it has a name. */
+export function addBrushPreset(tip: BrushTipData, name: string): BrushPreset {
   brushCounter++;
   const preset: BrushPreset = {
     id: `defined-brush-${Date.now()}-${brushCounter}`,
@@ -101,4 +106,5 @@ export async function defineBrush(asColor: boolean = false): Promise<void> {
   const store = useToolSettingsStore.getState();
   store.addPreset(preset);
   store.setActivePreset(preset.id);
+  return preset;
 }

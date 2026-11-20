@@ -4,9 +4,8 @@ import { formatDimension, toPixels, type DimensionUnit } from '../../utils/dimen
 import styles from './CanvasSizeModal.module.css';
 import { clampDocumentSide } from '../../utils/document-size';
 import { getMaxDocumentSide } from '../../engine-wasm/gpu-limits';
-
-type AnchorX = 0 | 0.5 | 1;
-type AnchorY = 0 | 0.5 | 1;
+import { anchorWords, CANVAS_ANCHORS, type AnchorX, type AnchorY } from './canvas-anchor';
+import { invokeFromUi } from '../../commands/invoke-from-ui';
 
 interface CanvasSizeModalProps {
   onClose: () => void;
@@ -15,7 +14,6 @@ interface CanvasSizeModalProps {
 export function CanvasSizeModal({ onClose }: CanvasSizeModalProps) {
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
-  const resizeCanvas = useEditorStore((s) => s.resizeCanvas);
 
   const [unit, setUnit] = useState<DimensionUnit>('px');
   const [dpi, setDpi] = useState('72');
@@ -48,9 +46,9 @@ export function CanvasSizeModal({ onClose }: CanvasSizeModalProps) {
     const maxSide = getMaxDocumentSide();
     const w = clampDocumentSide(pxW, maxSide);
     const h = clampDocumentSide(pxH, maxSide);
-    resizeCanvas(w, h, anchorX, anchorY);
+    invokeFromUi('image.canvas-size', { width: w, height: h, anchor: anchorWords({ x: anchorX, y: anchorY }).join('-') });
     onClose();
-  }, [width, height, unit, dpi, anchorX, anchorY, docWidth, docHeight, resizeCanvas, onClose]);
+  }, [width, height, unit, dpi, anchorX, anchorY, docWidth, docHeight, onClose]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -61,12 +59,6 @@ export function CanvasSizeModal({ onClose }: CanvasSizeModalProps) {
       onClose();
     }
   }, [handleApply, onClose]);
-
-  const anchorPositions: Array<{ x: AnchorX; y: AnchorY }> = [
-    { x: 0, y: 0 }, { x: 0.5, y: 0 }, { x: 1, y: 0 },
-    { x: 0, y: 0.5 }, { x: 0.5, y: 0.5 }, { x: 1, y: 0.5 },
-    { x: 0, y: 1 }, { x: 0.5, y: 1 }, { x: 1, y: 1 },
-  ];
 
   const currentDpi = Math.max(1, parseInt(dpi, 10) || 72);
   const currentDisplay = `${formatDimension(docWidth, unit, currentDpi)} × ${formatDimension(docHeight, unit, currentDpi)} ${unit}`;
@@ -133,13 +125,13 @@ export function CanvasSizeModal({ onClose }: CanvasSizeModalProps) {
           <div className={styles.anchorSection}>
             <span className={styles.fieldLabel}>Anchor</span>
             <div className={styles.anchorGrid}>
-              {anchorPositions.map((pos) => (
+              {CANVAS_ANCHORS.map((pos) => (
                 <button
                   key={`${pos.x}-${pos.y}`}
                   type="button"
                   className={`${styles.anchorDot} ${anchorX === pos.x && anchorY === pos.y ? styles.anchorDotActive : ''}`}
                   onClick={() => { setAnchorX(pos.x); setAnchorY(pos.y); }}
-                  aria-label={`Anchor ${pos.x === 0 ? 'left' : pos.x === 0.5 ? 'center' : 'right'} ${pos.y === 0 ? 'top' : pos.y === 0.5 ? 'middle' : 'bottom'}`}
+                  aria-label={`Anchor ${anchorWords(pos).join(' ')}`}
                   aria-pressed={anchorX === pos.x && anchorY === pos.y}
                 />
               ))}

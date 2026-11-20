@@ -3,13 +3,13 @@ import '../../test/canvas-mock';
 import { describe, it, expect } from 'vitest';
 import {
   resolveGapDrop,
-  currentDropTarget,
   autoScrollStep,
   edgeClips,
   AUTO_SCROLL_ZONE_PX,
   AUTO_SCROLL_EDGE_BAND_PX,
   AUTO_SCROLL_MAX_STEP_PX,
 } from './useLayerDnd';
+import { currentDropTarget } from './drop-target';
 import { computeDropLayer } from '../../app/store/actions/drop-layer';
 import { buildFlatDisplayList, findParentGroup, getDescendantIds, isGroupLayer } from '../../layers/group-utils';
 import { createRasterLayer, createGroupLayer } from '../../layers/layer-model';

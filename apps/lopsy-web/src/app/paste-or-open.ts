@@ -53,20 +53,36 @@ function fitPastedLayerIfOversized(): void {
  * respond straight away. Without this the paste had no selection of its own —
  * at best the copy's marquee carried over — and a handle drag moved it instead.
  */
-export function pasteInternalClipboard(): void {
+export function pasteInternalClipboard(): PastedLayer | null {
   const pastedId = useEditorStore.getState().paste();
-  if (!pastedId) return;
+  if (!pastedId) return null;
   useUIStore.getState().setActiveTool('move');
   // Register the new layer with the engine now instead of on the next frame,
   // so the selection is in place before any key that follows the paste.
   flushLayerSync(useEditorStore.getState());
   // No prefloat: it would grow the layer to the document at (0, 0), and a
   // paste in place keeps the copied size and offset. The first drag floats.
-  void selectLayerAlpha(pastedId, { prefloat: false });
+  const selected = selectLayerAlpha(pastedId, { prefloat: false });
+  return { id: pastedId, selected };
 }
 
-export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNewDocument = false): Promise<void> {
+export interface PastedLayer {
+  readonly id: string;
+  /** Settles once the pasted pixels are selected; nothing in the UI waits on it. */
+  readonly selected: Promise<void>;
+}
+
+export interface PasteOrOpenOutcome {
+  /**
+   * When the image was added to an open document: settles once its pixels
+   * are selected, which happens on the next animation frame. Otherwise null.
+   */
+  readonly selected: Promise<void> | null;
+}
+
+export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNewDocument = false): Promise<PasteOrOpenOutcome> {
   const store = useEditorStore.getState();
+  let selected: Promise<void> | null = null;
 
   if (forceNewDocument && store.documentReady) {
     const bitmap = await createImageBitmap(blob);
@@ -120,7 +136,9 @@ export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNew
     // descriptor before selectLayerAlpha tries to float it.
     const pastedId = useEditorStore.getState().document.activeLayerId;
     if (pastedId) {
-      requestAnimationFrame(() => void selectLayerAlpha(pastedId));
+      selected = new Promise((resolve) => {
+        requestAnimationFrame(() => resolve(selectLayerAlpha(pastedId)));
+      });
     }
   } else {
     const layerId = crypto.randomUUID();
@@ -146,4 +164,5 @@ export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNew
   // Seed bitmap cache for efficient thumbnail rendering
   const activeLayerId = useEditorStore.getState().document.activeLayerId;
   if (activeLayerId) seedBitmapFromBlob(activeLayerId, blob);
+  return { selected };
 }

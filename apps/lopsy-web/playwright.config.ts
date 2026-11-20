@@ -39,6 +39,8 @@ export default defineConfig({
     },
     {
       name: 'firefox',
+      // The command-API specs test the commands, not the browser: one engine is enough.
+      testIgnore: /e2e[\\/]api[\\/]/,
       use: {
         ...devices['Desktop Firefox'],
         launchOptions: {

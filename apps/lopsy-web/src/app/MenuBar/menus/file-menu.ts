@@ -1,30 +1,22 @@
 import { useUIStore } from '../../ui-store';
 import { useEditorStore } from '../../editor-store';
-import { addPngMetadata, addJpegComment } from '../../../utils/image-metadata';
-import type { EmbeddedIccProfile } from '../../../utils/image-metadata';
-import { encodeBMP } from '../../../utils/bmp-encoder';
-import { contextOptions, canvasColorSpace, isWideGamut, createImageDataFromArray } from '../../../engine/color-space';
-import { seedBitmapFromBlob } from '../../../engine/bitmap-cache';
+import { contextOptions, createImageDataFromArray } from '../../../engine/color-space';
 import { getEngine } from '../../../engine-wasm/engine-state';
-import {
-  buildIccProfile,
-  compositeForExport,
-  convertP3ToSrgb,
-  exportPng16,
-  getCompositeSize,
-} from '../../../engine-wasm/wasm-bridge';
+import { compositeForExport, getCompositeSize } from '../../../engine-wasm/wasm-bridge';
 import type { MenuDef } from './types';
+import { commandItem } from './command-item';
+import { registerDialogOpener, unregisterDialogOpener } from '../dialog-openers';
 import { exportPsdFile, importPsdFile } from '../../../io/psd';
 import { describeError, notifyError } from '../../notifications-store';
 import { finalizePendingStrokeGlobal } from '../../interactions/pending-stroke';
 import { commitLayerTransform } from '../../interactions/layer-transform';
 import { flushLayerSync } from '../../../engine-wasm/engine-sync';
+import { encodeDocumentImageBlob, Png16EncodeError, type EncodedImageBlob } from '../../../io/export-image';
+import { openFile, OPEN_FILE_ACCEPT } from '../../../io/open-file';
 
 // Re-export so existing callers (App.tsx, e2e tests) keep working.
 export { importPsdFile, exportPsdFile };
 
-import { importDngFile } from '../../../io/dng';
-import { importRafFile } from '../../../io/raf';
 import { saveProject } from '../../../io/project-save';
 import { loadProject } from '../../../io/project-load';
 
@@ -32,23 +24,7 @@ import { loadProject } from '../../../io/project-load';
 // the codebase imports from one place.
 export type { ExportFormat, ExportOptions } from '../export-logic';
 import type { ExportFormat, ExportOptions } from '../export-logic';
-import { qualityToFraction, FORMAT_EXT, FORMAT_MIME } from '../export-logic';
-
-const METADATA_NOTE = 'Made with Lopsy — http://lopsy.art';
-
-/** Color space code shared with the WASM export functions: 0 = sRGB, 1 = Display P3. */
-const COLOR_SPACE_DISPLAY_P3 = 1;
-
-/**
- * The ICC profile to embed when an exported file ends up untagged.
- * Wide-gamut sessions need the Display P3 profile (built in Rust) so readers
- * interpret the P3 pixel values correctly; sRGB sessions return undefined and
- * keep the historical sRGB tagging.
- */
-function exportIccProfile(): EmbeddedIccProfile | undefined {
-  if (!isWideGamut()) return undefined;
-  return { name: 'Display P3', data: buildIccProfile(COLOR_SPACE_DISPLAY_P3) };
-}
+import { qualityToFraction, FORMAT_MIME } from '../export-logic';
 
 function confirmIfDirty(): boolean {
   if (!useEditorStore.getState().isDirty) return true;
@@ -72,115 +48,38 @@ export function openFileFromDisk(): void {
   if (!confirmIfDirty()) return;
   const input = document.createElement('input');
   input.type = 'file';
-  // Mixing `image/*` with bare extensions causes Chrome on macOS to
-  // restrict the picker to a single filter (often the last extension
-  // listed), so users see only `.raf` files. List explicit extensions
-  // for every supported type to keep all files visible.
-  input.accept = '.jpg,.jpeg,.png,.gif,.bmp,.webp,.psd,.dng,.raf,.lopsy';
+  input.accept = OPEN_FILE_ACCEPT;
   input.onchange = () => {
     const file = input.files?.[0];
     if (!file) return;
-
-    // Route .lopsy project files to the project loader
-    if (/\.lopsy$/i.test(file.name)) {
-      loadProject(file).catch((err) => notifyError(`Failed to open project: ${describeError(err)}`));
-      return;
-    }
-
-    // Route PSD files to the PSD importer
-    if (/\.psd$/i.test(file.name)) {
-      file
-        .arrayBuffer()
-        .then((buffer) => importPsdFile(new Uint8Array(buffer), file.name.replace(/\.psd$/i, '')))
-        .catch((err) => notifyError(`Failed to import PSD: ${describeError(err)}`));
-      return;
-    }
-
-    // Route DNG (raw) files to the WASM DNG decoder
-    if (/\.dng$/i.test(file.name)) {
-      file
-        .arrayBuffer()
-        .then((buffer) => importDngFile(new Uint8Array(buffer), file.name.replace(/\.dng$/i, '')))
-        .catch((err) => notifyError(`Failed to import DNG: ${describeError(err)}`));
-      return;
-    }
-
-    // Route RAF (Fujifilm raw) files to the WASM RAF decoder
-    if (/\.raf$/i.test(file.name)) {
-      file
-        .arrayBuffer()
-        .then((buffer) => importRafFile(new Uint8Array(buffer), file.name.replace(/\.raf$/i, '')))
-        .catch((err) => notifyError(`Failed to import RAF: ${describeError(err)}`));
-      return;
-    }
-
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    // Revoke runs in every branch (success, decode error, fallback timeout).
-    // Without an explicit error path, a corrupt or unsupported image leaked
-    // the blob URL for the lifetime of the tab.
-    let revoked = false;
-    const revoke = () => {
-      if (revoked) return;
-      revoked = true;
-      URL.revokeObjectURL(url);
-    };
-    img.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        // Use sRGB context — internal pipeline works in sRGB
-        const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
-        if (ctx) {
-          ctx.drawImage(img, 0, 0);
-          const imageData = ctx.getImageData(0, 0, img.width, img.height);
-          const name = file.name.replace(/\.[^.]+$/, '');
-          useEditorStore.getState().openImageAsDocument(imageData, name);
-          // Seed the bitmap cache from the original file so the rendering
-          // path uses the browser's native decoded bitmap rather than one
-          // rebuilt from the canvas-round-tripped ImageData.
-          const layerId = useEditorStore.getState().document.activeLayerId;
-          if (layerId) seedBitmapFromBlob(layerId, file);
-          useEditorStore.getState().fitToView();
-        }
-      } finally {
-        revoke();
-      }
-    };
-    img.onerror = () => {
-      notifyError(`Failed to open image: ${file.name}`);
-      revoke();
-    };
-    // Browser quirk fallback: if neither onload nor onerror fires within
-    // a generous window (shouldn't happen in practice), reclaim the blob.
-    setTimeout(revoke, 60_000);
-    img.src = url;
+    void openFile(file);
   };
   input.click();
 }
 
-/** Callback registry so MenuBar.tsx can open the Export dialog in response to
- *  a File-menu action without creating a circular import. MenuBar registers
- *  its setter once on mount. */
-let openExportDialogFn: (() => void) | null = null;
+/** File > New: the unsaved-changes confirm, then the New Document modal. */
+export function startNewDocument(): void {
+  if (confirmIfDirty()) useUIStore.getState().setShowNewDocumentModal(true);
+}
+
+/** File > Save Project: the download, with a toast if it fails. */
+export function saveProjectFromMenu(): void {
+  saveProject().catch((err) => notifyError(`Save failed: ${describeError(err)}`));
+}
+
+/** MenuBar registers its Export dialog opener once on mount, so ui.dialog.export can open it. */
 export function registerOpenExportDialog(fn: () => void): void {
-  openExportDialogFn = fn;
+  registerDialogOpener('export', fn);
 }
 export function unregisterOpenExportDialog(): void {
-  openExportDialogFn = null;
+  unregisterDialogOpener('export');
 }
 
 /** Quick-export using the WASM engine's GPU compositor (no dialog). */
 export function exportCanvas(format: ExportFormat): void {
-  const engine = getEngine();
-  if (!engine) return;
-  finalizePendingStrokeGlobal();
-  // A live multi-layer transform shows its text resampled; baking it re-renders the text sharp.
-  commitLayerTransform();
-  flushLayerSync(useEditorStore.getState());
+  const pending = encodeDocumentImageBlob({ format, quality: 92, highQuality: false });
   const docName = useEditorStore.getState().document.name;
-  exportViaEngine(engine, { format, quality: 92, highQuality: false, filename: docName || 'lopsy' }).catch(reportExportError);
+  downloadExport(pending, docName || 'lopsy');
 }
 
 /**
@@ -188,13 +87,7 @@ export function exportCanvas(format: ExportFormat): void {
  * scale multiplier; PNG bypasses the quality parameter.
  */
 export function exportCanvasWithOptions(options: ExportOptions): void {
-  const engine = getEngine();
-  if (!engine) return;
-  finalizePendingStrokeGlobal();
-  // A live multi-layer transform shows its text resampled; baking it re-renders the text sharp.
-  commitLayerTransform();
-  flushLayerSync(useEditorStore.getState());
-  exportViaEngine(engine, options).catch(reportExportError);
+  downloadExport(encodeDocumentImageBlob(options), options.filename);
 }
 
 /**
@@ -280,48 +173,8 @@ export async function buildExportPreview(options: ExportOptions): Promise<string
 }
 
 function reportExportError(err: unknown): void {
-  notifyError(`Failed to export: ${describeError(err)}`);
-}
-
-async function exportViaEngine(
-  engine: NonNullable<ReturnType<typeof getEngine>>,
-  options: ExportOptions,
-): Promise<void> {
-  const { format, quality, highQuality, filename } = options;
-  const sizeArr = getCompositeSize(engine);
-  const srcWidth = sizeArr[0] ?? 0;
-  const srcHeight = sizeArr[1] ?? 0;
-  if (srcWidth === 0 || srcHeight === 0) return;
-
-  // PNG with high quality uses the 16-bit WASM path — composites at full
-  // precision and encodes directly in Rust, bypassing the 8-bit canvas.toBlob.
-  if (format === 'png' && highQuality) {
-    try {
-      const colorSpace: number = isWideGamut() ? COLOR_SPACE_DISPLAY_P3 : 0;
-      const pngBytes = await exportPng16(engine, colorSpace);
-      const blob = new Blob([pngBytes as BlobPart], { type: 'image/png' });
-      addPngMetadata(blob, { Software: 'Lopsy', Comment: METADATA_NOTE }, exportIccProfile())
-        .then((b) => downloadBlob(b, 'png', filename))
-        .catch((err) => notifyError(`Failed to export: ${describeError(err)}`));
-    } catch (err) {
-      notifyError(`Failed to export PNG: ${describeError(err)}`);
-    }
-    return;
-  }
-
-  const rawPixels = await compositeForExport(engine);
-  const clamped = new Uint8ClampedArray(srcWidth * srcHeight * 4);
-  clamped.set(rawPixels);
-  const imageData = createImageDataFromArray(clamped, srcWidth, srcHeight);
-
-  const canvas = document.createElement('canvas');
-  canvas.width = srcWidth;
-  canvas.height = srcHeight;
-  const ctx = canvas.getContext('2d', contextOptions);
-  if (!ctx) return;
-  ctx.putImageData(imageData, 0, 0);
-
-  finishCanvasExport(canvas, srcWidth, srcHeight, format, quality, filename);
+  const label = err instanceof Png16EncodeError ? 'Failed to export PNG' : 'Failed to export';
+  notifyError(`${label}: ${describeError(err)}`);
 }
 
 function downloadBlob(blob: Blob, ext = 'png', filename = 'lopsy'): void {
@@ -334,80 +187,27 @@ function downloadBlob(blob: Blob, ext = 'png', filename = 'lopsy'): void {
   useEditorStore.getState().markClean();
 }
 
-function finishCanvasExport(
-  canvas: HTMLCanvasElement,
-  width: number,
-  height: number,
-  format: ExportFormat,
-  quality: number,
-  filename: string,
-): void {
-  const mimeType = FORMAT_MIME[format];
-  const ext = FORMAT_EXT[format];
-  const qualityFraction = qualityToFraction(quality);
-
-  // BMP is encoded on the JS side — no canvas.toBlob support
-  if (format === 'bmp') {
-    const ctx = canvas.getContext('2d', contextOptions);
-    if (!ctx) return;
-    const imageData = ctx.getImageData(0, 0, width, height);
-    // BMP cannot carry an ICC profile, so wide-gamut pixels are converted
-    // to sRGB in Rust — readers assume sRGB and would otherwise show
-    // desaturated colors.
-    const pixels = isWideGamut()
-      ? convertP3ToSrgb(
-          new Uint8Array(imageData.data.buffer, imageData.data.byteOffset, imageData.data.byteLength),
-        )
-      : imageData.data;
-    downloadBlob(encodeBMP({ width, height, data: pixels }), ext, filename);
-    return;
-  }
-
-  const finishExport = async (blob: Blob) => {
-    const tagged =
-      format === 'png'
-        ? await addPngMetadata(blob, { Software: 'Lopsy', Comment: METADATA_NOTE }, exportIccProfile())
-        : format === 'jpeg'
-          ? await addJpegComment(blob, METADATA_NOTE, exportIccProfile())
-          : blob;
-    downloadBlob(tagged, ext, filename);
-  };
-
-  // Prefer OffscreenCanvas.convertToBlob which passes colorSpace to the
-  // encoder, producing a color-space-aware blob. Fall back to toBlob.
-  if (typeof OffscreenCanvas !== 'undefined') {
-    const offscreen = new OffscreenCanvas(width, height);
-    const offCtx = offscreen.getContext('2d', contextOptions);
-    if (offCtx) {
-      offCtx.drawImage(canvas, 0, 0);
-      offscreen
-        .convertToBlob({ type: mimeType, quality: qualityFraction, colorSpace: canvasColorSpace } as ImageEncodeOptions)
-        .then(finishExport)
-        .catch((err) => notifyError(`Failed to export: ${describeError(err)}`));
-      return;
-    }
-  }
-
-  canvas.toBlob((blob) => {
-    if (!blob) {
-      notifyError('Failed to export: browser could not encode image.');
-      return;
-    }
-    finishExport(blob).catch((err) => notifyError(`Failed to export: ${describeError(err)}`));
-  }, mimeType, qualityFraction);
+function downloadExport(pending: Promise<EncodedImageBlob | null>, filename: string): void {
+  pending
+    .then((image) => {
+      if (image) downloadBlob(image.blob, image.ext, filename);
+    })
+    .catch(reportExportError);
 }
 
-export const fileMenu: MenuDef = {
-  label: 'File',
-  items: [
-    { label: 'New', shortcut: '⌘N', action: () => { if (confirmIfDirty()) useUIStore.getState().setShowNewDocumentModal(true); } },
-    { label: 'Open...', shortcut: '⌘O', action: () => openFileFromDisk() },
-    { separator: true, label: '' },
-    { label: 'Save Project', shortcut: '⌘S', action: () => { saveProject().catch((err) => notifyError(`Save failed: ${describeError(err)}`)); } },
-    { label: 'Open Project...', action: () => openProjectFromDisk() },
-    { separator: true, label: '' },
-    { label: 'Export…', shortcut: '⌥⇧⌘E', action: () => openExportDialogFn?.() },
-    { label: 'Quick Export PNG', shortcut: '⇧⌘E', action: () => exportCanvas('png') },
-    { label: 'Export PSD', action: () => void exportPsdFile(16) },
-  ],
-};
+export function createFileMenu(): MenuDef {
+  return {
+    label: 'File',
+    items: [
+      commandItem('New', 'ui.file.new', undefined, '⌘N'),
+      commandItem('Open...', 'ui.file.open', undefined, '⌘O'),
+      { separator: true, label: '' },
+      commandItem('Save Project', 'ui.file.save-project', undefined, '⌘S'),
+      commandItem('Open Project...', 'ui.file.open-project'),
+      { separator: true, label: '' },
+      commandItem('Export…', 'ui.dialog.export', undefined, '⌥⇧⌘E'),
+      commandItem('Quick Export PNG', 'ui.file.quick-export-png', undefined, '⇧⌘E'),
+      commandItem('Export PSD', 'ui.file.export-psd'),
+    ],
+  };
+}

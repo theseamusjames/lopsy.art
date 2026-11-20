@@ -1,32 +1,25 @@
-import { useUIStore } from '../ui-store';
-import { useEditorStore } from '../editor-store';
-import { selectAll, invertSelectionAction } from '../MenuBar/menus/select-menu';
-import { applyAutoTone, applyAutoContrast, applyAutoColor } from '../MenuBar/menus/image-menu';
-import { openLiquify } from '../MenuBar/liquify-actions';
 import { scheduleFallbackPaste } from '../useKeyboardShortcuts';
+import { runKeyCommand } from './key-bindings';
 
-export function handleEditShortcut(
-  e: KeyboardEvent,
-  clearPersistentTransform: () => void,
-): boolean {
+export function handleEditShortcut(e: KeyboardEvent): boolean {
   // Cmd+Shift+X — open Liquify
   if ((e.key === 'x' || e.key === 'X') && e.shiftKey) {
     e.preventDefault();
-    openLiquify();
+    runKeyCommand('liquify');
     return true;
   }
   if (e.key === 'c' || e.key === 'C') {
     e.preventDefault();
     if (e.shiftKey) {
-      void useEditorStore.getState().copyMerged();
+      runKeyCommand('copyMerged');
     } else {
-      useEditorStore.getState().copy();
+      runKeyCommand('copy');
     }
     return true;
   }
   if (e.key === 'x') {
     e.preventDefault();
-    useEditorStore.getState().cut();
+    runKeyCommand('cut');
     return true;
   }
   if (e.key === 'v') {
@@ -42,60 +35,59 @@ export function handleEditShortcut(
   }
   if (e.key === 'e') {
     e.preventDefault();
-    useEditorStore.getState().mergeDown();
+    runKeyCommand('mergeDown');
     return true;
   }
   if (e.key === 'a') {
     e.preventDefault();
-    selectAll();
+    runKeyCommand('selectAll');
     return true;
   }
   if ((e.key === 'i' || e.key === 'I') && e.shiftKey) {
     e.preventDefault();
-    invertSelectionAction();
+    runKeyCommand('invertSelection');
     return true;
   }
   if (e.key === 'd') {
     e.preventDefault();
-    useEditorStore.getState().clearSelection();
-    useUIStore.getState().setTransform(null);
-    clearPersistentTransform();
+    runKeyCommand('deselect');
     return true;
   }
   if (e.key === "'") {
     e.preventDefault();
-    useUIStore.getState().toggleGrid();
+    runKeyCommand('toggleGrid');
     return true;
   }
   if (e.key === ';') {
     e.preventDefault();
-    useUIStore.getState().toggleGuides();
+    runKeyCommand('toggleGuides');
     return true;
   }
   if (e.key === 'z' || e.key === 'Z') {
     e.preventDefault();
     // Keyboard undo/redo applies synchronously: callers read state back on
-    // the same tick. undoBy/redoBy still batch the History-panel jump (#761).
-    if (e.shiftKey) useEditorStore.getState().redo();
-    else useEditorStore.getState().undo();
+    // the same tick, and invokeFromUi starts the command in this one.
+    // undoBy/redoBy still batch the History-panel jump (#761).
+    if (e.shiftKey) runKeyCommand('redo');
+    else runKeyCommand('undo');
     return true;
   }
   // Shift+Cmd+L — Auto Tone
   if ((e.key === 'l' || e.key === 'L') && e.shiftKey && !e.altKey) {
     e.preventDefault();
-    applyAutoTone();
+    runKeyCommand('autoTone');
     return true;
   }
   // Alt+Shift+Cmd+L — Auto Contrast
   if ((e.key === 'l' || e.key === 'L') && e.shiftKey && e.altKey) {
     e.preventDefault();
-    applyAutoContrast();
+    runKeyCommand('autoContrast');
     return true;
   }
   // Shift+Cmd+B — Auto Color
   if ((e.key === 'b' || e.key === 'B') && e.shiftKey) {
     e.preventDefault();
-    applyAutoColor();
+    runKeyCommand('autoColor');
     return true;
   }
   return false;

@@ -107,6 +107,11 @@ function endHold(): void {
   pendingApply = null;
 }
 
+/** Whether an arrow key is held: its nudges are still collecting into the hold's history entry. */
+export function isNudgeHeld(): boolean {
+  return heldArrows.size > 0;
+}
+
 /** Test seam: reset internal state without triggering an apply. */
 export function _resetNudgeCoalescer(): void {
   cancelScheduled();

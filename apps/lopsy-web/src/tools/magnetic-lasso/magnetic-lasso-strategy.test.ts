@@ -74,7 +74,6 @@ vi.mock('../../app/tool-settings-store', () => ({
 import { magneticLassoStrategy } from './magnetic-lasso-strategy';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
-import type { SelectionUpContext } from '../../app/interactions/selection-strategy';
 
 function makeCtx(overrides: Partial<InteractionContext> = {}): InteractionContext {
   const layer = { id: 'layer-1', x: 0, y: 0, visible: true } as unknown as InteractionContext['activeLayer'];
@@ -111,12 +110,6 @@ function makeState(): InteractionState {
   };
 }
 
-const upCtx: SelectionUpContext = {
-  screenToCanvas: (sx, sy) => ({ x: sx, y: sy }),
-  containerRef: { current: null },
-  event: { clientX: 0, clientY: 0 },
-};
-
 /** Identity snap: a straight two-point segment, no edge attraction. */
 function straightSnap(...args: unknown[]): Float32Array {
   const [, fromX, fromY, toX, toY] = args as [unknown, number, number, number, number];
@@ -148,7 +141,7 @@ beforeEach(() => {
     return new Float32Array([x, y]);
   });
   // Reset module-level trace state from any previous test.
-  magneticLassoStrategy.onUp!(makeState(), { x: 0, y: 0 }, upCtx);
+  magneticLassoStrategy.onUp!(makeState(), { x: 0, y: 0 });
   magneticLassoEnd.mockClear();
   uiState.clearLassoPoints.mockClear();
   editorState.setSelection.mockClear();
@@ -195,7 +188,7 @@ describe('magnetic lasso onDown', () => {
     let ready: () => void = () => {};
     magneticLassoBegin.mockImplementation(() => new Promise<void>((resolve) => { ready = resolve; }));
     magneticLassoStrategy.onDown(makeCtx(), 'lasso-magnetic');
-    magneticLassoStrategy.onUp!(makeState(), { x: 0, y: 0 }, upCtx);
+    magneticLassoStrategy.onUp!(makeState(), { x: 0, y: 0 });
     magneticLassoEnd.mockClear();
     ready();
     await settle();
@@ -271,7 +264,7 @@ describe('magnetic lasso onUp', () => {
     await settle();
     magneticLassoStrategy.onMove!(makeState(), { x: 8, y: 0 }, false);
     magneticLassoStrategy.onMove!(makeState(), { x: 8, y: 8 }, false);
-    magneticLassoStrategy.onUp!(makeState(), { x: 8, y: 8 }, upCtx);
+    magneticLassoStrategy.onUp!(makeState(), { x: 8, y: 8 });
 
     expect(editorState.setSelection).toHaveBeenCalledTimes(1);
     const [bounds, mask, w, h] = editorState.setSelection.mock.calls[0]! as [
@@ -293,7 +286,7 @@ describe('magnetic lasso onUp', () => {
   it('releases the engine trace without selecting when the loop is degenerate', async () => {
     magneticLassoStrategy.onDown(makeCtx({ canvasPos: { x: 0, y: 0 } }), 'lasso-magnetic');
     await settle();
-    magneticLassoStrategy.onUp!(makeState(), { x: 0, y: 0 }, upCtx);
+    magneticLassoStrategy.onUp!(makeState(), { x: 0, y: 0 });
     expect(editorState.setSelection).not.toHaveBeenCalled();
     expect(magneticLassoEnd).toHaveBeenCalledTimes(1);
     expect(uiState.clearLassoPoints).toHaveBeenCalledTimes(1);
@@ -302,10 +295,10 @@ describe('magnetic lasso onUp', () => {
   it('a second onUp without a new trace only clears the preview', async () => {
     magneticLassoStrategy.onDown(makeCtx(), 'lasso-magnetic');
     await settle();
-    magneticLassoStrategy.onUp!(makeState(), { x: 0, y: 0 }, upCtx);
+    magneticLassoStrategy.onUp!(makeState(), { x: 0, y: 0 });
     magneticLassoEnd.mockClear();
     editorState.setSelection.mockClear();
-    magneticLassoStrategy.onUp!(makeState(), { x: 0, y: 0 }, upCtx);
+    magneticLassoStrategy.onUp!(makeState(), { x: 0, y: 0 });
     expect(editorState.setSelection).not.toHaveBeenCalled();
     // engine end is still called defensively, but no commit happens
     expect(magneticLassoEnd).toHaveBeenCalledTimes(1);

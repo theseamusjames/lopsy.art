@@ -15,7 +15,8 @@ import {
 } from '../../engine-wasm/wasm-bridge';
 import { EMPTY_HANDLE } from '../store/layer-gpu-capture';
 import { uploadLayerMaskIfChanged } from '../../engine-wasm/engine-sync';
-import { canReceiveRasterPaint, guardPixelWrite } from '../../layers/paint-target';
+import { canReceiveRasterPaint, pixelWriteRefusal } from '../../layers/paint-target';
+import { announceRefusal, type Refusal } from '../../commands/refusal';
 
 /**
  * What a Filter menu command writes: the active layer's pixels or, in
@@ -38,18 +39,29 @@ export function isFilteringMask(): boolean {
 }
 
 /**
- * The active filter target, or null when there is nothing to filter. A
- * layer target goes through `guardPixelWrite` (which may prompt to
- * rasterize); a mask can be filtered on any layer type.
+ * Why Filter commands have no target right now, or null when they have one.
+ * A layer target is refused as `pixelWriteRefusal` refuses it; a mask can be
+ * filtered on any layer type.
  */
-export function resolveFilterTarget(): FilterTarget | null {
+export function filterTargetRefusal(): Refusal | null {
   const { document: doc } = useEditorStore.getState();
   const layerId = doc.activeLayerId;
-  if (!layerId) return null;
-  if (isFilteringMask()) return { layerId, isMask: true };
-  const layer = doc.layers.find((l) => l.id === layerId);
-  if (!guardPixelWrite(layer)) return null;
-  return { layerId, isMask: false };
+  if (!layerId) return pixelWriteRefusal(null);
+  if (isFilteringMask()) return null;
+  return pixelWriteRefusal(doc.layers.find((l) => l.id === layerId));
+}
+
+/**
+ * The active filter target, or null (after any toast `filterTargetRefusal`
+ * calls for) when there is nothing to filter.
+ */
+export function resolveFilterTarget(): FilterTarget | null {
+  const refusal = filterTargetRefusal();
+  if (refusal) {
+    announceRefusal(refusal);
+    return null;
+  }
+  return peekFilterTarget();
 }
 
 /**

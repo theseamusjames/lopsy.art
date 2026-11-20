@@ -12,10 +12,9 @@ import {
   Maximize2,
 } from 'lucide-react';
 import type { AlignEdge } from '../../../tools/move/move';
-import { rotateActiveLayer } from '../../MenuBar/menus/image-menu';
-import { TransformControls, applyLayerTransformStep, rotateSelection } from './TransformControls';
+import { TransformControls } from './TransformControls';
 import { getLayerTransformBox } from '../../interactions/layer-transform';
-import { rotateTransform90 } from '../../../tools/transform/multi-layer-transform';
+import { rotateFromMoveOptions } from '../../interactions/move-transform-buttons';
 import { MeshWarpControls } from './MeshWarpControls';
 import { commitLiveFloat } from '../../interactions/live-float';
 import styles from '../OptionsBar.module.css';
@@ -23,17 +22,9 @@ import styles from '../OptionsBar.module.css';
 export function MoveOptions() {
   const alignLayer = useEditorStore((s) => s.alignLayer);
   const fitActiveLayerToCanvas = useEditorStore((s) => s.fitActiveLayerToCanvas);
-  const selectionActive = useEditorStore((s) => s.selection.active);
 
   const handleRotate = (dir: 'cw' | 'ccw') => {
-    if (selectionActive) {
-      rotateSelection(dir);
-    } else if (getLayerTransformBox()) {
-      // Several layers selected: turn them together about their shared centre.
-      applyLayerTransformStep((t) => rotateTransform90(t, dir));
-    } else {
-      void rotateActiveLayer(dir);
-    }
+    void rotateFromMoveOptions(dir);
   };
 
   const handleAlign = (edge: AlignEdge) => {

@@ -1,5 +1,6 @@
 import type { RefObject } from 'react';
 import { nextZoomLevel } from '../../utils/zoom-levels';
+import { runKeyCommand } from './key-bindings';
 
 export function handleZoomShortcut(
   e: KeyboardEvent,
@@ -33,8 +34,7 @@ export function handleZoomShortcut(
   }
   if (e.key === '1') {
     e.preventDefault();
-    setZoom(1);
-    setPan(0, 0);
+    runKeyCommand('zoomActualSize');
     return true;
   }
   return false;

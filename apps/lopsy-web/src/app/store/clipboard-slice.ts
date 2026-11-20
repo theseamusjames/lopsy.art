@@ -17,18 +17,28 @@ import {
   completeSystemClipboardWrite,
   isSystemClipboardWriteCurrent,
 } from './system-clipboard-sync';
-import { notifyInfo } from '../notifications-store';
+import { announceRefusal, type Refusal } from '../../commands/refusal';
 import type { ClipboardData, SliceCreator } from './types';
 import type { Layer } from '../../types';
 
 /**
  * A group's own texture is never drawn, so copying or cutting it yields an
  * empty clipboard that a later Paste turns into an empty layer (#1338).
- * Returns false (after a toast) when the active layer can't be copied from.
+ * Null when the active layer can be copied from.
  */
+export function copySourceRefusal(layer: Layer | undefined, action: 'copied' | 'cut'): Refusal | null {
+  if (layer?.type !== 'group') return null;
+  return {
+    reason: `Groups can't be ${action} from. Select a layer inside the group, or use Copy Merged.`,
+    notice: 'info',
+  };
+}
+
+/** Returns false (after a toast) when the active layer can't be copied from. */
 function guardCopySource(layer: Layer | undefined, action: 'copied' | 'cut'): boolean {
-  if (layer?.type !== 'group') return true;
-  notifyInfo(`Groups can't be ${action} from. Select a layer inside the group, or use Copy Merged.`);
+  const refusal = copySourceRefusal(layer, action);
+  if (!refusal) return true;
+  announceRefusal(refusal);
   return false;
 }
 

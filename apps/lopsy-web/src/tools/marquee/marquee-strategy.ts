@@ -1,6 +1,6 @@
 import type { InteractionState, InteractionContext } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS, withMoveGesture } from '../../app/interactions/interaction-types';
-import type { SelectionToolStrategy, SelectionToolId, SelectionUpContext } from '../../app/interactions/selection-strategy';
+import type { SelectionToolStrategy, SelectionToolId } from '../../app/interactions/selection-strategy';
 import type { Point } from '../../types';
 import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
@@ -16,7 +16,7 @@ import {
   createRectSelection,
   createEllipseSelection,
   commitFeatheredSelection,
-  commitSelectionShape,
+  commitMarqueeShape,
   hasCombinableSelection,
 } from '../../app/interactions/selection-handlers';
 import { getMarqueePreview, setMarqueePreview } from './marquee-preview';
@@ -113,7 +113,7 @@ export const marqueeStrategy: SelectionToolStrategy = {
     }
   },
 
-  onUp(state: InteractionState, _canvasPos: Point, upCtx: SelectionUpContext): void {
+  onUp(state: InteractionState, canvasPos: Point): void {
     if (state.gesture.kind === 'transform' && state.gesture.selectionOnly) {
       useUIStore.getState().setActiveTransformHandle(null);
       return;
@@ -144,13 +144,8 @@ export const marqueeStrategy: SelectionToolStrategy = {
 
     // Commit a freshly drawn marquee.
     if (!state.startPoint) return;
-    const rect = upCtx.containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const screenX = upCtx.event.clientX - rect.left;
-    const screenY = upCtx.event.clientY - rect.top;
-    const upPos = upCtx.screenToCanvas(screenX, screenY);
-    const dx = Math.abs(upPos.x - state.startPoint.x);
-    const dy = Math.abs(upPos.y - state.startPoint.y);
+    const dx = Math.abs(canvasPos.x - state.startPoint.x);
+    const dy = Math.abs(canvasPos.y - state.startPoint.y);
 
     const combineMode = state.selectionCombineMode ?? 'replace';
     if ((dx < 2 && dy < 2) || !preview || preview.kind === 'move') {
@@ -175,11 +170,7 @@ export const marqueeStrategy: SelectionToolStrategy = {
       return;
     }
 
-    const selRect = preview.rect;
-    const mask = preview.kind === 'ellipse'
-      ? createEllipseSelection(selRect, docW, docH)
-      : createRectSelection(selRect, docW, docH);
-    commitSelectionShape(selRect, mask, docW, docH, combineMode);
+    void commitMarqueeShape(preview.kind, preview.rect, combineMode);
   },
 };
 
@@ -195,5 +186,5 @@ export function confirmMarqueeRegion(shape: MarqueeShape, from: Point, to: Point
   const mask = shape === 'ellipse'
     ? createEllipseSelection(rect, docW, docH)
     : createRectSelection(rect, docW, docH);
-  commitFeatheredSelection(rect, mask, docW, docH);
+  void commitFeatheredSelection(rect, mask, docW, docH);
 }

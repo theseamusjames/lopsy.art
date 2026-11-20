@@ -138,6 +138,17 @@ export function dabSampleMatrix(copy: SymmetryMatrix): SymmetryMatrix {
   return { m00: copy.m00, m01: copy.m10, m10: copy.m01, m11: copy.m11 };
 }
 
+export interface SymmetrySettings {
+  readonly symmetryHorizontal: boolean;
+  readonly symmetryVertical: boolean;
+  readonly symmetryRadialSegments: number;
+}
+
+/** Whether any symmetry is switched on in the tool settings; a Cmd/Ctrl press then sets the symmetry centre. */
+export function isSymmetryOn(settings: SymmetrySettings): boolean {
+  return settings.symmetryRadialSegments >= 2 || settings.symmetryHorizontal || settings.symmetryVertical;
+}
+
 export function isSymmetryActive(config: SymmetryConfig): boolean {
   return config.horizontal || config.vertical || config.radialSegments >= 2;
 }

@@ -4,11 +4,12 @@ import { DEFAULT_EFFECTS } from './layer-model';
 
 vi.mock('../app/notifications-store', () => ({
   notifyInfo: vi.fn(),
+  notifyError: vi.fn(),
 }));
 
-const { canReceiveRasterPaint, guardPixelWrite, toolIgnoresLayerLock, toolWritesRasterPixels } =
+const { canReceiveRasterPaint, guardPixelWrite, pixelWriteRefusal, toolIgnoresLayerLock, toolWritesRasterPixels } =
   await import('./paint-target');
-const { notifyInfo } = await import('../app/notifications-store');
+const { notifyInfo, notifyError } = await import('../app/notifications-store');
 
 const baseRaster: RasterLayer = {
   id: 'raster-1',
@@ -151,6 +152,53 @@ describe('guardPixelWrite', () => {
     expect(guardPixelWrite(null)).toBe(false);
     expect(guardPixelWrite(undefined)).toBe(false);
     expect(notifyInfo).not.toHaveBeenCalled();
+  });
+});
+
+const GROUP_REASON = "Groups can't be painted on. Select a layer inside the group.";
+const TEXT_REASON = 'Text layers must be rasterized before they can be painted on.';
+
+describe('pixelWriteRefusal', () => {
+  beforeEach(() => {
+    vi.mocked(notifyInfo).mockReset();
+    vi.mocked(notifyError).mockReset();
+  });
+
+  it('null for raster and shape layers', () => {
+    expect(pixelWriteRefusal(baseRaster)).toBeNull();
+    expect(pixelWriteRefusal(baseShape)).toBeNull();
+  });
+
+  it('pins the group and text toasts', () => {
+    expect(pixelWriteRefusal(baseGroup)).toEqual({ reason: GROUP_REASON, notice: 'info' });
+    expect(pixelWriteRefusal(baseText)).toEqual({ reason: TEXT_REASON, notice: 'info' });
+  });
+
+  it('a silent refusal with a reason when there is no layer', () => {
+    expect(pixelWriteRefusal(null)).toEqual({ reason: 'There is no active layer.', notice: null });
+    expect(pixelWriteRefusal(undefined)).toEqual({ reason: 'There is no active layer.', notice: null });
+  });
+
+  it('agrees with canReceiveRasterPaint', () => {
+    for (const layer of [baseRaster, baseShape, baseGroup, baseText, null, undefined]) {
+      expect(pixelWriteRefusal(layer) === null).toBe(canReceiveRasterPaint(layer));
+    }
+  });
+
+  it('has no side effects', () => {
+    for (const layer of [baseRaster, baseGroup, baseText, null]) pixelWriteRefusal(layer);
+    expect(notifyInfo).not.toHaveBeenCalled();
+    expect(notifyError).not.toHaveBeenCalled();
+  });
+
+  it('guardPixelWrite toasts exactly those strings once', () => {
+    expect(guardPixelWrite(baseGroup)).toBe(false);
+    expect(notifyInfo).toHaveBeenCalledTimes(1);
+    expect(notifyInfo).toHaveBeenLastCalledWith(GROUP_REASON);
+    expect(guardPixelWrite(baseText)).toBe(false);
+    expect(notifyInfo).toHaveBeenCalledTimes(2);
+    expect(notifyInfo).toHaveBeenLastCalledWith(TEXT_REASON);
+    expect(notifyError).not.toHaveBeenCalled();
   });
 });
 
