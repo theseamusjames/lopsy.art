@@ -94,17 +94,18 @@ is `docs/photonamous-spec.md`; running and setup are in
   Space or Escape goes back to the grid. In a narrow window the bars wrap
   rather than overlap: the edit buttons go under the labels and stars, and
   Set aside under the versions.
-- **Versions in Single view**: the **Selected** box holds the version the
-  photo uses in the grid, albums and exports, with its Rename (or a
-  double-click on its name; Enter saves and Escape keeps the old name) and
-  Delete (never the last version; the next one becomes selected). Up to
-  four versions, the others are chips beside it, and picking one makes it
-  the selected version and shows it. With five or more, the box holds a
-  dropdown of them all instead. When the view shows a version that is not
-  the selected one (opened from the grid's stack), its chip has a dot.
-  When the bar has no room for them, the chips scroll sideways on their
-  own and never run under Set aside. **New version** is there either
-  way.
+- **Versions in Single view**: the **Selected** box, drawn like the
+  chips, holds the version the photo uses in the grid, albums and
+  exports, with its Rename (or a double-click on its name; Enter saves and
+  Escape keeps the old name) and Delete (never the last version; the next
+  one becomes selected). Up to four versions, the others are chips beside
+  it. A chip shows its version without selecting it (Edit then edits that
+  version), with a dot while it is on screen; its check makes it the
+  selected version, and the one it replaces becomes a chip again; its bin
+  deletes it. With five or more, a dropdown of the others takes the
+  chips' place, with the check and the bin of the one it shows. When the
+  bar has no room for them, the chips scroll sideways on their own and
+  never run under Set aside. **New version** is there either way.
 - **Compare** (C): two to four selected photos side by side.
 - **Cull** (F): full screen, one photo at a time, laid out as Single view,
   with the keys' hint beside Set aside; rating (1–5) or setting aside (X)
@@ -147,8 +148,8 @@ is `docs/photonamous-spec.md`; running and setup are in
   the photo's selected version (one undo step); the original file is
   untouched. The photo's stack opens to show the other versions as their
   own tiles. Single view has the selected one in a box and the others as
-  chips or, past four, a dropdown: select, rename, delete (the selected
-  one too, when another is left).
+  chips or, past four, a dropdown: show, select, rename, delete (the
+  selected one too, when another is left).
 - **Albums** hold whole photos or single versions: with a version's tile
   selected, the details panel adds that version.
 - **Copy edits…** (⇧⌘C) asks which groups to copy; **Paste edits**

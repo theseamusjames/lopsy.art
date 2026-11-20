@@ -232,7 +232,7 @@ test('every view, as a user reaches it', async ({ page }) => {
   });
   await page.keyboard.press('Escape');
 
-  // More than four versions are chosen from a dropdown in the Selected box, with the selected one's actions beside it.
+  // More than four versions: the ones not selected are in a dropdown, with the check and bin of the one it shows.
   // On the second photo: the steps above gave the first one a Radial mask in the Edit view.
   await step(page, 'single view, versions dropdown', async () => {
     await tiles(page).nth(1).dblclick();
@@ -242,7 +242,7 @@ test('every view, as a user reaches it', async ({ page }) => {
       await page.getByRole('dialog', { name: 'New version' }).getByRole('button', { name: 'Create' }).click();
       await expect(page.getByRole('dialog', { name: 'New version' })).toHaveCount(0);
     }
-    await expect(versions.getByRole('combobox', { name: 'Selected' })).toBeVisible({ timeout: 15_000 });
+    await expect(versions.getByRole('combobox', { name: 'Other versions' })).toBeVisible({ timeout: 15_000 });
   });
 
   await step(page, 'cull view', async () => {

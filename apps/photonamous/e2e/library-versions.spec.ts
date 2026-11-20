@@ -131,7 +131,7 @@ test('a version in an album, made the selected one, then deleted', async ({ page
   // Version 2 moves into the Selected box, and as the last version it cannot be deleted.
   await expect(strip.getByRole('button', { name: 'Rename Version 2' })).toBeVisible();
   await expect(strip.getByRole('button', { name: 'Delete Version 2' })).toHaveCount(0);
-  await expect(strip.locator('button[data-version-id]')).toHaveCount(0);
+  await expect(strip.getByRole('button', { name: /^Make .+ the selected version$/ })).toHaveCount(0);
   await page.keyboard.press(' ');
   await expect(photo).toBeVisible();
   await expect(page.getByRole('gridcell')).toHaveCount(1);
