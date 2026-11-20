@@ -113,6 +113,9 @@ async function saveProject(page: Page): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
+/** The version the app writes today (`FORMAT_VERSION` in src/io/project-save.ts). */
+const CURRENT_FORMAT_VERSION = 3;
+
 function formatVersion(file: Buffer): number {
   return file.readUInt16LE(6);
 }
@@ -183,7 +186,7 @@ test.describe('projects saved before shadows included the stroke keep their look
     expect(await shadowEdges(page)).toEqual({ right: SQUARE.x1 + STROKE_W + OFFSET, bottom: SQUARE.y1 + STROKE_W + OFFSET });
 
     const saved = await saveProject(page);
-    expect(formatVersion(saved)).toBe(2);
+    expect(formatVersion(saved)).toBe(CURRENT_FORMAT_VERSION);
 
     // ... while the old renderer cast them from the bare square: 420 / 270.
     await openProject(page, asFormatV1(saved));
@@ -199,7 +202,7 @@ test.describe('projects saved before shadows included the stroke keep their look
     // Saving writes the current version with the migrated values, and
     // reopening it doesn't migrate them a second time.
     const resaved = await saveProject(page);
-    expect(formatVersion(resaved)).toBe(2);
+    expect(formatVersion(resaved)).toBe(CURRENT_FORMAT_VERSION);
     await openProject(page, resaved);
     expect((await layerEffects(page))!.dropShadow).toMatchObject({ offsetX: OFFSET - STROKE_W, offsetY: OFFSET - STROKE_W });
     expect(await shadowEdges(page)).toEqual(legacy);

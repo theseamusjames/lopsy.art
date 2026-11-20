@@ -113,8 +113,15 @@ test('#1792: undo/redo of a Move after a brush stroke restores the stroke where 
   await selectTool(page, 'move');
   await dragDoc(page, 165, 65, 165 + MOVE.dx, 65 + MOVE.dy);
 
+  // The drag runs in screen pixels at the fit zoom, so the move can land a
+  // pixel off the requested offset (Firefox rounds the pointer differently).
+  // The stroke must still move as a whole, by that offset to within a pixel.
   const moved = await redBounds(page, layerId);
-  expect(boxOf(moved)).toEqual(shifted(painted, MOVE.dx, MOVE.dy));
+  const dx = moved.minX - painted.minX;
+  const dy = moved.minY - painted.minY;
+  expect(Math.abs(dx - MOVE.dx)).toBeLessThanOrEqual(1);
+  expect(Math.abs(dy - MOVE.dy)).toBeLessThanOrEqual(1);
+  expect(boxOf(moved)).toEqual(shifted(painted, dx, dy));
 
   await undo(page);
   await page.waitForTimeout(300);
@@ -132,8 +139,8 @@ test('#1792: undo/redo of a Move after a brush stroke restores the stroke where 
   await redo(page);
   await page.waitForTimeout(300);
   const redone = await redBounds(page, layerId);
-  expect(boxOf(redone)).toEqual(shifted(painted, MOVE.dx, MOVE.dy));
-  expect(isRed(await compositeAt(page, midX + MOVE.dx, midY + MOVE.dy))).toBe(true);
+  expect(boxOf(redone)).toEqual(boxOf(moved));
+  expect(isRed(await compositeAt(page, midX + dx, midY + dy))).toBe(true);
 
   await undo(page);
   await page.waitForTimeout(300);
