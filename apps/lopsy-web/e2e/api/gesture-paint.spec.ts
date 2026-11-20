@@ -348,7 +348,7 @@ test.describe('paint.stroke on its own', () => {
       code: 'invalid',
       message: 'paint.stroke: source is only for the stamp and healing tools, not brush.',
     });
-    expect(await runError(page, { op: 'paint.stroke', tool: 'spray', points: STROKE })).toMatchObject({ code: 'invalid' });
+    expect(await runError(page, { op: 'paint.stroke', tool: 'airbrush', points: STROKE })).toMatchObject({ code: 'invalid' });
     expect(await runError(page, { op: 'paint.stroke', points: [] })).toMatchObject({ code: 'invalid' });
     expect(await historyLabels(page)).toEqual(['New Document']);
   });

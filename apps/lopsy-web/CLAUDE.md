@@ -272,7 +272,11 @@ while a Liquify, Tilt-Shift or Mesh Warp session is open (they would take
 the press), and once the press has landed it always releases and clears
 the interacting flag, even when a move throws. A command that opens a
 session and drags in it (`filter.liquify`) passes `session`, which is
-refused unless that session is open; no command takes it as a param. Document coordinates and
+refused unless that session is open; no command takes it as a param. Where
+a tool does work while the button is held still, `runHeldGesture` (a wait
+after the press) and `runPacedGesture` (a wait after the press and after
+every move) are the same press, moves and release with real time between
+them. Document coordinates and
 offsets in params use the shared specs in `context.ts`
 (`coordinateSpec`, `boundedPointSpec`, `offsetSpec`, `extentSpec`), which
 bound them to the largest document's side beyond each edge: an unbounded

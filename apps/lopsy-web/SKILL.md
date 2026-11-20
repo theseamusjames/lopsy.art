@@ -632,6 +632,12 @@ gradient to transparent on a `screen` layer is a soft light source.
   { "op": "tool.set", "tool": "eraser", "options": { "size": 40 } },
   { "op": "paint.stroke", "tool": "eraser", "points": [{ "x": 300, "y": 60 }, { "x": 300, "y": 180 }] },
 
+  { "op": "color.set", "foreground": "#268bd2" },
+  { "op": "tool.set", "tool": "spray", "options": { "size": 70, "density": 40, "opacity": 80, "softness": 40 } },
+  { "op": "paint.stroke", "tool": "spray", "points": [
+    { "x": 80, "y": 40 }, { "x": 160, "y": 30 }, { "x": 240, "y": 45 } ] },
+  { "op": "paint.stroke", "tool": "spray", "points": [{ "x": 520, "y": 200 }], "dwell": 800 },
+
   { "op": "layer.add", "name": "Leaf" },
   { "op": "path.add", "closed": true, "anchors": [
     { "point": { "x": 440, "y": 300 }, "handleIn": { "x": 470, "y": 370 }, "handleOut": { "x": 470, "y": 230 } },
@@ -651,14 +657,26 @@ One point is a single dab. Denser points give smoother curves: generate them
 in code. `line: true` is a Shift-click: a straight line from where the
 previous stroke **on this layer** ended to the stroke's first point, so a dab
 followed by `line` strokes draws a polyline. The pencil gives aliased,
-pixel-art lines; the eraser, smudge, dodge, sponge, stamp and healing tools
-work the same way (`tool` picks one). For an exact smooth curve, add a bezier
+pixel-art lines; the eraser, smudge, dodge, sponge, stamp, healing and spray
+tools work the same way (`tool` picks one). For an exact smooth curve, add a bezier
 path with `path.add` (each anchor's `handleIn` / `handleOut` are absolute
 document points) and stroke it with `path.stroke`, which uses the foreground
 colour and a width of 1–50 px. To fill a curve, `path.to-selection` makes the
 area a path encloses the selection (an open path is closed with a straight
 line) and `paint.fill` fills it, as with the Leaf. Strokes are instantaneous, so the brush's
 time-based behaviours (speed-based size, hold-to-smooth) never happen.
+
+The **spray** tool is the one that works in real time. It scatters a burst
+of random dots (`density` of them) inside its `size` at the press and along
+each move, and while the button is held it adds another burst about every
+166 ms. An instantaneous stroke therefore gets only the bursts of the press
+and the moves: a light speckle along the path. `dwell` holds the pointer
+still for that many milliseconds **at every point**, the press included, so
+the paint builds up there as under a hand that lingers (the one point at
+520, 200 gets about five more bursts in its 800 ms). The command takes as
+long as its dwells add up to: at most 2000 ms a point and 10 s a stroke.
+Spray dots are random, so a stroke never comes out the same twice; look at
+the render rather than assuming. It takes no `line`.
 
 <!-- recipe: type -->
 ```json
@@ -1171,7 +1189,6 @@ whole.
 
 These have no command. Don't hunt for them:
 
-- **The Spray tool** (it paints on a timer while the button is held).
 - **Colouring part of a text layer.** `text.set-color` recolours the whole
   layer; colours on ranges of the text need it open for editing.
 - **Anything that needs the system clipboard or a file picker.** A browser

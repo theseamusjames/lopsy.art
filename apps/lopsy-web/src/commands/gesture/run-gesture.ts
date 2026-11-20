@@ -211,3 +211,25 @@ export async function runHeldGesture(input: GestureInput, hold: () => Promise<vo
   }
   return pressed.result;
 }
+
+/**
+ * runGesture with the pointer resting at the press and after every move
+ * until `rest` resolves, as a hand that pauses along a drag: for a tool that
+ * keeps working while the button is held still (Spray deposits on a timer).
+ * The release still happens however a rest or a move ends.
+ */
+export async function runPacedGesture(input: GestureInput, rest: () => Promise<void>): Promise<GestureResult> {
+  const pressed = press(input);
+  const delivered = { at: pressed.first };
+  try {
+    useUIStore.getState().setIsInteracting(true);
+    await rest();
+    for (const point of pressed.rest) {
+      moveThrough(input, [point], delivered);
+      await rest();
+    }
+  } finally {
+    release(input, delivered.at);
+  }
+  return pressed.result;
+}
