@@ -61,7 +61,10 @@ COMMITS the float in place (there is no keyboard cancel)".
   `navigator.clipboard.read()` for an image, falling back to the internal
   clipboard when there is none or the read is refused. Ignored with an
   aria-modal dialog open.
-- **Cmd+Shift+V**: no handler; no paste event fires.
+- **Cmd+Shift+V**: no handler. On macOS, and in Firefox, no paste event
+  fires. Chromium on Linux and Windows binds Ctrl+Shift+V to paste as plain
+  text and fires the same `paste` event as Ctrl+V, which `handlePaste` takes
+  as one.
 
 **Difference**: only the key pastes an image from the system clipboard.
 While text is being edited the key inserts text, while the menu pastes
@@ -73,7 +76,8 @@ with an empty internal clipboard and no clipboard permission does
 nothing", "D2: Cmd+V after Cmd+C adds "Pasted Layer" in place, picks Move
 and selects its alpha; the native paste event fires", "D2: Cmd+V with an
 external image on the system clipboard opens it as a layer at 0,0 (the
-menu Paste cannot)", "D2: Cmd+Shift+V is not a paste shortcut", "D2: Cmd+V
+menu Paste cannot)", "D2: Cmd+Shift+V has no handler of its own; only the browser decides
+whether it pastes", "D2: Cmd+V
 is ignored while an aria-modal dialog is open (no paste, no fallback
 timer)", "D2/D3: Cmd+V while editing text inserts the system clipboard
 text".
@@ -124,16 +128,16 @@ fills the mask (D26) and the button deletes. With a row button of a
 layer other than the active one focused, one press runs both listeners:
 the global handler deletes the active layer, the next layer down becomes
 active and selected, and the panel handler deletes that one too. With
-the active row's own button focused, that row unmounts first and only one
-layer goes.
+the active row's own button focused, Chromium unmounts that row first and
+only one layer goes; Firefox still runs the panel handler, and two go.
 
 **Pinned by**: `surface-keys-tools.spec.ts` "D4: Delete with no selection
 removes only the ACTIVE layer, as "Delete Layer", even with several
 selected", "D4: Backspace and Cmd+Backspace delete the active layer like
 Delete", "D4: Delete with a non-active row button focused runs BOTH
 handlers and removes two layers (pinned as-is)", "D4: Delete with the
-active row's own button focused removes one layer (its row unmounts
-first)"; `surface-panel-layers.spec.ts` "D4: Delete Layer removes EVERY
+active row's own button focused removes one layer in Chromium (its row
+unmounts first), two in Firefox"; `surface-panel-layers.spec.ts` "D4: Delete Layer removes EVERY
 selected layer, as "Delete Layers"", "D4: Delete Layer is disabled when
 only the root group is selected", "D4: Delete Layer in mask edit mode
 still deletes the layer (the key fills the mask)".

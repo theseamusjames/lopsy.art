@@ -13,6 +13,7 @@ import {
   getTransformedContentBounds,
   createTransformState,
   mapRectThroughAffine,
+  affineSourceRect,
 } from '../../tools/transform/transform';
 import { transformPoint } from '../../tools/transform/transform-handles';
 import type { TransformHandle, TransformState } from '../../tools/transform/transform';
@@ -433,7 +434,8 @@ export function renderTransformedFloat(layerId: string | null, transform: Transf
   // The source rect bounds what the shader samples. A whole-layer lift also
   // holds the layer past the canvas edge, outside the canvas-clamped box: it
   // is carried through the same map rather than dropped (#1785).
-  const source = affineSourceRect(layerId, ob);
+  const { width, height } = useEditorStore.getState().document;
+  const source = affineSourceRect(ob, layerId ? wholeLayerFloatRect(layerId) : null, { width, height });
   if (layerId) growFloatToCover(engine, layerId, mapRectThroughAffine(transform, source));
   const srcCx = source.x + source.width / 2;
   const srcCy = source.y + source.height / 2;
@@ -442,19 +444,6 @@ export function renderTransformedFloat(layerId: string | null, transform: Transf
   const dst = transformPoint(srcCx, srcCy, transform);
   const invMatrix = computeInverseAffineMatrix(transform);
   compositeFloatAffine(engine, invMatrix, srcCx, srcCy, dst.x, dst.y, source.width, source.height);
-}
-
-function affineSourceRect(layerId: string | null, box: Rect): Rect {
-  const whole = layerId ? wholeLayerFloatRect(layerId) : null;
-  if (!whole) return box;
-  const x = Math.min(box.x, whole.x);
-  const y = Math.min(box.y, whole.y);
-  return {
-    x,
-    y,
-    width: Math.max(box.x + box.width, whole.x + whole.width) - x,
-    height: Math.max(box.y + box.height, whole.y + whole.height) - y,
-  };
 }
 
 /**
