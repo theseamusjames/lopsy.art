@@ -64,7 +64,7 @@ const SURFACE = 'document' satisfies CommandSurface;
 const DOCUMENT_ONLY: RunOptions = { surface: SURFACE };
 
 export const NO_WEBGL2_MESSAGE =
-  'This browser has no WebGL2, which the editor needs to draw, so no command can run. Use a browser with a real GPU, or start Chromium with software WebGL (SwiftShader): --use-gl=angle --use-angle=swiftshader --enable-webgl --ignore-gpu-blocklist, as the driver in /SKILL.md does unless REAL_GPU=1.';
+  'This browser has no WebGL2, which the editor needs to draw, so no command can run. Use a browser with a real GPU, or start Chromium with software WebGL (SwiftShader): --use-gl=angle --use-angle=swiftshader --enable-webgl --ignore-gpu-blocklist.';
 
 function commandFailure(error: CommandError, isBatch: boolean): LopsyOutcome {
   const json = error.toJSON();

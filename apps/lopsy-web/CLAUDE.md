@@ -12,10 +12,11 @@ Read `SPEC.md` for the full product specification.
 - `SKILL.md` — public guide for agents that create images through the
   agent page's command API (published at `/SKILL.md`, along with
   `FEATURES.md`; indexed by `public/llms.txt`).
-  `e2e/skill-recipes.spec.ts` runs its driver and every recipe against the
-  agent page and checks that every command id it names exists, so update
-  it in the same change when you rename a command or change what a recipe
-  relies on (a param, a refusal, an ambient-state rule).
+  `e2e/skill-recipes.spec.ts` runs its driver, every recipe and every
+  JavaScript snippet against the agent page and checks that every command
+  id it names exists, so update it in the same change when you rename a
+  command or change what a recipe or snippet relies on (a param, a
+  refusal, an ambient-state rule, a result's fields).
 - `FEATURES.md` — the feature catalog. Describe current behaviour only: no
   bug tracking ("Known defect" notes, issue/PR numbers, "fixed in #N"
   history). Bugs live in GitHub issues; fix history lives in commits and PRs.

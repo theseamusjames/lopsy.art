@@ -5,7 +5,11 @@
  * - runs every recipe (a ```json block after `<!-- recipe: name -->`) through
  *   window.lopsy on a fresh agent page, and checks the complete composition's
  *   export;
- * - checks that every command id the guide names is one lopsy.describe() lists;
+ * - evaluates every snippet (a ```js block after `<!-- snippet: name -->`) in
+ *   a fresh agent page, as an agent's browser tool would, and checks it does
+ *   what the guide says;
+ * - checks that every command id the guide names is one lopsy.describe() lists,
+ *   and that the driver's HTTP transport is named only in its appendix;
  * - runs the guide's driver (the ```js block after `<!-- driver: ... -->`) with
  *   Node against this checkout's dev server and exercises each endpoint.
  */
@@ -27,8 +31,15 @@ import {
 
 const SKILL = readFileSync('SKILL.md', 'utf8');
 
-/** The driver resolves `{ "$file": path }` to that file's bytes; here every such file is this photo. */
+/** The guide writes a file's bytes as "<base64 of name>"; here every such file is this photo. */
 const PHOTO_FIXTURE = 'e2e/fixtures/masked-monk/raccoon.jpg';
+const BYTES_PLACEHOLDER = /^<base64 of [^<>]+>$/;
+
+/** Everything after this heading is the optional driver; the rest of the guide must not depend on it. */
+const APPENDIX_HEADING = '\n## Appendix: a ready-made driver\n';
+
+/** The URL the fetch-image snippet reads, which the test answers with the photo, as a site allowing cross-origin reads would. */
+const SNIPPET_IMAGE_URL = 'https://example.com/photo.jpg';
 
 /** The recipe the guide presents as a complete composition, and the size it says it exports. */
 const COMPOSITION = { name: 'evening-poster', width: 1200, height: 800, previewWidth: 800, previewHeight: 533 };
@@ -64,10 +75,27 @@ function driverBlock(): { name: string; source: string } {
   return { name: match[1]!, source: match[2]! };
 }
 
+/** The guide's JavaScript snippets, each with the indentation of its list item removed. */
+function snippets(): Map<string, string> {
+  const pattern = /^( *)<!-- snippet: ([\w-]+) -->\n\1```js\n([\s\S]*?)\n\1```$/gm;
+  const found = new Map<string, string>();
+  for (const [, indent, name, body] of SKILL.matchAll(pattern)) {
+    expect(found.has(name!), `two snippets are named ${name}`).toBe(false);
+    found.set(name!, body!.split('\n').map((line) => line.slice(indent!.length)).join('\n'));
+  }
+  return found;
+}
+
+function snippet(name: string): string {
+  const source = snippets().get(name);
+  if (source === undefined) throw new Error(`SKILL.md has no snippet ${name}`);
+  return source;
+}
+
 function resolveFiles(value: unknown, photoBase64: string): unknown {
   if (Array.isArray(value)) return value.map((v) => resolveFiles(v, photoBase64));
+  if (typeof value === 'string') return BYTES_PLACEHOLDER.test(value) ? photoBase64 : value;
   if (value === null || typeof value !== 'object') return value;
-  if ('$file' in value) return photoBase64;
   return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, resolveFiles(v, photoBase64)]));
 }
 
@@ -129,7 +157,7 @@ function pngSize(bytes: Buffer): { width: number; height: number } {
 
 test.describe('SKILL.md', () => {
   test.beforeEach(({ browserName, isMobile }) => {
-    test.skip(browserName !== 'chromium' || isMobile, 'the guide is for Chromium driven by Playwright');
+    test.skip(browserName !== 'chromium' || isMobile, 'the guide says the agent page is tested in desktop Chromium');
   });
 
   test('has its recipes and its composition', () => {
@@ -188,6 +216,117 @@ test.describe('SKILL.md', () => {
     );
     expect(named.size).toBeGreaterThan(60);
     expect([...named].filter((id) => !ids.includes(id)), 'command ids in SKILL.md that describe() does not list').toEqual([]);
+  });
+
+  test('names the driver and its transport only in the appendix', () => {
+    const parts = SKILL.split(APPENDIX_HEADING);
+    expect(parts, 'SKILL.md has one appendix heading').toHaveLength(2);
+    const [body, appendix] = parts as [string, string];
+    expect(appendix).toContain(driverBlock().source);
+    for (const word of ['POST /', 'GET /', 'curl', '$file', 'OUT_DIR', 'REAL_GPU']) {
+      expect(body.includes(word), `the guide's body names ${word}`).toBe(false);
+    }
+    // Playwright appears once, among the automation libraries Setup lists as equals.
+    expect(body.match(/Playwright/g)).toHaveLength(1);
+    expect(body.replace(/\s+/g, ' ')).toContain('an automation library (Playwright, Puppeteer, Selenium, the DevTools protocol)');
+  });
+
+  test.describe('snippets', () => {
+    test('every snippet is one this spec checks', () => {
+      expect([...snippets().keys()].sort()).toEqual(
+        ['describe-family', 'describe-list', 'describe-op', 'download', 'fetch-image', 'first-call', 'renderer'],
+      );
+    });
+
+    test('the first call paints, and a screenshot of the page shows the document', async ({ page }) => {
+      await openAgentPage(page);
+      const outcome = (await page.evaluate(snippet('first-call'))) as Outcome;
+      expect(outcome).toMatchObject({ ok: true, results: expect.any(Array) });
+      // An 800 × 600 white document with a 300 × 200 red rectangle, shown at 100% in a 1280 × 720 window.
+      const shot = await page.screenshot();
+      const counts = await page.evaluate(async (b64) => {
+        const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+        const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+        const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(bitmap, 0, 0);
+        const data = ctx.getImageData(0, 0, bitmap.width, bitmap.height).data;
+        let red = 0;
+        let white = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          const [r, g, b] = [data[i]!, data[i + 1]!, data[i + 2]!];
+          if (r > 200 && g < 100 && b < 100) red += 1;
+          if (r > 245 && g > 245 && b > 245) white += 1;
+        }
+        return { red, white };
+      }, shot.toString('base64'));
+      expect(counts.red).toBeGreaterThan(300 * 200 * 0.95);
+      expect(counts.red).toBeLessThan(300 * 200 * 1.05);
+      expect(counts.white).toBeGreaterThan((800 * 600 - 300 * 200) * 0.95);
+    });
+
+    test('the describe expressions return what the guide says', async ({ page }) => {
+      await openAgentPage(page);
+      const all = await page.evaluate(() => (window as unknown as AgentWindow).lopsy.describe().map((c) => c.id));
+
+      const list = (await page.evaluate(snippet('describe-list'))) as string;
+      const lines = list.split('\n');
+      expect(lines.map((line) => line.split(': ')[0])).toEqual(all);
+      expect(lines.every((line) => /^[a-z]+\.[a-z0-9-]+: \S/.test(line))).toBe(true);
+
+      const one = (await page.evaluate(snippet('describe-op'))) as { id: string; params: Record<string, unknown> };
+      expect(one.id).toBe('layer.effects');
+      expect(one.params).toHaveProperty('dropShadow');
+
+      const family = (await page.evaluate(snippet('describe-family'))) as Array<{ id: string; params: unknown }>;
+      expect(family.map((c) => c.id)).toEqual(all.filter((id) => id.startsWith('filter.')));
+      expect(family.length).toBeGreaterThan(20);
+      expect(family.every((c) => typeof c.params === 'object')).toBe(true);
+    });
+
+    test('the download snippet downloads a PNG of the document and returns only its name and size', async ({ page }) => {
+      await openAgentPage(page);
+      await page.evaluate(() => (window as unknown as AgentWindow).lopsy.run([
+        { op: 'doc.new', width: 320, height: 200 },
+        { op: 'color.set', foreground: '#2a9d8f' },
+        { op: 'paint.fill' },
+      ]));
+      const downloading = page.waitForEvent('download');
+      const returned = await page.evaluate(snippet('download'));
+      const download = await downloading;
+      expect(download.suggestedFilename()).toBe('poster.png');
+      const bytes = readFileSync((await download.path())!);
+      expect(pngSize(bytes)).toEqual({ width: 320, height: 200 });
+      expect(returned).toEqual({ downloaded: 'poster.png', bytes: bytes.length });
+    });
+
+    test('the fetch snippet places an image from a URL that allows cross-origin reads', async ({ page }) => {
+      await page.route(SNIPPET_IMAGE_URL, (route) => route.fulfill({
+        body: readFileSync(PHOTO_FIXTURE),
+        contentType: 'image/jpeg',
+        headers: { 'access-control-allow-origin': '*' },
+      }));
+      await openAgentPage(page);
+      await page.evaluate(() => (window as unknown as AgentWindow).lopsy.run({ op: 'doc.new', width: 400, height: 300 }));
+      const source = snippet('fetch-image');
+      expect(source).toContain(`('${SNIPPET_IMAGE_URL}')`);
+      const outcome = (await page.evaluate(source)) as Outcome;
+      expect(outcome).toMatchObject({ ok: true, result: { id: expect.any(String) } });
+      const info = (await page.evaluate(() => (window as unknown as AgentWindow).lopsy.run({ op: 'doc.info' }))) as {
+        ok: true;
+        result: { layers: Array<{ id: string; name: string }> };
+      };
+      const placed = info.result.layers.find((layer) => layer.id === (outcome as { result: { id: string } }).result.id);
+      expect(placed?.name).toBe('Pasted Layer');
+    });
+
+    test('the renderer expression names the WebGL renderer', async ({ page }) => {
+      await openAgentPage(page);
+      const renderer = await page.evaluate(snippet('renderer'));
+      expect(typeof renderer).toBe('string');
+      expect(renderer).not.toBe('no WebGL2');
+      expect((renderer as string).length).toBeGreaterThan(0);
+    });
   });
 
   test('pins the Playwright version this repository tests with', () => {
