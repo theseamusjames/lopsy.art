@@ -320,7 +320,12 @@ to the library**.
   changes nothing makes none.
 - **Crop** tool: drag the frame; **Aspect** Free, Original, 1 : 1,
   4 : 5, 3 : 2 or 16 : 9, made landscape or portrait; Reset, Done (Enter)
-  or Cancel (Escape). The crop follows rotation and flips.
+  or Cancel (Escape). The crop follows rotation and flips. These options
+  sit at the bottom of the photo, or at the top when they would hide the
+  crop's bottom edge, until they are moved: dragging the grip at their
+  left puts them anywhere on the photo, and clicking it sends them to the
+  top or the bottom. The next crop on this device opens with them where
+  they were put, in the same corner when the window is another size.
 - **Areas** (toolbar): add **Linear** (a gradient across the photo) or
   **Radial** (an ellipse) areas, up to eight, each with Amount, Invert, a
   name, Delete, and its own Exposure, Contrast, Highlights, Shadows,
@@ -492,7 +497,10 @@ best-practice rules at each step; the `a11y-*.spec.ts` and
   - *Crop*: each edge is a slider. The arrow keys move the focused edge,
     Shift or Page Up/Down by 10 %, Home and End to the photo's side; Left,
     Top, Width and Height fields set the crop in pixels. Opening Crop
-    focuses the top edge, and focus returns to Crop when it closes.
+    focuses the top edge, and focus returns to Crop when it closes. The
+    options' grip ("Move crop options", next after the edges) takes the
+    arrow keys, 10 px a press or 50 px with Shift, and Enter or Space
+    sends the options to the top or the bottom without applying the crop.
   - *Areas*: the selected area's shape sliders set Start and End X and Y
     (linear), or Center X and Y, Width, Height, Turn and Feather
     (radial), in percent of the photo as shown. Each row has Rename.

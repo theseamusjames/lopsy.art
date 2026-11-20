@@ -1,5 +1,5 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
-import { Check, RectangleHorizontal, RectangleVertical, RotateCcw, X } from 'lucide-react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
+import { Check, GripVertical, RectangleHorizontal, RectangleVertical, RotateCcw, X } from 'lucide-react';
 import {
   ASPECT_PRESETS,
   FULL_RECT,
@@ -12,6 +12,7 @@ import {
   type Rect,
 } from '../../engine/crop';
 import { BAR_CLEARANCE, CROP_EDGES, cropAfterEdgeKey, cropWithField, edgePosition, edgeValueText, isBarOnTop, type CropEdge, type CropField, type PixelSize } from '../crop-keys';
+import { barOffset, isBarDrag, isBarHigh, loadBarPlace, otherEnd, placeAfterKey, placeAt, saveBarPlace, type BarPlace, type Size } from '../crop-bar';
 import styles from './CropTool.module.css';
 
 export interface CropToolProps {
@@ -45,12 +46,43 @@ interface Drag {
   readonly start: Rect;
 }
 
+/** The stage's size and the options bar's, and where the bar is on the stage, in CSS pixels. */
+interface BarLayout {
+  readonly stage: Size;
+  readonly bar: Size;
+  readonly left: number;
+  readonly top: number;
+}
+
+interface GripDrag {
+  readonly pointerId: number;
+  readonly startX: number;
+  readonly startY: number;
+  readonly from: BarLayout;
+  /** Null while the pointer is in the dead zone, where letting go is a click; then where the drag has put the bar. */
+  place: BarPlace | null;
+}
+
+function measureBar(root: HTMLElement, bar: HTMLElement): BarLayout {
+  const rootBox = root.getBoundingClientRect();
+  const barBox = bar.getBoundingClientRect();
+  return {
+    stage: { width: root.clientWidth, height: root.clientHeight },
+    bar: { width: bar.offsetWidth, height: bar.offsetHeight },
+    left: barBox.left - rootBox.left,
+    top: barBox.top - rootBox.top,
+  };
+}
+
+const isSameSize = (a: Size, b: Size): boolean => a.width === b.width && a.height === b.height;
+
 /**
  * The crop overlay: a rectangle with a thirds grid over the whole framed
  * image, moved by dragging inside it and resized by its handles, with
  * aspect presets and the crop in pixels in a bar below (above, when it
- * would hide the crop's bottom edge). Each edge is also a slider for the
- * keyboard. Enter or Done commits, Esc cancels.
+ * would hide the crop's bottom edge) until its grip moves it anywhere on
+ * the stage (crop-bar.ts). Each edge is also a slider for the keyboard.
+ * Enter or Done commits, Esc cancels.
  */
 export function CropTool({ imageBox, imageSize, rect, onChange, onDone, onCancel }: CropToolProps) {
   const imageAspect = imageSize.height > 0 ? imageSize.width / imageSize.height : 1;
@@ -59,27 +91,31 @@ export function CropTool({ imageBox, imageSize, rect, onChange, onDone, onCancel
   const [activeHandle, setActiveHandle] = useState<CropHandle | null>(null);
   const [field, setField] = useState<{ readonly id: CropField; readonly text: string } | null>(null);
   const [focusedEdge, setFocusedEdge] = useState<CropEdge | null>(null);
-  const [heights, setHeights] = useState({ stage: 0, bar: 0 });
+  const [sizes, setSizes] = useState<{ readonly stage: Size; readonly bar: Size }>({ stage: { width: 0, height: 0 }, bar: { width: 0, height: 0 } });
+  // Null until the user moves the bar: it then stays where they put it, on this device.
+  const [barPlace, setBarPlace] = useState<BarPlace | null>(loadBarPlace);
   const drag = useRef<Drag | null>(null);
+  const gripDrag = useRef<GripDrag | null>(null);
+  const isAfterGripDrag = useRef(false);
   const firstEdge = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const hintId = useId();
+  const gripHintId = useId();
   const ratio = aspectRatio(aspect, imageAspect, isPortrait);
 
   useEffect(() => {
     firstEdge.current?.focus();
   }, []);
 
-  // The bar's place depends on how tall it and the stage are, measured before the first paint and on resizes.
+  // The bar's place depends on how big it and the stage are, measured before the first paint and on resizes.
   useLayoutEffect(() => {
     const root = rootRef.current;
     const bar = barRef.current;
     if (!root || !bar) return;
     const measure = () => {
-      const stage = root.clientHeight;
-      const height = bar.offsetHeight;
-      setHeights((h) => (h.stage === stage && h.bar === height ? h : { stage, bar: height }));
+      const { stage, bar: barSize } = measureBar(root, bar);
+      setSizes((s) => (isSameSize(s.stage, stage) && isSameSize(s.bar, barSize) ? s : { stage, bar: barSize }));
     };
     measure();
     if (typeof ResizeObserver === 'undefined') return;
@@ -153,6 +189,66 @@ export function CropTool({ imageBox, imageSize, rect, onChange, onDone, onCancel
     onChange(cropWithField(rect, id, value, imageSize, ratio));
   };
 
+  const barLayout = (): BarLayout | null => (rootRef.current && barRef.current ? measureBar(rootRef.current, barRef.current) : null);
+
+  /** The bar's place: the one the user gave it, or the one it took for itself. */
+  const placeOfBar = (layout: BarLayout): BarPlace => barPlace ?? placeAt(layout.left, layout.top, layout.stage, layout.bar);
+
+  const moveBar = (place: BarPlace) => {
+    setBarPlace(place);
+    saveBarPlace(place);
+  };
+
+  const handleGripPointerDown = (e: PointerEvent<HTMLButtonElement>) => {
+    if (e.button !== 0) return;
+    const from = barLayout();
+    if (!from) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    gripDrag.current = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, from, place: null };
+    isAfterGripDrag.current = false;
+  };
+
+  const handleGripPointerMove = (e: PointerEvent<HTMLButtonElement>) => {
+    const d = gripDrag.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    const dx = e.clientX - d.startX;
+    const dy = e.clientY - d.startY;
+    if (!d.place && !isBarDrag(dx, dy)) return;
+    d.place = placeAt(d.from.left + dx, d.from.top + dy, d.from.stage, d.from.bar);
+    setBarPlace(d.place);
+  };
+
+  const handleGripPointerEnd = (e: PointerEvent<HTMLButtonElement>) => {
+    const d = gripDrag.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    gripDrag.current = null;
+    if (!d.place) return;
+    saveBarPlace(d.place);
+    // The click that follows a drag's pointerup only ends the drag.
+    isAfterGripDrag.current = e.type === 'pointerup';
+  };
+
+  const handleGripClick = (e: MouseEvent<HTMLButtonElement>) => {
+    // Enter and Space click with no detail: they never end a drag.
+    if (isAfterGripDrag.current && e.detail > 0) {
+      isAfterGripDrag.current = false;
+      return;
+    }
+    const layout = barLayout();
+    if (layout) moveBar(otherEnd(placeOfBar(layout)));
+  };
+
+  const handleGripKey = (e: KeyboardEvent<HTMLButtonElement>) => {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    const layout = barLayout();
+    if (!layout) return;
+    const next = placeAfterKey(placeOfBar(layout), e.key, e.shiftKey, layout.stage, layout.bar);
+    if (!next) return;
+    e.preventDefault();
+    moveBar(next);
+  };
+
   const box = {
     '--crop-left': `${imageBox.left + rect.x * imageBox.width}px`,
     '--crop-top': `${imageBox.top + rect.y * imageBox.height}px`,
@@ -169,13 +265,19 @@ export function CropTool({ imageBox, imageSize, rect, onChange, onDone, onCancel
   const pixels = cropPixels(rect, imageSize.width, imageSize.height);
   const isBottomInUse = focusedEdge === 's' || activeHandle === 's' || activeHandle === 'se' || activeHandle === 'sw';
   const isBarAtTop =
-    heights.stage > 0 &&
+    sizes.stage.height > 0 &&
     isBarOnTop(
       { top: imageBox.top + rect.y * imageBox.height, bottom: imageBox.top + (rect.y + rect.height) * imageBox.height },
-      heights.stage,
-      heights.bar + BAR_CLEARANCE,
+      sizes.stage.height,
+      sizes.bar.height + BAR_CLEARANCE,
       isBottomInUse,
     );
+  const movedTo = barPlace ? barOffset(barPlace, sizes.stage, sizes.bar) : null;
+  // From the stage's centre line, where a moved bar's left: 50% still puts it (CropTool.module.css).
+  const barStyle = movedTo
+    ? ({ '--bar-shift': `${movedTo.left - sizes.stage.width / 2}px`, '--bar-top': `${movedTo.top}px` } as CSSProperties)
+    : undefined;
+  const clickSendsBarTo = (barPlace ? isBarHigh(barPlace) : isBarAtTop) ? 'bottom' : 'top';
 
   return (
     <div ref={rootRef} className={styles.cropTool} role="group" aria-label="Crop" data-testid="crop-tool">
@@ -219,8 +321,33 @@ export function CropTool({ imageBox, imageSize, rect, onChange, onDone, onCancel
       <p id={hintId} className={styles.srOnly}>
         Arrow keys move the edge, Shift for bigger steps. Enter applies the crop, Escape cancels it.
       </p>
-      <div ref={barRef} className={styles.bar} role="group" aria-label="Crop options" data-place={isBarAtTop ? 'top' : 'bottom'}>
+      <p id={gripHintId} className={styles.srOnly}>
+        Drag it, or press the arrow keys, to move the crop options anywhere on the photo. Enter, or a click, moves them to the top or the bottom.
+      </p>
+      <div
+        ref={barRef}
+        className={styles.bar}
+        role="group"
+        aria-label="Crop options"
+        data-place={barPlace ? 'moved' : isBarAtTop ? 'top' : 'bottom'}
+        style={barStyle}
+      >
         <div className={styles.row}>
+          <button
+            type="button"
+            className={styles.grip}
+            aria-label="Move crop options"
+            aria-describedby={gripHintId}
+            title={`Drag to move the crop options, or click to move them to the ${clickSendsBarTo}`}
+            onPointerDown={handleGripPointerDown}
+            onPointerMove={handleGripPointerMove}
+            onPointerUp={handleGripPointerEnd}
+            onPointerCancel={handleGripPointerEnd}
+            onClick={handleGripClick}
+            onKeyDown={handleGripKey}
+          >
+            <GripVertical size={16} aria-hidden />
+          </button>
           <select
             className={styles.select}
             aria-label="Aspect"

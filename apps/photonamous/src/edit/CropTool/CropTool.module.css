@@ -88,6 +88,37 @@
   bottom: auto;
 }
 
+/* Where its grip put it. It keeps left: 50%, so it is as wide, and wraps the same, as in its own place. */
+.bar[data-place='moved'] {
+  top: var(--bar-top);
+  bottom: auto;
+  transform: translateX(var(--bar-shift));
+}
+
+.grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  cursor: grab;
+  touch-action: none;
+}
+
+.grip:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.grip:active {
+  cursor: grabbing;
+}
+
 .row {
   display: flex;
   flex-wrap: wrap;
@@ -206,6 +237,7 @@
 
 .number:focus-visible,
 .select:focus-visible,
+.grip:focus-visible,
 .button:focus-visible,
 .iconButton:focus-visible,
 .primary:focus-visible {

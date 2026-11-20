@@ -178,6 +178,19 @@ test('every view, as a user reaches it', async ({ page }) => {
   await step(page, 'edit view, crop tool', async () => {
     await page.keyboard.press('r');
   });
+  // The options dragged by their grip to the stage's top right corner, where they stay.
+  await step(page, 'edit view, crop tool, options moved', async () => {
+    const stage = await page.getByTestId('crop-tool').boundingBox();
+    const bar = page.getByRole('group', { name: 'Crop options' });
+    const grip = bar.getByRole('button', { name: 'Move crop options' });
+    const g = await grip.boundingBox();
+    if (!stage || !g) throw new Error('no crop options');
+    await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(stage.x + stage.width + 100, Math.max(1, stage.y - 100), { steps: 10 });
+    await page.mouse.up();
+    await expect.poll(async () => Math.round(((await bar.boundingBox())?.y ?? 0) - stage.y)).toBe(8);
+  });
   await page.keyboard.press('Escape');
 
   await step(page, 'edit view, areas', async () => {
