@@ -275,6 +275,8 @@ export async function loadProjectOrThrow(file: File): Promise<LoadedProject> {
         layers: newLayers,
         layerOrder: [...manifest.layerOrder],
         activeLayerId: manifest.activeLayerId,
+        // The ids the throwaway document selected name no loaded layer.
+        selectedLayerIds: manifest.activeLayerId ? [manifest.activeLayerId] : [],
         backgroundColor: manifest.backgroundColor,
         colorMode: manifest.colorMode ?? 'rgb',
         indexedPalette: manifest.indexedPalette,
