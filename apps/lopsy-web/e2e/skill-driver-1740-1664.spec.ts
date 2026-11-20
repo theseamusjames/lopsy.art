@@ -4,7 +4,7 @@ import { createServer } from 'node:net';
 import { test, expect } from './fixtures';
 
 /**
- * Runs the driver published in SKILL.md, as written there, against this
+ * Runs the driver published in SKILL-UI.md, as written there, against this
  * checkout's dev server.
  *
  * #1740 — h.text set font and size with the previous text layer still
@@ -16,10 +16,10 @@ import { test, expect } from './fixtures';
  */
 
 function driverSource(): string {
-  const skill = readFileSync('SKILL.md', 'utf8');
+  const skill = readFileSync('SKILL-UI.md', 'utf8');
   const section = skill.slice(skill.indexOf('## The driver'));
   const match = /```js\n([\s\S]*?)```/.exec(section);
-  if (!match) throw new Error('driver code block not found in SKILL.md');
+  if (!match) throw new Error('driver code block not found in SKILL-UI.md');
   return match[1];
 }
 
@@ -40,7 +40,7 @@ async function postStep(port: number, body: string): Promise<{ status: number; t
   return { status: res.status, text: await res.text() };
 }
 
-test.describe('SKILL.md driver (#1740, #1664)', () => {
+test.describe('SKILL-UI.md driver (#1740, #1664)', () => {
   test.beforeEach(({ browserName, isMobile }) => {
     test.skip(browserName !== 'chromium' || isMobile, 'the driver launches its own Chromium');
   });

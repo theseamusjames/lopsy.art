@@ -1,15 +1,17 @@
 # Lopsy
 
-> Lopsy is a free, open-source image editor that runs entirely in the browser at https://lopsy.art: layers, masks, blend modes, layer effects, gradients, brushes, text with Google Fonts, filters, and PNG/JPEG/PSD export. It has no backend and no API. Agents create images by driving the editor's UI with a browser automation tool such as Playwright.
+> Lopsy is a free, open-source image editor that runs entirely in the browser at https://lopsy.art: layers, masks, blend modes, layer effects, gradients, brushes, text with Google Fonts, filters, and PNG/JPEG/PSD export. It has no backend: images are made in the browser tab. Agents make images on its agent page, https://lopsy.art/agent/, which shows the canvas alone and runs every editing operation as a named command through `window.lopsy`, from a browser automation tool such as Playwright.
 
-To make an image with Lopsy, read SKILL.md first. It has a tested Playwright driver, the coordinate system, step-by-step recipes and the pitfalls to avoid. Use FEATURES.md to look up exactly what each tool, filter and effect does.
+To make an image with Lopsy, read SKILL.md first. It has a tested Playwright driver for the agent page, the command API's contract, step-by-step recipes and the behaviours to know. SKILL-UI.md drives the full editor's UI instead, for testing the UI as a person uses it and for the few things the command API does not offer. Use FEATURES.md to look up exactly what each tool, filter and effect does.
 
 The source is on GitHub at https://github.com/theseamusjames/lopsy.art, and we accept pull requests written by AI agents. AGENTS.md explains how to make one we can merge.
 
 ## For agents
 
-- [SKILL.md](https://lopsy.art/SKILL.md): how to create images with Lopsy programmatically. Covers setup, a persistent Playwright driver with helpers, recipes and a UI selector reference.
-- [FEATURES.md](https://lopsy.art/FEATURES.md): the exhaustive feature catalog, with every tool, option range, behaviour and known defect.
+- [SKILL.md](https://lopsy.art/SKILL.md): how to create images with Lopsy programmatically, through the agent page's command API. Covers setup, a persistent Playwright driver, the API's contract, tested recipes and what the API does not offer.
+- [SKILL-UI.md](https://lopsy.art/SKILL-UI.md): how to drive the editor's UI with Playwright: a driver with helpers, coordinates, recipes and a UI selector reference.
+- [FEATURES.md](https://lopsy.art/FEATURES.md): the exhaustive feature catalog, with every tool, option range and behaviour.
+- [Agent page](https://lopsy.art/agent/): the canvas alone, driven through `window.lopsy` (`lopsy.describe()` lists every command).
 
 ## Contributing
 

@@ -20,7 +20,7 @@ But of course there are bugs. A lot of bugs. The engine is written in rust, comp
 With that, there’s a particularly pernicious class of bug that’s hard to spot: the kind that only appears in sequence. Undo, for example. You might undo once and it works. You might undo twice and it works. But maybe a bunch of undos in a row on a particular sequence of actions causes redo to fail. Your regular e2e won’t catch that.
 
 ## Design as Diagnosis
-So to combat that, I let Claude build unique, randomized compositions, using the tool the way a user would [through Playwright](https://lopsy.art/SKILL.md).
+So to combat that, I let Claude build unique, randomized compositions, using the tool the way a user would [through Playwright](https://lopsy.art/SKILL-UI.md).
 
 First, I give Claude a `/random` skill that allows for actual random selection via node (because LLMs are really bad at choosing randomly on their own, particularly for the same prompt). 
 

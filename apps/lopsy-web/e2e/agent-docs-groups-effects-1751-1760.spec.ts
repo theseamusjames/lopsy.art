@@ -13,7 +13,7 @@ import { test, expect } from './fixtures';
 import { waitForStore, createDocument, drawRect, openEffectsPanel } from './helpers';
 
 test.describe('Agent docs on group effects and copying effects (#1751, #1760)', () => {
-  test('a group drawer shows adjustments only, and SKILL.md says so', async ({ page, isMobile }) => {
+  test('a group drawer shows adjustments only, and SKILL-UI.md says so', async ({ page, isMobile }) => {
     test.skip(isMobile, 'the layers panel toolbar is a desktop layout');
     await page.goto('/');
     await waitForStore(page);
@@ -29,7 +29,7 @@ test.describe('Agent docs on group effects and copying effects (#1751, #1760)', 
     await expect(drawer.locator('[aria-label="Add Adjustment"]')).toBeVisible();
     await expect(drawer.locator('[aria-label="Enable Drop Shadow"]')).toHaveCount(0);
 
-    const skill = readFileSync('SKILL.md', 'utf8');
+    const skill = readFileSync('SKILL-UI.md', 'utf8');
     expect(skill).not.toContain('Group effects and adjustment layers apply to everything inside the group');
     const groups = skill.slice(skill.indexOf('**Groups.**'), skill.indexOf('**Guides and grid.**'));
     expect(groups).toContain('no layer effects');
