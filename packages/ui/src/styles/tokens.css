@@ -53,6 +53,8 @@
   --color-danger-bg: #c62828;
   --color-danger-bg-hover: #b91c1c;
   --color-danger-text: #ffffff;
+  /* A slider's fill, from where its value starts to the thumb: 3.3:1 against the track. */
+  --color-slider-fill: var(--color-primary-bg);
 
   /* Radii */
   --radius-sm: 3px;

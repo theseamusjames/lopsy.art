@@ -28,7 +28,9 @@ export interface EditSliderProps extends Partial<SliderReadout> {
 
 /**
  * The shared slider as the Edit view uses it: value boxes read '+0.50',
- * '−12' and '0' unless `format` and `parse` say otherwise. The shared
+ * '−12' and '0' unless `format` and `parse` say otherwise, and the track
+ * fills from the default value, so a control left alone shows no fill
+ * and a changed one stands out (UX-09). The shared
  * slider also commits on a key-up or pointer-up that changed nothing (a
  * Tab onto it, a press on its thumb); here a commit is a history step, and
  * on Temperature or Tint it makes the white balance Custom, so only a
@@ -40,6 +42,7 @@ export function EditSlider({ min, max, step, format, parse, onChange, onCommit, 
   return (
     <Slider
       {...props}
+      fillFrom={props.defaultValue}
       min={min}
       max={max}
       step={step}

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, type CSSProperties } from 'react';
 import styles from './Slider.module.css';
 
 export interface SliderProps {
@@ -24,6 +24,13 @@ export interface SliderProps {
   parse?: (text: string) => number | null;
   /** Read after the value by screen readers ("+0.50 EV"); the suffix when there is none. */
   unit?: string;
+  /**
+   * Where the track's fill starts: it runs from this value to the thumb.
+   * Pass the default value where a change from it is what matters (an
+   * edit), so a slider left alone shows no fill. By default 0 when the
+   * range runs either side of 0, else the minimum.
+   */
+  fillFrom?: number;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -72,6 +79,36 @@ export function sliderKnobPosition(
   return scale === 'log' ? posLog(clamped, sliderMin, sliderMax) : clamped;
 }
 
+/** The thumb's width in the stylesheet: its centre travels from half a thumb in from one end to half a thumb in from the other. */
+const THUMB_WIDTH = 20;
+
+/** A fill edge at `fraction` of the way along the track, under the thumb's centre; the ends reach the track's ends. */
+function fillEdge(fraction: number): string {
+  if (fraction <= 0) return '0%';
+  if (fraction >= 1) return '100%';
+  return `calc(${THUMB_WIDTH / 2}px + (100% - ${THUMB_WIDTH}px) * ${Number(fraction.toFixed(4))})`;
+}
+
+/**
+ * Where the track's fill starts and ends, as CSS lengths along the track:
+ * from `fillFrom` (by default 0 on a range either side of 0, else the
+ * minimum) to the value, in the knob's scale. Equal when they meet.
+ */
+export function sliderFill(
+  value: number,
+  knobMin: number,
+  knobMax: number,
+  scale: 'linear' | 'log' = 'linear',
+  fillFrom?: number,
+): { from: string; to: string } {
+  const at = (v: number) =>
+    knobMax === knobMin ? 0 : (sliderKnobPosition(v, knobMin, knobMax, scale) - knobMin) / (knobMax - knobMin);
+  const origin = fillFrom ?? (knobMin < 0 && knobMax > 0 ? 0 : knobMin);
+  const a = at(origin);
+  const b = at(value);
+  return { from: fillEdge(Math.min(a, b)), to: fillEdge(Math.max(a, b)) };
+}
+
 /** What a screen reader says for the value: the value box's text, then the unit or suffix. */
 export function sliderValueText(text: string, unit?: string): string {
   return unit ? `${text} ${unit}` : text;
@@ -96,6 +133,7 @@ export function Slider({
   format = String,
   parse = parseNumber,
   unit,
+  fillFrom,
 }: SliderProps) {
   const [localValue, setLocalValue] = useState(String(value));
   const [isFocused, setIsFocused] = useState(false);
@@ -183,12 +221,14 @@ export function Slider({
   );
 
   const knobPosition = sliderKnobPosition(value, knobMin, knobMax, scale);
+  const fill = sliderFill(value, knobMin, knobMax, scale, fillFrom);
   return (
     <div className={styles.container} data-disabled={disabled || undefined} onDoubleClick={handleDoubleClick}>
       {label && <span className={styles.label}>{label}</span>}
       <input
         type="range"
         className={styles.slider}
+        style={{ '--slider-fill-from': fill.from, '--slider-fill-to': fill.to } as CSSProperties}
         value={knobPosition}
         min={knobMin}
         max={knobMax}

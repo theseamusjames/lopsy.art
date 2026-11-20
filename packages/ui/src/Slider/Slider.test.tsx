@@ -2,7 +2,7 @@
 import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { Slider, commitSliderValue, sliderKnobPosition, type SliderProps } from './Slider';
+import { Slider, commitSliderValue, sliderFill, sliderKnobPosition, type SliderProps } from './Slider';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -136,6 +136,35 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
+describe('sliderFill', () => {
+  const at = (f: number) => `calc(10px + (100% - 20px) * ${f})`;
+
+  it('fills a range either side of 0 from 0, in both directions', () => {
+    expect(sliderFill(50, -100, 100)).toEqual({ from: at(0.5), to: at(0.75) });
+    expect(sliderFill(-40, -100, 100)).toEqual({ from: at(0.3), to: at(0.5) });
+  });
+
+  it('fills a one-sided range from its start, reaching the track\'s ends', () => {
+    expect(sliderFill(25, 0, 100)).toEqual({ from: '0%', to: at(0.25) });
+    expect(sliderFill(100, 0, 100)).toEqual({ from: '0%', to: '100%' });
+  });
+
+  it('shows no fill when the value is where the fill starts', () => {
+    expect(sliderFill(0, -100, 100)).toEqual({ from: at(0.5), to: at(0.5) });
+    expect(sliderFill(0, 0, 100)).toEqual({ from: '0%', to: '0%' });
+    expect(sliderFill(5000, 2000, 12000, 'linear', 5000)).toEqual({ from: at(0.3), to: at(0.3) });
+  });
+
+  it('fills from fillFrom when given, such as a default value', () => {
+    expect(sliderFill(3000, 2000, 12000, 'linear', 5000)).toEqual({ from: at(0.1), to: at(0.3) });
+    expect(sliderFill(80, 0, 100, 'linear', 50)).toEqual({ from: at(0.5), to: at(0.8) });
+  });
+
+  it('places the edges in the knob\'s scale', () => {
+    expect(sliderFill(10, 1, 100, 'log')).toEqual({ from: '0%', to: at(0.5) });
+  });
+});
+
 describe('Slider', () => {
   it('shows the value through format and reads typed text through parse', () => {
     const onChange = vi.fn();
@@ -234,6 +263,13 @@ describe('Slider', () => {
     expect(rangeOf(host).disabled).toBe(false);
     expect(valueBoxOf(host).disabled).toBe(false);
     expect(host.firstElementChild?.hasAttribute('data-disabled')).toBe(false);
+  });
+
+  it('draws the fill from where the value starts to the thumb', () => {
+    const host = render(<Slider value={20} min={-100} max={100} onChange={() => undefined} />);
+    const style = rangeOf(host).style;
+    expect(style.getPropertyValue('--slider-fill-from')).toBe('calc(10px + (100% - 20px) * 0.5)');
+    expect(style.getPropertyValue('--slider-fill-to')).toBe('calc(10px + (100% - 20px) * 0.6)');
   });
 
   it('names the range and the value box after the label', () => {

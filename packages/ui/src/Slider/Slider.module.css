@@ -16,7 +16,15 @@
   -webkit-appearance: none;
   appearance: none;
   height: 10px;
-  background: #1e1e1e;
+  background-color: #1e1e1e;
+  /* The fill: from where the value starts to the thumb's centre (Slider.tsx sets the two edges). */
+  background-image: linear-gradient(
+    to right,
+    transparent var(--slider-fill-from, 0%),
+    var(--color-slider-fill) var(--slider-fill-from, 0%),
+    var(--color-slider-fill) var(--slider-fill-to, 0%),
+    transparent var(--slider-fill-to, 0%)
+  );
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-xs);
   outline: none;

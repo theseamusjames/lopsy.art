@@ -14,10 +14,10 @@ load this package's stories) and tests, following
 
 | Import | What |
 |---|---|
-| `@lopsy/ui/styles/tokens.css` | The design tokens: colours (among them the filled buttons', `--color-primary-*` and `--color-danger-*`, under which white text is at least 4.5:1 in every state), spacing, radii, fonts, sizes, z-index, shadows |
+| `@lopsy/ui/styles/tokens.css` | The design tokens: colours (among them the filled buttons', `--color-primary-*` and `--color-danger-*`, under which white text is at least 4.5:1 in every state, and `--color-slider-fill`, the primary blue), spacing, radii, fonts, sizes, z-index, shadows |
 | `@lopsy/ui/styles/reset.css` | The reset and base element styles, including the default focus ring |
 | `@lopsy/ui/styles/fonts.css` | The `@font-face` rules for Inter and Jersey 10 |
-| `@lopsy/ui/Slider` | The slider: label, range, value box with an optional suffix, double-click reset; `format`, `parse`, `unit`, `disabled` |
+| `@lopsy/ui/Slider` | The slider: label, range, value box with an optional suffix, double-click reset, and a fill along the track from its origin to the thumb (0 when the range runs both sides of it, else the left end, or `fillFrom`); `format`, `parse`, `unit`, `disabled`, `fillFrom` |
 | `@lopsy/ui/Menu` | A dropdown or context menu: `Menu`, `MenuItem` (accent icon, title, detail line), `MenuSeparator`, `MenuGroup` |
 | `@lopsy/ui/a11y/focus-trap` | Tab stops inside a dialog, wrapping Tab, handing focus back when it closes |
 | `@lopsy/ui/a11y/layers` | Which open dialog or popover answers Escape and keeps Tab |
