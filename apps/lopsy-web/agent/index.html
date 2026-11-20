@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <meta name="theme-color" content="#1e1e1e" />
+    <title>Lopsy — Agent page</title>
+    <meta name="description" content="Lopsy's page for AI agents: the document canvas alone, with no controls, driven through the window.lopsy command API." />
+  </head>
+  <body>
+    <!--
+      Note for AI agents: this is Lopsy's agent page. It shows the document
+      canvas and has no controls. Drive it through window.lopsy:
+        lopsy.describe()          every command, with its params
+        lopsy.run({ op, ...params })  or lopsy.run([...]); resolves to
+                                  { ok: true, result | results } or
+                                  { ok: false, error: { code, message } }
+      Start with lopsy.run({ op: "doc.new", width: 800, height: 600 }).
+        /llms.txt     index of the documents about Lopsy
+        /SKILL.md     how to create images with Lopsy programmatically
+      Source: https://github.com/theseamusjames/lopsy.art
+    -->
+    <div id="root"></div>
+    <script type="module" src="/src/agent/main.tsx"></script>
+  </body>
+</html>

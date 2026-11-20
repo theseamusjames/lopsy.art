@@ -46,6 +46,8 @@ src/
     interactions/
       gesture-session.ts  # Canvas pointer down/move/up state machine, shared by
                           # the canvas hook and the gesture commands
+  agent/            # The agent page (agent/index.html, served at /agent/):
+                    # the canvas alone, with the command API as window.lopsy
   commands/         # Command registry and the commands, one directory per
                     # family (layer/, filter/, ui/, ...); see Commands below
   components/       # Reusable UI components (Button, Slider, etc.)
