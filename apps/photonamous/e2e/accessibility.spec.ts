@@ -193,8 +193,8 @@ test('every view, as a user reaches it', async ({ page }) => {
   });
   await page.keyboard.press('Escape');
 
-  await step(page, 'edit view, areas', async () => {
-    await edit.getByRole('button', { name: 'Areas', exact: true }).click();
+  await step(page, 'edit view, masks', async () => {
+    await edit.getByRole('button', { name: 'Masks', exact: true }).click();
     await edit.getByRole('button', { name: 'Radial' }).click();
   });
 
@@ -221,7 +221,7 @@ test('every view, as a user reaches it', async ({ page }) => {
   await page.keyboard.press('Escape');
 
   // More than four versions are chosen from a dropdown in the Selected box, with the selected one's actions beside it.
-  // On the second photo: the steps above gave the first one a Radial area in the Edit view.
+  // On the second photo: the steps above gave the first one a Radial mask in the Edit view.
   await step(page, 'single view, versions dropdown', async () => {
     await tiles(page).nth(1).dblclick();
     const versions = page.getByRole('group', { name: 'Versions' });

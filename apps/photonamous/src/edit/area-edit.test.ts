@@ -39,12 +39,12 @@ describe('dragRadial', () => {
 });
 
 describe('areaLabel', () => {
-  it('uses the name, or the place in the list', () => {
+  it('uses the name, or the place in the list as a mask', () => {
     const added = addArea(DEFAULT_RECIPE, 'radial', 'r1');
     if (!added) throw new Error('no area');
     const [area] = liveAreas(applyChanges(DEFAULT_RECIPE, added.values));
     if (!area) throw new Error('no area');
-    expect(areaLabel(area, 1)).toBe('Area 2');
+    expect(areaLabel(area, 1)).toBe('Mask 2');
     expect(areaLabel({ ...area, name: 'Sky' }, 0)).toBe('Sky');
   });
 });

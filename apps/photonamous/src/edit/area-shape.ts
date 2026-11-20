@@ -37,20 +37,20 @@ const SIZE = { min: 1, max: 400, step: 1, unit: 'percent' } as const;
 
 /** A linear area: full effect at its start, none past its end. */
 export const LINEAR_SHAPE: readonly AreaShapeControl[] = [
-  { key: 'startX', label: 'Start X', ...POSITION, defaultValue: 50, historyLabel: 'Area: resize' },
-  { key: 'startY', label: 'Start Y', ...POSITION, defaultValue: 25, historyLabel: 'Area: resize' },
-  { key: 'endX', label: 'End X', ...POSITION, defaultValue: 50, historyLabel: 'Area: resize' },
-  { key: 'endY', label: 'End Y', ...POSITION, defaultValue: 75, historyLabel: 'Area: resize' },
+  { key: 'startX', label: 'Start X', ...POSITION, defaultValue: 50, historyLabel: 'Mask: resize' },
+  { key: 'startY', label: 'Start Y', ...POSITION, defaultValue: 25, historyLabel: 'Mask: resize' },
+  { key: 'endX', label: 'End X', ...POSITION, defaultValue: 50, historyLabel: 'Mask: resize' },
+  { key: 'endY', label: 'End Y', ...POSITION, defaultValue: 75, historyLabel: 'Mask: resize' },
 ];
 
 /** A radial area: an ellipse's centre, its width and height along its own axes, its turn and its feather. */
 export const RADIAL_SHAPE: readonly AreaShapeControl[] = [
-  { key: 'centerX', label: 'Center X', ...POSITION, defaultValue: 50, historyLabel: 'Area: move' },
-  { key: 'centerY', label: 'Center Y', ...POSITION, defaultValue: 50, historyLabel: 'Area: move' },
-  { key: 'width', label: 'Width', ...SIZE, defaultValue: 50, historyLabel: 'Area: resize' },
-  { key: 'height', label: 'Height', ...SIZE, defaultValue: 50, historyLabel: 'Area: resize' },
-  { key: 'turn', label: 'Turn', min: -180, max: 180, step: 1, unit: 'degrees', defaultValue: 0, historyLabel: 'Area: turn' },
-  { key: 'feather', label: 'Feather', min: 0, max: 100, step: 1, unit: 'percent', defaultValue: 50, historyLabel: 'Area: feather' },
+  { key: 'centerX', label: 'Center X', ...POSITION, defaultValue: 50, historyLabel: 'Mask: move' },
+  { key: 'centerY', label: 'Center Y', ...POSITION, defaultValue: 50, historyLabel: 'Mask: move' },
+  { key: 'width', label: 'Width', ...SIZE, defaultValue: 50, historyLabel: 'Mask: resize' },
+  { key: 'height', label: 'Height', ...SIZE, defaultValue: 50, historyLabel: 'Mask: resize' },
+  { key: 'turn', label: 'Turn', min: -180, max: 180, step: 1, unit: 'degrees', defaultValue: 0, historyLabel: 'Mask: turn' },
+  { key: 'feather', label: 'Feather', min: 0, max: 100, step: 1, unit: 'percent', defaultValue: 50, historyLabel: 'Mask: feather' },
 ];
 
 export function shapeControls(area: Area): readonly AreaShapeControl[] {

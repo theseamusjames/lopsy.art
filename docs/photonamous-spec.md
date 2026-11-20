@@ -90,7 +90,7 @@ Appendix A. Re-check them before building on them.
   filter by metadata.
 - Develop RAF, DNG, JPEG, PNG and WebP non-destructively: profile, white
   balance, tone, curves, colour, colour grading, sharpness and noise,
-  lens corrections, framing, finish, local adjustments ("areas") and
+  lens corrections, framing, finish, local adjustments ("masks") and
   spot fixes. Versions, history, presets, and copy and paste of edits.
 - Export JPEG, PNG and 16-bit TIFF to Drive or to the computer, with
   presets.
@@ -258,7 +258,7 @@ The Edit view is built for developing RAW files.
 - A toolbar holds:
   - viewing: before and after (toggle and split), clipping warnings, zoom
     (fit, 100 %, 200 %);
-  - tools: Crop, Straighten, Areas, Spot fixes, white-balance picker;
+  - tools: Crop, Straighten, Masks, Spot fixes, white-balance picker;
   - actions: Copy edits, Paste edits, Edit in Lopsy, Export.
 
 **Control groups.** The final names come out of design review, but they
@@ -279,7 +279,7 @@ can be switched off, to see what it does, and reset.
 | Lens | Distortion, Vignetting, Color fringes; automatic when the file carries correction data | Phase 4. DNG opcode lists first; Fujifilm's embedded data if spike S7 finds it usable |
 | Framing | Crop (free or fixed aspect), Straighten (angle, auto-level), Rotate, Flip, Perspective (vertical, horizontal, auto) | Crop and straighten in Phase 2, perspective in Phase 4 |
 | Finish | Vignette (amount, size, roundness, feather), Grain (amount, size, roughness) | |
-| Areas | Brush, Gradient, Circle, Brightness range and Color range, which can be combined and inverted. Each area has its own Tone, White balance, Color, Local contrast and Sharpness & noise sliders. | Phase 4. Subject and sky selection by an on-device model is later (open question 6) |
+| Masks | Brush, Gradient, Circle, Brightness range and Color range, which can be combined and inverted. Each mask has its own Tone, White balance, Color, Local contrast and Sharpness & noise sliders. | Phase 4. Subject and sky selection by an on-device model is later (open question 6) |
 | Spot fixes | Heal or Clone a circle or a brushed shape. The source is chosen automatically and can be moved. | Phase 4 |
 
 **Sliders.**
@@ -308,7 +308,7 @@ can be switched off, to see what it does, and reset.
 - The built-in presets are few and made for Lopsy.
 
 **Copy and paste.** **Copy edits** asks which groups to copy; **Paste
-edits** applies them to one photo or many. Framing, Areas and Spot fixes
+edits** applies them to one photo or many. Framing, Masks and Spot fixes
 are unticked by default because they rarely fit another photo.
 
 **Pixel readout.** The value of the rendered output under the pointer, in
@@ -421,7 +421,7 @@ the product.
 | A rule-based group | Saved search | smart collection |
 | A reduced copy that can be edited without the original | Proxy; in the UI, "Edit without the original" | smart preview |
 | A revision of the rendering maths | Pipeline version; in the UI, "Editing engine version" | process version |
-| Local adjustments | Areas | masks, local adjustments |
+| Local adjustments | Masks (`areas` in the recipe and the code) | local adjustments |
 | The develop controls | The groups in 5.4 | panels |
 
 ## 6. Architecture
@@ -927,7 +927,7 @@ engine RFC may refine it before 1.0 ships.
 | 10 | Local contrast (large and small details) | rendered | Local contrast | GPU |
 | 11 | Colour: vibrance, saturation, colour by hue, black & white, colour grading | OkLab/OkLCh | Color, Color Grading | GPU |
 | 12 | Curves | rendered, display-like encoding | Curves | GPU |
-| 13 | Areas: each area's mask times its own stage 3 to 12 changes | as above | Areas | GPU |
+| 13 | Masks: each mask times its own stage 3 to 12 changes | as above | Masks | GPU |
 | 14 | Sharpening | luminance | Sharpness & noise | GPU |
 | 15 | Finish: vignette after crop, grain | rendered | Finish | GPU |
 | 16 | Output transform: gamut mapping, transfer function, dither | display or export space | the view or the export | GPU |
@@ -979,7 +979,7 @@ engine RFC may refine it before 1.0 ships.
 - `develop_render_full(scale, region)` for export
 - `develop_auto_tone` and `develop_auto_white_balance`, which return
   recipe patches
-- the mask and spot commands for Areas and Spot fixes
+- the mask and spot commands for Masks and Spot fixes
 
 Each is a function in `engine/src/commands/` with a one-line export in
 `engine/hosts/wasm/src/api/`, per `engine/CLAUDE.md`. The CLI host gains
@@ -1246,7 +1246,7 @@ more. "Phase" is when it is needed (12).
 | E9 | Camera colour data v2: two calibration illuminants per model, with the source of every number recorded, as `base_curves.rs` does ("facts, not code"); temperature and tint to and from the camera neutral per the DNG specification | 2 | M |
 | E10 | Writers: 16-bit TIFF, and EXIF and XMP blocks for JPEG, PNG and TIFF | 2 | M |
 | E11 | Lens corrections (manual, plus DNG opcode lists), perspective, auto-level and auto perspective | 4 | L |
-| E12 | Areas: brush strokes stored as resolution-independent vector paths and rasterized at render resolution; analytic gradients and circles; brightness and colour range masks; combine and invert; per-area stage parameters | 4 | XL |
+| E12 | Masks: brush strokes stored as resolution-independent vector paths and rasterized at render resolution; analytic gradients and circles; brightness and colour range masks; combine and invert; per-mask stage parameters | 4 | XL |
 | E13 | Spot fixes: parametric heal and clone, re-rendered every time from the stored spots (Lopsy's healing math is a reference) | 4 | L |
 | E14 | Better Bayer demosaic for DNG and future formats, implemented from a published paper and measured against reference renders | 4 | M |
 | E15 | Highlight reconstruction, local contrast and haze | 2 to 4 | L |
@@ -1360,7 +1360,7 @@ Reference machines:
 | Embedded preview on screen after opening a photo | < 150 ms |
 | First full-quality render of a 26 MP RAF | < 2.5 s; < 0.5 s for a prefetched neighbour |
 | Slider drag, global groups, working resolution | 60 fps target, 30 fps floor |
-| Slider drag with 10 areas | ≥ 30 fps |
+| Slider drag with 10 masks | ≥ 30 fps |
 | Export, 26 MP RAF to full-size JPEG | < 4 s each; 100 photos in < 5 min |
 | Memory in the Edit view, ≤ 50 MP | ≤ 1.5 GB JS and wasm heap, ≤ 1 GB GPU |
 | Handoff, click to the developed layer in Lopsy, 26 MP, photo open in Edit | < 4 s |
@@ -1464,14 +1464,14 @@ first part of E15; L6.
 - **Public beta** begins: the consent screen goes to production after
   brand verification, and a landing page is linked from Lopsy.
 
-### Phase 4: areas and repair
+### Phase 4: masks and repair
 
-**Features:** Areas, Spot fixes, Lens, Perspective, the rest of Local
+**Features:** Masks, Spot fixes, Lens, Perspective, the rest of Local
 contrast, and better noise reduction.
 
 **Engine work:** E11 to E15.
 
-**Exit criteria:** the slider budget with 10 areas is met, and the golden
+**Exit criteria:** the slider budget with 10 masks is met, and the golden
 corpus covers local edits.
 
 ### Phase 5: scale, offline and polish
@@ -1541,9 +1541,9 @@ Each question has a recommendation; the decision is the owner's.
    Drive" covers it.
 5. **Folder layout for originals.** By capture date (proposed) or by
    import? Recommendation: by capture date, with "by import" as a setting.
-6. **On-device segmentation** for subject and sky areas: model size,
+6. **On-device segmentation** for subject and sky masks: model size,
    licence, and WebGPU-only? Recommendation: decide in Phase 4; not
-   before Areas works by hand.
+   before Masks work by hand.
 7. **Export metadata default.** "Remove location" on by default
    (proposed). Recommendation: keep it on.
 8. **Should Lopsy save to Drive on its own** (Save, Open recent), rather
@@ -1629,14 +1629,14 @@ feature: `apps/photonamous/FEATURES.md`. How the library database works:
 | 5.1 First run | Three kinds of storage: Google Drive (GIS token model, `drive.file`), a folder on this computer (Chromium) and this browser (OPFS). Reconnecting checks it is the same Google account. |
 | 5.2 Library | Grid (sizes, sorting, windowed for large libraries), Single, Compare and Cull. Ratings, labels, set aside, titles, captions, keywords, albums (whole photos or single versions), the Info panel. Filters with counts, text search, saved searches, dates, imports, bursts. Stacks of RAW+JPEG pairs, versions and Lopsy documents. Library undo (⌘Z) for marks, keywords, albums, deletes and versions. Delete to trash and restore. Check library: orphans, missing, trashed, changed and left-over files, with repair. |
 | 5.3, 6.8 Import | Files, folders, and Add from Google Drive (Picker). Duplicates by SHA-256 (named before importing), RAW+JPEG pairs, embedded previews, EXIF, XMP sidecars with their develop settings (`crs:`) mapped (`xmp/crs-mapping.ts`), a preset, album and keywords to apply. Staged in OPFS, resumable uploads with checksum verification, retry with backoff, Retry for parked items. Survives a reload; one tab at a time claims an import. |
-| 5.4, 6.10 Edit | Profile (Standard and the Fujifilm looks from the base curves, Neutral, Monochrome), White balance (As shot, Auto, the camera's presets, picker, Kelvin for RAW), Tone with Auto, Curves (luminance, red, green, blue), Color with Color by hue, Color Grading, Local contrast (large details, small details, haze), Sharpness & noise, Framing (crop with aspect presets, straighten with a Level tool, rotate, flip both ways), Finish (vignette amount, midpoint, roundness, feather; grain), Areas (up to 8 linear or radial gradients with their own tone, white balance and saturation). Histogram with clipping warnings (J, and Alt while dragging Blacks, Whites or sharpening). History with click-back, Versions, Presets (built-in and the user's, previewed on hover), Copy and Paste edits, Before and after (toggle and split), filmstrip. Edits run on a working image of at most 4096 px; full resolution loads at 50 % zoom and for output. |
+| 5.4, 6.10 Edit | Profile (Standard and the Fujifilm looks from the base curves, Neutral, Monochrome), White balance (As shot, Auto, the camera's presets, picker, Kelvin for RAW), Tone with Auto, Curves (luminance, red, green, blue), Color with Color by hue, Color Grading, Local contrast (large details, small details, haze), Sharpness & noise, Framing (crop with aspect presets, straighten with a Level tool, rotate, flip both ways), Finish (vignette amount, midpoint, roundness, feather; grain), Masks (up to 8 linear or radial gradients with their own tone, white balance and saturation). Histogram with clipping warnings (J, and Alt while dragging Blacks, Whites or sharpening). History with click-back, Versions, Presets (built-in and the user's, previewed on hover), Copy and Paste edits, Before and after (toggle and split), filmstrip. Edits run on a working image of at most 4096 px; full resolution loads at 50 % zoom and for output. |
 | 5.5, 6.11 Export | JPEG, PNG (8 or 16-bit) and TIFF (16-bit, Deflate, ICC), in sRGB or Display P3. Size by long edge, short edge or megapixels, with "Don't enlarge". Metadata all, copyright only or none, with location removed by default. File-name templates. To `Exports/` in the library, a download, or a ZIP. Export presets (built-in and the user's). Show in Drive and share links, only after the user confirms. |
 | 5.6, 6.12 Round trips | Edit in Lopsy (16-bit), Save to Photonamous (`.lopsy` v3 with a 16-bit render, stacked with the photo, updated in place only at a matching revision, otherwise a copy), Add to Photonamous from Lopsy's File menu, and Grade in Photonamous for a layer (L5). Lopsy offers none of this unless its build sets `VITE_PHOTONAMOUS_URL`; without it Lopsy is unchanged, and Save Project still writes v2. |
 | 5.7, 6.7 Devices and offline | The library opens offline from IndexedDB, and a service worker loads the app shell offline. Keep originals: Recent, All or None. Previews re-render in the background after presets, pastes, synced edits and new versions. Sync panel, storage meter, device cache. |
 | 6.6 Library database | Per-device journals of last-writer-wins fields stamped with hybrid logical clocks, snapshots, roll-up, the Drive change feed, a Web Locks single writer per device, durable-before-destructive ordering, and merging of duplicate library roots. A 50,000-photo library opens cold in about 2 s. |
 | 6.2 Code layout | `packages/ui` (`@lopsy/ui`), which both apps import: the design tokens, reset and fonts; the Slider, Lopsy's, which Photonamous' Edit view now uses too; a Menu with Photonamous' look, used by Import photos; and the keyboard and focus helpers from the accessibility pass (`@lopsy/ui/a11y`). `packages/handoff` and `packages/photos-core` as specified. The engine bridge is still in `apps/lopsy-web`. |
 | 6.3 Hosting | Its own Pages project, `photonamous`, for `photonamous.com`, with its own CSP; Lopsy hands off to it there. Deployed only when the repository variable `DEPLOY_PHOTONAMOUS` is `true`. CI runs Photonamous' typecheck, lint and unit tests. |
-| Accessibility | WCAG 2.2 AA: AA contrast tokens, 24 px targets, a visible focus ring, every function by keyboard (crop edges, curve points and areas included, with fields or sliders instead of dragging), focus that moves into dialogs and menus and back, live announcements, page titles, landmarks, a reflowing library, and a setting that turns single-key shortcuts off. `e2e/accessibility.spec.ts` runs axe-core on every view; keyboard specs cover each area. |
+| Accessibility | WCAG 2.2 AA: AA contrast tokens, 24 px targets, a visible focus ring, every function by keyboard (crop edges, curve points and masks included, with fields or sliders instead of dragging), focus that moves into dialogs and menus and back, live announcements, page titles, landmarks, a reflowing library, and a setting that turns single-key shortcuts off. `e2e/accessibility.spec.ts` runs axe-core on every view; keyboard specs cover each area. |
 
 ### Where it departs from the design
 
@@ -1648,9 +1648,9 @@ feature: `apps/photonamous/FEATURES.md`. How the library database works:
   own.
 - **The develop chain is display-referred.** The RAW stage outputs
   sRGB-encoded values and the later stages (Lopsy's adjustments, the
-  colour mixer, areas, detail, finish) work on them, not on linear
+  colour mixer, masks, detail, finish) work on them, not on linear
   Rec. 2020 floats. The order also differs from 6.10: noise reduction,
-  haze and local contrast run before tone; areas after colour and curves;
+  haze and local contrast run before tone; masks after colour and curves;
   sharpening and finish last. `engine/src/develop/mod.rs` gives the
   reasons.
 - **The engine runs on the main thread** (spike S4 was not done). RAF
@@ -1661,7 +1661,7 @@ feature: `apps/photonamous/FEATURES.md`. How the library database works:
   White per-hue mix.
 - **Presets are ordinary fields on new IDs**, not a `preset.add` op.
 - **No default sharpening or noise reduction**, even for RAW files.
-- **Areas have no local contrast of their own**: the recipe has the field;
+- **Masks have no local contrast of their own**: the recipe has the field;
   the engine doesn't render it.
 - **Rec. 2020 export and WebP export** are not offered, and TIFF carries no
   EXIF. There is no output sharpening.
@@ -1679,7 +1679,7 @@ feature: `apps/photonamous/FEATURES.md`. How the library database works:
 
 ### Not built
 
-- Areas from a brush, a brightness range or a colour range; Spot fixes;
+- Masks from a brush, a brightness range or a colour range; Spot fixes;
   Lens corrections; Perspective (Phase 4).
 - Proxies, "Open with Photonamous" from Drive's UI, the sign-in helper, a
   watermark on export, keyword paths (Phase 5).

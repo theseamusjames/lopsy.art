@@ -61,12 +61,12 @@ export function dragRadial(start: RadialDrag, handle: RadialHandle, from: Point,
   }
 }
 
-/** The name an area shows: its own, or "Area 2" by its place in the list. */
+/** The name an area shows, as a mask in the UI: its own, or "Mask 2" by its place in the list. */
 export function areaLabel(area: Area, index: number): string {
-  return area.name.trim() || `Area ${index + 1}`;
+  return area.name.trim() || `Mask ${index + 1}`;
 }
 
-/** The adjustment sliders an area shows (local contrast is not rendered per area yet). */
+/** The adjustment sliders a mask shows (local contrast is not rendered per mask yet). */
 export const AREA_SLIDERS = [
   { key: 'exposure', label: 'Exposure' },
   { key: 'contrast', label: 'Contrast' },

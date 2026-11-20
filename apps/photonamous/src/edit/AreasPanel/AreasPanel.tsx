@@ -20,7 +20,7 @@ export interface AreasPanelProps {
   readonly onDelete: (areaId: string) => void;
   readonly onChange: (control: ControlDef, value: number) => void;
   readonly onCommit: (control: ControlDef, value: number) => void;
-  /** Where the photo is, for the selected area's shape sliders; they show once it is known. */
+  /** Where the photo is, for the selected mask's shape sliders; they show once it is known. */
   readonly shapeFrame?: { readonly frame: AreaFrame; readonly doc: DocSize } | null;
   /** While a shape slider moves. */
   readonly onShapeChange?: (areaId: string, geometry: LinearGeometry | RadialGeometry) => void;
@@ -36,7 +36,10 @@ const READOUTS: Readonly<Record<ShapeUnit, SliderReadout>> = {
   degrees: { format: (v) => formatShape(v, 'degrees'), parse: parseShape },
 };
 
-/** Areas (spec 5.4): the list, adding and removing, and the chosen area's shape and its own sliders. */
+/**
+ * Masks (spec 5.4; areas in the recipe and the code): the list, adding
+ * and removing, and the chosen mask's shape and its own sliders.
+ */
 export function AreasPanel({
   recipe,
   selectedId,
@@ -120,9 +123,9 @@ export function AreasPanel({
   );
 
   return (
-    <section ref={panelRef} className={styles.panel} aria-label="Areas">
+    <section ref={panelRef} className={styles.panel} aria-label="Masks">
       <header className={styles.header}>
-        <h2 className={styles.title}>Areas</h2>
+        <h2 className={styles.title}>Masks</h2>
         <div className={styles.add}>
           <button
             type="button"
@@ -141,8 +144,8 @@ export function AreasPanel({
           </button>
         </div>
       </header>
-      {areas.length === 0 && <p className={styles.empty}>Add a linear or radial area to adjust part of the photo.</p>}
-      <ul className={styles.list} aria-label="Area list">
+      {areas.length === 0 && <p className={styles.empty}>Add a linear or radial mask to adjust part of the photo.</p>}
+      <ul className={styles.list} aria-label="Mask list">
         {areas.map((area, i) => {
           const label = areaLabel(area, i);
           const isSelected = area.id === selectedId;
@@ -158,7 +161,7 @@ export function AreasPanel({
                 >
                   <input
                     className={styles.input}
-                    aria-label="Area name"
+                    aria-label="Mask name"
                     value={renaming.name}
                     autoFocus
                     maxLength={60}

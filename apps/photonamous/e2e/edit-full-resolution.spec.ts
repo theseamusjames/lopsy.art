@@ -6,7 +6,7 @@ import { generatedJpeg, importFiles, tiles } from './library';
 /**
  * The Edit view edits a working image (spec 6.10) and loads the full size
  * for a full-size export. Everything sized in pixels (sharpening and local
- * contrast radii, areas, straighten, the crop) must follow it there, so the
+ * contrast radii, masks, straighten, the crop) must follow it there, so the
  * Edit view's export matches the export renderer's, which loads the full
  * size from the start.
  *
@@ -26,8 +26,8 @@ async function setValue(page: Page, label: string, value: string): Promise<void>
   await expect(readout).not.toBeFocused();
 }
 
-async function setAreaValue(page: Page, label: string, value: string): Promise<void> {
-  const readout = page.getByRole('group', { name: 'Area 1 adjustments' }).getByLabel(`${label} value`, { exact: true });
+async function setMaskValue(page: Page, label: string, value: string): Promise<void> {
+  const readout = page.getByRole('group', { name: 'Mask 1 adjustments' }).getByLabel(`${label} value`, { exact: true });
   await readout.fill(value);
   await readout.press('Enter');
 }
@@ -133,9 +133,9 @@ test('a full-size export from the working image matches the export renderer’s'
   log('ready');
   const edit = page.getByTestId('edit-view');
 
-  // Sized in pixels: an area and sharpening at its largest radius.
+  // Sized in pixels: a mask and sharpening at its largest radius.
   await page.keyboard.press('m');
-  await setAreaValue(page, 'Exposure', '-1.5');
+  await setMaskValue(page, 'Exposure', '-1.5');
   await setValue(page, 'Sharpen', '150');
   await setValue(page, 'Radius', '3');
   await expect(edit.getByTestId('history-list').getByRole('button', { name: /^Sharpen radius/ })).toBeVisible();

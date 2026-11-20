@@ -249,7 +249,7 @@ to the library**.
   (<version>)", with that version's preview), which opens that version.
   Lopsy documents are in it too.
 - **Toolbar.** Library (back), Rotate left, Rotate right, Flip, Flip
-  vertical, **Crop**, **Areas**; then Undo / Redo (⌘Z, ⇧⌘Z or ⌘Y) beside
+  vertical, **Crop**, **Masks**; then Undo / Redo (⌘Z, ⇧⌘Z or ⌘Y) beside
   Copy edits / Paste edits (⇧⌘C, ⇧⌘V), away from the rotations; **Edit in
   Lopsy** and **Export**. The image pans by dragging and zooms with the
   wheel.
@@ -326,14 +326,15 @@ to the library**.
   left puts them anywhere on the photo, and clicking it sends them to the
   top or the bottom. The next crop on this device opens with them where
   they were put, in the same corner when the window is another size.
-- **Areas** (toolbar): add **Linear** (a gradient across the photo) or
-  **Radial** (an ellipse) areas, up to eight, each with Amount, Invert, a
-  name, Delete, and its own Exposure, Contrast, Highlights, Shadows,
-  Temperature, Tint and Saturation. The selected area's mask shows in red
-  on screen, and handles on the image move it, resize it, turn it and set
-  its feather; each drag or slider release is one history step ("Area:
-  move"). Areas are stored on the unrotated photo, so they follow
-  rotation, flips, straightening and the crop.
+- **Masks** (toolbar): add **Linear** (a gradient across the photo) or
+  **Radial** (an ellipse) masks, up to eight, each with Amount, Invert, a
+  name ("Mask 1" until it has its own), Delete, and its own Exposure,
+  Contrast, Highlights, Shadows, Temperature, Tint and Saturation. The
+  selected mask shows in red on screen, and handles on the image move it,
+  resize it, turn it and set its feather; each drag or slider release is
+  one history step ("Mask: move"). The recipe stores masks as `areas`, on
+  the unrotated photo, so they follow rotation, flips, straightening and
+  the crop.
 
 ## Export
 
@@ -501,7 +502,7 @@ best-practice rules at each step; the `a11y-*.spec.ts` and
     options' grip ("Move crop options", next after the edges) takes the
     arrow keys, 10 px a press or 50 px with Shift, and Enter or Space
     sends the options to the top or the bottom without applying the crop.
-  - *Areas*: the selected area's shape sliders set Start and End X and Y
+  - *Masks*: the selected mask's shape sliders set Start and End X and Y
     (linear), or Center X and Y, Width, Height, Turn and Feather
     (radial), in percent of the photo as shown. Each row has Rename.
   - *Curves*: points are sliders. Up and Down change the output, Left and
@@ -545,7 +546,7 @@ Shown in the app with `?`. The one-key shortcuts below (digits, letters,
 
 In the Edit view: ⌘Z undo, ⇧⌘Z or ⌘Y redo, ⌘0 fit, ⌘1 full size (100%), ⇧⌘C and
 ⇧⌘V copy and paste edits, hold `\` for before, J for clipping, R crop,
-M a linear area, ⇧M a radial area, ← → the previous or next photo,
+M a linear mask, ⇧M a radial mask, ← → the previous or next photo,
 Escape back to the library (or out of the tool in use), ? the Edit
 view's shortcuts. With the photo focused, the arrow keys move a zoomed
 photo and + and − zoom.

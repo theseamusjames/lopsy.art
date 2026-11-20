@@ -29,12 +29,13 @@ interface Drag {
 const ROTATE_OFFSET = 28;
 
 /**
- * The selected area's handles over the image: for a linear area the lines
- * of full and no effect with a handle at each and one to move both; for a
- * radial one the ellipse, a handle per radius, a turn handle and a feather
- * ring. Drags work in document pixels and hand back source geometry. The
- * handles are for the pointer: the Areas panel's shape sliders do the same
- * by keyboard, so they stay out of the accessibility tree.
+ * The selected mask's handles over the image (an area in the recipe): for
+ * a linear mask the lines of full and no effect with a handle at each and
+ * one to move both; for a radial one the ellipse, a handle per radius, a
+ * turn handle and a feather ring. Drags work in document pixels and hand
+ * back source geometry. The handles are for the pointer: the Masks panel's
+ * shape sliders do the same by keyboard, so they stay out of the
+ * accessibility tree.
  */
 export function AreaHandles({ area, frame, box, docWidth, onDraft, onCommit }: AreaHandlesProps) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -77,7 +78,7 @@ export function AreaHandles({ area, frame, box, docWidth, onDraft, onCommit }: A
     const d = drag.current;
     if (!d || d.pointerId !== e.pointerId) return;
     drag.current = null;
-    if (d.geometry) onCommit(d.geometry, d.handle === 'move' ? 'Area: move' : d.handle === 'rotate' ? 'Area: turn' : d.handle === 'feather' ? 'Area: feather' : 'Area: resize');
+    if (d.geometry) onCommit(d.geometry, d.handle === 'move' ? 'Mask: move' : d.handle === 'rotate' ? 'Mask: turn' : d.handle === 'feather' ? 'Mask: feather' : 'Mask: resize');
   };
 
   return (

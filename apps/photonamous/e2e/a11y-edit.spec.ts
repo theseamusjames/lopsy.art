@@ -4,7 +4,7 @@ import { generatedJpeg, importFiles, tiles } from './library';
 
 /**
  * The Edit view by keyboard (WCAG 2.1.1, 2.5.7, 4.1.2, 4.1.3, 2.4.2,
- * 2.4.3): crop edges, curve points, the split divider, an area's shape,
+ * 2.4.3): crop edges, curve points, the split divider, a mask's shape,
  * tabs and folding sections, panning and zooming, what it announces, and
  * the page's title and focus as it opens and closes.
  */
@@ -152,23 +152,23 @@ test('the split divider moves with the arrow, Page, Home and End keys', async ({
   await expect(divider).toHaveAttribute('aria-valuetext', '90 % before, 10 % after');
 });
 
-test('a radial area is added, shaped and renamed by keyboard', async ({ page }) => {
+test('a radial mask is added, shaped and renamed by keyboard', async ({ page }) => {
   await openHarness(page);
   await openFlatImage(page);
   await waitForReady(page);
 
-  await page.getByRole('button', { name: 'Areas', exact: true }).focus();
+  await page.getByRole('button', { name: 'Masks', exact: true }).focus();
   await page.keyboard.press('Enter');
-  const panel = page.getByRole('region', { name: 'Areas' });
+  const panel = page.getByRole('region', { name: 'Masks' });
   await expect(panel.getByRole('button', { name: 'Linear' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(panel.getByRole('button', { name: 'Radial' })).toBeFocused();
   await page.keyboard.press('Enter');
-  const row = panel.getByRole('list', { name: 'Area list' }).getByRole('button', { name: /^Radial\s*Area 1$/ });
+  const row = panel.getByRole('list', { name: 'Mask list' }).getByRole('button', { name: /^Radial\s*Mask 1$/ });
   await expect(row).toBeFocused();
   await expect(row).toHaveAttribute('aria-current', 'true');
 
-  const shape = panel.getByRole('group', { name: 'Area 1 shape' });
+  const shape = panel.getByRole('group', { name: 'Mask 1 shape' });
   const centreX = shape.getByRole('slider', { name: 'Center X' });
   await expect(centreX).toHaveAttribute('aria-valuetext', '50 %');
   await centreX.focus();
@@ -185,7 +185,7 @@ test('a radial area is added, shaped and renamed by keyboard', async ({ page }) 
   await expect(shape.getByRole('slider', { name: 'Turn' })).toHaveAttribute('aria-valuetext', '180°');
   await shape.getByLabel('Feather value').fill('20');
   await shape.getByLabel('Feather value').press('Enter');
-  expect(await steps(page)).toEqual(['Add radial area', 'Area: move', 'Area: resize', 'Area: turn', 'Area: turn', 'Area: feather']);
+  expect(await steps(page)).toEqual(['Add radial mask', 'Mask: move', 'Mask: resize', 'Mask: turn', 'Mask: turn', 'Mask: feather']);
   const geometry = await page.evaluate(() => {
     const recipe = window.__photosHarness?.recipe as { areas: Record<string, { geometry: Record<string, number> }> } | undefined;
     return Object.values(recipe?.areas ?? {})[0]?.geometry;
@@ -195,9 +195,9 @@ test('a radial area is added, shaped and renamed by keyboard', async ({ page }) 
   expect(Math.abs(geometry?.angle ?? 0)).toBeCloseTo(180, 3);
   expect(geometry?.feather).toBe(20);
 
-  await panel.getByRole('button', { name: 'Rename Area 1' }).focus();
+  await panel.getByRole('button', { name: 'Rename Mask 1' }).focus();
   await page.keyboard.press('Enter');
-  await expect(panel.getByLabel('Area name')).toBeFocused();
+  await expect(panel.getByLabel('Mask name')).toBeFocused();
   await page.keyboard.type('Sky');
   await page.keyboard.press('Enter');
   await expect(panel.getByRole('button', { name: /^Radial\s*Sky$/ })).toBeFocused();

@@ -781,7 +781,7 @@ A coloured left border (or any edge stripe, such as an inset box-shadow
 bar) used to mark state or kind is always wrong, in either app and on the
 sites. What replaces it depends on the context; choose what fits: a dot
 beside the label, an icon, a check, a fill, or a word. Examples in the
-code: Photonamous' History, Versions and Areas lists mark the current or
+code: Photonamous' History, Versions and Masks lists mark the current or
 selected row with a 6 px accent dot (every row keeps the dot's slot, so
 labels line up); Lopsy's toasts show their kind with a dot in its colour;
 tutorial notes are a tinted box.

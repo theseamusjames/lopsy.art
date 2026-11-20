@@ -529,12 +529,12 @@ export function EditView({
     announce(label);
   };
 
-  // ---- areas ----------------------------------------------------------
+  // ---- masks (areas in the recipe) -------------------------------------
 
   const [isAreasOpen, setIsAreasOpen] = useState(false);
   const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
   const panelRef = useRef<HTMLElement>(null);
-  // Focus for the Areas panel once it has rendered: a new area's row, or (null) its first button.
+  // Focus for the Masks panel once it has rendered: a new mask's row, or (null) its first button.
   const [areaFocus, setAreaFocus] = useState<{ readonly id: string | null } | null>(null);
   useEffect(() => {
     if (!areaFocus) return;
@@ -551,7 +551,7 @@ export function EditView({
   const labelOfArea = (id: string) => {
     const index = shownAreas.findIndex((a) => a.id === id);
     const area = shownAreas[index];
-    return area ? areaLabel(area, index) : 'Area';
+    return area ? areaLabel(area, index) : 'Mask';
   };
 
   useEffect(() => {
@@ -562,7 +562,7 @@ export function EditView({
     const id = newId();
     const added = addArea(savedRecipe, kind, id);
     if (!added) return;
-    commit(added.values, kind === 'linear' ? 'Add linear area' : 'Add radial area');
+    commit(added.values, kind === 'linear' ? 'Add linear mask' : 'Add radial mask');
     setSelectedAreaId(id);
     setAreaFocus({ id });
   };
@@ -858,8 +858,8 @@ export function EditView({
           <button
             type="button"
             className={styles.iconButton}
-            aria-label="Areas"
-            title="Areas (M linear, ⇧M radial)"
+            aria-label="Masks"
+            title="Masks (M linear, ⇧M radial)"
             aria-pressed={isAreasOpen}
             disabled={!canEdit || isBefore || isCropping}
             onClick={toggleAreas}
@@ -1047,7 +1047,7 @@ export function EditView({
               isDisabled={!canEdit || isBefore || isCropping}
               onAdd={handleAddArea}
               onSelect={setSelectedAreaId}
-              onRename={(id, name) => commit({ [`areas.${id}.name`]: name }, 'Rename area')}
+              onRename={(id, name) => commit({ [`areas.${id}.name`]: name }, 'Rename mask')}
               onInvert={(id, isInverted) => commit({ [`areas.${id}.invert`]: isInverted }, `${labelOfArea(id)} ${isInverted ? 'inverted' : 'not inverted'}`)}
               onDelete={(id) => {
                 commit(removeArea(id), `Delete ${labelOfArea(id)}`);

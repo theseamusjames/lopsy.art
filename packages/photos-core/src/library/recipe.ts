@@ -780,7 +780,8 @@ export const RECIPE_GROUPS: readonly RecipeGroup[] = [
   { id: 'detail', label: 'Detail', prefixes: ['sharpness.', 'noise.'] },
   { id: 'framing', label: 'Framing', prefixes: ['framing.'] },
   { id: 'finish', label: 'Finish', prefixes: ['finish.'] },
-  { id: 'areas', label: 'Areas', prefixes: ['areas.'] },
+  // The UI calls areas masks; the id stays, as saved presets name it.
+  { id: 'areas', label: 'Masks', prefixes: ['areas.'] },
 ];
 
 /** Copy edits copies everything but framing and areas by default (spec 5.4, Copy and paste). */
