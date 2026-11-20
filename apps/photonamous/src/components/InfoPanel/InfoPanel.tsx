@@ -78,25 +78,28 @@ export function InfoPanel() {
         {!one && <p className={styles.muted}>Changes here apply to all of them.</p>}
       </header>
 
-      <section className={styles.section}>
-        <div className={styles.field}>
-          <span className={styles.fieldLabel}>Rating</span>
-          <Stars
-            rating={rating ?? 0}
-            mixed={rating === undefined}
-            size={16}
-            onChange={(r: Rating) => setRating(r, orderedIds, targetIds)}
-          />
-        </div>
-        <div className={styles.field}>
-          <span className={styles.fieldLabel}>Label</span>
-          <LabelPicker value={label} onChange={(l) => setLabel(l, orderedIds, targetIds)} />
-        </div>
-        <Button size="sm" variant={allAside ? 'primary' : 'secondary'} onClick={() => toggleSetAside(orderedIds, targetIds)}>
-          <EyeOff size={13} />
-          {allAside ? 'Bring back' : 'Set aside'}
-        </Button>
-      </section>
+      {/* The Single view has the marks in its own bars, around the photo. */}
+      {mode !== 'single' && (
+        <section className={styles.section}>
+          <div className={styles.field}>
+            <span className={styles.fieldLabel}>Rating</span>
+            <Stars
+              rating={rating ?? 0}
+              mixed={rating === undefined}
+              size={16}
+              onChange={(r: Rating) => setRating(r, orderedIds, targetIds)}
+            />
+          </div>
+          <div className={styles.field}>
+            <span className={styles.fieldLabel}>Label</span>
+            <LabelPicker value={label} onChange={(l) => setLabel(l, orderedIds, targetIds)} />
+          </div>
+          <Button size="sm" variant={allAside ? 'primary' : 'secondary'} onClick={() => toggleSetAside(orderedIds, targetIds)}>
+            <EyeOff size={13} />
+            {allAside ? 'Bring back' : 'Set aside'}
+          </Button>
+        </section>
+      )}
 
       {one && (
         <section className={styles.section}>

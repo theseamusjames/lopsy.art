@@ -17,13 +17,17 @@
   z-index: var(--z-modal);
 }
 
-/* The back link at the left edge and the position at the right line up with the bars' content; the name is centred on the view. */
+/*
+ * The back link at the left edge and the position at the right line up with the bars' content; the name is centred on the view.
+ * It has the colour of the marks bar under it, so the two read as one header above the photo.
+ */
 .top {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-4);
+  background: var(--color-bg-secondary);
 }
 
 .back {
@@ -92,6 +96,11 @@
 .edit {
   justify-content: flex-end;
   gap: var(--space-2);
+}
+
+/* The view's main action keeps the outline it had as a labelled button. */
+.editButton {
+  border: 1px solid var(--color-border);
 }
 
 .stage {

@@ -81,12 +81,13 @@ is `docs/photonamous-spec.md`; running and setup are in
 ### Single, Compare and Cull
 
 - **Single view** (Space, or double-click): one photo large at 2048 px,
-  with Previous/Next (← →). Above it, **Back to the grid** (a link at the
-  left edge), the file name, centred, and its place in the list; then a
-  bar with the colour labels at the left, the stars in the centre and
-  **Edit in Lopsy** and **Edit** at the right. A Lopsy document has
-  **Open in Lopsy** there instead, as it opens in Lopsy, not in the Edit
-  view. Below the photo, a bar with its versions and, at the right end,
+  with Previous/Next (← →). Above it, a header of two rows in the bars'
+  colour: **Back** (a link at the left edge, named "Back to the grid"),
+  the file name, centred, and its place in the list; then the colour
+  labels at the left, the stars in the centre and **Edit in Lopsy** and
+  **Edit** at the right, as icons named for screen readers and in their
+  tooltips. A Lopsy document has **Open in Lopsy** there instead, as it
+  opens in Lopsy, not in the Edit view. Below the photo, a bar with its versions and, at the right end,
   **Set aside / Bring back**; then the Lopsy documents made from it.
   Space or Escape goes back to the grid. In a narrow window the bars wrap
   rather than overlap: the edit buttons go under the labels and stars, and
@@ -115,10 +116,11 @@ is `docs/photonamous-spec.md`; running and setup are in
   A delete is undone by ⌘Z right after it (or the message's Undo), which
   brings back the photo and takes its files out of the trash together;
   once something else has changed, the delete is no longer in ⌘Z's reach.
-- **Details panel** (I): rating, label, title, caption, keywords and the
-  albums the photo is in, plus file and camera facts (camera, lens,
-  exposure, capture time, size). With several photos selected, changes
-  apply to all of them.
+- **Details panel** (I): rating, label, Set aside, title, caption,
+  keywords and the albums the photo is in, plus file and camera facts
+  (camera, lens, exposure, capture time, size). With several photos
+  selected, changes apply to all of them. Beside the Single view it leaves
+  out rating, label and Set aside, which the bars around the photo have.
 
 ### Collections and finding
 

@@ -3,8 +3,10 @@ import { generatedJpeg, importFiles } from './library';
 
 /**
  * The Single view's layout, through the UI: the back link at the left edge;
- * the labels, stars and edit buttons left, centre and right in a bar above
- * the photo; the versions in a bar below it with Set aside at its right end,
+ * the labels, stars and edit buttons (icons) left, centre and right in a bar
+ * above the photo, which the back link's row shares the colour of; the
+ * details panel without the marks the bars already have; the versions in a
+ * bar below it with Set aside at its right end,
  * as chips that scroll on their own up to four versions and as a dropdown
  * beyond; and a Lopsy document, which opens in Lopsy and has no Edit button.
  */
@@ -66,6 +68,18 @@ test('the back link is at the left edge, and labels, stars and edit buttons sit 
   expect(await back.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
   await back.hover();
   expect(await back.evaluate((el) => getComputedStyle(el).textDecorationLine)).toBe('underline');
+  // It reads "Back"; its name says where to.
+  await expect(back).toHaveText('Back');
+  // Its row has the marks bar's colour, not the stage's: one header above the photo.
+  const rowColour = await back.evaluate((el) => (el.parentElement ? getComputedStyle(el.parentElement).backgroundColor : ''));
+  const barColour = await view
+    .getByRole('radiogroup', { name: 'Colour label' })
+    .evaluate((el) => {
+      const bar = el.closest('[class*="actions"]');
+      return bar ? getComputedStyle(bar).backgroundColor : '';
+    });
+  expect(rowColour).toBe(barColour);
+  expect(rowColour).not.toBe(await view.evaluate((el) => getComputedStyle(el).backgroundColor));
   // The name is centred on the view.
   const heading = await box(view.getByRole('heading', { level: 1, name: 'layout.jpg' }));
   expect(Math.abs(heading.centerX - (frame.left + frame.right) / 2)).toBeLessThanOrEqual(1);
@@ -90,6 +104,21 @@ test('the back link is at the left edge, and labels, stars and edit buttons sit 
   expect(Math.abs(versions.left - (frame.left + EDGE))).toBeLessThanOrEqual(1);
   expect(Math.abs(setAside.right - (frame.right - EDGE))).toBeLessThanOrEqual(1);
   expect(Math.abs(setAside.centerY - versions.centerY)).toBeLessThanOrEqual(2);
+
+  // Edit in Lopsy and Edit are icons, named for screen readers and in their tooltips.
+  await expect(view.getByRole('button', { name: 'Edit in Lopsy' })).toHaveText('');
+  await expect(view.getByRole('button', { name: 'Edit', exact: true })).toHaveText('');
+  await expect(view.getByRole('button', { name: 'Edit', exact: true })).toHaveAttribute('title', 'Edit (Enter)');
+
+  // The details panel leaves the marks to the bars around the photo; beside the grid it keeps them, for the selection.
+  const details = page.getByRole('complementary', { name: 'Details' });
+  await expect(details.getByRole('heading', { name: 'layout.jpg' })).toBeVisible();
+  await expect(details.getByRole('radiogroup', { name: 'Rating' })).toHaveCount(0);
+  await expect(details.getByRole('radiogroup', { name: 'Colour label' })).toHaveCount(0);
+  await expect(details.getByRole('button', { name: 'Set aside' })).toHaveCount(0);
+  await back.click();
+  await expect(details.getByRole('radiogroup', { name: 'Rating' })).toBeVisible();
+  await expect(details.getByRole('button', { name: 'Set aside' })).toBeVisible();
 });
 
 test('more than four versions become a dropdown; switching works and the actions apply to the chosen version', async ({ page }) => {

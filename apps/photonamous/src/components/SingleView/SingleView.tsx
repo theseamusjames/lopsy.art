@@ -47,9 +47,16 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
       aria-describedby={cull ? hintId : undefined}
     >
       <div className={styles.top}>
-        <Button variant="link" size="sm" className={styles.back} onClick={backOut}>
+        <Button
+          variant="link"
+          size="sm"
+          className={styles.back}
+          onClick={backOut}
+          aria-label={cull ? undefined : 'Back to the grid'}
+          title={cull ? undefined : 'Back to the grid (Esc)'}
+        >
           <ArrowLeft size={14} />
-          {cull ? 'Leave full screen' : 'Back to the grid'}
+          {cull ? 'Leave full screen' : 'Back'}
         </Button>
         <h1 id={headingId} className={styles.name}>
           {asset?.fileName ?? 'No photo'}
@@ -71,20 +78,25 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
           <div className={styles.edit}>
             {asset.kind === 'document' ? (
               // A Lopsy document is edited in Lopsy, as its .lopsy: the Edit view cannot open it.
-              <Button size="sm" onClick={openFocusedInLopsy}>
-                <Paintbrush size={14} />
-                Open in Lopsy
-              </Button>
+              <IconButton
+                size="sm"
+                className={styles.editButton}
+                label="Open in Lopsy"
+                title="Open in Lopsy (Enter)"
+                icon={<Paintbrush size={16} />}
+                onClick={openFocusedInLopsy}
+              />
             ) : (
               <>
-                <Button size="sm" variant="ghost" onClick={openFocusedInLopsy}>
-                  <Paintbrush size={14} />
-                  Edit in Lopsy
-                </Button>
-                <Button size="sm" onClick={openEdit}>
-                  <SlidersHorizontal size={14} />
-                  Edit
-                </Button>
+                <IconButton size="sm" label="Edit in Lopsy" icon={<Paintbrush size={16} />} onClick={openFocusedInLopsy} />
+                <IconButton
+                  size="sm"
+                  className={styles.editButton}
+                  label="Edit"
+                  title="Edit (Enter)"
+                  icon={<SlidersHorizontal size={16} />}
+                  onClick={openEdit}
+                />
               </>
             )}
           </div>
