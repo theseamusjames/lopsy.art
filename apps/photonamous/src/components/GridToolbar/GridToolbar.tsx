@@ -55,7 +55,7 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
         {collection.kind === 'set-aside' && orderedIds.length > 0 && (
           <Button size="sm" variant="ghost" onClick={() => askDelete(orderedIds)}>
             <Trash2 size={13} />
-            Delete set-aside photos
+            Delete dropped photos
           </Button>
         )}
       </div>

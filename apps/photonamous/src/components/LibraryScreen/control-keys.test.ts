@@ -21,7 +21,7 @@ const press = (key: string, mods: { ctrlKey?: boolean; metaKey?: boolean; altKey
 describe('isControlKey', () => {
   it('leaves Enter and Space to buttons, links, checkboxes and menu items', () => {
     for (const html of [
-      '<button>Set aside</button>',
+      '<button>Drop</button>',
       '<a href="#photos">Skip</a>',
       '<input type="checkbox">',
       '<span role="button" tabindex="0"></span>',
@@ -50,7 +50,7 @@ describe('isControlKey', () => {
   });
 
   it('keeps letters, Escape and chords with Ctrl, Cmd or Alt as shortcuts', () => {
-    const button = el('<button>Set aside</button>');
+    const button = el('<button>Drop</button>');
     expect(isControlKey(press('x'), button)).toBe(false);
     expect(isControlKey(press('Escape'), button)).toBe(false);
     expect(isControlKey(press(' ', { ctrlKey: true }), button)).toBe(false);

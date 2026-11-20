@@ -202,8 +202,8 @@ test('landmarks, one h1 per view, and a page title that names the view', async (
   expect(await focusedRole(page)).toBe('gridcell');
 
   // Another collection names the page after it.
-  await page.getByRole('navigation', { name: 'Library' }).getByRole('button', { name: /^Set aside/ }).click();
-  await expect(page).toHaveTitle('Set aside – Photonamous');
+  await page.getByRole('navigation', { name: 'Library' }).getByRole('button', { name: /^Dropped/ }).click();
+  await expect(page).toHaveTitle('Dropped – Photonamous');
   await expect(page.locator('h1')).toHaveCount(1);
 });
 

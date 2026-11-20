@@ -20,7 +20,7 @@ export const Default: Story = {
   },
 };
 
-/** At 320 px the bars wrap: the edit buttons under the labels and stars, Set aside under the versions. */
+/** At 320 px the bars wrap: the edit buttons under the labels and stars, Drop under the versions. */
 export const Narrow: Story = {
   render: () => {
     useUi.getState().setSelection({ ids: new Set(ids.slice(0, 1)), anchor: ids[0] ?? null, focus: ids[0] ?? null });

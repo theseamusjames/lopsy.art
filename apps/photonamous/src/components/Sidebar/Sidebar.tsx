@@ -114,7 +114,7 @@ export function Sidebar() {
       <div className={styles.section}>
         {item({ kind: 'all' }, <Images size={16} />, 'All photos', counts.all)}
         {item({ kind: 'recent' }, <Clock size={16} />, 'Recent imports', counts.recent)}
-        {item({ kind: 'set-aside' }, <ImageX size={16} />, 'Set aside', counts.setAside)}
+        {item({ kind: 'set-aside' }, <ImageX size={16} />, 'Dropped', counts.setAside)}
       </div>
 
       <div className={styles.section}>

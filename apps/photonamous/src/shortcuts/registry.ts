@@ -80,7 +80,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   rate(3),
   rate(4),
   rate(5),
-  { id: 'set-aside', chords: [{ key: 'x' }], description: 'Set aside, or bring back', group: 'Marks', contexts: ALL },
+  { id: 'set-aside', chords: [{ key: 'x' }], description: 'Drop, or bring back', group: 'Marks', contexts: ALL },
   label('label-red', 'r', 'Red'),
   label('label-yellow', 'y', 'Yellow'),
   label('label-green', 'g', 'Green'),

@@ -97,7 +97,7 @@ export function InfoPanel() {
           </div>
           <Button size="sm" variant={allAside ? 'primary' : 'secondary'} onClick={() => toggleSetAside(orderedIds, targetIds)}>
             <ImageX size={13} />
-            {allAside ? 'Bring back' : 'Set aside'}
+            {allAside ? 'Bring back' : 'Drop'}
           </Button>
         </section>
       )}

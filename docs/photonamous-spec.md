@@ -175,20 +175,20 @@ app is that second app.
 **Marks.**
 - A rating from 0 to 5 stars.
 - A colour label, one of five colours.
-- **Set aside**, for photos the user does not want. They leave "All
-  photos" but stay findable. **Delete set-aside photos** moves them to
+- **Drop**, for photos the user does not want. They leave "All photos"
+  but stay findable, in **Dropped**. **Delete dropped photos** moves them to
   Drive's trash after a confirmation that names the count and total size.
 
 **Organizing.**
 - **Albums** are hand-picked and can hold a particular version of a photo.
-- **Saved searches** are rules: rating, label, set aside, date range,
+- **Saved searches** are rules: rating, label, dropped, date range,
   camera, lens, focal length, ISO, file type, keyword, edited or not,
   has a location, in an album.
 - **Keywords** are flat in 1.0; `parent/child` paths come later.
 
 **Finding.** The sidebar lists All photos, Recent imports, Imports (one
 entry per import), Dates (year, then month, then day), Albums, Saved
-searches, Keywords and Set aside. A filter bar takes free text (file
+searches, Keywords and Dropped. A filter bar takes free text (file
 name, title, caption, keywords) and facets (camera, lens, rating, label,
 file type, edited).
 
@@ -416,7 +416,7 @@ the product.
 |---|---|---|
 | The parameters of a non-destructive edit | Edits (a "recipe" in code) | develop settings, sidecar |
 | A second edit of the same original | Version | virtual copy |
-| A photo the user does not want | Set aside | rejected, flagged |
+| A photo the user does not want | Drop (the photo is dropped) | rejected, flagged |
 | A hand-made group | Album | collection |
 | A rule-based group | Saved search | smart collection |
 | A reduced copy that can be edited without the original | Proxy; in the UI, "Edit without the original" | smart preview |
@@ -1415,7 +1415,7 @@ Nothing user-visible ships in this phase.
 - Sign-in, and creating or finding the library.
 - Import from files, folders and the Picker: duplicates, pairs, embedded
   previews, staging, resumable uploads, checksum verification.
-- Grid, Single, Compare and Cull mode. Ratings, labels, set aside,
+- Grid, Single, Compare and Cull mode. Ratings, labels, drop,
   keywords, albums, the Info panel.
 - Journal, snapshots and multi-device sync. Delete to trash and restore.
 - The sync panel and the storage display.
@@ -1627,7 +1627,7 @@ feature: `apps/photonamous/FEATURES.md`. How the library database works:
 | Spec | Built |
 |---|---|
 | 5.1 First run | Three kinds of storage: Google Drive (GIS token model, `drive.file`), a folder on this computer (Chromium) and this browser (OPFS). Reconnecting checks it is the same Google account. |
-| 5.2 Library | Grid (sizes, sorting, windowed for large libraries), Single, Compare and Cull. Ratings, labels, set aside, titles, captions, keywords, albums (whole photos or single versions), the Info panel. Filters with counts, text search, saved searches, dates, imports, bursts. Stacks of RAW+JPEG pairs, versions and Lopsy documents. Library undo (⌘Z) for marks, keywords, albums, deletes and versions. Delete to trash and restore. Check library: orphans, missing, trashed, changed and left-over files, with repair. |
+| 5.2 Library | Grid (sizes, sorting, windowed for large libraries), Single, Compare and Cull. Ratings, labels, drop, titles, captions, keywords, albums (whole photos or single versions), the Info panel. Filters with counts, text search, saved searches, dates, imports, bursts. Stacks of RAW+JPEG pairs, versions and Lopsy documents. Library undo (⌘Z) for marks, keywords, albums, deletes and versions. Delete to trash and restore. Check library: orphans, missing, trashed, changed and left-over files, with repair. |
 | 5.3, 6.8 Import | Files, folders, and Add from Google Drive (Picker). Duplicates by SHA-256 (named before importing), RAW+JPEG pairs, embedded previews, EXIF, XMP sidecars with their develop settings (`crs:`) mapped (`xmp/crs-mapping.ts`), a preset, album and keywords to apply. Staged in OPFS, resumable uploads with checksum verification, retry with backoff, Retry for parked items. Survives a reload; one tab at a time claims an import. |
 | 5.4, 6.10 Edit | Profile (Standard and the Fujifilm looks from the base curves, Neutral, Monochrome), White balance (As shot, Auto, the camera's presets, picker, Kelvin for RAW), Tone with Auto, Curves (luminance, red, green, blue), Color with Color by hue, Color Grading, Local contrast (large details, small details, haze), Sharpness & noise, Framing (crop with aspect presets, straighten with a Level tool, rotate, flip both ways), Finish (vignette amount, midpoint, roundness, feather; grain), Masks (up to 8 linear or radial gradients with their own tone, white balance and saturation). Histogram with clipping warnings (J, and Alt while dragging Blacks, Whites or sharpening). History with click-back, Versions, Presets (built-in and the user's, previewed on hover), Copy and Paste edits, Before and after (toggle and split), filmstrip. Edits run on a working image of at most 4096 px; full resolution loads at 50 % zoom and for output. |
 | 5.5, 6.11 Export | JPEG, PNG (8 or 16-bit) and TIFF (16-bit, Deflate, ICC), in sRGB or Display P3. Size by long edge, short edge or megapixels, with "Don't enlarge". Metadata all, copyright only or none, with location removed by default. File-name templates. To `Exports/` in the library, a download, or a ZIP. Export presets (built-in and the user's). Show in Drive and share links, only after the user confirms. |

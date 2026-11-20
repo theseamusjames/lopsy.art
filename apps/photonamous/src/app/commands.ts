@@ -248,7 +248,7 @@ export function setRating(rating: Rating, orderedIds: readonly AssetId[], ids = 
   if (mode === 'cull' && selection.focus !== null) advance(orderedIds, selection.focus);
 }
 
-/** Whether photos marked this way leave the list on screen (All photos hides set-aside ones; Set aside shows only them). */
+/** Whether photos marked this way leave the list on screen (All photos hides dropped ones; Dropped shows only them). */
 function leavesCollection(setAside: boolean): boolean {
   const kind = useUi.getState().collection.kind;
   return setAside ? kind === 'all' || kind === 'date' : kind === 'set-aside';
@@ -273,7 +273,7 @@ export function toggleSetAside(orderedIds: readonly AssetId[], ids = currentTarg
   s.setMarks(ids, { setAside });
   if (leavesCollection(setAside)) selectAfterRemoval(orderedIds, ids);
   else if (next !== null) useUi.getState().setSelection(selectOne(next));
-  const words = `${ids.length === 1 ? 'Photo' : plural(ids.length, 'photo')} ${setAside ? 'set aside' : 'back from Set aside'}.`;
+  const words = `${ids.length === 1 ? 'Photo' : plural(ids.length, 'photo')} ${setAside ? 'dropped' : 'brought back'}.`;
   showToast(words, 6000, { label: 'Undo', run: () => restoreSetAside(s, before) });
 }
 

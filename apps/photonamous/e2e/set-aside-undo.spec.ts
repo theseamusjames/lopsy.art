@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { generatedJpeg, importFiles } from './library';
 
-/** Set aside moves the selection to the next photo; Undo (toast or Ctrl+Z) brings it back. */
-test('set aside moves on, and undo brings the photo back', async ({ page }) => {
+/** Drop moves the selection to the next photo; Undo (toast or Ctrl+Z) brings it back. */
+test('drop moves on, and undo brings the photo back', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: /This browser/ }).click();
   await expect(page.getByText('Your library is empty')).toBeVisible();
@@ -29,7 +29,7 @@ test('set aside moves on, and undo brings the photo back', async ({ page }) => {
   await expect(tile('one.jpg')).toBeVisible();
   await expect(page.getByRole('gridcell')).toHaveCount(3);
 
-  // The last one set aside selects the one before it; the toast's Undo brings it back.
+  // The last one dropped selects the one before it; the toast's Undo brings it back.
   await tile('two.jpg').click();
   await page.keyboard.press('x');
   await expect(tile('two.jpg')).toHaveCount(0);
@@ -38,7 +38,7 @@ test('set aside moves on, and undo brings the photo back', async ({ page }) => {
   await expect(tile('two.jpg')).toBeVisible();
   await expect(tile('two.jpg')).toHaveAttribute('aria-selected', 'true');
 
-  // Redo sets it aside again.
+  // Redo drops it again.
   await page.keyboard.press('Control+z');
   await expect(tile('two.jpg')).toHaveCount(0);
   await page.keyboard.press('Control+Shift+z');

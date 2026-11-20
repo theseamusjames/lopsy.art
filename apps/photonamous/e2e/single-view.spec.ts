@@ -6,7 +6,7 @@ import { generatedJpeg, importFiles } from './library';
  * the labels, stars and edit buttons (icons) left, centre and right in a bar
  * above the photo, which the back link's row shares the colour of; the
  * details panel without the marks the bars already have; the versions in a
- * bar below it with Set aside at its right end, the selected one in a box
+ * bar below it with Drop at its right end, the selected one in a box
  * of its own and the others as chips (show, select, delete) that scroll on
  * their own up to four versions, and as a dropdown beyond; and a Lopsy document,
  * which opens in Lopsy as its .lopsy and is edited here on its render.
@@ -98,9 +98,9 @@ test('the back link is at the left edge, and labels, stars and edit buttons sit 
   for (const part of [labels, stars, editInLopsy, edit]) expect(part.bottom).toBeLessThanOrEqual(photo.top);
   expect(labels.top).toBeGreaterThanOrEqual(backBox.bottom);
 
-  // Below the photo: the versions at the left, Set aside at the right end.
+  // Below the photo: the versions at the left, Drop at the right end.
   const versions = await box(view.getByRole('group', { name: 'Versions' }));
-  const setAside = await box(view.getByRole('button', { name: 'Set aside' }));
+  const setAside = await box(view.getByRole('button', { name: 'Drop', exact: true }));
   expect(versions.top).toBeGreaterThanOrEqual(photo.bottom);
   expect(Math.abs(versions.left - (frame.left + EDGE))).toBeLessThanOrEqual(1);
   expect(Math.abs(setAside.right - (frame.right - EDGE))).toBeLessThanOrEqual(1);
@@ -116,10 +116,10 @@ test('the back link is at the left edge, and labels, stars and edit buttons sit 
   await expect(details.getByRole('heading', { name: 'layout.jpg' })).toBeVisible();
   await expect(details.getByRole('radiogroup', { name: 'Rating' })).toHaveCount(0);
   await expect(details.getByRole('radiogroup', { name: 'Colour label' })).toHaveCount(0);
-  await expect(details.getByRole('button', { name: 'Set aside' })).toHaveCount(0);
+  await expect(details.getByRole('button', { name: 'Drop', exact: true })).toHaveCount(0);
   await back.click();
   await expect(details.getByRole('radiogroup', { name: 'Rating' })).toBeVisible();
-  await expect(details.getByRole('button', { name: 'Set aside' })).toBeVisible();
+  await expect(details.getByRole('button', { name: 'Drop', exact: true })).toBeVisible();
 });
 
 test('the selected version has a box; chips show the others, select them by their check and delete them; past four, a dropdown', async ({ page }) => {
@@ -203,7 +203,7 @@ test('the selected version has a box; chips show the others, select them by thei
   await expect(page.locator('[role="gridcell"][title="many.jpg (Original)"]')).toBeVisible();
 });
 
-test('at a narrow width the version chips scroll on their own and never cover Set aside', async ({ page }) => {
+test('at a narrow width the version chips scroll on their own and never cover Drop', async ({ page }) => {
   test.setTimeout(240_000);
   await page.setViewportSize({ width: 480, height: 900 });
   const view = await openPhotoInSingleView(page, 'narrow.jpg');
@@ -213,11 +213,11 @@ test('at a narrow width the version chips scroll on their own and never cover Se
   await expect(strip.getByRole('button', { name: 'Rename Black and white' })).toBeVisible();
   await expect(strip.getByRole('button', { name: /^Make .+ the selected version$/ })).toHaveCount(3);
   const scroller = strip.locator('[class*="chips"]');
-  const setAside = view.getByRole('button', { name: 'Set aside' });
+  const setAside = view.getByRole('button', { name: 'Drop', exact: true });
   await setAside.scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'test-results/single-view-narrow-versions.png' });
 
-  // The chips do not fit: they scroll inside their own area, which shares the row with Set aside and stops short of it.
+  // The chips do not fit: they scroll inside their own area, which shares the row with Drop and stops short of it.
   const sizes = await scroller.evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }));
   expect(sizes.scrollWidth).toBeGreaterThan(sizes.clientWidth + 50);
   const frame = await box(view);
@@ -230,17 +230,17 @@ test('at a narrow width the version chips scroll on their own and never cover Se
   expect(area.right).toBeLessThanOrEqual(button.left);
   expect(add.right).toBeLessThanOrEqual(button.left);
 
-  /** What a pointer at Set aside's centre would press. */
+  /** What a pointer at Drop's centre would press. */
   const hitsSetAside = () =>
     page.evaluate(
       ({ x, y }) => document.elementFromPoint(x, y)?.closest('button')?.textContent?.trim() ?? '',
       { x: button.centerX, y: button.centerY },
     );
-  expect(await hitsSetAside()).toBe('Set aside');
+  expect(await hitsSetAside()).toBe('Drop');
 
-  // Scrolled to the end, nothing moved over Set aside either.
+  // Scrolled to the end, nothing moved over Drop either.
   await scroller.evaluate((el) => el.scrollTo({ left: el.scrollWidth }));
-  expect(await hitsSetAside()).toBe('Set aside');
+  expect(await hitsSetAside()).toBe('Drop');
   expect((await box(scroller)).right).toBeLessThanOrEqual((await box(setAside)).left);
 });
 

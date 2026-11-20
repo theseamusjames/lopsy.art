@@ -70,7 +70,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, column, sele
     paired ? 'RAW+JPEG' : null,
     isVersionTile ? version.name : versions > 1 ? `${versions} versions` : null,
     edited ? 'Edited' : null,
-    asset.setAside ? 'Set aside' : null,
+    asset.setAside ? 'Dropped' : null,
   ]
     .filter((part): part is string => part !== null)
     .join(', ');

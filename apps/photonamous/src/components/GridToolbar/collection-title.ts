@@ -13,7 +13,7 @@ export function collectionTitle(collection: Collection, view: LibraryView, saved
     case 'recent':
       return 'Recent imports';
     case 'set-aside':
-      return 'Set aside';
+      return 'Dropped';
     case 'album':
       return view.albums.get(collection.albumId)?.name ?? 'Album';
     case 'keyword':

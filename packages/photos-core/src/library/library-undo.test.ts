@@ -52,7 +52,7 @@ describe('library undo', () => {
 
     const labels: (string | null)[] = [];
     for (let i = 0; i < 7; i++) labels.push(s.undoLibrary());
-    expect(labels).toEqual(['Add to album', 'Add to album', 'Add keyword', 'Edit info', 'Set aside', 'Label', 'Rating']);
+    expect(labels).toEqual(['Add to album', 'Add to album', 'Add keyword', 'Edit info', 'Drop', 'Label', 'Rating']);
     expect(s.undoLibrary()).toBeNull();
     for (const id of [a.assetId, b.assetId]) {
       expect(asset(id)).toMatchObject({ rating: 0, label: null, setAside: false, title: '', caption: '', keywords: [] });

@@ -89,11 +89,11 @@ is `docs/photonamous-spec.md`; running and setup are in
   **Edit** at the right, as icons named for screen readers and in their
   tooltips. On a Lopsy document the first is **Open in Lopsy**, which
   sends its `.lopsy`, and Edit edits its flattened render here. Below the
-  photo, a bar with its versions and, at the right end, **Set aside /
-  Bring back**; then the Lopsy documents made from it.
+  photo, a bar with its versions and, at the right end, **Drop / Bring
+  back**; then the Lopsy documents made from it.
   Space or Escape goes back to the grid. In a narrow window the bars wrap
   rather than overlap: the edit buttons go under the labels and stars, and
-  Set aside under the versions.
+  Drop under the versions.
 - **Versions in Single view**: the **Selected** box, drawn like the
   chips, holds the version the photo uses in the grid, albums and
   exports, with its Rename (or a double-click on its name; Enter saves and
@@ -105,33 +105,33 @@ is `docs/photonamous-spec.md`; running and setup are in
   deletes it. With five or more, a dropdown of the others takes the
   chips' place, with the check and the bin of the one it shows. When the
   bar has no room for them, the chips scroll sideways on their own and
-  never run under Set aside. **New version** is there either way.
+  never run under Drop. **New version** is there either way.
 - **Compare** (C): two to four selected photos side by side.
 - **Cull** (F): full screen, one photo at a time, laid out as Single view,
-  with the keys' hint beside Set aside; rating (1–5) or setting aside (X)
-  moves on to the next. Escape leaves.
+  with the keys' hint beside Drop; rating (1–5) or dropping (X) moves on
+  to the next. Escape leaves.
 
 ### Marks, details and keywords
 
 - **Rating** 0–5 stars (keys 0–5), **colour label** red, yellow, green,
   blue, purple (R Y G B P; pressing the same key again removes it), and
-  **Set aside** (X), which hides a photo from the other collections
-  without deleting it. When the photo leaves the grid, the next one is
+  **Drop** (X), which hides a photo from the other collections without
+  deleting it, until **Bring back**; dropped photos are in **Dropped**. When the photo leaves the grid, the next one is
   selected; the message that follows has **Undo**.
 - **Undo / Redo in the library** (⌘Z, ⇧⌘Z): marks, keywords, albums and
   versions, one step at a time, with what was undone said in a message.
   A delete is undone by ⌘Z right after it (or the message's Undo), which
   brings back the photo and takes its files out of the trash together;
   once something else has changed, the delete is no longer in ⌘Z's reach.
-- **Details panel** (I): rating, label, Set aside, title, caption,
+- **Details panel** (I): rating, label, Drop, title, caption,
   keywords and the albums the photo is in, plus file and camera facts
   (camera, lens, exposure, capture time, size). With several photos
   selected, changes apply to all of them. Beside the Single view it leaves
-  out rating, label and Set aside, which the bars around the photo have.
+  out rating, label and Drop, which the bars around the photo have.
 
 ### Collections and finding
 
-- Sidebar: **All photos**, **Recent imports**, **Set aside**, **Albums**
+- Sidebar: **All photos**, **Recent imports**, **Dropped**, **Albums**
   (made by hand, renamed and deleted from the sidebar), **Saved
   searches**, **Dates** (years opening into months), **Imports** (one
   entry per import) and **Keywords**.
@@ -469,7 +469,7 @@ best-practice rules at each step; the `a11y-*.spec.ts` and
     and keeps your place.
   - Focus returns to the photo you were on after Single view, Compare,
     Cull, Edit, a dialog or the menu, and stays on a photo when photos are
-    deleted, set aside or filtered out.
+    deleted, dropped or filtered out.
   - The large photo in Single view and Cull zooms from the keyboard (Enter
     or Space; the arrow keys pan, Escape fits), and in Compare Left and
     Right choose the marked photo.
@@ -543,7 +543,7 @@ Shown in the app with `?`. The one-key shortcuts below (digits, letters,
 |---|---|
 | 0–5 | Rating (0 clears) |
 | R Y G B P | Red, yellow, green, blue, purple label (again removes it) |
-| X | Set aside, or bring back |
+| X | Drop, or bring back |
 | ⌘Z / ⇧⌘Z | Undo / redo in the library |
 | ← → ↑ ↓ | Move between photos (↑ ↓ in the grid) |
 | Shift+← → | Grow the selection |

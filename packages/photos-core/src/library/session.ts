@@ -296,7 +296,7 @@ function marksLabel(marks: Partial<AssetMarks>): string {
     case 'label':
       return 'Label';
     case 'setAside':
-      return marks.setAside ? 'Set aside' : 'Bring back';
+      return marks.setAside ? 'Drop' : 'Bring back';
     case 'title':
       return 'Title';
     default:

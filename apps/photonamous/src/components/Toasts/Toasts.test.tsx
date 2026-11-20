@@ -51,10 +51,10 @@ describe('toast timers', () => {
   it('start a toast that arrives while held only once it is let go', () => {
     pauseToasts();
     act(() => {
-      showToast('Photo set aside.', 6000, { label: 'Undo', run: () => undefined });
+      showToast('Photo dropped.', 6000, { label: 'Undo', run: () => undefined });
     });
     act(() => vi.advanceTimersByTime(30_000));
-    expect(messages()).toEqual(['Photo set aside.']);
+    expect(messages()).toEqual(['Photo dropped.']);
     resumeToasts();
     act(() => vi.advanceTimersByTime(6000));
     expect(messages()).toEqual([]);
@@ -84,12 +84,12 @@ describe('Toasts', () => {
     before.focus();
     const run = vi.fn();
     act(() => {
-      showToast('Photo set aside.', 6000, { label: 'Undo', run });
+      showToast('Photo dropped.', 6000, { label: 'Undo', run });
     });
     const undo = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Undo');
     act(() => undo?.focus());
     act(() => vi.advanceTimersByTime(60_000));
-    expect(messages()).toEqual(['Photo set aside.']);
+    expect(messages()).toEqual(['Photo dropped.']);
 
     act(() => undo?.click());
     expect(run).toHaveBeenCalledTimes(1);

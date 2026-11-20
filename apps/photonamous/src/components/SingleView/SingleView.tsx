@@ -108,7 +108,7 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
               zoom={zoom}
               onZoom={(point) => setZoomed(point ? { id: focus, point } : null)}
             />
-            {asset.setAside && <span className={styles.asideTag}>Set aside</span>}
+            {asset.setAside && <span className={styles.asideTag}>Dropped</span>}
           </>
         ) : (
           <p className={styles.empty}>No photo to show.</p>
@@ -135,12 +135,12 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
           <div className={styles.aside}>
             {cull && (
               <span id={hintId} className={styles.hint}>
-                1–5 rate · X set aside · each moves on · Esc leaves
+                1–5 rate · X drop · each moves on · Esc leaves
               </span>
             )}
             <Button size="sm" variant={asset.setAside ? 'primary' : 'secondary'} onClick={() => toggleSetAside(orderedIds, [asset.id])}>
               <ImageX size={14} />
-              {asset.setAside ? 'Bring back' : 'Set aside'}
+              {asset.setAside ? 'Bring back' : 'Drop'}
             </Button>
           </div>
         </div>

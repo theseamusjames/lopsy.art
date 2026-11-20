@@ -13,7 +13,7 @@ export const Messages: Story = {
   render: () => {
     useToasts.setState({ toasts: [] });
     showToast('Imported 12 photos', null);
-    showToast('Photo set aside.', null, { label: 'Undo', run: () => undefined });
+    showToast('Photo dropped.', null, { label: 'Undo', run: () => undefined });
     return <Toasts />;
   },
 };

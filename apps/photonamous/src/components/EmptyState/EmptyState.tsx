@@ -14,11 +14,11 @@ function message(collection: Collection, searching: boolean): string {
   if (searching) return 'No photos match what you typed.';
   switch (collection.kind) {
     case 'all':
-      return 'Every photo here is set aside.';
+      return 'Every photo here is dropped.';
     case 'recent':
       return 'Nothing has been imported yet.';
     case 'set-aside':
-      return 'Nothing is set aside. Press X on a photo you don’t want: it leaves All photos but stays findable here.';
+      return 'Nothing is dropped. Press X on a photo you don’t want: it leaves All photos but stays findable here.';
     case 'album':
       return 'This album is empty. Drag photos from the grid onto its name in the sidebar to add them.';
     case 'keyword':
