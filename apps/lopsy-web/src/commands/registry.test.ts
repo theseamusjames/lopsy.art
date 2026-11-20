@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { CommandError, SettleTimeoutError, isCommandError, type Command } from './command';
+import { CommandError, SettleTimeoutError, StepFailure, isCommandError, type Command } from './command';
 import { createRegistry, suggestIds } from './registry';
 
 interface Deferred {
@@ -25,6 +25,16 @@ async function rejection(promise: Promise<unknown>): Promise<CommandError> {
   } catch (error) {
     expect(error).toBeInstanceOf(CommandError);
     return error as CommandError;
+  }
+  throw new Error('expected a rejection');
+}
+
+async function stepFailure(promise: Promise<unknown>): Promise<StepFailure> {
+  try {
+    await promise;
+  } catch (error) {
+    expect(error).toBeInstanceOf(StepFailure);
+    return error as StepFailure;
   }
   throw new Error('expected a rejection');
 }
@@ -558,6 +568,33 @@ describe('runAll', () => {
     const registry = sequenceRegistry([]);
     const error = await rejection(registry.runAll([{ op: 'step.slow', name: 1 }]));
     expect(error.message).toBe('[0] step.slow: name must be a string, got 1');
+  });
+
+  it('gives a step that throws something other than a CommandError its index and the completed steps', async () => {
+    const registry = sequenceRegistry([]);
+    const bug = new TypeError('x is undefined');
+    registry.define({
+      ...noop('step.bug'),
+      run: () => {
+        throw bug;
+      },
+    });
+    const error = await stepFailure(registry.runAll([
+      { op: 'step.slow', name: 'a' },
+      { op: 'step.slow', name: 'b' },
+      { op: 'step.bug' },
+      { op: 'step.slow', name: 'c' },
+    ]));
+    expect(error).not.toBeInstanceOf(CommandError);
+    expect(error).toMatchObject({ index: 2, completed: ['a', 'b'], cause: bug });
+    expect(error.message).toBe('[2] step.bug: TypeError: x is undefined');
+  });
+
+  it('gives a rejection with a non-Error value the same', async () => {
+    const registry = sequenceRegistry([]);
+    registry.define({ ...noop('step.odd'), run: () => Promise.reject(42) });
+    const error = await stepFailure(registry.runAll([{ op: 'step.odd' }]));
+    expect(error).toMatchObject({ index: 0, completed: [], cause: 42, message: '[0] step.odd: 42' });
   });
 
   it('labels an invocation without an op', async () => {

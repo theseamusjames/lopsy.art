@@ -69,13 +69,16 @@ node lopsy-driver.mjs > driver.log 2>&1 &
 ```
 
 It opens <https://lopsy.art/agent/> headless and listens on
-`http://localhost:47391`. Useful environment variables:
+`http://127.0.0.1:47391`. It is **local-only**: it listens on the loopback
+interface and refuses any request a web page makes, so only programs on your
+machine can use it. Do not expose its port (no tunnel, port forward or proxy).
+Useful environment variables:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `LOPSY_URL` | `https://lopsy.art/agent/` | Point at a local dev server instead (`http://localhost:5173/agent/`). |
 | `DRIVER_PORT` | `47391` | Change if the port is taken. |
-| `OUT_DIR` | `./lopsy-out` | Where renders, exports and projects are written. |
+| `OUT_DIR` | `./lopsy-out` | Where renders, exports and projects are written. `$file` can read from here and from the directory the driver runs in. |
 | `HEADED` | unset | `1` shows the browser window. Keep the agent page the visible tab (see [the contract](#the-page-must-be-the-visible-tab)). |
 | `REAL_GPU` | unset | `1` uses the GPU instead of SwiftShader (on Linux through ANGLE's GL/EGL backend). Much faster on a machine with a GPU. |
 
@@ -89,16 +92,22 @@ lives between your requests, and turns HTTP into calls to `window.lopsy`:
 - Any `base64` field in a result (renders, exports, saved projects) is written
   to `OUT_DIR` and replaced by `file`, the path it went to, so image bytes
   never land in your context. `POST /run?name=poster` names those files
-  `poster-NNN.png`.
+  `poster-NNN.png`; a name is a plain file name (letters, digits, `-`, `_`,
+  `.`), never a path.
 - The other way round, `{ "$file": "path" }` anywhere in a request is
   replaced by that file's bytes as base64, for `doc.open` and
-  `layer.add-image`.
+  `layer.add-image`. A relative path is relative to the directory the driver
+  runs in, and the file must be inside that directory or `OUT_DIR` (after
+  following symlinks): copy anything else in first.
 - A failure comes back with the page's console errors since the request
-  began, as `consoleErrors`.
+  began, as `consoleErrors`. What the driver itself refuses (a body that is
+  not JSON, a `$file` outside those directories, a bad `name`) comes back as
+  HTTP 400 with code `driver`, before anything runs; HTTP 500 with code
+  `driver` means the browser or the driver itself failed (see `driver.log`).
 - `GET /describe` lists every command with its one-sentence summary;
   `GET /describe?op=layer.effects` returns one command's full parameter
   schema; `GET /describe?family=filter` every command in a family.
-- `GET /quit` closes the browser and stops the driver.
+- `POST /quit` closes the browser and stops the driver.
 
 Tested against lopsy.art with Playwright 1.58.2. Save it as `lopsy-driver.mjs`.
 
@@ -114,6 +123,8 @@ const LOPSY_URL = process.env.LOPSY_URL ?? 'https://lopsy.art/agent/';
 const PORT = Number(process.env.DRIVER_PORT ?? 47391);
 const OUT = process.env.OUT_DIR ?? './lopsy-out';
 fs.mkdirSync(OUT, { recursive: true });
+// $file reads only from these: the directory the driver runs in, and OUT_DIR.
+const READABLE = [process.cwd(), OUT].map((dir) => fs.realpathSync(dir));
 
 // SwiftShader makes WebGL2 work on any headless/CI machine; a real GPU is much
 // faster. Headless Chromium on Linux falls back to SwiftShader unless ANGLE is
@@ -148,9 +159,9 @@ function saveFiles(value, name) {
   const out = {};
   for (const [key, v] of Object.entries(value)) {
     if (key === 'base64' && typeof v === 'string') {
-      const ext = value.ext ?? String(value.mime).split('/').pop();
+      const ext = plainName(String(value.ext ?? String(value.mime).split('/').pop()), 'the file extension');
       fileN += 1;
-      const file = path.join(OUT, `${name ?? 'out'}-${String(fileN).padStart(3, '0')}.${ext}`);
+      const file = path.join(OUT, `${name}-${String(fileN).padStart(3, '0')}.${ext}`);
       fs.writeFileSync(file, Buffer.from(v, 'base64'));
       out.file = file;
     } else {
@@ -164,8 +175,20 @@ function saveFiles(value, name) {
 function loadFiles(value) {
   if (Array.isArray(value)) return value.map(loadFiles);
   if (value === null || typeof value !== 'object') return value;
-  if (typeof value.$file === 'string') return fs.readFileSync(value.$file).toString('base64');
+  if (typeof value.$file === 'string') return fs.readFileSync(readablePath(value.$file)).toString('base64');
   return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, loadFiles(v)]));
+}
+class DriverError extends Error {}
+function readablePath(file) {
+  let real;
+  try { real = fs.realpathSync(file); } catch (err) { throw new DriverError(`$file ${file}: ${err.message}`); }
+  if (READABLE.some((dir) => real === dir || real.startsWith(dir + path.sep))) return real;
+  throw new DriverError(`$file ${file} is outside the driver's directory and OUT_DIR: copy it into one of them`);
+}
+// A name from a request becomes part of a file name in OUT_DIR, never a path.
+function plainName(name, what) {
+  if (/^[\w.-]+$/.test(name) && !name.includes('..')) return name;
+  throw new DriverError(`${what} ${JSON.stringify(name)} must be letters, digits, '-', '_' and '.', with no path in it`);
 }
 
 // GET /describe: one line per command. ?op=layer.effects: that command's full
@@ -179,6 +202,24 @@ async function describe(query) {
   return all.map((c) => `${c.id}: ${c.summary}`).join('\n') + '\n';
 }
 
+// Only this machine may use the driver. It listens on 127.0.0.1, and refuses a
+// request addressed to any other host name (a web page reaching it by DNS
+// rebinding) or sent by a web page (browsers add Origin or Sec-Fetch-Site).
+const HOSTS = [`127.0.0.1:${PORT}`, `localhost:${PORT}`];
+function isFromThisMachine(req) {
+  const site = req.headers['sec-fetch-site'];
+  return HOSTS.includes(req.headers.host) && req.headers.origin === undefined
+    && (site === undefined || site === 'none' || site === 'same-origin');
+}
+
+async function readJson(req) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  // Decoded once: a character split between two chunks would not survive decoding each.
+  const body = Buffer.concat(chunks).toString('utf8');
+  try { return JSON.parse(body); } catch (err) { throw new DriverError(`the body is not JSON: ${err.message}`); }
+}
+
 http.createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
   const send = (status, body) => {
@@ -186,30 +227,28 @@ http.createServer(async (req, res) => {
     res.writeHead(status, { 'content-type': isText ? 'text/plain' : 'application/json' });
     res.end(isText ? body : JSON.stringify(body, null, 1) + '\n');
   };
+  if (!isFromThisMachine(req)) return send(403, 'refused: the driver serves only requests from this machine, not web pages\n');
+  const route = `${req.method} ${url.pathname}`;
   try {
-    if (url.pathname === '/quit') {
+    if (route === 'GET /describe') return send(200, await describe(url.searchParams));
+    if (route === 'POST /quit') {
       send(200, 'bye\n');
       await browser.close();
       process.exit(0);
     }
-    if (url.pathname === '/describe') return send(200, await describe(url.searchParams));
-    let body = '';
-    for await (const chunk of req) body += chunk;
-    let invocation;
-    try {
-      invocation = loadFiles(JSON.parse(body));
-    } catch (err) {
-      return send(400, { ok: false, error: { code: 'driver', message: String(err) } });
-    }
-    consoleErrors = [];
+    if (route !== 'POST /run') return send(['/run', '/quit', '/describe'].includes(url.pathname) ? 405 : 404, 'POST /run, POST /quit, GET /describe\n');
     // POST /run?name=poster names the files this request writes poster-NNN.<ext>.
-    const outcome = saveFiles(await page.evaluate((inv) => window.lopsy.run(inv), invocation), url.searchParams.get('name'));
+    const name = plainName(url.searchParams.get('name') ?? 'out', 'name');
+    const invocation = loadFiles(await readJson(req));
+    consoleErrors = [];
+    const outcome = saveFiles(await page.evaluate((inv) => window.lopsy.run(inv), invocation), name);
     if (!outcome.ok && consoleErrors.length > 0) outcome.consoleErrors = consoleErrors;
     send(200, outcome);
   } catch (err) {
+    if (err instanceof DriverError) return send(400, { ok: false, error: { code: 'driver', message: err.message } });
     send(500, { ok: false, error: { code: 'driver', message: String(err?.stack ?? err) }, consoleErrors });
   }
-}).listen(PORT, () => console.log(`lopsy driver on http://localhost:${PORT} → ${LOPSY_URL}`));
+}).listen(PORT, '127.0.0.1', () => console.log(`lopsy driver on http://127.0.0.1:${PORT} → ${LOPSY_URL}`));
 ```
 
 Send a stage as a JSON file:
@@ -225,7 +264,7 @@ cat > steps/01-sky.json <<'EOF'
   { "op": "view.render", "maxSize": 800 }
 ]
 EOF
-curl -s --data-binary @steps/01-sky.json localhost:47391/run
+curl -s --data-binary @steps/01-sky.json 127.0.0.1:47391/run
 ```
 
 Always send files with `--data-binary @file`: `--data` strips newlines, and
@@ -265,7 +304,7 @@ the one document the driver keeps open:
    paths and guides, and starts a fresh undo history.
 5. **Export** with `{ "op": "doc.export", "format": "png" }` (or `jpeg`,
    `webp`, `bmp`) and look at the exported file itself.
-6. **Quit the driver** when you're done: `curl -s localhost:47391/quit`.
+6. **Quit the driver** when you're done: `curl -s -X POST 127.0.0.1:47391/quit`.
 
 ## The contract
 
@@ -284,13 +323,16 @@ run, and the ones before it stay done.
 
 ### Results
 
-Every call resolves to an envelope, never a thrown error:
+Every call resolves to an envelope; `lopsy.run` does not reject:
 
 ```json
 { "ok": true, "result": { "id": "…" } }
 { "ok": true, "results": [ { … }, { … } ] }
 { "ok": false, "error": { "name": "CommandError", "code": "invalid", "message": "…" } }
 ```
+
+A refusal is a `CommandError`. A bug in the editor comes back the same way,
+as `{ "name": "InternalError", "code": "internal" }` (see below).
 
 `result` answers a single invocation, `results` an array (one entry per
 invocation, in order). Each command's summary says what it returns: the new
@@ -308,6 +350,11 @@ the message starts with `[index] op:`.
 | `not-found` | An unknown command, layer, node or path. Unknown commands come with suggestions (`Did you mean: filter.gaussian-blur, …`). | Correct the name; `GET /describe` or `doc.info` lists what exists. |
 | `unavailable` | Nothing to act on yet: no document open (`No document is open`), the engine not started, or the graphics context lost and being restored. | Create or open a document; otherwise wait a moment and retry. |
 | `unsettled` | The command's change **was applied**, but the engine did not finish drawing it within 10 s. Its result is on `error.result`. | **Do not run it again.** Wait, then check with `view.render` or `doc.info`. |
+| `internal` | The editor hit a bug. The step that failed **may or may not have been applied**; in a batch, the steps before it (`error.completed`) were. The message names the error. | Call `doc.info` (and `view.render`) before deciding what to redo, and report it with the message and the batch that caused it. |
+
+`unavailable` also answers every call at once, before anything runs, when the
+browser has no WebGL2 (the message says so): use a real GPU, or the SwiftShader
+flags the driver passes by default.
 
 ### Coordinates
 
@@ -357,7 +404,7 @@ the options bar. Set them first:
 - `text.set-font` sets the font family, weight and style.
 
 Nothing resets between commands or between documents: `doc.new` keeps the
-colours and tool options you set before. Set everything a stage relies on at
+colours, the tool options and the active tool you had before. Set everything a stage relies on at
 the start of the stage. There are no per-call overrides.
 
 Commands that drive a tool make it the **active tool** first, as clicking it
@@ -1073,8 +1120,9 @@ the full editor at <https://lopsy.art/>.
 Each of these was checked on the agent page.
 
 - **A new document** is a white `Background`, an empty `Layer 1` (active) and
-  the root group `Project`; the active tool is Move. Colours and tool options
-  carry over from before `doc.new`.
+  the root group `Project`. It changes nothing else: the colours, the tool
+  options and the active tool carry over from before `doc.new` (Move on a
+  fresh page; the Brush after a `paint.stroke`).
 - **A selection constrains painting, fills, gradients and filters until
   `select.none`.** It is the most common cause of "my stroke only half
   appeared". `select.none` takes `commit`: `true` also commits a pending Move

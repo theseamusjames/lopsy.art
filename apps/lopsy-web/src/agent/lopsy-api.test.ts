@@ -1,9 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CommandError, SettleTimeoutError } from '../commands/command';
 import { createRegistry } from '../commands/registry';
-import { createLopsyApi } from './lopsy-api';
+import { LOPSY_ERROR_CODES, NO_WEBGL2_MESSAGE, createLopsyApi } from './lopsy-api';
 
-function setup() {
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+const GUIDE = Object.values(
+  import.meta.glob('/SKILL.md', { eager: true, query: '?raw', import: 'default' }) as Record<string, string>,
+)[0]!;
+
+function setup({ hasWebGL2 = true }: { hasWebGL2?: boolean } = {}) {
   const registry = createRegistry();
   const log: string[] = [];
   registry.define({
@@ -50,7 +58,14 @@ function setup() {
     params: {},
     run: () => 'done',
   });
-  return { api: createLopsyApi(registry), registry, log };
+  registry.define({
+    id: 'layer.reject',
+    summary: 'Rejects with something that is not an Error.',
+    surface: 'document',
+    params: {},
+    run: () => Promise.reject('a string'),
+  });
+  return { api: createLopsyApi(registry, { hasWebGL2: () => hasWebGL2 }), registry, log };
 }
 
 describe('lopsy.describe', () => {
@@ -132,9 +147,83 @@ describe('lopsy.run', () => {
     expect(log).toEqual([]);
   });
 
-  it('rejects for anything that is not a CommandError', async () => {
+  it('resolves a bug to code internal, and logs the original error', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { api } = setup();
-    await expect(api.run({ op: 'layer.explode' })).rejects.toThrow(TypeError);
-    await expect(api.run([{ op: 'layer.add' }, { op: 'layer.explode' }])).rejects.toThrow(TypeError);
+    const outcome = await api.run({ op: 'layer.explode' });
+    expect(outcome).toEqual({
+      ok: false,
+      error: { name: 'InternalError', code: 'internal', message: 'TypeError: cannot read properties of undefined' },
+    });
+    expect(JSON.parse(JSON.stringify(outcome))).toEqual(outcome);
+    expect(logged).toHaveBeenCalledTimes(1);
+    expect(logged.mock.calls[0]![0]).toBeInstanceOf(TypeError);
+  });
+
+  it('gives a bug in a list the index and completed a refusal has', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { api, log } = setup();
+    const outcome = await api.run([{ op: 'layer.add' }, { op: 'layer.add' }, { op: 'layer.explode' }, { op: 'layer.add' }]);
+    expect(outcome).toEqual({
+      ok: false,
+      error: {
+        name: 'InternalError',
+        code: 'internal',
+        message: '[2] layer.explode: TypeError: cannot read properties of undefined',
+        index: 2,
+        completed: [{ id: 'layer-1' }, { id: 'layer-2' }],
+      },
+    });
+    expect(log).toEqual(['add ', 'add ']);
+    expect(logged.mock.calls[0]![0]).toBeInstanceOf(TypeError);
+  });
+
+  it('resolves a rejection with a non-Error value to code internal', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { api } = setup();
+    expect(await api.run({ op: 'layer.reject' })).toMatchObject({ ok: false, error: { code: 'internal', message: 'a string' } });
+    expect(await api.run([{ op: 'layer.reject' }])).toMatchObject({
+      ok: false,
+      error: { code: 'internal', message: '[0] layer.reject: a string', index: 0, completed: [] },
+    });
+  });
+
+  it('logs nothing for a refusal', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { api } = setup();
+    await api.run([{ op: 'layer.add' }, { op: 'layer.remove' }]);
+    expect(logged).not.toHaveBeenCalled();
+  });
+});
+
+describe('lopsy.run without WebGL2', () => {
+  it('answers every call unavailable at once, running nothing', async () => {
+    const { api, log } = setup({ hasWebGL2: false });
+    const single = await api.run({ op: 'layer.add', name: 'a' });
+    expect(single).toEqual({ ok: false, error: { name: 'CommandError', code: 'unavailable', message: NO_WEBGL2_MESSAGE } });
+    expect(await api.run([{ op: 'layer.add' }, { op: 'layer.add' }])).toEqual({
+      ok: false,
+      error: { name: 'CommandError', code: 'unavailable', message: NO_WEBGL2_MESSAGE, index: 0, completed: [] },
+    });
+    expect(await api.run({ op: 'no.such' })).toMatchObject({ ok: false, error: { code: 'unavailable' } });
+    expect(log).toEqual([]);
+    expect(NO_WEBGL2_MESSAGE).toMatch(/WebGL2/);
+    expect(NO_WEBGL2_MESSAGE).toContain('--use-angle=swiftshader');
+  });
+
+  it('still describes the commands', () => {
+    const { api, registry } = setup({ hasWebGL2: false });
+    expect(api.describe().map((d) => d.id)).toEqual(registry.describe('document').map((d) => d.id));
+  });
+
+  it('offers the same SwiftShader flags as the guide\'s driver', () => {
+    expect(GUIDE).toContain("'--use-gl=angle', '--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'");
+  });
+});
+
+describe('the guide', () => {
+  it('documents every error code lopsy.run can answer with', () => {
+    const table = GUIDE.slice(GUIDE.indexOf('### Errors'), GUIDE.indexOf('### Coordinates'));
+    for (const code of LOPSY_ERROR_CODES) expect(table, code).toContain(`| \`${code}\` |`);
   });
 });

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { WebGL2Warning, checkWebGL2Support } from '../components/WebGL2Warning/WebGL2Warning';
+import { useEffect, useRef } from 'react';
+import { WebGL2Warning } from '../components/WebGL2Warning/WebGL2Warning';
 import { CanvasRenderer } from '../app/CanvasRenderer';
 import { useEditorStore } from '../app/editor-store';
 import { useAppEffects } from '../app/hooks/useAppEffects';
@@ -11,8 +11,12 @@ import styles from './AgentApp.module.css';
  * through `window.lopsy` (set by the entry), never by input: no menus,
  * panels, shortcuts or pointer handlers are mounted.
  */
-export function AgentApp() {
-  const [hasWebGL2] = useState(() => checkWebGL2Support());
+interface AgentAppProps {
+  /** checkWebGL2Support(), asked once by the entry so the page and window.lopsy agree. */
+  hasWebGL2: boolean;
+}
+
+export function AgentApp({ hasWebGL2 }: AgentAppProps) {
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);

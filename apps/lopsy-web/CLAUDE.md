@@ -239,7 +239,9 @@ When the wait after a command's own work times out, the work has
 happened: the registry rejects with code `'unsettled'`, the command's
 result on the error's `result`, and a message saying not to run it
 again. `runAll` puts the results of the steps that completed before a
-failure on the error's `completed`.
+failure on the error's `completed`; when a step throws something that is
+not a `CommandError` (a bug), it rejects with a `StepFailure` carrying the
+same, the step's `index` and the original as `cause`.
 
 **Wrap, never re-implement.** A command calls the same function the UI
 calls, so the two cannot drift; when that function lives in a component

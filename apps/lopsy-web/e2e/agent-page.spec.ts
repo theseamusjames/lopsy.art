@@ -212,6 +212,47 @@ test.describe('agent page', () => {
     // Background, Layer 1, the added layer and the root group.
     expect(info.layers).toHaveLength(4);
   });
+
+  test('a new document leaves the active tool as it was', async ({ page }) => {
+    await openAgentPage(page);
+    await lopsy(page, { op: 'doc.new', width: 200, height: 150 });
+    const first = await lopsyResult<{ activeTool: string }>(page, { op: 'doc.info' });
+    expect(first.activeTool).toBe('move');
+    const stroked = await lopsy(page, [
+      { op: 'paint.stroke', points: [{ x: 20, y: 20 }, { x: 120, y: 90 }] },
+      { op: 'doc.new', width: 200, height: 150 },
+    ]);
+    expect(stroked.ok, JSON.stringify(stroked)).toBe(true);
+    const second = await lopsyResult<{ activeTool: string }>(page, { op: 'doc.info' });
+    expect(second.activeTool).toBe('brush');
+  });
+
+  test('without WebGL2, every run is answered unavailable at once and describe() still works', async ({ page }) => {
+    await page.addInitScript(() => {
+      const original = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, ...args: Parameters<typeof original>) {
+        return args[0] === 'webgl2' ? null : original.apply(this, args);
+      } as typeof original;
+    });
+    await openAgentPage(page);
+    await expect(page.getByRole('heading', { name: 'WebGL 2 is not available' })).toBeVisible();
+
+    const started = Date.now();
+    const made = await lopsy(page, { op: 'doc.new', width: 100, height: 100 });
+    expect(made).toMatchObject({
+      ok: false,
+      error: { name: 'CommandError', code: 'unavailable', message: expect.stringContaining('no WebGL2') },
+    });
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(await lopsy(page, [{ op: 'color.set', foreground: '#ff0000' }])).toMatchObject({
+      ok: false,
+      error: { code: 'unavailable', index: 0, completed: [] },
+    });
+    // Nothing ran: no document was created.
+    expect(await page.locator('canvas[aria-label="Drawing canvas"]').count()).toBe(0);
+    const ids = await page.evaluate(() => (window as unknown as AgentWindow).lopsy!.describe().map((c) => c.id));
+    expect(ids).toContain('doc.new');
+  });
 });
 
 /** One image made of most kinds of command: layers, a filled selection, a gradient, a stroke, a filter, an effect, text and an adjustment. */
@@ -313,4 +354,5 @@ test.describe('the same recipe on both pages', () => {
     expect(probes.gradient).not.toEqual([255, 255, 255, 255]);
     expect(probes.fill).not.toEqual(probes.gradient);
   });
+
 });

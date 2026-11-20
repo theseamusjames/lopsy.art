@@ -1,6 +1,7 @@
 import {
   CommandError,
   SettleTimeoutError,
+  StepFailure,
   isValidCommandId,
   type Command,
   type CommandMeta,
@@ -150,9 +151,9 @@ function splitInvocation(invocation: unknown): { op: string; params: Record<stri
   return { op, params };
 }
 
-function withIndex(error: unknown, index: number, op: string | undefined, completed: readonly unknown[]): unknown {
-  if (!(error instanceof CommandError)) return error;
+function withIndex(error: unknown, index: number, op: string | undefined, completed: readonly unknown[]): Error {
   const label = op ?? '(invalid)';
+  if (!(error instanceof CommandError)) return new StepFailure(error, index, label, [...completed]);
   const message = error.message.startsWith(`${label}: `) ? error.message : `${label}: ${error.message}`;
   return new CommandError(error.code, `[${index}] ${message}`, {
     notice: error.notice,

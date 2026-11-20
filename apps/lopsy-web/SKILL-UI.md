@@ -67,7 +67,10 @@ node lopsy-driver.mjs > driver.log 2>&1 &
 ```
 
 It opens <https://lopsy.art/> headless at 1600×1000 and listens on
-`http://localhost:47391`. Useful environment variables:
+`http://127.0.0.1:47391`. It runs whatever code it is sent, so it is
+**local-only**: it listens on the loopback interface, takes only POSTs, and
+refuses any request a web page makes. Do not expose its port (no tunnel, port
+forward or proxy). Useful environment variables:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
@@ -98,7 +101,7 @@ await h.gradient('linear', [{ pos: 0, hex: '#1B2A4A' }, { pos: 1, hex: '#F2A541'
 await h.drag([{ x: 600, y: 0 }, { x: 600, y: 1500 }], { steps: 8 });
 return await h.shot('background');
 EOF
-curl -s --data-binary @steps/01-background.js localhost:47391
+curl -s --data-binary @steps/01-background.js 127.0.0.1:47391
 ```
 
 Always send step files with `--data-binary @file`; `echo` and `--data`
@@ -122,7 +125,7 @@ The loop:
    through **File → Open Project...**.
 5. **Export** with `h.exportPng('name.png')` and look at the exported file
    itself, not only the canvas screenshot.
-6. **Stop the driver** when you're done: `curl -s --data '__quit__' localhost:47391`.
+6. **Stop the driver** when you're done: `curl -s --data '__quit__' 127.0.0.1:47391` (a POST).
 
 ## Coordinates
 
@@ -515,9 +518,21 @@ const h = {
 
 const ctx = {}; // survives between steps: stash palettes, helper functions, measurements
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
+// It runs the code it is sent, so only this machine may use it: it listens on
+// 127.0.0.1, and refuses a request addressed to any other host name (a web page
+// reaching it by DNS rebinding) or sent by a web page (Origin, Sec-Fetch-Site).
+const HOSTS = [`127.0.0.1:${PORT}`, `localhost:${PORT}`];
+function isFromThisMachine(req) {
+  const site = req.headers['sec-fetch-site'];
+  return HOSTS.includes(req.headers.host) && req.headers.origin === undefined
+    && (site === undefined || site === 'none' || site === 'same-origin');
+}
 http.createServer(async (req, res) => {
-  let body = '';
-  for await (const chunk of req) body += chunk;
+  if (!isFromThisMachine(req)) { res.statusCode = 403; return res.end('refused: only requests from this machine, not web pages\n'); }
+  if (req.method !== 'POST') { res.statusCode = 405; return res.end('POST a step file, or __quit__\n'); }
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  const body = Buffer.concat(chunks).toString('utf8'); // once: a character may span two chunks
   if (body.trim() === '__quit__') { res.end('bye\n'); await browser.close(); process.exit(0); }
   try {
     const result = await new AsyncFunction('page', 'h', 'ctx', body)(page, h, ctx);
@@ -527,7 +542,7 @@ http.createServer(async (req, res) => {
     res.statusCode = 500;
     res.end(`${err.stack ?? err}\nscreenshot: ${path}\n`);
   }
-}).listen(PORT, () => console.log(`lopsy driver on http://localhost:${PORT} → ${LOPSY_URL}`));
+}).listen(PORT, '127.0.0.1', () => console.log(`lopsy driver on http://127.0.0.1:${PORT} → ${LOPSY_URL}`));
 ```
 
 A complete first step, which draws a sunset poster in about fifteen seconds:

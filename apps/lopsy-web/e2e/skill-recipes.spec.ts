@@ -9,12 +9,21 @@
  * - runs the guide's driver (the ```js block after `<!-- driver: ... -->`) with
  *   Node against this checkout's dev server and exercises each endpoint.
  */
-import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { createServer } from 'node:net';
+import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { TestInfo } from '@playwright/test';
 import { test, expect, type Page } from './fixtures';
 import { serveFontsOffline } from './font-fixtures';
+import {
+  FROM_A_WEB_PAGE,
+  foreignHosts,
+  freePort,
+  lanAddress,
+  rawRequest,
+  spawnDriver,
+  tryConnect,
+  type RunningDriver,
+} from './driver-requests';
 
 const SKILL = readFileSync('SKILL.md', 'utf8');
 
@@ -82,16 +91,34 @@ async function decodePng(page: Page, base64: string): Promise<{ width: number; h
   }, base64);
 }
 
-function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const server = createServer();
-    server.listen(0, () => {
-      const address = server.address();
-      const port = typeof address === 'object' && address ? address.port : 0;
-      server.close(() => resolve(port));
-    });
-    server.on('error', reject);
-  });
+interface StartedDriver {
+  readonly driver: RunningDriver;
+  readonly dir: string;
+  readonly outDir: string;
+  readonly port: number;
+}
+
+/** Writes the guide's driver to its own directory and starts it there, as the guide says to. */
+async function startDriver(baseURL: string, testInfo: TestInfo): Promise<StartedDriver> {
+  const { name, source } = driverBlock();
+  const dir = testInfo.outputPath('driver');
+  const outDir = join(dir, 'out');
+  mkdirSync(dir, { recursive: true });
+  const driverPath = join(dir, name);
+  writeFileSync(driverPath, source);
+  const port = await freePort();
+  const driver = spawnDriver(driverPath, dir, { LOPSY_URL: `${baseURL}/agent/`, DRIVER_PORT: String(port), OUT_DIR: outDir });
+  return { driver, dir, outDir, port };
+}
+
+async function waitForDriver(driver: RunningDriver): Promise<void> {
+  await expect.poll(() => driver.log(), { timeout: 90_000, message: 'the driver never started' }).toContain('lopsy driver on');
+}
+
+/** The manifest of a saved .lopsy project: the JSON after its 12-byte header. */
+function projectManifest(bytes: Buffer): string {
+  expect(bytes.subarray(0, 6).toString('latin1')).toBe('LOPSY\0');
+  return bytes.subarray(12, 12 + bytes.readUInt32LE(8)).toString('utf8');
 }
 
 /** Width and height from a PNG's IHDR chunk. */
@@ -172,28 +199,12 @@ test.describe('SKILL.md', () => {
 
   test('its driver runs commands, writes files, describes and quits', async ({ baseURL }, testInfo) => {
     test.setTimeout(180_000);
-    const { name, source } = driverBlock();
-    const dir = testInfo.outputPath('driver');
-    const outDir = join(dir, 'out');
-    mkdirSync(dir, { recursive: true });
-    const driverPath = join(dir, name);
-    writeFileSync(driverPath, source);
-    const port = await freePort();
-    const url = (path: string) => `http://localhost:${port}${path}`;
-
-    let log = '';
-    const driver: ChildProcess = spawn(process.execPath, [driverPath], {
-      cwd: dir,
-      env: { ...process.env, LOPSY_URL: `${baseURL}/agent/`, DRIVER_PORT: String(port), OUT_DIR: outDir },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    const exited = new Promise<number | null>((resolve) => driver.on('exit', resolve));
-    driver.stdout!.on('data', (chunk: Buffer) => { log += chunk.toString(); });
-    driver.stderr!.on('data', (chunk: Buffer) => { log += chunk.toString(); });
+    const { driver, port } = await startDriver(baseURL!, testInfo);
+    const url = (path: string) => `http://127.0.0.1:${port}${path}`;
 
     try {
-      await expect.poll(() => log, { timeout: 90_000, message: 'the driver never started' }).toContain('lopsy driver on');
-      expect(log).toMatch(/renderer: /);
+      await waitForDriver(driver);
+      expect(driver.log()).toMatch(/renderer: /);
 
       const run = async (body: unknown, query = ''): Promise<Record<string, unknown>> => {
         const response = await fetch(url(`/run${query}`), { method: 'POST', body: JSON.stringify(body) });
@@ -225,6 +236,26 @@ test.describe('SKILL.md', () => {
       const failed = await run({ op: 'doc.nwe' });
       expect(failed).toMatchObject({ ok: false, error: { code: 'not-found', message: expect.stringContaining('doc.new') } });
 
+      // Over 100 KB of CJK text arrives in several chunks, and a character split between two must
+      // survive. x of 1, 10 and 100 shift the text by a byte each time, so at least one of the three
+      // requests puts a chunk boundary inside a three-byte character.
+      const line = '漢字のテスト、中文测试。한국어텍스트入力'.repeat(8);
+      const text = Array.from({ length: 240 }, () => line).join('\n');
+      expect(Buffer.byteLength(text)).toBeGreaterThan(100_000);
+      for (const x of [1, 10, 100]) {
+        const typed = await run([
+          { op: 'doc.new', width: 320, height: 200 },
+          { op: 'tool.set', tool: 'text', options: { fontSize: 8, align: 'left' } },
+          { op: 'text.add', x, y: 4, text },
+          { op: 'doc.save' },
+        ]);
+        expect(typed.ok, JSON.stringify(typed).slice(0, 2000)).toBe(true);
+        const saved = (typed.results as Array<{ file?: string }>).at(-1)!;
+        const manifest = projectManifest(readFileSync(saved.file!));
+        expect(manifest.includes('\uFFFD'), `x ${x}: the text has U+FFFD in it`).toBe(false);
+        expect(manifest.includes(JSON.stringify(text)), `x ${x}: the text layer's text is what was sent`).toBe(true);
+      }
+
       const list = await (await fetch(url('/describe'))).text();
       expect(list).toContain('layer.add: ');
       expect(list.split('\n').filter(Boolean).length).toBeGreaterThan(100);
@@ -235,10 +266,92 @@ test.describe('SKILL.md', () => {
       expect(family.length).toBeGreaterThan(20);
       expect(family.every((c) => c.id.startsWith('filter.'))).toBe(true);
 
-      expect(await (await fetch(url('/quit'))).text()).toBe('bye\n');
-      expect(await exited).toBe(0);
+      // A GET (an <img> on any web page) does not stop it; a POST from this machine does.
+      expect((await fetch(url('/quit'))).status).toBe(405);
+      expect(driver.isRunning()).toBe(true);
+      expect((await fetch(url('/describe?op=doc.new'))).status).toBe(200);
+      expect(await (await fetch(url('/quit'), { method: 'POST' })).text()).toBe('bye\n');
+      expect(await driver.exited).toBe(0);
     } finally {
-      if (driver.exitCode === null && driver.signalCode === null) driver.kill();
+      driver.kill();
+    }
+  });
+
+  test('its driver serves only this machine, and reads and writes only its own directories', async ({ baseURL }, testInfo) => {
+    test.setTimeout(180_000);
+    const { driver, dir, outDir, port } = await startDriver(baseURL!, testInfo);
+    const post = (body: unknown, { headers = {}, path = '/run' }: { headers?: Record<string, string>; path?: string } = {}) =>
+      rawRequest(port, { method: 'POST', path, headers: { 'content-type': 'text/plain', ...headers }, body: JSON.stringify(body) });
+    const layerNames = async (): Promise<string[]> => {
+      const info = JSON.parse((await post({ op: 'doc.info' })).text) as { result: { layers: Array<{ name: string }> } };
+      return info.result.layers.map((layer) => layer.name);
+    };
+
+    try {
+      await waitForDriver(driver);
+      expect(await tryConnect('127.0.0.1', port)).toBe('connected');
+      const lan = lanAddress();
+      if (lan) expect(await tryConnect(lan, port), `the driver must not listen on ${lan}`).not.toBe('connected');
+
+      expect((await post({ op: 'doc.new', width: 40, height: 30 })).status).toBe(200);
+      for (const { what, headers } of FROM_A_WEB_PAGE) {
+        expect((await post({ op: 'layer.add', name: 'from-a-page' }, { headers })).status, what).toBe(403);
+        expect((await post({}, { headers, path: '/quit' })).status, what).toBe(403);
+        expect((await rawRequest(port, { path: '/describe', headers })).status, what).toBe(403);
+      }
+      for (const host of foreignHosts(port)) {
+        expect((await post({ op: 'layer.add', name: 'from-a-page' }, { headers: { host } })).status, host).toBe(403);
+        expect((await post({}, { headers: { host }, path: '/quit' })).status, host).toBe(403);
+        expect((await rawRequest(port, { path: '/describe', headers: { host } })).status, host).toBe(403);
+      }
+      // What a browser sends for a URL typed in its address bar, and what curl and Node send.
+      expect((await rawRequest(port, { path: '/describe', headers: { 'sec-fetch-site': 'none' } })).status).toBe(200);
+      expect((await rawRequest(port, { path: '/describe', headers: { host: `localhost:${port}` } })).status).toBe(200);
+      expect(await layerNames()).not.toContain('from-a-page');
+
+      const getRun = await rawRequest(port, { path: '/run' });
+      expect(getRun.status).toBe(405);
+      expect((await rawRequest(port, { method: 'GET', path: '/run', body: JSON.stringify({ op: 'layer.add', name: 'by-get' }) })).status).toBe(405);
+      expect(await layerNames()).not.toContain('by-get');
+
+      // $file reads only inside the directory the driver runs in and OUT_DIR, symlinks resolved.
+      const outside = testInfo.outputPath('outside-secret.txt');
+      writeFileSync(outside, 'secret');
+      writeFileSync(join(dir, 'inside.txt'), 'inside');
+      writeFileSync(join(outDir, 'in-out.txt'), 'in out');
+      symlinkSync(outside, join(dir, 'link-out.txt'));
+      for (const [file, bytes] of [['inside.txt', 'inside'], [join(dir, 'inside.txt'), 'inside'], [join(outDir, 'in-out.txt'), 'in out']] as const) {
+        const read = JSON.parse((await post({ op: 'layer.add', name: { $file: file } })).text) as { ok: boolean };
+        expect(read.ok, file).toBe(true);
+        expect(await layerNames(), file).toContain(Buffer.from(bytes).toString('base64'));
+      }
+      const secret = Buffer.from('secret').toString('base64');
+      for (const file of [outside, '../outside-secret.txt', 'link-out.txt', '/etc/hosts']) {
+        const refused = await post([{ op: 'layer.add', name: { $file: file } }, { op: 'doc.info' }]);
+        expect(refused.status, file).toBe(400);
+        expect(JSON.parse(refused.text), file).toMatchObject({ ok: false, error: { code: 'driver', message: expect.stringContaining('outside') } });
+        expect(refused.text).not.toContain(secret);
+      }
+      expect(await layerNames()).not.toContain(secret);
+
+      // An output name is a file name in OUT_DIR, never a path.
+      for (const name of ['../escape', '..', 'a/b', 'a\\b', '/tmp/escape']) {
+        const refused = await post({ op: 'doc.save' }, { path: `/run?name=${encodeURIComponent(name)}` });
+        expect(refused.status, name).toBe(400);
+        expect(JSON.parse(refused.text), name).toMatchObject({ ok: false, error: { code: 'driver' } });
+      }
+      expect(readdirSync(dir).filter((file) => file.includes('escape'))).toEqual([]);
+      expect(readdirSync(testInfo.outputPath()).filter((file) => file.includes('escape'))).toEqual([]);
+      expect(existsSync(join(outDir, 'a'))).toBe(false);
+      const named = JSON.parse((await post({ op: 'doc.save' }, { path: '/run?name=poster.v2' })).text) as { result: { file: string } };
+      expect(named.result.file).toMatch(/poster\.v2-\d{3}\.lopsy$/);
+
+      expect((await rawRequest(port, { path: '/quit' })).status).toBe(405);
+      expect(driver.isRunning()).toBe(true);
+      expect((await post({}, { path: '/quit' })).text).toBe('bye\n');
+      expect(await driver.exited).toBe(0);
+    } finally {
+      driver.kill();
     }
   });
 });
