@@ -1,6 +1,17 @@
 import { CommandError } from '../command';
 import { defineCommand } from '../registry';
-import { actOnLayer, coordinateSpec, extentSpec, layerRefSpec, ownEntry, requireDocument, requireEngine, resolveLayer } from '../context';
+import {
+  actOnLayer,
+  colorHex,
+  coordinateSpec,
+  extentSpec,
+  layerRefSpec,
+  ownEntry,
+  parseHexColor,
+  requireDocument,
+  requireEngine,
+  resolveLayer,
+} from '../context';
 import { documentEnvironment, gestureNote, runGesture } from '../gesture/run-gesture';
 import { TOOL_OPTIONS, checkOption } from '../tool/tool-options';
 import { hasOwnKey } from '../params';
@@ -8,6 +19,7 @@ import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { findFontEntry } from '../../app/local-fonts-store';
+import { toDocumentColor } from '../../app/document-color';
 import { insertIntoEditedText, selectAllEditedText } from '../../app/text-edit-buffer';
 import { commitTextEditing, textLayerAt } from '../../tools/text/text-interaction';
 import {
@@ -18,11 +30,12 @@ import {
   beginTextLayerHistory,
   endTextLayerHistory,
 } from '../../tools/text/apply-text-setting';
+import { applyTextColor, beginTextColorPick, endTextColorPick } from '../../tools/text/apply-text-color';
 import { buildFontFamilyValue, extractFamilyName } from '../../utils/font-loader';
 import { getLayerTextureDimensions, isFontLoaded, type Engine } from '../../engine-wasm/wasm-bridge';
 import type { TextSettings } from '../../tools/text/text-settings';
-import type { FontEntry } from '../../utils/font-catalog';
-import type { FontStyle, Layer, Point, TextLayer } from '../../types';
+import { FONT_CATALOG, type FontCategory, type FontEntry } from '../../utils/font-catalog';
+import type { Color, FontStyle, Layer, Point, TextLayer } from '../../types';
 
 export interface TextLayerResult {
   id: string;
@@ -240,11 +253,14 @@ function checkStyleOptions(options: Record<string, unknown>): void {
   }
 }
 
-/** One option changed as its control does: the Size slider's typed value is bracketed by its history, a select or toggle is one discrete change. */
+/** The options a slider sets (in the options bar or the Text panel); the rest are selects and toggles. */
+const SLIDER_OPTIONS: ReadonlySet<keyof TextSettings> = new Set<keyof TextSettings>(['fontSize', 'lineHeight', 'letterSpacing', 'paragraphSpacing']);
+
+/** One option changed as its control does: a slider's typed value is bracketed by its history, a select or toggle is one discrete change. */
 function applyStyleOption(key: keyof TextSettings, value: unknown): Promise<void> {
-  if (key === 'fontSize') {
+  if (SLIDER_OPTIONS.has(key)) {
     beginTextLayerHistory();
-    const done = applyTextSetting('fontSize', value as number);
+    const done = applyTextSetting(key, value as TextSettings[typeof key]);
     endTextLayerHistory();
     return done;
   }
@@ -258,7 +274,7 @@ function styleValues(): Record<string, unknown> {
 export const textStyle = defineCommand({
   id: 'text.style',
   summary:
-    'Restyles a text layer as changing the Text options (options bar or Text panel) with it active does: the layer is made active first, as a click on its row does, and each option that differs from the current value is applied as its control applies it, one "Text" history step each (the options also become the Text options for new text). Options are tool.set\'s text options: fontSize, fontStyle, align, underline, strikethrough, vertical (tool.describe lists their ranges); the font family and weight are text.set-font\'s. Refused while text is being edited and for a layer that is not text. Returns the layer\'s id and name and the text options after.',
+    'Restyles a text layer as changing the Text options (options bar or Text panel) with it active does: the layer is made active first, as a click on its row does, and each option that differs from the current value is applied as its control applies it, one "Text" history step each (the options also become the Text options for new text). Options are tool.set\'s text options: fontSize, fontStyle, align, underline, strikethrough and vertical from the options bar, lineHeight, letterSpacing and paragraphSpacing from the Text panel (tool.describe lists their ranges); the font family and weight are text.set-font\'s, the colour text.set-color\'s. Refused while text is being edited and for a layer that is not text. Returns the layer\'s id and name and the text options after.',
   surface: 'document',
   params: {
     layer: layerRefSpec,
@@ -279,5 +295,91 @@ export const textStyle = defineCommand({
       await Promise.all(loads);
       return { id: layer.id, name: textLayer(layer.id).name, options: styleValues() };
     });
+  },
+});
+
+export interface TextColorResult extends TextLayerResult {
+  /** The layer's colour as hex, with alpha when it is not opaque. */
+  color: string;
+}
+
+function isSameColor(a: Color, b: Color): boolean {
+  return a.r === b.r && a.g === b.g && a.b === b.b && a.a === b.a;
+}
+
+/** One pick in the text colour control: the picking session's start, the pick, and the end the picker's closing gives it. */
+function pickTextColor(color: Color): void {
+  beginTextColorPick();
+  applyTextColor(color);
+  endTextColorPick();
+}
+
+export const textSetColor = defineCommand({
+  id: 'text.set-color',
+  summary:
+    'Recolours a whole text layer as one pick in the text colour control (the Text color swatch in the options bar or the Text panel) does with it active: the layer is made active first, as a click on its row does, then its colour is replaced and any colours set on ranges of it are cleared, one "Text" history step (none when the layer is that colour throughout already). The foreground colour is not changed. Ranges of the text have no command: they need the text open for editing. Refused while text is being edited and for a layer that is not text. Returns the layer\'s id and name and its colour as hex.',
+  surface: 'document',
+  params: {
+    layer: layerRefSpec,
+    color: {
+      type: 'color',
+      description: '"#rrggbb" (or "#rgb"), or "#rrggbbaa" for translucent text, as the picker\'s Opacity bar gives; in a Grayscale or Indexed document it is held to the mode as a pick is.',
+    },
+  },
+  run({ layer: ref, color }): TextColorResult | Promise<TextColorResult> {
+    requireDocument();
+    requireEngine();
+    const picked = parseHexColor('text.set-color', 'color', color);
+    const layer = requireTextLayer(resolveLayer(ref));
+    checkNotEditing();
+    return actOnLayer(layer.id, () => {
+      const current = textLayer(layer.id);
+      const hasSpans = (current.colorSpans?.length ?? 0) > 0;
+      if (hasSpans || !isSameColor(current.color, toDocumentColor(picked))) pickTextColor(picked);
+      const after = textLayer(layer.id);
+      return { id: layer.id, name: after.name, color: colorHex(after.color) };
+    });
+  },
+});
+
+export interface FontListEntry {
+  family: string;
+  category: FontCategory;
+  /** The weights the family offers, as the Font weight select lists them. */
+  weights: number[];
+  hasItalic: boolean;
+}
+
+export interface FontListResult {
+  /** How many families matched the filters; `fonts` holds the first `limit` of them. */
+  total: number;
+  fonts: FontListEntry[];
+}
+
+const FONT_CATEGORIES: readonly FontCategory[] = ['sans-serif', 'serif', 'display', 'handwriting', 'monospace'];
+const DEFAULT_FONT_LIMIT = 50;
+
+function fontListEntry(entry: FontEntry): FontListEntry {
+  return { family: entry.family, category: entry.category, weights: [...entry.weights], hasItalic: entry.hasItalic };
+}
+
+export const textFonts = defineCommand({
+  id: 'text.fonts',
+  summary:
+    `Lists the families the options bar's font picker offers from its catalogue (the browser's built-in fonts and the Google Fonts it downloads on first use), alphabetically, with each one's category, weights and whether it has an italic; pass a family to text.set-font exactly as it is listed. Fonts installed on this machine, which the picker adds once the browser grants access to them, are not listed. Changes nothing and needs no document. Returns how many families matched and the first \`limit\` of them (${DEFAULT_FONT_LIMIT} unless given).`,
+  surface: 'document',
+  settles: false,
+  params: {
+    category: { type: 'string', enum: [...FONT_CATEGORIES], optional: true, description: 'Only this category, as the picker groups them.' },
+    query: { type: 'string', minLength: 1, maxLength: 200, optional: true, description: 'Only families whose name contains this, ignoring case, as the picker\'s search box filters.' },
+    limit: { type: 'number', integer: true, min: 1, max: FONT_CATALOG.length, default: DEFAULT_FONT_LIMIT, description: `The most families to return, 1 to ${FONT_CATALOG.length} (the whole catalogue).` },
+  },
+  run({ category, query, limit }): FontListResult {
+    const needle = query?.toLowerCase();
+    const matched = FONT_CATALOG
+      .filter((entry) => category === undefined || entry.category === category)
+      .filter((entry) => needle === undefined || entry.family.toLowerCase().includes(needle))
+      .sort((a, b) => a.family.localeCompare(b.family));
+    return { total: matched.length, fonts: matched.slice(0, limit).map(fontListEntry) };
   },
 });

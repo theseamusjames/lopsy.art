@@ -19,7 +19,10 @@ const mocks = vi.hoisted(() => ({
   engine: null as object | null,
   rasterizePathToLayer: vi.fn((..._args: unknown[]) => true),
   booleanOp: vi.fn(),
+  pathToSelection: vi.fn(),
 }));
+
+vi.mock('../../panels/PathsPanel/path-to-selection', () => ({ pathToSelection: mocks.pathToSelection }));
 
 vi.mock('../../tools/path/boolean-ops', () => ({ booleanOp: mocks.booleanOp }));
 
@@ -189,6 +192,48 @@ describe('path.stroke', () => {
     mocks.engine = null;
     expect((await failure(runCommand('path.stroke'))).code).toBe('unavailable');
     expect(mocks.rasterizePathToLayer).not.toHaveBeenCalled();
+  });
+});
+
+describe('path.to-selection', () => {
+  /** jsdom has no 2D canvas to rasterize the path with, so the panel function's store writes are given. */
+  function convertsAs(label: string): void {
+    mocks.pathToSelection.mockImplementation(() => {
+      const { width, height } = store().document;
+      store().pushHistoryMetadata(label);
+      store().setSelection({ x: 0, y: 0, width, height }, Uint8ClampedArray.of(255), 1, 1);
+    });
+  }
+
+  it('calls the Paths panel\'s function with the selected path, or the named one', async () => {
+    convertsAs('Path to Selection');
+    const a = await addSquare(10, 10, 20);
+    await addSquare(40, 40, 20);
+    const pending = runCommand('path.to-selection');
+    expect(mocks.pathToSelection).toHaveBeenCalledWith(store().paths[1]);
+    expect(await pending).toEqual({ id: store().paths[1]!.id, name: 'Path 2' });
+    expect(await runCommand('path.to-selection', { path: 'Path 1' })).toEqual(a);
+    expect(mocks.pathToSelection).toHaveBeenLastCalledWith(store().paths[0]);
+    expect(store().selection.active).toBe(true);
+    expect(lastLabel()).toBe('Path to Selection');
+  });
+
+  it('refuses with no selected path, and for a path of fewer than two anchors, where the button does nothing', async () => {
+    expect(await failure(runCommand('path.to-selection'))).toMatchObject({
+      code: 'refused', message: 'No path is selected: pass path, or select one with path.select.',
+    });
+    const a = await addSquare(10, 10, 20);
+    useEditorStore.setState({ paths: [{ ...store().paths[0]!, anchors: store().paths[0]!.anchors.slice(0, 1) }] });
+    expect(await failure(runCommand('path.to-selection', { path: a.id }))).toMatchObject({
+      code: 'refused', message: '"Path 1" has fewer than two anchors, so it encloses nothing: Path to Selection does nothing with it.',
+    });
+    expect(mocks.pathToSelection).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the function made no selection', async () => {
+    mocks.pathToSelection.mockImplementation(() => undefined);
+    await addSquare(10, 10, 20);
+    expect(await failure(runCommand('path.to-selection'))).toMatchObject({ code: 'refused', message: 'The path was not turned into a selection.' });
   });
 });
 

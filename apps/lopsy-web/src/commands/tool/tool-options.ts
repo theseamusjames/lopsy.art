@@ -200,6 +200,9 @@ export const TOOL_OPTIONS: Readonly<Record<ToolId, Readonly<Record<string, ToolO
     underline: textOption('underline', { kind: 'boolean' }),
     strikethrough: textOption('strikethrough', { kind: 'boolean' }),
     vertical: textOption('vertical', { kind: 'boolean' }),
+    lineHeight: textOption('lineHeight', { kind: 'number', min: 0.5, max: 4, note: 'A multiple of the font size, 0.5 to 4: the Text panel\'s Line height slider.' }),
+    letterSpacing: textOption('letterSpacing', { kind: 'number', min: -20, max: 200, note: 'Pixels added between letters, -20 to 200: the Text panel\'s Letter spacing slider.' }),
+    paragraphSpacing: textOption('paragraphSpacing', { kind: 'number', min: 0, max: 200, note: 'Pixels added at each line break (\\n), not at wrapped lines, 0 to 200: the Text panel\'s Paragraph spacing slider.' }),
   },
   crop: {
     mode: choice(['normal', 'perspective'], () => slices().crop.mode, setCropMode),

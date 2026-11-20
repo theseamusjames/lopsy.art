@@ -280,6 +280,104 @@ test.describe('the text commands against the Text tool', () => {
   });
 });
 
+
+/** The Text panel's spacing settings and the colour of every text layer, bottom to top. */
+async function textExtras(page: Page): Promise<Array<{ lineHeight: number; letterSpacing: number; paragraphSpacing: number; color: unknown; colorSpans: unknown }>> {
+  return page.evaluate(() => {
+    type T = { type: string; id: string; lineHeight: number; letterSpacing: number; paragraphSpacing: number; color: unknown; colorSpans?: unknown };
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: T[]; layerOrder: string[] } };
+    };
+    const { layers, layerOrder } = store.getState().document;
+    return layerOrder
+      .map((id) => layers.find((l) => l.id === id))
+      .filter((l): l is T => l?.type === 'text')
+      .map((l) => ({ lineHeight: l.lineHeight, letterSpacing: l.letterSpacing, paragraphSpacing: l.paragraphSpacing, color: l.color, colorSpans: l.colorSpans ?? [] }));
+  });
+}
+
+async function openTextPanel(page: Page): Promise<void> {
+  const value = page.locator('[aria-label="Line height value"]');
+  if (!(await value.isVisible())) await page.locator('[aria-label="Panel visibility"] [aria-label="Text"]').click();
+  await expect(value).toBeVisible();
+}
+
+/** Types a value into a Text panel slider's box and commits it with Enter, as text-panel.spec does. */
+async function setPanelSlider(page: Page, label: string, value: number): Promise<void> {
+  const input = page.locator(`[data-panel="text"] [aria-label="${label} value"]`);
+  await input.fill(String(value));
+  await input.press('Enter');
+  await blurFocus(page);
+  await settle(page, 200);
+}
+
+test.describe('the Text panel and the text colour control, and text.style and text.set-color', () => {
+  test.describe.configure({ timeout: 120_000 });
+
+  test.beforeEach(({ isMobile }) => {
+    test.skip(isMobile, 'the options bar and Text panel need the desktop layout');
+  });
+
+  test('text.style with lineHeight, letterSpacing and paragraphSpacing matches the Text panel\'s sliders', async ({ page }) => {
+    const extras: Array<Awaited<ReturnType<typeof textExtras>>> = [];
+    const { api } = await compareUiAndApi(page, {
+      width: 300, height: 200,
+      setup: async (p) => {
+        await offlineAtActualSize(p);
+        await uiText(p, 40, 40, ['Line one', 'Line two']);
+      },
+      viaUi: async (p) => {
+        await openTextPanel(p);
+        await setPanelSlider(p, 'Line height', 2.2);
+        await setPanelSlider(p, 'Letter spacing', 6.5);
+        await setPanelSlider(p, 'Paragraph spacing', 12);
+        extras.push(await textExtras(p));
+      },
+      viaApi: async (p) => {
+        const result = await run<{ options: Record<string, unknown> }>(p, {
+          op: 'text.style', options: { lineHeight: 2.2, letterSpacing: 6.5, paragraphSpacing: 12 },
+        });
+        expect(result.options).toMatchObject({ lineHeight: 2.2, letterSpacing: 6.5, paragraphSpacing: 12 });
+        extras.push(await textExtras(p));
+      },
+    });
+    expect(extras[1]).toEqual(extras[0]);
+    expect(extras[1]?.[0]).toMatchObject({ lineHeight: 2.2, letterSpacing: 6.5, paragraphSpacing: 12 });
+    expect(api.history.undo).toEqual(['New Document', 'Add Text Layer', 'Text', 'Text', 'Text', 'Text']);
+  });
+
+  test('text.set-color matches a hex typed into the options bar\'s Text color picker, and leaves the foreground alone', async ({ page }) => {
+    const extras: Array<Awaited<ReturnType<typeof textExtras>>> = [];
+    const { api } = await compareUiAndApi(page, {
+      width: 300, height: 200,
+      withEditorState: true,
+      setup: async (p) => {
+        await offlineAtActualSize(p);
+        await uiText(p, 40, 60, ['Colour me']);
+      },
+      viaUi: async (p) => {
+        const swatch = p.getByRole('button', { name: 'Text color', exact: true });
+        await swatch.click();
+        const field = p.getByRole('dialog', { name: 'Text color picker' }).getByLabel('Hex color');
+        await field.fill('2A9D8F');
+        await field.press('Enter');
+        await swatch.click();
+        await settle(p, 300);
+        extras.push(await textExtras(p));
+      },
+      viaApi: async (p) => {
+        expect(await run(p, { op: 'text.set-color', color: '#2a9d8f' })).toMatchObject({ name: 'Colour me', color: '#2a9d8f' });
+        await settle(p, 300);
+        extras.push(await textExtras(p));
+      },
+    });
+    expect(extras[1]).toEqual(extras[0]);
+    expect(extras[1]?.[0]?.color).toEqual({ r: 42, g: 157, b: 143, a: 1 });
+    expect(api.editor.foreground).toEqual({ r: 0, g: 0, b: 0, a: 1 });
+    expect(api.history.undo).toEqual(['New Document', 'Add Text Layer', 'Text', 'Text']);
+  });
+});
+
 test.describe('the text commands on their own', () => {
   test.describe.configure({ timeout: 120_000 });
 
@@ -304,9 +402,52 @@ test.describe('the text commands on their own', () => {
     expect(await render(page)).toBe(first);
   });
 
+  test('text.set-color recolours a layer that is not active, making it active first, in one "Text" step', async ({ page }) => {
+    await run(page, { op: 'text.add', x: 40, y: 60, text: 'Teal' });
+    await run(page, { op: 'layer.select', layer: 'Background' });
+    const before = await render(page);
+    const history = await historyLabels(page);
+    expect(await run(page, { op: 'text.set-color', layer: 'Teal', color: '#2a9d8f80' })).toMatchObject({ name: 'Teal', color: '#2a9d8f80' });
+    expect(await render(page)).not.toBe(before);
+    expect(await historyLabels(page)).toEqual([...history, 'Text']);
+    expect(await run(page, { op: 'text.set-color', layer: 'Teal', color: '#2a9d8f80' })).toMatchObject({ color: '#2a9d8f80' });
+    expect(await historyLabels(page)).toEqual([...history, 'Text']);
+    const active = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { activeLayerId: string | null; layers: Array<{ id: string; name: string }> } };
+      };
+      const { document: doc } = store.getState();
+      return doc.layers.find((l) => l.id === doc.activeLayerId)?.name;
+    });
+    expect(active).toBe('Teal');
+  });
+
+  test('text.style with letterSpacing widens the text it re-renders', async ({ page }) => {
+    await run(page, { op: 'text.add', x: 40, y: 60, text: 'Wide' });
+    const narrow = await textRect(page, 'Wide');
+    await run(page, { op: 'text.style', options: { letterSpacing: 30 } });
+    const wide = await textRect(page, 'Wide');
+    expect(wide.width).toBeGreaterThan(narrow.width + 60);
+    expect((await runError(page, { op: 'text.style', options: { lineHeight: 5 } })).code).toBe('invalid');
+  });
+
+  test('text.fonts lists the font picker\'s catalogue, filtered, with no document needed', async ({ page }) => {
+    await page.reload();
+    await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__lopsyCommands);
+    const all = await run<{ total: number; fonts: Array<{ family: string; category: string; weights: number[]; hasItalic: boolean }> }>(page, { op: 'text.fonts' });
+    expect(all.total).toBeGreaterThan(1500);
+    expect(all.fonts).toHaveLength(50);
+    const mono = await run<typeof all>(page, { op: 'text.fonts', category: 'monospace', query: 'mono', limit: 500 });
+    expect(mono.fonts.map((f) => f.family)).toContain('JetBrains Mono');
+    expect(mono.fonts.every((f) => f.category === 'monospace' && f.family.toLowerCase().includes('mono'))).toBe(true);
+    expect(mono.total).toBe(mono.fonts.length);
+    expect(mono.fonts.find((f) => f.family === 'JetBrains Mono')).toMatchObject({ hasItalic: true, weights: expect.arrayContaining([400, 700]) });
+  });
+
   test('refusals', async ({ page }) => {
     expect(await runError(page, { op: 'text.add', x: 40, y: 60, text: '  ' })).toEqual({ code: 'invalid', message: 'text.add: text is empty or only whitespace, which a commit discards.' });
     expect(await runError(page, { op: 'text.edit', layer: 'Layer 1', text: 'x' })).toEqual({ code: 'refused', message: '"Layer 1" is not a text layer.' });
+    expect(await runError(page, { op: 'text.set-color', layer: 'Layer 1', color: '#ff0000' })).toEqual({ code: 'refused', message: '"Layer 1" is not a text layer.' });
     expect(await runError(page, { op: 'text.set-font', family: 'No Such Font' })).toMatchObject({ code: 'refused' });
     expect(await runError(page, { op: 'text.set-font', family: 'Inter', weight: 450 })).toEqual({ code: 'invalid', message: 'text.set-font: Inter offers the weights 100, 200, 300, 400, 500, 600, 700, 800, 900, not 450.' });
     await run(page, { op: 'text.add', x: 40, y: 60, text: 'Hello' });
@@ -323,6 +464,7 @@ test.describe('the text commands on their own', () => {
     expect(await runError(page, { op: 'text.add', x: 20, y: 160, text: 'More' })).toEqual({ code: 'refused', message: 'Text is being edited: commit it first (for example with tool.select).' });
     expect((await runError(page, { op: 'text.edit', layer: 'Hello', text: 'More' })).code).toBe('refused');
     expect((await runError(page, { op: 'text.style', layer: 'Hello', options: { fontSize: 30 } })).code).toBe('refused');
+    expect(await runError(page, { op: 'text.set-color', layer: 'Hello', color: '#ff0000' })).toEqual({ code: 'refused', message: 'Text is being edited: commit it first (for example with tool.select).' });
     await page.keyboard.press('Escape');
     expect(await historyLabels(page)).toEqual(['New Document', 'Add Text Layer', 'Text']);
   });

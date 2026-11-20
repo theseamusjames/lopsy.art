@@ -15,6 +15,7 @@ import './color/color';
 import './tool/tool';
 import './adjust/adjust';
 import './filter/filter';
+import './filter/session-filters';
 import './image/image';
 import './document/color-mode';
 import './document/files';

@@ -24,6 +24,25 @@ export function canStartMeshWarp(): boolean {
   return guardPixelWrite(doc.layers.find((l) => l.id === doc.activeLayerId));
 }
 
+/** The grid sizes the Mesh Warp controls' Grid size select offers (points per side), and the one a session starts with. */
+export const MESH_WARP_GRID_SIZES = [3, 4, 5, 6] as const;
+export const DEFAULT_MESH_WARP_GRID_SIZE = 4;
+
+function clampToDoc(rect: Rect, docW: number, docH: number): Rect {
+  const x = Math.max(0, Math.min(docW, Math.round(rect.x)));
+  const y = Math.max(0, Math.min(docH, Math.round(rect.y)));
+  const right = Math.max(0, Math.min(docW, Math.round(rect.x + rect.width)));
+  const bottom = Math.max(0, Math.min(docH, Math.round(rect.y + rect.height)));
+  return { x, y, width: Math.max(1, right - x), height: Math.max(1, bottom - y) };
+}
+
+/** The document rect a session's grid covers: the selection's bounding box (clamped to the document) when there is one, else the document. */
+export function meshWarpBounds(selectionActive: boolean, selectionBounds: Rect | null, docW: number, docH: number): Rect {
+  return (selectionActive && selectionBounds && selectionBounds.width > 1 && selectionBounds.height > 1)
+    ? clampToDoc(selectionBounds, docW, docH)
+    : { x: 0, y: 0, width: docW, height: docH };
+}
+
 function getDocSize(): { w: number; h: number } {
   const doc = useEditorStore.getState().document;
   return { w: doc.width, h: doc.height };

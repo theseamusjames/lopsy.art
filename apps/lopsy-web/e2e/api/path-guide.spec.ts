@@ -234,6 +234,47 @@ test.describe('the Pen tool, Paths panel and Path menu, and the path commands', 
     expect((await runError(page, { op: 'path.remove', path: 'Path 9' })).code).toBe('not-found');
   });
 
+  /** A closed curve: a lens from (40, 75) to (160, 75), bulging 40 px up and down. */
+  const LENS = [
+    { point: { x: 40, y: 75 }, handleIn: { x: 40, y: 115 }, handleOut: { x: 40, y: 35 } },
+    { point: { x: 160, y: 75 }, handleIn: { x: 160, y: 35 }, handleOut: { x: 160, y: 115 } },
+  ];
+
+  test('path.to-selection matches the Paths panel\'s Path to Selection button on a curved path', async ({ page }) => {
+    const { api } = await compareUiAndApi(page, {
+      setup: async (p) => {
+        await run(p, { op: 'path.add', anchors: LENS, closed: true });
+      },
+      viaUi: async (p) => {
+        await showPathsPanel(p);
+        await p.getByRole('button', { name: 'Path to Selection', exact: true }).click();
+        await settle(p);
+      },
+      viaApi: async (p) => {
+        expect(await run(p, { op: 'path.to-selection' })).toMatchObject({ name: 'Path 1' });
+      },
+    });
+    expect(api.selection.active).toBe(true);
+    expect(api.history.undo).toEqual(['New Document', 'Add Path', 'Path to Selection']);
+  });
+
+  test('path.to-selection then paint.fill fills the curve, and refuses with no path selected', async ({ page }) => {
+    await freshDocument(page);
+    const { id } = await run<{ id: string }>(page, { op: 'path.add', anchors: LENS, closed: true });
+    await run(page, { op: 'path.select' });
+    expect((await runError(page, { op: 'path.to-selection' })).message).toBe('No path is selected: pass path, or select one with path.select.');
+    await run(page, [
+      { op: 'path.to-selection', path: id },
+      { op: 'color.set', foreground: '#ff0000' },
+      { op: 'paint.fill' },
+    ]);
+    const at = async (x: number, y: number) => (await run<{ hex: string }>(page, { op: 'view.sample', x, y })).hex;
+    // The bezier bulges about 30 px each way at the middle, so (100, 50) is inside and (100, 20) and the corner (45, 50) outside.
+    expect([await at(100, 75), await at(100, 50), await at(100, 100)]).toEqual(['#ff0000', '#ff0000', '#ff0000']);
+    expect([await at(100, 20), await at(100, 130), await at(45, 50), await at(10, 75)]).toEqual(['#ffffff', '#ffffff', '#ffffff', '#ffffff']);
+    expect((await historyLabels(page)).slice(-2)).toEqual(['Path to Selection', 'Fill']);
+  });
+
   test('path.stroke refuses a group with the dialog\'s toast text, and no selected path', async ({ page }) => {
     await freshDocument(page);
     expect((await runError(page, { op: 'path.stroke' })).message).toBe('No path is selected: pass path, or select one with path.select.');

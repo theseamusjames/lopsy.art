@@ -398,7 +398,8 @@ the options bar. Set them first:
   alignment, wand tolerance… `GET /describe?op=tool.describe` then
   `{ "op": "tool.describe", "tool": "brush" }` lists every option with its
   range and current value.
-- `text.set-font` sets the font family, weight and style.
+- `text.set-font` sets the font family, weight and style (`text.fonts` lists
+  the families).
 
 Nothing resets between commands or between documents: `doc.new` keeps the
 colours, the tool options and the active tool you had before. Set everything a stage relies on at
@@ -432,7 +433,7 @@ message says *The page is a background tab … make it the visible tab*.
 
 ## Command families
 
-About 130 commands, in 19 families. This table is a map; the parameters are
+About 140 commands, in 19 families. This table is a map; the parameters are
 in `GET /describe?family=<family>` (or `?op=<id>`), which is always current.
 Every command's summary names the UI control it matches and its history label.
 
@@ -445,13 +446,13 @@ Every command's summary names the UI control it matches and its history label.
 | `tool` | Tool options | `tool.set`, `tool.describe`, `tool.options`, `tool.gesture` (raw canvas gestures) |
 | `select` | Selections | `select.rect`, `select.ellipse`, `select.polygon`, `select.none`, `select.modify`, `select.invert`, `select.from-layer` |
 | `paint` | Putting pixels down | `paint.fill`, `paint.stroke`, `paint.gradient`, `paint.shape`, `paint.clear`, `paint.bucket` |
-| `text` | Live text layers | `text.set-font`, `text.add`, `text.style`, `text.edit` |
-| `filter` | Destructive filters | `filter.gaussian-blur`, `filter.add-noise`, `filter.texture`, `filter.clouds`, `filter.halftone`… (33) |
+| `text` | Live text layers | `text.fonts`, `text.set-font`, `text.add`, `text.style`, `text.set-color`, `text.edit` |
+| `filter` | Destructive filters | `filter.gaussian-blur`, `filter.add-noise`, `filter.texture`, `filter.clouds`, `filter.halftone`, `filter.tilt-shift`, `filter.mesh-warp`… (35) |
 | `adjust` | Non-destructive adjustments on a group | `adjust.add`, `adjust.set`, `adjust.list` |
 | `mask` | Layer masks | `mask.add`, `mask.edit`, `mask.clear`, `mask.remove` |
 | `image` | The whole canvas | `image.canvas-size`, `image.size`, `image.crop`, `image.rotate`, `image.flip-layer`, `image.border` |
 | `history` | Undo | `history.undo`, `history.redo` |
-| `path` | Vector paths | `path.add`, `path.stroke`, `path.unite`, `path.list` |
+| `path` | Vector paths | `path.add`, `path.stroke`, `path.to-selection`, `path.unite`, `path.list` |
 | `clipboard` | The editor's own clipboard | `clipboard.copy`, `clipboard.paste`, `clipboard.copy-merged` |
 | `guide` | Ruler guides | `guide.add`, `guide.list` |
 | `quickmask` | Quick Mask mode | `quickmask.set` |
@@ -502,7 +503,8 @@ it. Apart from the photo recipe, they need nothing but the page.
 
 **Flat shapes: select, then fill.** A selection plus `paint.fill` is the most
 dependable primitive: crisp edges, exact geometry, any polygon you can
-compute (a 48–72 point polygon reads as a smooth curve). `mode: "add"` (or
+compute; for a smooth curve, `path.to-selection` turns a bezier path into a
+selection (see Brush work). `mode: "add"` (or
 `subtract`, `intersect`) combines selections, so one fill covers several
 shapes. With no selection, `paint.fill` fills the whole layer. Always
 `select.none` afterwards: a live selection keeps constraining everything that
@@ -630,6 +632,15 @@ gradient to transparent on a `screen` layer is a soft light source.
   { "op": "tool.set", "tool": "eraser", "options": { "size": 40 } },
   { "op": "paint.stroke", "tool": "eraser", "points": [{ "x": 300, "y": 60 }, { "x": 300, "y": 180 }] },
 
+  { "op": "layer.add", "name": "Leaf" },
+  { "op": "path.add", "closed": true, "anchors": [
+    { "point": { "x": 440, "y": 300 }, "handleIn": { "x": 470, "y": 370 }, "handleOut": { "x": 470, "y": 230 } },
+    { "point": { "x": 560, "y": 300 }, "handleIn": { "x": 530, "y": 230 }, "handleOut": { "x": 530, "y": 370 } } ] },
+  { "op": "path.to-selection" },
+  { "op": "color.set", "foreground": "#859900" },
+  { "op": "paint.fill" },
+  { "op": "select.none" },
+
   { "op": "view.render", "maxSize": 600 }
 ]
 ```
@@ -644,7 +655,9 @@ pixel-art lines; the eraser, smudge, dodge, sponge, stamp and healing tools
 work the same way (`tool` picks one). For an exact smooth curve, add a bezier
 path with `path.add` (each anchor's `handleIn` / `handleOut` are absolute
 document points) and stroke it with `path.stroke`, which uses the foreground
-colour and a width of 1–50 px. Strokes are instantaneous, so the brush's
+colour and a width of 1–50 px. To fill a curve, `path.to-selection` makes the
+area a path encloses the selection (an open path is closed with a straight
+line) and `paint.fill` fills it, as with the Leaf. Strokes are instantaneous, so the brush's
 time-based behaviours (speed-based size, hold-to-smooth) never happen.
 
 <!-- recipe: type -->
@@ -665,10 +678,11 @@ time-based behaviours (speed-based size, hold-to-smooth) never happen.
   { "op": "tool.set", "tool": "text", "options": { "fontSize": 26, "align": "center" } },
   { "op": "color.set", "foreground": "#f2f2f2" },
   { "op": "text.add", "x": 400, "y": 290, "text": "OPEN FRIDAYS FROM SIX\nBY THE RIVER" },
+  { "op": "text.style", "options": { "letterSpacing": 6, "lineHeight": 1.8 } },
 
   { "op": "text.style", "layer": "Night Market", "options": { "fontSize": 120 } },
   { "op": "text.edit", "layer": "Night Market", "text": "Night Bazaar" },
-  { "op": "layer.effects", "layer": "Night Bazaar", "colorOverlay": { "enabled": true, "color": "#ffb703" } },
+  { "op": "text.set-color", "layer": "Night Bazaar", "color": "#ffb703" },
 
   { "op": "layer.select", "layer": "Backdrop" },
   { "op": "text.set-font", "family": "Barlow Condensed" },
@@ -690,7 +704,8 @@ width. The layer is named after its first 16 characters.
 
 **Choose the font before you add the text**, with `text.set-font` and an
 exact family name as Google Fonts lists it (`Montserrat`, `Barlow
-Condensed`, `IM Fell English`…) and a weight the family offers. The command
+Condensed`, `IM Fell English`…) and a weight the family offers; `text.fonts`
+lists the families, filtered by `category` or a `query`. The command
 waits for the font to download, and so do `text.add` and `text.edit`: their
 result says `fontLoaded: true` when the text is drawn in it.
 `fontLoaded: false` means the font did not arrive within 20 s: the text is
@@ -702,12 +717,13 @@ active, and as in the UI, the text settings then apply to it: `text.set-font`
 **restyles that layer**, and `tool.set` on the text tool is refused. So
 before setting up the next piece of text, select a non-text layer
 (`layer.select`) or add one. To change a text layer later, `text.style`
-changes its size, style or alignment and `text.edit` replaces its words
-(renaming a layer still named after its old text). `text.edit` also loads
-the layer's colour into the foreground and its font, size, alignment and
-spacing into the text options, as clicking into the text does: set the colour
-again before you paint. There is no command to recolour a text
-layer: a `colorOverlay` effect does it and keeps the text live.
+changes its size, style, alignment, `lineHeight` (a multiple of the size),
+`letterSpacing` and `paragraphSpacing` (pixels), as the subtitle's spacing is
+set here; `text.set-color` recolours the whole layer and leaves the
+foreground alone; and `text.edit` replaces its words (renaming a layer still
+named after its old text). `text.edit` also loads the layer's colour into the
+foreground and its font, size, alignment and spacing into the text options,
+as clicking into the text does: set the colour again before you paint.
 
 <!-- recipe: layer-effects -->
 ```json
@@ -764,6 +780,7 @@ makes active first (here Badge, while Neon was active).
   { "op": "layer.add", "name": "Clouds" },
   { "op": "color.set", "foreground": "#ffffff", "background": "#3d405b" },
   { "op": "filter.clouds", "scale": 6 },
+  { "op": "filter.tilt-shift", "focusPosition": 0.35, "focusWidth": 0.2, "blurRadius": 24 },
   { "op": "layer.set", "blendMode": "soft-light", "opacity": 60 },
 
   { "op": "layer.add", "name": "Dots" },
@@ -773,6 +790,7 @@ makes active first (here Badge, while Neon was active).
   { "op": "paint.gradient", "from": { "x": 40, "y": 0 }, "to": { "x": 560, "y": 0 } },
   { "op": "filter.halftone", "dotSize": 10 },
   { "op": "select.none" },
+  { "op": "filter.mesh-warp", "gridSize": 3, "points": [{ "col": 1, "row": 1, "dx": 0, "dy": -40 }] },
   { "op": "layer.set", "blendMode": "multiply", "opacity": 80 },
 
   { "op": "layer.add", "name": "Grain" },
@@ -797,7 +815,12 @@ fill a layer mid-grey, add mono noise, set it to `overlay`), `texture`
 `sunburst` and `voronoi` render texture onto the layer (clouds in the
 foreground and background colours); `motion-blur`, `radial-blur`,
 `lens-distortion`, `chromatic-aberration`, `kaleidoscope`, `bloom`,
-`color-lut`. Filters refuse text and group layers. `clouds`, `fibers`,
+`color-lut`. `tilt-shift` keeps a band sharp and blurs the rest (here the
+Clouds): `focusPosition` and `focusWidth` are fractions of the document, 0
+the top at `angle` 0. `mesh-warp` bends the layer by moving points of a grid
+laid over the selection's box, or the whole document (here it lifts the
+middle of the Dots band 40 px): each point is `{ col, row, dx, dy }`, offsets
+in pixels. Filters refuse text and group layers. `clouds`, `fibers`,
 `smoke` and `add-noise` draw a new random seed on every run.
 
 <!-- recipe: masks -->
@@ -1103,24 +1126,20 @@ These have no command. Don't hunt for them:
 - **Skew, distort and perspective.** `layer.transform` turns, scales and
   flips; the Move tool's other transform modes have no command. Draw the
   shape you need instead: a polygon selection can have any outline.
-- **The Spray tool** (it paints on a timer while the button is held),
-  **Liquify**, **Tilt-Shift** and **Mesh Warp**.
-- **Changing the colour of an existing text layer.** `text.add` uses the
-  foreground; afterwards a `colorOverlay` effect recolours the text and keeps
-  it live.
-- **Text letter spacing, line height and paragraph spacing.** `text.style`
-  and `tool.set` take size, style, alignment, underline, strikethrough and
-  vertical only.
-- **Turning a path into a selection or a filled shape.** `path.stroke`
-  strokes a path; to fill a curve, select a polygon through points sampled
-  along it.
-- **The Export dialog's options** beyond what `doc.export` takes (format,
-  JPEG/WebP quality, 16-bit PNG), and anything that needs the **system
-  clipboard** or a **file picker**: files go in and out as base64
+- **The Spray tool** (it paints on a timer while the button is held) and
+  **Liquify**.
+- **Colouring part of a text layer.** `text.set-color` recolours the whole
+  layer; colours on ranges of the text need it open for editing.
+- **Anything that needs the system clipboard or a file picker.** A browser
+  allows those only inside a person's click. Files go in and out as base64
   (`doc.open`, `layer.add-image`, `doc.save`, `doc.export`,
   `doc.export-psd`), and `clipboard.*` is the editor's own clipboard.
-- **A list of available fonts.** `text.set-font` takes any family the
-  editor's font picker lists (the Google Fonts catalogue), by its exact name.
+  `doc.export` takes everything the Export dialog offers: format, JPEG/WebP
+  quality and 16-bit PNG.
+- **Listing the fonts installed on the machine.** `text.fonts` lists the font
+  picker's catalogue (the Google Fonts and the browser's own); installed fonts
+  are left out, and `text.set-font` takes one only once the browser has
+  granted the page access to them.
 
 ## Behaviours worth knowing
 

@@ -14,6 +14,7 @@ import {
   MIN_STROKE_PATH_WIDTH,
 } from '../../components/StrokePathModal/stroke-path-width';
 import { pixelWriteRefusal } from '../../layers/paint-target';
+import { pathToSelection } from '../../panels/PathsPanel/path-to-selection';
 import type { PathAnchor } from '../../tools/path/path';
 import type { StoredPath } from '../../types/paths';
 
@@ -206,6 +207,27 @@ export const pathStroke = defineCommand({
       throw new CommandError('refused', 'The path was not stroked.');
     }
     return { path: path.id, layer: layer.id, width: strokeWidth };
+  },
+});
+
+export const pathToSelectionCommand = defineCommand({
+  id: 'path.to-selection',
+  summary:
+    'Replaces the selection with the area a path encloses, as the Paths panel\'s Path to Selection button does for the selected path ("Path to Selection"): an open path is closed with a straight line from its last anchor to its first, and the edge is antialiased. Fill it with paint.fill. Refused for a path with fewer than two anchors, where the button does nothing. Returns the path\'s id and name.',
+  surface: 'document',
+  params: {
+    path: { ...pathRefSpec, optional: true, description: 'A path id or exact name. Omitted means the selected path, as the Paths panel converts.' },
+  },
+  run({ path: ref }): PathRef {
+    requireDocument();
+    const path = ref === undefined ? selectedPath() : resolvePath(ref);
+    if (path.anchors.length < 2) {
+      throw new CommandError('refused', `"${path.name}" has fewer than two anchors, so it encloses nothing: Path to Selection does nothing with it.`);
+    }
+    const before = store().selection.mask;
+    pathToSelection(path);
+    if (store().selection.mask === before) throw new CommandError('refused', 'The path was not turned into a selection.');
+    return pathRef(path);
   },
 });
 

@@ -2,7 +2,7 @@ import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { hitTestMeshHandle } from '../rendering/render-mesh-warp';
 import { previewMeshWarp } from '../MenuBar/mesh-warp-actions';
-import type { Point } from '../../types';
+import type { Point, Rect } from '../../types';
 import type { MeshWarpGrid } from '../../filters/mesh-warp';
 import { INITIAL_INTERACTION_STATE, type InteractionState } from './interaction-types';
 
@@ -45,6 +45,17 @@ export function isMeshWarpDragging(): boolean {
     && useUIStore.getState().meshWarp !== null;
 }
 
+/** Where a drag to `canvasPos` puts the dragged grid point: bounds-local 0..1 coords, held inside the bounds. */
+export function meshPointAt(canvasPos: Point, bounds: Rect): { x: number; y: number } {
+  const x = bounds.width > 0
+    ? Math.max(0, Math.min(1, (canvasPos.x - bounds.x) / bounds.width))
+    : 0;
+  const y = bounds.height > 0
+    ? Math.max(0, Math.min(1, (canvasPos.y - bounds.y) / bounds.height))
+    : 0;
+  return { x, y };
+}
+
 export function handleMeshWarpMove(canvasPos: Point): void {
   const ui = useUIStore.getState();
   const session = ui.meshWarp;
@@ -60,17 +71,8 @@ export function handleMeshWarpMove(canvasPos: Point): void {
     return;
   }
 
-  // Drag update — convert canvas pos back to bounds-local 0..1 coords
-  const { bounds } = session;
-  const newX = bounds.width > 0
-    ? Math.max(0, Math.min(1, (canvasPos.x - bounds.x) / bounds.width))
-    : 0;
-  const newY = bounds.height > 0
-    ? Math.max(0, Math.min(1, (canvasPos.y - bounds.y) / bounds.height))
-    : 0;
-
   const newPoints = [...session.grid.points];
-  newPoints[session.dragging] = { x: newX, y: newY };
+  newPoints[session.dragging] = meshPointAt(canvasPos, session.bounds);
   const newGrid: MeshWarpGrid = { ...session.grid, points: newPoints };
   ui.updateMeshWarpGrid(newGrid);
 
