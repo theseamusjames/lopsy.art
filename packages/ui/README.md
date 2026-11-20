@@ -18,7 +18,9 @@ load this package's stories) and tests, following
 | `@lopsy/ui/styles/reset.css` | The reset and base element styles, including the default focus ring |
 | `@lopsy/ui/styles/fonts.css` | The `@font-face` rules for Inter and Jersey 10 |
 | `@lopsy/ui/Slider` | The slider: label, range, value box with an optional suffix, double-click reset, and a fill along the track from its origin to the thumb (0 when the range runs both sides of it, else the left end, or `fillFrom`); `format`, `parse`, `unit`, `disabled`, `fillFrom` |
+| `@lopsy/ui/ZoomReadout` | The zoom level, as a button: drag left or right on it to zoom (1 % a pixel, 10 % to 400 %), double-click it or press Enter for 100 %, and the arrow keys step to the next 10 % |
 | `@lopsy/ui/Menu` | A dropdown or context menu: `Menu`, `MenuItem` (accent icon, title, detail line), `MenuSeparator`, `MenuGroup` |
+| `@lopsy/ui/a11y/arrow-keys` | `HANDLES_ARROW_KEYS_ATTR`, which marks a control that handles the arrow keys itself, for a shortcut handler that listens in the capture phase (Lopsy's) |
 | `@lopsy/ui/a11y/focus-trap` | Tab stops inside a dialog, wrapping Tab, handing focus back when it closes |
 | `@lopsy/ui/a11y/layers` | Which open dialog or popover answers Escape and keeps Tab |
 | `@lopsy/ui/a11y/use-menu-keys` | A menu's keyboard: arrows, Home and End, letters, Escape and Tab |

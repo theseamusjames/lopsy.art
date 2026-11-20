@@ -621,9 +621,12 @@ nothing" bugs.
 `useKeyboardShortcuts` listens on `window` in the capture phase, so it runs
 before any React handler and `stopPropagation` in the control is too late.
 A `role="slider"` div that handles arrows would step itself *and* nudge the
-active layer. Put `HANDLES_ARROW_KEYS_ATTR` (`native-control-keys.ts`) on the
-element to opt out, as `ColorWheel` does. Native range, radio and select
-controls are already exempt.
+active layer. Put `HANDLES_ARROW_KEYS_ATTR` (`@lopsy/ui/a11y/arrow-keys`) on
+the element to opt out, as `ColorWheel` and `@lopsy/ui`'s `ZoomReadout` do;
+`native-control-keys.ts` reads it. Native range, radio and select controls
+are already exempt. Photonamous's Edit view listens in the bubble phase, so
+there `stopPropagation` is enough; a shared control that owns the arrows
+does both.
 
 ## Splitting a raw-decode stage into bands: prove the halo, don't guess it
 
