@@ -205,6 +205,46 @@ describe('runGesture', () => {
   });
 });
 
+describe('a gesture for an open session', () => {
+  it('presses while its Liquify session is open, without switching tools', () => {
+    useUIStore.setState({ liquify: {} } as unknown as Partial<ReturnType<typeof useUIStore.getState>>);
+    try {
+      const tool = useUIStore.getState().activeTool;
+      expect(runGesture({ points: [{ x: 1, y: 1 }, { x: 3, y: 3 }], session: 'liquify' })).toEqual({ tool, layer: activeId() });
+      expect(gesture.down).toHaveBeenCalledTimes(1);
+      expect(gesture.move).toHaveBeenCalledTimes(1);
+      expect(gesture.up).toHaveBeenCalledTimes(1);
+    } finally {
+      useUIStore.setState({ liquify: null });
+    }
+  });
+
+  it('is refused when that session is not open: the press would go to a tool', () => {
+    expect(failure(() => runGesture({ points: [{ x: 1, y: 1 }], session: 'liquify' }))).toMatchObject({
+      code: 'refused',
+      message: 'No Liquify session is open, and the press would go to the active tool instead.',
+    });
+    useUIStore.setState({ tiltShift: {} } as unknown as Partial<ReturnType<typeof useUIStore.getState>>);
+    try {
+      expect(failure(() => runGesture({ points: [{ x: 1, y: 1 }], session: 'liquify' })).code).toBe('refused');
+    } finally {
+      useUIStore.setState({ tiltShift: null });
+    }
+    expect(gesture.down).not.toHaveBeenCalled();
+  });
+
+  it('still refuses a press the dispatcher would drop: a locked layer under a tool that honours the lock', () => {
+    useUIStore.setState({ liquify: {} } as unknown as Partial<ReturnType<typeof useUIStore.getState>>);
+    try {
+      patchActive({ locked: true });
+      expect(failure(() => runGesture({ points: [{ x: 1, y: 1 }], session: 'liquify' })).message).toContain('is locked');
+      expect(gesture.down).not.toHaveBeenCalled();
+    } finally {
+      useUIStore.setState({ liquify: null });
+    }
+  });
+});
+
 describe('runHeldGesture', () => {
   it('holds still after the press until the hold resolves, then moves and releases', async () => {
     const hold = vi.fn(() => {

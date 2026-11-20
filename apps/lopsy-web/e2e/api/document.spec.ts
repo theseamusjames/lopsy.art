@@ -224,7 +224,7 @@ test.describe('the command API', () => {
       'filter.add-noise', 'filter.bloom', 'filter.box-blur', 'filter.brightness-contrast', 'filter.cel-shading',
       'filter.chromatic-aberration', 'filter.clouds', 'filter.color-lut', 'filter.desaturate', 'filter.emboss',
       'filter.fibers', 'filter.find-edges', 'filter.gaussian-blur', 'filter.halftone', 'filter.hue-saturation',
-      'filter.invert', 'filter.kaleidoscope', 'filter.lens-distortion', 'filter.mesh-warp', 'filter.motion-blur', 'filter.oil-paint',
+      'filter.invert', 'filter.kaleidoscope', 'filter.lens-distortion', 'filter.liquify', 'filter.mesh-warp', 'filter.motion-blur', 'filter.oil-paint',
       'filter.pattern-fill', 'filter.pixel-stretch', 'filter.pixelate', 'filter.posterize', 'filter.radial-blur',
       'filter.smoke', 'filter.solarize', 'filter.sunburst', 'filter.surface-blur', 'filter.texture',
       'filter.threshold', 'filter.tilt-shift', 'filter.unsharp-mask', 'filter.voronoi',

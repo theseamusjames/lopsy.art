@@ -4,9 +4,11 @@ import { IconButton } from '../../../components/IconButton/IconButton';
 import { FlipHorizontal2, FlipVertical2 } from 'lucide-react';
 import type { TransformMode } from '../../../tools/transform/transform';
 import type { TextTransformMode } from '../../ui-store';
-import { createTransformState } from '../../../tools/transform/transform';
-import { commitLiveFloat } from '../../interactions/live-float';
-import { flipFromMoveOptions, wantsLayerTransform } from '../../interactions/move-transform-buttons';
+import {
+  flipFromMoveOptions,
+  setTransformModeFromMoveOptions,
+  wantsLayerTransform,
+} from '../../interactions/move-transform-buttons';
 import styles from './TransformControls.module.css';
 
 const MODES: { id: TransformMode; label: string }[] = [
@@ -36,9 +38,7 @@ export function TransformControls() {
     return layer?.type === 'text' && !layer.pathId;
   });
   const transform = useUIStore((s) => s.transform);
-  const setTransform = useUIStore((s) => s.setTransform);
   const layerTransformMode = useUIStore((s) => s.layerTransformMode);
-  const setLayerTransformMode = useUIStore((s) => s.setLayerTransformMode);
   const isLayerBox = useWantsLayerTransform();
   const textMode = useUIStore((s) => s.textTransformMode);
   const setTextMode = useUIStore((s) => s.setTextTransformMode);
@@ -50,21 +50,7 @@ export function TransformControls() {
   const currentMode = isLayerBox ? layerTransformMode : (transform?.mode ?? 'free');
 
   const handleModeChange = (mode: TransformMode) => {
-    if (isLayerBox) {
-      // Bake the pending transform; the box starts again on the result.
-      commitLiveFloat();
-      setLayerTransformMode(mode);
-      return;
-    }
-    if (!transform) return;
-    // Commit any active transform before switching modes; the selection
-    // takes on the transformed outline rather than the whole layer's alpha.
-    commitLiveFloat();
-    // Create fresh transform state with the new mode
-    const sel = useEditorStore.getState().selection;
-    if (sel.active && sel.bounds) {
-      setTransform(createTransformState(sel.bounds, mode));
-    }
+    setTransformModeFromMoveOptions(mode, isLayerBox);
   };
 
   const handleFlip = (axis: 'horizontal' | 'vertical') => {

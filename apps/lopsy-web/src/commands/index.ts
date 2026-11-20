@@ -16,6 +16,7 @@ import './tool/tool';
 import './adjust/adjust';
 import './filter/filter';
 import './filter/session-filters';
+import './filter/liquify';
 import './image/image';
 import './document/color-mode';
 import './document/files';

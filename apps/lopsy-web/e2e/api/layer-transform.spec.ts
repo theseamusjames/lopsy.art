@@ -159,8 +159,8 @@ test.describe('layer.transform on its own', () => {
   });
 
   test('refusals', async ({ page }) => {
-    expect(await runError(page, { op: 'layer.transform' })).toEqual({ code: 'invalid', message: 'layer.transform: pass exactly one of rotate, flip or scale.' });
-    expect(await runError(page, { op: 'layer.transform', rotate: 90, flip: 'vertical' })).toEqual({ code: 'invalid', message: 'layer.transform: pass exactly one of rotate, flip or scale.' });
+    expect(await runError(page, { op: 'layer.transform' })).toEqual({ code: 'invalid', message: 'layer.transform: pass exactly one of rotate, flip, scale, skew, distort or perspective.' });
+    expect(await runError(page, { op: 'layer.transform', rotate: 90, flip: 'vertical' })).toEqual({ code: 'invalid', message: 'layer.transform: pass exactly one of rotate, flip, scale, skew, distort or perspective.' });
     expect(await runError(page, { op: 'layer.transform', layer: 'Layer 1', layers: ['Layer 1', 'Layer 1'], rotate: 90 })).toMatchObject({ code: 'invalid' });
     expect(await runError(page, { op: 'layer.transform', flip: 'horizontal' })).toEqual({
       code: 'refused',

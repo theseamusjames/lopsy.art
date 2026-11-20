@@ -108,7 +108,7 @@ beforeEach(() => {
   read.mockClear();
   drag.run.mockReset().mockImplementation((step: { kind: string }, _isBox: boolean, layer: { id: string }) => Promise.resolve({
     layers: [layer.id],
-    outcome: step.kind === 'rotate' ? { rotate: 30 } : { scale: { x: 2, y: 2 } },
+    outcome: step.kind === 'rotate' ? { rotate: 30 } : step.kind === 'skew' ? { skew: { x: 20, y: 0 } } : { scale: { x: 2, y: 2 } },
   }));
 });
 
@@ -156,7 +156,7 @@ describe('layer.transform', () => {
     expect(buttons.flip).not.toHaveBeenCalled();
   });
 
-  it('takes exactly one of rotate, flip or scale', async () => {
+  it('takes exactly one of rotate, flip, scale, skew, distort or perspective', async () => {
     expect((await failure(runCommand('layer.transform', {}))).code).toBe('invalid');
     expect((await failure(runCommand('layer.transform', { rotate: 90, flip: 'horizontal' }))).code).toBe('invalid');
     expect((await failure(runCommand('layer.transform', { rotate: 30, scale: { x: 2, y: 2 } }))).code).toBe('invalid');
@@ -166,7 +166,19 @@ describe('layer.transform', () => {
     expect((await failure(runCommand('layer.transform', { scale: { x: 0.01, y: 1 } }))).code).toBe('invalid');
     expect((await failure(runCommand('layer.transform', { scale: { x: 1, y: 1 } }))).code).toBe('invalid');
     expect((await failure(runCommand('layer.transform', { scale: { x: 2, y: 2 }, anchor: 'top' }))).message).toContain('scales only y');
-    expect((await failure(runCommand('layer.transform', { rotate: 30, anchor: 'top' }))).message).toBe('layer.transform: anchor goes with scale only.');
+    expect((await failure(runCommand('layer.transform', { rotate: 30, anchor: 'top' }))).message).toBe('layer.transform: anchor goes with scale or skew only.');
+    expect((await failure(runCommand('layer.transform', { skew: { x: 10, y: 0 }, perspective: { top: { inset: 5 } } }))).message)
+      .toBe('layer.transform: pass exactly one of rotate, flip, scale, skew, distort or perspective.');
+    expect((await failure(runCommand('layer.transform', { skew: { x: 10, y: 10 } }))).message).toContain('one axis at a time');
+    expect((await failure(runCommand('layer.transform', { skew: { x: 0, y: 0 } }))).code).toBe('invalid');
+    expect((await failure(runCommand('layer.transform', { skew: { x: 61, y: 0 } }))).code).toBe('invalid');
+    expect((await failure(runCommand('layer.transform', { skew: { x: 10, y: 0 }, anchor: 'right' }))).message).toContain('holds the "top" or "bottom" edge still, not "right"');
+    expect((await failure(runCommand('layer.transform', { skew: { x: 0, y: 10 }, anchor: 'bottom-left' }))).message).toContain('holds the "left" or "right" edge still');
+    expect((await failure(runCommand('layer.transform', { distort: {} }))).message).toBe('layer.transform: distort moves no corner by a whole pixel.');
+    expect((await failure(runCommand('layer.transform', { distort: { 'top-left': { x: 0.4, y: 0 } } }))).code).toBe('invalid');
+    expect((await failure(runCommand('layer.transform', { distort: { centre: { x: 4, y: 0 } } }))).code).toBe('invalid');
+    expect((await failure(runCommand('layer.transform', { perspective: { top: { inset: 0, shift: 0.3 } } }))).message).toBe('layer.transform: perspective moves neither edge by a whole pixel.');
+    expect((await failure(runCommand('layer.transform', { perspective: { top: { shift: 5 } } }))).code).toBe('invalid');
     expect((await failure(runCommand('layer.transform', { layer: 'Layer 1', layers: ['a', 'b'], rotate: 90 }))).code).toBe('invalid');
     expect(drag.run).not.toHaveBeenCalled();
   });
@@ -196,6 +208,38 @@ describe('layer.transform', () => {
     expect(isBox).toBe(true);
     await (measure as () => Promise<void>)();
     expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it('asks for a skew as the tangent of its angle, the edge opposite the default or named anchor sliding', async () => {
+    const id = useEditorStore.getState().document.activeLayerId;
+    await expect(runCommand('layer.transform', { skew: { x: 45, y: 0 } })).resolves.toEqual({ layers: [id], skew: { x: 20, y: 0 } });
+    await runCommand('layer.transform', { skew: { x: 0, y: -45 } });
+    await runCommand('layer.transform', { skew: { x: -45, y: 0 }, anchor: 'bottom' });
+    const steps = drag.run.mock.calls.map(([step]) => step as { kind: string; tan: number; anchor: string });
+    expect(steps.map((s) => [s.kind, s.anchor])).toEqual([['skew', 'top'], ['skew', 'left'], ['skew', 'bottom']]);
+    expect(steps[0]!.tan).toBeCloseTo(1, 12);
+    expect(steps[1]!.tan).toBeCloseTo(-1, 12);
+    expect(steps[2]!.tan).toBeCloseTo(-1, 12);
+  });
+
+  it('asks for a distort as whole-pixel corner drags in order round the box, leaving out corners that do not move', async () => {
+    await runCommand('layer.transform', { distort: { 'bottom-left': { x: -4.6, y: 3 }, 'top-right': { x: 10, y: -2.4 }, 'top-left': { x: 0.2, y: 0 } } });
+    expect(drag.run.mock.calls[0]![0]).toEqual({
+      kind: 'corners',
+      mode: 'distort',
+      drags: [{ handle: 'top-right', offset: { x: 10, y: -2 } }, { handle: 'bottom-left', offset: { x: -5, y: 3 } }],
+    });
+  });
+
+  it('asks for perspective as a drag of the left corner of each edge named, which the mode mirrors onto the right', async () => {
+    await runCommand('layer.transform', { perspective: { top: { inset: 12 }, bottom: { inset: -8, shift: 3 } } });
+    expect(drag.run.mock.calls[0]![0]).toEqual({
+      kind: 'corners',
+      mode: 'perspective',
+      drags: [{ handle: 'top-left', offset: { x: 12, y: 0 } }, { handle: 'bottom-left', offset: { x: -8, y: 3 } }],
+    });
+    await runCommand('layer.transform', { perspective: { bottom: { inset: 5 } } });
+    expect((drag.run.mock.calls[1]![0] as { drags: unknown[] }).drags).toEqual([{ handle: 'bottom-left', offset: { x: 5, y: 0 } }]);
   });
 
   it('refuses a drag while a marquee is active, as it refuses the buttons', async () => {

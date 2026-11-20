@@ -1,7 +1,7 @@
 import { useEditorStore } from '../editor-store';
 import { useUIStore } from '../ui-store';
-import type { TransformState } from '../../tools/transform/transform';
-import { isShapeChangingTransform, mapRectThroughInverse } from '../../tools/transform/transform';
+import type { TransformMode, TransformState } from '../../tools/transform/transform';
+import { createTransformState, isShapeChangingTransform, mapRectThroughInverse } from '../../tools/transform/transform';
 import {
   flipTransform,
   resolveLayerTransformTargets,
@@ -37,11 +37,11 @@ import { rotateActiveLayer } from '../MenuBar/menus/image-menu';
 import type { Layer } from '../../types';
 
 /**
- * What the Move tool's options-bar buttons do: Rotate 90° CW / CCW and the
- * Flip Horizontal / Vertical buttons of its transform controls. Which path a
- * button takes depends on what is selected: a marquee's pixels, the selected
- * layers' shared box (several layers or a group), a live text layer, or the
- * one active layer.
+ * What the Move tool's options-bar buttons do: Rotate 90° CW / CCW, and the
+ * Flip Horizontal / Vertical and transform-mode buttons of its transform
+ * controls. Which path a button takes depends on what is selected: a
+ * marquee's pixels, the selected layers' shared box (several layers or a
+ * group), a live text layer, or the one active layer.
  */
 
 /**
@@ -193,4 +193,28 @@ export function flipFromMoveOptions(axis: 'horizontal' | 'vertical', isLayerBox:
     ? new Float32Array([-1, 0, 0, 0, 1, 0, 0, 0, 1])
     : new Float32Array([1, 0, 0, 0, -1, 0, 0, 0, 1]));
   return Promise.resolve();
+}
+
+/**
+ * A transform-mode button (Free, Skew, Distort, Perspective) of the
+ * transform controls; `isLayerBox` is whether they frame the selected
+ * layers. A live text layer's own Free / Skew buttons set
+ * `textTransformMode` in the UI store instead.
+ */
+export function setTransformModeFromMoveOptions(mode: TransformMode, isLayerBox: boolean): void {
+  if (isLayerBox) {
+    // Bake the pending transform; the box starts again on the result.
+    commitLiveFloat();
+    useUIStore.getState().setLayerTransformMode(mode);
+    return;
+  }
+  if (!useUIStore.getState().transform) return;
+  // Commit any active transform before switching modes; the selection
+  // takes on the transformed outline rather than the whole layer's alpha.
+  commitLiveFloat();
+  // Create fresh transform state with the new mode
+  const sel = useEditorStore.getState().selection;
+  if (sel.active && sel.bounds) {
+    useUIStore.getState().setTransform(createTransformState(sel.bounds, mode));
+  }
 }

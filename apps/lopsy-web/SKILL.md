@@ -441,13 +441,13 @@ Every command's summary names the UI control it matches and its history label.
 | --- | --- | --- |
 | `doc` | Documents and files | `doc.new`, `doc.info`, `doc.export`, `doc.save`, `doc.open` |
 | `view` | Looking at the result | `view.render`, `view.render-layer`, `view.sample` |
-| `layer` | The layer stack | `layer.add`, `layer.set` (name, opacity, blend mode, visibility), `layer.effects`, `layer.move`, `layer.duplicate`, `layer.group`, `layer.reorder` |
+| `layer` | The layer stack | `layer.add`, `layer.set` (name, opacity, blend mode, visibility), `layer.effects`, `layer.move`, `layer.transform` (turn, scale, skew, distort, perspective), `layer.duplicate`, `layer.group`, `layer.reorder` |
 | `color` | Foreground and background | `color.set`, `color.swap`, `color.reset` |
 | `tool` | Tool options | `tool.set`, `tool.describe`, `tool.options`, `tool.gesture` (raw canvas gestures) |
 | `select` | Selections | `select.rect`, `select.ellipse`, `select.polygon`, `select.none`, `select.modify`, `select.invert`, `select.from-layer` |
 | `paint` | Putting pixels down | `paint.fill`, `paint.stroke`, `paint.gradient`, `paint.shape`, `paint.clear`, `paint.bucket` |
 | `text` | Live text layers | `text.fonts`, `text.set-font`, `text.add`, `text.style`, `text.set-color`, `text.edit` |
-| `filter` | Destructive filters | `filter.gaussian-blur`, `filter.add-noise`, `filter.texture`, `filter.clouds`, `filter.halftone`, `filter.tilt-shift`, `filter.mesh-warp`… (35) |
+| `filter` | Destructive filters | `filter.gaussian-blur`, `filter.add-noise`, `filter.texture`, `filter.clouds`, `filter.halftone`, `filter.tilt-shift`, `filter.mesh-warp`, `filter.liquify`… (36) |
 | `adjust` | Non-destructive adjustments on a group | `adjust.add`, `adjust.set`, `adjust.list` |
 | `mask` | Layer masks | `mask.add`, `mask.edit`, `mask.clear`, `mask.remove` |
 | `image` | The whole canvas | `image.canvas-size`, `image.size`, `image.crop`, `image.rotate`, `image.flip-layer`, `image.border` |
@@ -632,6 +632,12 @@ gradient to transparent on a `screen` layer is a soft light source.
   { "op": "tool.set", "tool": "eraser", "options": { "size": 40 } },
   { "op": "paint.stroke", "tool": "eraser", "points": [{ "x": 300, "y": 60 }, { "x": 300, "y": 180 }] },
 
+  { "op": "color.set", "foreground": "#268bd2" },
+  { "op": "tool.set", "tool": "spray", "options": { "size": 70, "density": 40, "opacity": 80, "softness": 40 } },
+  { "op": "paint.stroke", "tool": "spray", "points": [
+    { "x": 80, "y": 40 }, { "x": 160, "y": 30 }, { "x": 240, "y": 45 } ] },
+  { "op": "paint.stroke", "tool": "spray", "points": [{ "x": 520, "y": 200 }], "dwell": 800 },
+
   { "op": "layer.add", "name": "Leaf" },
   { "op": "path.add", "closed": true, "anchors": [
     { "point": { "x": 440, "y": 300 }, "handleIn": { "x": 470, "y": 370 }, "handleOut": { "x": 470, "y": 230 } },
@@ -651,14 +657,26 @@ One point is a single dab. Denser points give smoother curves: generate them
 in code. `line: true` is a Shift-click: a straight line from where the
 previous stroke **on this layer** ended to the stroke's first point, so a dab
 followed by `line` strokes draws a polyline. The pencil gives aliased,
-pixel-art lines; the eraser, smudge, dodge, sponge, stamp and healing tools
-work the same way (`tool` picks one). For an exact smooth curve, add a bezier
+pixel-art lines; the eraser, smudge, dodge, sponge, stamp, healing and spray
+tools work the same way (`tool` picks one). For an exact smooth curve, add a bezier
 path with `path.add` (each anchor's `handleIn` / `handleOut` are absolute
 document points) and stroke it with `path.stroke`, which uses the foreground
 colour and a width of 1–50 px. To fill a curve, `path.to-selection` makes the
 area a path encloses the selection (an open path is closed with a straight
 line) and `paint.fill` fills it, as with the Leaf. Strokes are instantaneous, so the brush's
 time-based behaviours (speed-based size, hold-to-smooth) never happen.
+
+The **spray** tool is the one that works in real time. It scatters a burst
+of random dots (`density` of them) inside its `size` at the press and along
+each move, and while the button is held it adds another burst about every
+166 ms. An instantaneous stroke therefore gets only the bursts of the press
+and the moves: a light speckle along the path. `dwell` holds the pointer
+still for that many milliseconds **at every point**, the press included, so
+the paint builds up there as under a hand that lingers (the one point at
+520, 200 gets about five more bursts in its 800 ms). The command takes as
+long as its dwells add up to: at most 2000 ms a point and 10 s a stroke.
+Spray dots are random, so a stroke never comes out the same twice; look at
+the render rather than assuming. It takes no `line`.
 
 <!-- recipe: type -->
 ```json
@@ -791,6 +809,15 @@ makes active first (here Badge, while Neon was active).
   { "op": "filter.halftone", "dotSize": 10 },
   { "op": "select.none" },
   { "op": "filter.mesh-warp", "gridSize": 3, "points": [{ "col": 1, "row": 1, "dx": 0, "dy": -40 }] },
+  { "op": "filter.liquify", "strokes": [
+    { "mode": "push", "size": 120, "pressure": 60, "points": [
+      { "x": 150, "y": 290 }, { "x": 160, "y": 286 }, { "x": 170, "y": 282 }, { "x": 180, "y": 278 },
+      { "x": 190, "y": 274 }, { "x": 200, "y": 270 }, { "x": 210, "y": 266 }, { "x": 220, "y": 262 } ] },
+    { "mode": "twirl-cw", "size": 140, "pressure": 70, "points": [
+      { "x": 430, "y": 290 }, { "x": 430, "y": 290 }, { "x": 430, "y": 290 }, { "x": 430, "y": 290 },
+      { "x": 430, "y": 290 }, { "x": 430, "y": 290 }, { "x": 430, "y": 290 }, { "x": 430, "y": 290 },
+      { "x": 430, "y": 290 }, { "x": 430, "y": 290 }, { "x": 430, "y": 290 }, { "x": 430, "y": 290 } ] }
+  ] },
   { "op": "layer.set", "blendMode": "multiply", "opacity": 80 },
 
   { "op": "layer.add", "name": "Grain" },
@@ -820,8 +847,20 @@ Clouds): `focusPosition` and `focusWidth` are fractions of the document, 0
 the top at `angle` 0. `mesh-warp` bends the layer by moving points of a grid
 laid over the selection's box, or the whole document (here it lifts the
 middle of the Dots band 40 px): each point is `{ col, row, dx, dy }`, offsets
-in pixels. Filters refuse text and group layers. `clouds`, `fibers`,
-`smoke` and `add-noise` draw a new random seed on every run.
+in pixels. `liquify` warps the layer with brush strokes, as the Liquify
+brush does by hand: each stroke has a `mode`, a brush `size` (its diameter)
+and a `pressure` (percent), and `points`, the first a press and every
+further one a pointer move that makes **one dab**. A `push` dab shoves the
+pixels under the brush along the way the pointer came from the point before
+it, so give a push stroke points a few pixels apart, a quarter of the brush
+size or less (here it smears the left of the Dots up and to the right).
+`twirl-cw`, `twirl-ccw`, `bloat` and `pinch` turn, swell or shrink what is
+under the brush a little with every dab, wherever the pointer came from, so
+repeat a point to work on one spot (the twelve dabs at 430, 290); at 10%
+pressure or less a twirl hardly builds up however many dabs it gets, so use
+more pressure rather than more dabs. All the strokes of one call are one history step. Filters
+refuse text and group layers. `clouds`, `fibers`, `smoke` and `add-noise`
+draw a new random seed on every run.
 
 <!-- recipe: masks -->
 ```json
@@ -934,6 +973,17 @@ adjust those to grade the whole image. `filter.hue-saturation` and
   { "op": "layer.transform", "scale": { "x": 0.6, "y": 0.6 }, "anchor": "top-left" },
   { "op": "layer.move", "dx": 300, "dy": 230 },
 
+  { "op": "layer.duplicate", "layer": "Arrow" },
+  { "op": "layer.set", "name": "Leaning" },
+  { "op": "layer.transform", "skew": { "x": -20, "y": 0 }, "anchor": "bottom" },
+  { "op": "layer.move", "dx": 0, "dy": 190 },
+
+  { "op": "layer.duplicate", "layer": "Arrow" },
+  { "op": "layer.set", "name": "Receding" },
+  { "op": "layer.transform", "perspective": { "top": { "inset": 40 } } },
+  { "op": "layer.transform", "distort": { "bottom-right": { "x": 30, "y": 20 } } },
+  { "op": "layer.move", "dx": 170, "dy": 40 },
+
   { "op": "view.render", "maxSize": 600 }
 ]
 ```
@@ -957,6 +1007,22 @@ pixel of what you asked, as a drag on whole pixels does. On one raster layer
 it selects the layer's pixels for the drag and drops the selection after,
 so `history.undo` brings that selection back: `select.none` with
 `commit: true` before the next move. Text stays live through all of them.
+
+`layer.transform` also reaches the Move tool's other three modes. `skew`
+shears by degrees along one axis (`{ "x": -20, "y": 0 }`): an edge slides
+along itself while the `anchor` edge opposite holds still, and a positive
+`x` leans the bottom to the right of the top, a positive `y` the right side
+below the left. `distort` moves corners of the box by pixel offsets, each on
+its own (`{ "bottom-right": { "x": 30, "y": 20 } }`), and the picture
+stretches to follow. `perspective` narrows or widens the top or bottom edge
+evenly about its middle: `{ "top": { "inset": 40 } }` moves both ends of the
+top edge 40 px inward, so the picture recedes upward. Offsets are in
+document pixels, from where the corners of the box round the layer's content
+are now, and the corners must stay a convex quad. `distort` and
+`perspective` add **one history step per corner or edge moved**, and the
+result's `corners` says how far each corner went; a text layer takes `skew`
+and stays live, but must be rasterized (`layer.rasterize`) for the other
+two.
 `layer.duplicate` puts the copy, named
 `<name> copy`, directly on top of the original and makes it active.
 
@@ -1123,11 +1189,6 @@ whole.
 
 These have no command. Don't hunt for them:
 
-- **Skew, distort and perspective.** `layer.transform` turns, scales and
-  flips; the Move tool's other transform modes have no command. Draw the
-  shape you need instead: a polygon selection can have any outline.
-- **The Spray tool** (it paints on a timer while the button is held) and
-  **Liquify**.
 - **Colouring part of a text layer.** `text.set-color` recolours the whole
   layer; colours on ranges of the text need it open for editing.
 - **Anything that needs the system clipboard or a file picker.** A browser

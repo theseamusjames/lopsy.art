@@ -1,7 +1,7 @@
 import { CommandError } from '../command';
 import { defineCommand } from '../registry';
 import { refusalError } from '../refusal';
-import { afterActivation, layerRefSpec, requireDocument, requireEngine, resolveLayer, selectReplace } from '../context';
+import { MAX_SPAN, afterActivation, layerRefSpec, offsetSpec, requireDocument, requireEngine, resolveLayer, selectReplace } from '../context';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import {
@@ -18,8 +18,17 @@ import { readLayerContentRectLocal } from '../../app/layer-content-rect';
 import { transformableTextLayer } from '../../app/text-layer-transform';
 import type { Engine } from '../../engine-wasm/wasm-bridge';
 import type { Layer, Point } from '../../types';
-import { dragTransform, type DragOutcome, type DragStep } from './transform-drag';
-import { SCALE_ANCHORS, anchorAxes, type ScaleAnchor } from './transform-geometry';
+import { dragTransform, type CornerDrag, type DragOutcome, type DragStep } from './transform-drag';
+import {
+  CORNERS,
+  SCALE_ANCHORS,
+  SKEW_ANCHORS,
+  anchorAxes,
+  skewAxis,
+  type Corner,
+  type ScaleAnchor,
+  type SkewAnchor,
+} from './transform-geometry';
 
 export interface LayerTransformResult extends DragOutcome {
   /** The layers the step transformed. */
@@ -48,11 +57,37 @@ function topEntry(): unknown {
 const ROTATE_RANGE = 360;
 const SCALE_MIN = 0.05;
 const SCALE_MAX = 20;
+/** The largest shear the Skew handles give (tools/transform/transform-skew.ts). */
+const SKEW_RANGE = 60;
+
+type Anchor = ScaleAnchor;
+type CornerOffsetsParam = Partial<Record<Corner, Point>>;
+
+interface EdgePull {
+  inset: number;
+  shift: number;
+}
+
+interface PerspectiveParam {
+  top?: EdgePull;
+  bottom?: EdgePull;
+}
+
+/** What a call asks for: exactly one of these is given. */
+interface Asked {
+  rotate?: number;
+  flip?: Axis;
+  scale?: Point;
+  skew?: Point;
+  distort?: CornerOffsetsParam;
+  perspective?: PerspectiveParam;
+  anchor?: Anchor;
+}
 
 interface Request {
   /** A Move-options button step: a quarter turn or a flip. */
   button?: Step;
-  /** A handle drag: any other turn, or a scale. */
+  /** Handle drags: any other turn, a scale, a skew, or corners moved. */
   drag?: DragStep;
 }
 
@@ -68,12 +103,64 @@ function parseScale(scale: Point, anchor: ScaleAnchor): DragStep {
   return { kind: 'scale', factor: { x: scale.x, y: scale.y }, anchor };
 }
 
-function parseRequest(rotate: number | undefined, flip: Axis | undefined, scale: Point | undefined, anchor: ScaleAnchor | undefined): Request {
-  const given = [rotate, flip, scale].filter((v) => v !== undefined).length;
-  if (given !== 1) throw new CommandError('invalid', 'layer.transform: pass exactly one of rotate, flip or scale.');
-  if (anchor !== undefined && scale === undefined) throw new CommandError('invalid', 'layer.transform: anchor goes with scale only.');
+function isSkewAnchor(anchor: Anchor): anchor is SkewAnchor {
+  return (SKEW_ANCHORS as readonly string[]).includes(anchor);
+}
+
+function parseSkew(skew: Point, anchor: Anchor | undefined): DragStep {
+  if ((skew.x === 0) === (skew.y === 0)) {
+    throw new CommandError('invalid', 'layer.transform: skew shears along one axis at a time: pass one of x and y as 0 and the other not (two calls shear along both).');
+  }
+  const axis = skew.x !== 0 ? 'x' : 'y';
+  const held = anchor ?? (axis === 'x' ? 'top' : 'left');
+  if (!isSkewAnchor(held) || skewAxis(held) !== axis) {
+    throw new CommandError(
+      'invalid',
+      `layer.transform: a skew along ${axis} holds ${axis === 'x' ? 'the "top" or "bottom"' : 'the "left" or "right"'} edge still, not "${held}".`,
+    );
+  }
+  return { kind: 'skew', tan: Math.tan((skew[axis] * Math.PI) / 180), anchor: held };
+}
+
+/** A pointer moves by whole pixels, so an offset is rounded to them; one that rounds to nothing is not a drag. */
+function wholeOffset(x: number, y: number): Point | null {
+  const offset = { x: Math.round(x), y: Math.round(y) };
+  return offset.x === 0 && offset.y === 0 ? null : offset;
+}
+
+function parseDistort(distort: CornerOffsetsParam): DragStep {
+  const drags: CornerDrag[] = [];
+  for (const handle of CORNERS) {
+    const given = distort[handle];
+    const offset = given ? wholeOffset(given.x, given.y) : null;
+    if (offset) drags.push({ handle, offset });
+  }
+  if (drags.length === 0) throw new CommandError('invalid', 'layer.transform: distort moves no corner by a whole pixel.');
+  return { kind: 'corners', mode: 'distort', drags };
+}
+
+/** In Perspective mode a corner drag moves the other corner of its top or bottom edge the opposite way, so the left corner's drag sets the edge. */
+function parsePerspective(perspective: PerspectiveParam): DragStep {
+  const drags: CornerDrag[] = [];
+  const edges = [['top', 'top-left'], ['bottom', 'bottom-left']] as const;
+  for (const [edge, handle] of edges) {
+    const pull = perspective[edge];
+    const offset = pull ? wholeOffset(pull.inset, pull.shift) : null;
+    if (offset) drags.push({ handle, offset });
+  }
+  if (drags.length === 0) throw new CommandError('invalid', 'layer.transform: perspective moves neither edge by a whole pixel.');
+  return { kind: 'corners', mode: 'perspective', drags };
+}
+
+function parseRequest({ rotate, flip, scale, skew, distort, perspective, anchor }: Asked): Request {
+  const given = [rotate, flip, scale, skew, distort, perspective].filter((v) => v !== undefined).length;
+  if (given !== 1) throw new CommandError('invalid', 'layer.transform: pass exactly one of rotate, flip, scale, skew, distort or perspective.');
+  if (anchor !== undefined && scale === undefined && skew === undefined) throw new CommandError('invalid', 'layer.transform: anchor goes with scale or skew only.');
   if (flip) return { button: { flip } };
   if (scale) return { drag: parseScale(scale, anchor ?? 'top-left') };
+  if (skew) return { drag: parseSkew(skew, anchor) };
+  if (distort) return { drag: parseDistort(distort) };
+  if (perspective) return { drag: parsePerspective(perspective) };
   if (rotate === 90) return { button: { rotate: 'cw' } };
   if (rotate === -90) return { button: { rotate: 'ccw' } };
   const turn = rotate ?? 0;
@@ -170,10 +257,30 @@ async function dragStep(engine: Engine, step: DragStep): Promise<LayerTransformR
   return { layers, ...outcome };
 }
 
+const cornerOffsetSpec = (corner: string) =>
+  ({
+    type: 'point',
+    min: -MAX_SPAN,
+    max: MAX_SPAN,
+    optional: true,
+    description: `How far the ${corner} corner moves, in document pixels: x to the right (negative: left), y down (negative: up). Rounded to whole pixels.`,
+  }) as const;
+
+const edgePullSpec = (edge: string) =>
+  ({
+    type: 'object',
+    optional: true,
+    description: `The ${edge} edge: both of its ends move toward its middle by \`inset\`, and the edge moves down by \`shift\`.`,
+    fields: {
+      inset: offsetSpec(`How far each end of the ${edge} edge moves toward the middle of the edge, in document pixels (negative: apart). Rounded to whole pixels.`),
+      shift: { ...offsetSpec(`How far the ${edge} edge moves down, in document pixels (negative: up). Rounded to whole pixels.`), default: 0 },
+    },
+  }) as const;
+
 export const layerTransform = defineCommand({
   id: 'layer.transform',
   summary:
-    'Turns, scales or flips whole layers with the Move tool, as its options-bar buttons and transform handles do with no marquee, and applies the step at once: nothing is left pending (a drag ends as Escape does). rotate 90 / -90 are the Rotate 90° CW / CCW buttons, exact with no resampling ("Rotate Layer 90° CW" / "... CCW" for one layer, "Transform" for several); any other angle drags a rotate handle, turning about the centre of the content. scale drags a scale handle by {x, y} factors with `anchor` held still: default "top-left" (the bottom-right corner is dragged); a corner anchor scales both axes, an edge anchor one, and no single drag scales about the centre. flip is the Flip Horizontal / Vertical button, for several layers, a group or a text layer. A drag resamples the pixels and lands on whole document pixels, as a pointer does, so it reaches the angle within 0.01° and the factors within half a pixel of the box; the result says what it reached. Pass `layers` for several layers (selected as a click and Cmd-clicks in the Layers panel do; they turn and scale together in one box), `layer` for one, or neither for the layers selected now; the Move tool is selected first, as tool.select does. One raster layer has no handles of its own, so a drag first selects its pixels as a Cmd-click on its thumbnail does and drops the selection after (history.undo brings that selection back with the pixels). A text layer is dragged by its own handles and stays live. Every drag is one history step ("Transform"). Refused while a marquee is active (select.none with commit: true first), when View > Snap to Grid with the grid shown would change the result, in layer-mask edit mode or Quick Mask for raster layers, on a locked layer, for text on a path, for a flip of one non-text layer (image.flip-layer does it), and when the Move options are in another mode than Free where that mode changes the drag. Returns the layers transformed, plus `rotate` (degrees) or `scale` ({x, y}) as the drag reached them.',
+    'Turns, scales, skews, distorts or flips whole layers with the Move tool, as its options-bar buttons and transform handles do with no marquee, and applies the step at once: nothing is left pending (a drag ends as Escape does). rotate 90 / -90 are the Rotate 90° CW / CCW buttons, exact with no resampling ("Rotate Layer 90° CW" / "... CCW" for one layer, "Transform" for several); any other angle drags a rotate handle, turning about the centre of the content. scale drags a scale handle by {x, y} factors with `anchor` held still: default "top-left" (the bottom-right corner is dragged); a corner anchor scales both axes, an edge anchor one, and no single drag scales about the centre. skew, distort and perspective press that mode\'s button in the Move options (Skew, Distort, Perspective), drag its handles, and press the button they found pressed again when they are done; rotate and scale do the same with Free. skew shears by {x, y} degrees, one axis a call: an edge handle slides along itself while `anchor`, the edge opposite, holds still (x: "top" by default, or "bottom"; y: "left" by default, or "right"); a positive x leans the bottom to the right of the top, a positive y the right side below the left, up to 60°. distort drags corner handles by pixel offsets, each corner on its own, and the picture stretches to follow: {"top-right": {x: -30, y: 10}} moves that corner 30 px left and 10 px down. perspective drags a corner in Perspective mode, where the other end of that edge mirrors it: {top: {inset: 40}} moves both ends of the top edge 40 px toward its middle (negative: apart), and `shift` moves the edge down (negative: up). flip is the Flip Horizontal / Vertical button, for several layers, a group or a text layer. A drag resamples the pixels and lands on whole document pixels, as a pointer does, so it reaches the angle within 0.01° and the factors or the skew within half a pixel of the box, and corner offsets are rounded to whole pixels; the result says what it reached. Pass `layers` for several layers (selected as a click and Cmd-clicks in the Layers panel do; they are transformed together in one box), `layer` for one, or neither for the layers selected now; the Move tool is selected first, as tool.select does. One raster layer has no handles of its own, so a drag first selects its pixels as a Cmd-click on its thumbnail does and drops the selection after (history.undo brings that selection back with the pixels). A text layer is dragged by its own handles and stays live. Every drag is one history step ("Transform"): one for a rotate, a scale or a skew, one per corner moved for distort (up to four) and one per edge for perspective (up to two), so history.undo takes as many steps. Refused while a marquee is active (select.none with commit: true first), when View > Snap to Grid with the grid shown would change a rotate or scale, in layer-mask edit mode or Quick Mask for raster layers, on a locked layer, for text on a path, for distort or perspective on a text layer or on layers that include one (a text layer has only Free and Skew: layer.rasterize first), when the corners would not stay a convex quad, when a skew would slide its edge less than a pixel, and for a flip of one non-text layer (image.flip-layer does it). Returns the layers transformed, plus `rotate` (degrees), `scale` ({x, y}), `skew` ({x, y} degrees) or `corners` (how far each corner moved, by name) as the drags reached them.',
   surface: 'document',
   params: {
     layer: layerRefSpec,
@@ -200,17 +307,41 @@ export const layerTransform = defineCommand({
       optional: true,
       description: `Factors {x, y}, each ${SCALE_MIN} to ${SCALE_MAX}: {x: 2, y: 2} doubles the size. For a text layer already turned, x and y are along its own axes. With an edge anchor, the axis it does not scale must be 1.`,
     },
+    skew: {
+      type: 'point',
+      min: -SKEW_RANGE,
+      max: SKEW_RANGE,
+      optional: true,
+      description: `Degrees {x, y}, each -${SKEW_RANGE} to ${SKEW_RANGE}, exactly one of them 0. x shears sideways: the top and bottom edges slide apart, the bottom to the right of the top when positive. y shears up and down: the right side below the left when positive. For a text layer already turned, x and y are along its own axes.`,
+    },
+    distort: {
+      type: 'object',
+      optional: true,
+      description: 'Corner offsets by corner name; a corner left out stays where it is. The corners must stay a convex quad.',
+      fields: {
+        'top-left': cornerOffsetSpec('top-left'),
+        'top-right': cornerOffsetSpec('top-right'),
+        'bottom-right': cornerOffsetSpec('bottom-right'),
+        'bottom-left': cornerOffsetSpec('bottom-left'),
+      },
+    },
+    perspective: {
+      type: 'object',
+      optional: true,
+      description: 'The top edge, the bottom edge or both, each narrowed (or widened) evenly about its middle: {top: {inset: 40}} makes the picture recede upward.',
+      fields: { top: edgePullSpec('top'), bottom: edgePullSpec('bottom') },
+    },
     anchor: {
       type: 'string',
       enum: SCALE_ANCHORS,
       optional: true,
-      description: 'With scale: the point of the box that stays put; the handle opposite it is dragged. Default "top-left". Corners scale both axes; "left" / "right" scale x only, "top" / "bottom" y only.',
+      description: 'With scale: the point of the box that stays put; the handle opposite it is dragged. Default "top-left". Corners scale both axes; "left" / "right" scale x only, "top" / "bottom" y only. With skew: the edge that stays put, "top" (the default) or "bottom" for x, "left" (the default) or "right" for y.',
     },
   },
-  async run({ layer: ref, layers: refs, rotate, flip, scale, anchor }): Promise<LayerTransformResult> {
+  async run({ layer: ref, layers: refs, ...asked }): Promise<LayerTransformResult> {
     requireDocument();
     const engine = requireEngine();
-    const request = parseRequest(rotate, flip, scale, anchor);
+    const request = parseRequest(asked);
     const layers = targets(ref, refs);
     if (store().selection.active) throw new CommandError('refused', MARQUEE_REFUSAL);
     return afterActivation(() => selectLayers(layers), async () => {
