@@ -322,7 +322,12 @@ most 16384 px a side, or the GPU's largest texture if that is smaller.
 ### Layers
 
 A layer param takes a layer's **id or its exact name**; leaving it out means
-the **active layer**. When two layers share a name, the call is refused as
+the **active layer**. A command that works on the active layer (`layer.duplicate`,
+`layer.rasterize-style`, `layer.move`, `mask.add`, `image.flip-layer`,
+`text.style`…) makes a named layer active first, as clicking its row would,
+and then acts, so that layer is active afterwards; its summary says so. Others
+(`layer.set`, `layer.effects`, `layer.remove`, `mask.remove`,
+`select.from-layer`, `view.render-layer`) leave the active layer alone. When two layers share a name, the call is refused as
 `invalid` and lists their ids, so give layers unique names (`layer.add`
 takes `name`) or keep the ids that `layer.add` and `doc.info` return.
 `doc.info` lists the layers bottom to top, each with its id, type, parent
@@ -443,7 +448,6 @@ it. Apart from the photo recipe, they need nothing but the page.
   { "op": "select.none" },
 
   { "op": "layer.add", "name": "Door" },
-  { "op": "tool.select", "tool": "shape" },
   { "op": "tool.set", "tool": "shape", "options": { "mode": "rectangle", "cornerRadius": 18,
     "fillColor": "#e76f51", "strokeColor": "#1d3557", "strokeWidth": 4 } },
   { "op": "paint.shape", "from": { "x": 300, "y": 310 }, "to": { "x": 335, "y": 360 } },
@@ -459,10 +463,8 @@ compute (a 48–72 point polygon reads as a smooth curve). `mode: "add"` (or
 shapes. With no selection, `paint.fill` fills the whole layer. Always
 `select.none` afterwards: a live selection keeps constraining everything that
 follows. The Shape tool is the other route, with its own fill and stroke
-colours and rounded corners; it draws from the centre (`from`) to a corner
-(`to`). Select it with `tool.select` **before** setting its options: the first
-time the Shape tool is chosen on a page it takes the foreground as its fill
-colour, replacing a fill you set earlier.
+colours (`fillColor`, `strokeColor`, set with `tool.set`, not the foreground)
+and rounded corners; it draws from the centre (`from`) to a corner (`to`).
 
 <!-- recipe: soft-shapes-and-light -->
 ```json
@@ -658,8 +660,9 @@ before setting up the next piece of text, select a non-text layer
 (`layer.select`) or add one. To change a text layer later, `text.style`
 changes its size, style or alignment and `text.edit` replaces its words
 (renaming a layer still named after its old text). `text.edit` also loads
-the layer's colour into the foreground, as clicking into the text does: set
-the colour again before you paint. There is no command to recolour a text
+the layer's colour into the foreground and its font, size, alignment and
+spacing into the text options, as clicking into the text does: set the colour
+again before you paint. There is no command to recolour a text
 layer: a `colorOverlay` effect does it and keeps the text live.
 
 <!-- recipe: layer-effects -->
@@ -679,7 +682,6 @@ layer: a `colorOverlay` effect does it and keeps the text live.
     "dropShadow": { "enabled": true, "color": "#000000", "offsetX": 0, "offsetY": 12, "blur": 24, "opacity": 40 },
     "stroke": { "enabled": true, "color": "#ffffff", "width": 8, "position": "inside" },
     "innerGlow": { "enabled": true, "color": "#bde0fe", "size": 30, "opacity": 60 } },
-  { "op": "layer.rasterize-style" },
 
   { "op": "layer.add", "name": "Neon" },
   { "op": "color.set", "foreground": "#ffffff" },
@@ -690,6 +692,7 @@ layer: a `colorOverlay` effect does it and keeps the text live.
   { "op": "layer.effects", "outerGlow": { "enabled": true, "color": "#ff006e", "size": 30, "spread": 4, "opacity": 90 },
     "colorOverlay": { "enabled": true, "color": "#ffd6ec" } },
 
+  { "op": "layer.rasterize-style", "layer": "Badge" },
   { "op": "view.render", "maxSize": 600 }
 ]
 ```
@@ -701,7 +704,9 @@ effect on with its defaults. `GET /describe?op=layer.effects` has each
 field's range. Effects stay live and follow the layer's pixels. A group has
 no effects: give each layer its own. Many live effects slow every later
 command down on a software renderer; once a layer's look is final,
-`layer.rasterize-style` bakes its effects into its pixels.
+`layer.rasterize-style` bakes its effects into its pixels. Like every command
+that acts on the active layer, it takes `layer` to name another one, which it
+makes active first (here Badge, while Neon was active).
 
 <!-- recipe: filters-and-textures -->
 ```json
@@ -1043,8 +1048,12 @@ These have no command. Don't hunt for them:
   instead: a polygon selection can have any orientation.
 - **The Spray tool** (it paints on a timer while the button is held),
   **Liquify**, **Tilt-Shift** and **Mesh Warp**.
-- **Text letter spacing, line height and paragraph spacing**, and a text
-  colour change on an existing text layer (use a `colorOverlay` effect).
+- **Changing the colour of an existing text layer.** `text.add` uses the
+  foreground; afterwards a `colorOverlay` effect recolours the text and keeps
+  it live.
+- **Text letter spacing, line height and paragraph spacing.** `text.style`
+  and `tool.set` take size, style, alignment, underline, strikethrough and
+  vertical only.
 - **Turning a path into a selection or a filled shape.** `path.stroke`
   strokes a path; to fill a curve, select a polygon through points sampled
   along it.
@@ -1081,18 +1090,21 @@ Each of these was checked on the agent page.
 - **After `text.add`, the text settings belong to the new text layer.**
   `text.set-font` restyles it and `tool.set` on the text tool is refused until
   another layer is active.
-- **`text.edit` loads the edited layer's colour into the foreground.**
-- **The Shape tool takes the foreground as its fill colour the first time it
-  is chosen on a page**, replacing a `fillColor` set before. Choose it with
-  `tool.select` first.
+- **`text.edit` loads the edited layer's colour into the foreground**, and its
+  style into the text options.
+- **The Shape tool's fill starts as the foreground colour** the first time it
+  is chosen on a page, unless `tool.set` has given it a `fillColor` already.
 - **In mask edit mode the brush and pencil always hide and the eraser always
   reveals**; `paint.fill` and `paint.gradient` write the grey value of their
   colours.
 - **`layer.move` is refused while a selection is active**, and
   `layer.add-image` leaves one: `select.none` after placing an image.
-- **`color.set` takes opaque colours only** (`"#rrggbb"` or `"#rgb"`). For a
-  translucent fill, lower the layer's opacity, or use a gradient stop with
-  alpha.
+- **`color.set` takes opaque colours only** (`"#rrggbb"` or `"#rgb"`;
+  `"#rrggbbaa"` is `invalid`). For a translucent fill, lower the layer's
+  opacity, or use a gradient stop with alpha.
+- **`view.sample` reads the canvas as the Eyedropper does**: in mask edit
+  mode that includes the mask overlay's tint. `view.render` and `doc.export`
+  give the image itself.
 - **The undo history holds 50 steps.** Older steps fall off the bottom.
   Save projects as checkpoints instead of relying on deep undo.
 - **Fonts download on first use.** `fontLoaded: false` (after 20 s without
