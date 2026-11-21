@@ -1,5 +1,7 @@
 export const SITE_ORIGIN = 'https://lopsy.art';
 export const SITE_NAME = 'Lopsy';
+/** How the site describes Lopsy in a phrase. Every page says it, word for word; page titles do not. */
+export const SITE_TAGLINE = 'the industry standard agentic photo editor';
 export const TUTORIALS_PATH = '/tutorials/';
 export const BLOG_PATH = '/blog/';
 export const BLOG_FEED_PATH = `${BLOG_PATH}feed.xml`;

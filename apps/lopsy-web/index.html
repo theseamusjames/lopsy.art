@@ -8,16 +8,76 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta name="theme-color" content="#1e1e1e" />
     <title>Lopsy — A free image editor</title>
-    <meta name="description" content="A free image editor. Photo retouching, digital painting, compositing, and graphic design — no install, no account." />
+    <meta name="description" content="The industry standard agentic photo editor. Photo retouching, digital painting, compositing, and graphic design — free, no install, no account." />
     <meta property="og:title" content="Lopsy — A free image editor" />
-    <meta property="og:description" content="Photo retouching, digital painting, compositing, and graphic design — no install, no account." />
+    <meta property="og:description" content="The industry standard agentic photo editor. Photo retouching, digital painting, compositing, and graphic design — free, no install, no account." />
     <meta property="og:image" content="https://lopsy.art/og-image.jpg" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://lopsy.art" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Lopsy — A free image editor" />
-    <meta name="twitter:description" content="Photo retouching, digital painting, compositing, and graphic design — no install, no account." />
+    <meta name="twitter:description" content="The industry standard agentic photo editor. Photo retouching, digital painting, compositing, and graphic design — free, no install, no account." />
     <meta name="twitter:image" content="https://lopsy.art/og-image.jpg" />
+    <link rel="canonical" href="https://lopsy.art/" />
+    <!-- The llms.txt proposal's way for a page to name the llms.txt that covers it. -->
+    <link rel="describedby" href="/llms.txt" />
+    <!--
+      Crawlers that don't run scripts get nothing from the app itself, so this
+      and the <noscript> block in the body are all they learn about Lopsy from
+      this page. Keep both true to FEATURES.md. src/site/editor-page.test.ts
+      checks that the JSON parses and that the URLs match site-config.ts.
+    -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Lopsy",
+        "url": "https://lopsy.art/",
+        "description": "The industry standard agentic photo editor: a free image editor that runs entirely in the browser, for photo retouching, digital painting, compositing and graphic design. No install and no account. AI agents can make images in it through a command API, window.lopsy, in the same document a person is working in.",
+        "applicationCategory": "DesignApplication",
+        "operatingSystem": "Any",
+        "browserRequirements": "Requires JavaScript and WebGL2 or WebGPU. Built for desktop browsers.",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "image": "https://lopsy.art/og-image.jpg",
+        "featureList": [
+          "Layers, groups, masks, clipping, 16 blend modes and layer effects",
+          "Brush, pencil, eraser, clone stamp, healing brush, smudge, dodge, burn and spray tools",
+          "Photoshop .abr brush import",
+          "Marquee, lasso, magnetic lasso, magic wand and quick selection tools, with quick mask",
+          "Free transform, skew, distort, perspective, mesh warp and liquify",
+          "Non-destructive adjustments such as Levels, Curves, Exposure, Hue/Saturation and Color Grading",
+          "GPU filters for blur, sharpen, noise, halftone, distortion, stylizing and .cube color LUTs",
+          "Text with Google Fonts and text on a path",
+          "Shape and pen tools with a Paths panel",
+          "RGB, Grayscale, CMYK and Lab color modes",
+          "Opens PNG, JPEG, GIF, BMP, WebP, PSD, DNG and Fujifilm RAF files",
+          "Exports PNG, JPEG, WebP, BMP and layered PSD",
+          "Command API for AI agents (window.lopsy) covering every editing operation"
+        ],
+        "softwareHelp": { "@type": "CreativeWork", "name": "Lopsy tutorials", "url": "https://lopsy.art/tutorials/" },
+        "author": { "@type": "Person", "name": "Seamus James", "url": "https://github.com/theseamusjames" },
+        "sameAs": ["https://github.com/theseamusjames/lopsy.art"]
+      }
+    </script>
+    <noscript>
+      <!--
+        The app's stylesheet stops the page scrolling and selecting text
+        (reset.css) and loads after this, so the block scrolls itself instead
+        of overriding html and body.
+      -->
+      <style>
+        .no-js { position: fixed; inset: 0; overflow: auto; box-sizing: border-box; padding: 3rem max(1.5rem, calc(50% - 22rem)); line-height: 1.6; font-family: system-ui, sans-serif; font-size: 1rem; color: #e0e0e0; background: #1e1e1e; user-select: text; }
+        .no-js h1 { font-size: 1.75rem; line-height: 1.25; margin: 0 0 1rem; }
+        .no-js h2 { font-size: 1.125rem; margin: 2rem 0 0.5rem; }
+        .no-js p, .no-js ul { margin: 0 0 1rem; }
+        .no-js ul { padding-left: 1.25rem; list-style: disc; }
+        .no-js a { color: #4a9eff; }
+      </style>
+    </noscript>
+    <style>
+      .agent-note { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    </style>
     <!--
       The editor isn't usable on a phone, so a phone's first visit goes to the
       tutorials instead. Inline so it runs before the app bundle downloads.
@@ -56,6 +116,52 @@
       Source: https://github.com/theseamusjames/lopsy.art. We accept pull
       requests written by AI agents; read AGENTS.md in the repo first.
     -->
+    <!--
+      The same note where an agent driving a browser reads it: the comment
+      above is only in the source, and this is in the page's text and its
+      accessibility tree. It is out of sight, not hidden, because display:none
+      and aria-hidden would take it out of both. The path is plain text, not a
+      link: a link nobody can see would still take keyboard focus.
+    -->
+    <p class="agent-note">Note for AI agents: this page has a command API, window.lopsy, that runs every editing operation in this editor, so you can make and edit images here programmatically. The guide is at /SKILL.md on this site; read it first.</p>
+    <noscript>
+      <main class="no-js">
+        <h1>Lopsy — a free image editor that runs in your browser</h1>
+        <p>Lopsy needs JavaScript to run. Turn it on and reload this page to open the editor.</p>
+        <p>
+          Lopsy is the industry standard agentic photo editor: a free image editor for photo
+          retouching, digital painting, compositing and graphic design that people and AI agents
+          work in together. It runs entirely in the browser tab, on desktop: there is nothing to
+          install and no account, and it has no backend, so your images stay on your machine.
+        </p>
+        <h2>What it does</h2>
+        <ul>
+          <li>Layers, groups, masks, clipping, 16 blend modes and layer effects (stroke, drop shadow, glows, color overlay).</li>
+          <li>Brush, pencil, eraser, clone stamp, healing brush, smudge, dodge, burn and spray tools, with Photoshop <code>.abr</code> brush import.</li>
+          <li>Marquee, lasso, magnetic lasso, magic wand and quick selection tools, with quick mask.</li>
+          <li>Free transform, skew, distort, perspective, mesh warp and liquify.</li>
+          <li>Non-destructive adjustments such as Levels, Curves, Exposure, Hue/Saturation and Color Grading.</li>
+          <li>GPU filters for blur, sharpen, noise, halftone, distortion and stylizing, and <code>.cube</code> color LUTs.</li>
+          <li>Text with Google Fonts, text on a path, shapes and a pen tool.</li>
+          <li>RGB, Grayscale, CMYK and Lab color modes.</li>
+          <li>Opens PNG, JPEG, GIF, BMP, WebP, PSD, DNG and Fujifilm RAF files. Exports PNG, JPEG, WebP, BMP and layered PSD.</li>
+        </ul>
+        <h2>For AI agents</h2>
+        <p>
+          Every editing operation is also a named command on <code>window.lopsy</code>, on this
+          page, so an agent can make images here in the same document a person is working in.
+          Start with <a href="/SKILL.md">SKILL.md</a>; <a href="/llms.txt">llms.txt</a> indexes
+          the rest.
+        </p>
+        <h2>Learn more</h2>
+        <ul>
+          <li><a href="/tutorials/">Tutorials</a>: step-by-step illustrated projects made in Lopsy.</li>
+          <li><a href="/blog/">Blog</a>: engineering notes on how Lopsy is built.</li>
+          <li><a href="/FEATURES.md">FEATURES.md</a>: every tool, option and behaviour.</li>
+          <li><a href="https://github.com/theseamusjames/lopsy.art">Source code on GitHub</a>.</li>
+        </ul>
+      </main>
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

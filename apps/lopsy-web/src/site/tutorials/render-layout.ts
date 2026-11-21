@@ -6,6 +6,7 @@ import {
   BLOG_PATH,
   COPYRIGHT_YEAR,
   SITE_NAME,
+  SITE_TAGLINE,
   SOURCE_URL,
   TUTORIALS_PATH,
   absoluteUrl,
@@ -145,7 +146,7 @@ function renderSiteFooter(): string {
   <div class="site-footer-inner">
     <div class="footer-about">
       <a class="brand" href="/" aria-label="${SITE_NAME} home">LOPSY</a>
-      <p>${SITE_NAME} is a free image editor that runs entirely in your browser — no install, no account.</p>
+      <p>${SITE_NAME} is ${SITE_TAGLINE}. It is free and runs entirely in your browser — no install, no account.</p>
     </div>
     <nav class="footer-links" aria-label="Footer">
       <div>
