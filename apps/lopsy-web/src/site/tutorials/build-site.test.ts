@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildTutorialSite } from './build-site';
+import { SITE_NAME, SITE_TAGLINE } from './site-config';
 import { SWATCH_SCRIPT } from './swatch';
 import type { SourceTutorial } from './types';
 
@@ -78,6 +79,15 @@ describe('buildTutorialSite', () => {
       'tutorials/index.html',
     ]);
     expect(result.warnings).toContain('tutorials/alpha: "unused.png" is not used and won\'t be published.');
+  });
+
+  it('says the site tagline in the footer of every page, and in no page title', () => {
+    const { files } = build([source('alpha', '')]);
+    for (const path of ['tutorials/index.html', 'tutorials/alpha/index.html']) {
+      const html = files.get(path) as string;
+      expect(html).toContain(`<p>${SITE_NAME} is ${SITE_TAGLINE}.`);
+      expect(/<title>(.*?)<\/title>/s.exec(html)?.[1]).not.toContain(SITE_TAGLINE);
+    }
   });
 
   it('renders SEO metadata and structured data on tutorial pages', () => {

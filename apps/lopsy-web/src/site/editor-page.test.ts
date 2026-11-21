@@ -5,6 +5,7 @@ import {
   BLOG_PATH,
   DEFAULT_OG_IMAGE,
   SITE_NAME,
+  SITE_TAGLINE,
   SOURCE_URL,
   TUTORIALS_PATH,
   absoluteUrl,
@@ -13,6 +14,15 @@ import {
 const html = Object.values(
   import.meta.glob('/index.html', { eager: true, query: '?raw', import: 'default' }) as Record<string, string>,
 )[0]!;
+
+const llms = Object.values(
+  import.meta.glob('/public/llms.txt', { eager: true, query: '?raw', import: 'default' }) as Record<string, string>,
+)[0]!;
+
+/** The tagline opens a sentence in some places, so its first letter's case varies. */
+function saysTagline(text: string): boolean {
+  return text.toLowerCase().includes(SITE_TAGLINE.toLowerCase());
+}
 
 function only(pattern: RegExp): string {
   const matches = [...html.matchAll(pattern)];
@@ -36,6 +46,21 @@ describe('the editor page, as a crawler that runs no scripts reads it', () => {
     const features = app.featureList as string[];
     expect(features.length).toBeGreaterThan(0);
     expect(new Set(features).size).toBe(features.length);
+  });
+
+  it('says the site tagline in every description, in the fallback and in llms.txt, but in no title', () => {
+    const descriptions = [...html.matchAll(/<meta (?:name|property)="(?:og:|twitter:)?description" content="([^"]*)"/g)];
+    expect(descriptions).toHaveLength(3);
+    for (const description of descriptions) expect(saysTagline(description[1] ?? '')).toBe(true);
+
+    const app = JSON.parse(only(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)) as { description: string };
+    expect(saysTagline(app.description)).toBe(true);
+    expect(saysTagline(only(/<body>[\s\S]*?<noscript>([\s\S]*?)<\/noscript>\s*<div id="root">/g).replace(/\s+/g, ' '))).toBe(true);
+    expect(saysTagline(llms)).toBe(true);
+
+    const titles = [...html.matchAll(/<title>([^<]*)<\/title>|<meta (?:name|property)="(?:og:|twitter:)title" content="([^"]*)"/g)];
+    expect(titles).toHaveLength(3);
+    for (const title of titles) expect(saysTagline(title[1] ?? title[2] ?? '')).toBe(false);
   });
 
   it('names its canonical URL', () => {
