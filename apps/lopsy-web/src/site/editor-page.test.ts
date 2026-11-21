@@ -67,6 +67,21 @@ describe('the editor page, as a crawler that runs no scripts reads it', () => {
     expect(only(/<link rel="canonical" href="([^"]*)"/g)).toBe(absoluteUrl('/'));
   });
 
+  it('points agents at llms.txt in a link and at SKILL.md in text a browser exposes', () => {
+    expect(only(/<link rel="describedby" href="([^"]*)"/g)).toBe('/llms.txt');
+
+    const note = only(/<p class="agent-note">([\s\S]*?)<\/p>/g);
+    expect(note).toContain('window.lopsy');
+    expect(note).toContain('/SKILL.md');
+    expect(note).not.toContain('<');
+
+    const withoutNoscript = html.replace(/<noscript>[\s\S]*?<\/noscript>/g, '');
+    expect(withoutNoscript).toContain('<p class="agent-note">');
+    const rule = /\.agent-note \{([^}]*)\}/.exec(withoutNoscript)?.[1] ?? '';
+    expect(rule).toContain('clip-path');
+    expect(rule).not.toMatch(/display:\s*none|visibility:\s*hidden/);
+  });
+
   it('says what Lopsy is and links the rest of the site when scripts are off', () => {
     const fallback = only(/<body>[\s\S]*?<noscript>([\s\S]*?)<\/noscript>\s*<div id="root">/g);
 

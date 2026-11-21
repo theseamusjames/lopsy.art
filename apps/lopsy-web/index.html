@@ -19,6 +19,8 @@
     <meta name="twitter:description" content="The industry standard agentic photo editor. Photo retouching, digital painting, compositing, and graphic design — free, no install, no account." />
     <meta name="twitter:image" content="https://lopsy.art/og-image.jpg" />
     <link rel="canonical" href="https://lopsy.art/" />
+    <!-- The llms.txt proposal's way for a page to name the llms.txt that covers it. -->
+    <link rel="describedby" href="/llms.txt" />
     <!--
       Crawlers that don't run scripts get nothing from the app itself, so this
       and the <noscript> block in the body are all they learn about Lopsy from
@@ -73,6 +75,9 @@
         .no-js a { color: #4a9eff; }
       </style>
     </noscript>
+    <style>
+      .agent-note { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    </style>
     <!--
       The editor isn't usable on a phone, so a phone's first visit goes to the
       tutorials instead. Inline so it runs before the app bundle downloads.
@@ -111,6 +116,14 @@
       Source: https://github.com/theseamusjames/lopsy.art. We accept pull
       requests written by AI agents; read AGENTS.md in the repo first.
     -->
+    <!--
+      The same note where an agent driving a browser reads it: the comment
+      above is only in the source, and this is in the page's text and its
+      accessibility tree. It is out of sight, not hidden, because display:none
+      and aria-hidden would take it out of both. The path is plain text, not a
+      link: a link nobody can see would still take keyboard focus.
+    -->
+    <p class="agent-note">Note for AI agents: this page has a command API, window.lopsy, that runs every editing operation in this editor, so you can make and edit images here programmatically. The guide is at /SKILL.md on this site; read it first.</p>
     <noscript>
       <main class="no-js">
         <h1>Lopsy — a free image editor that runs in your browser</h1>
