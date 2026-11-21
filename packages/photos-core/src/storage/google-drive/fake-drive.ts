@@ -344,7 +344,7 @@ export function createFakeDrive(options: FakeDriveOptions = {}): FakeDrive {
 
   function listFiles(url: URL): Response {
     const q = url.searchParams.get('q') ?? '';
-    const predicate = parseQuery(q, { isTrashed });
+    const predicate = parseQuery(q, { isTrashed, resolveId });
     const matching = [...files.values()].filter((file) => file.id !== rootId && predicate(file)).sort((a, b) => a.order - b.order);
     const pageSize = Math.min(Number(url.searchParams.get('pageSize') ?? '100'), maxPageSize);
     const offset = Number(url.searchParams.get('pageToken') ?? '0');
@@ -527,6 +527,9 @@ export function createFakeDrive(options: FakeDriveOptions = {}): FakeDrive {
     const fileMatch = new RegExp(`^${API}/files/([^/]+)$`).exec(path);
     if (fileMatch?.[1] !== undefined) {
       const id = decodeURIComponent(fileMatch[1]);
+      // As Drive answers an app with the drive.file scope (seen on 2026-11-21): My Drive is not a
+      // file the app made or was given, so it cannot be read, by its alias or by its ID.
+      if (method === 'GET' && resolveId(id) === rootId) throw new HttpError(404, 'notFound', `File not found: ${rootId}.`);
       const file = requireFile(id);
       if (method === 'GET') return url.searchParams.get('alt') === 'media' ? media(file, request) : json(200, resource(file));
       if (method === 'PATCH') {
@@ -744,7 +747,10 @@ async function parseMultipart(request: Request): Promise<{ metadata: Record<stri
 }
 
 /** The `q` subset the adapter writes: `'id' in parents`, `trashed=…`, `appProperties has {…}`, `name = '…'`, joined by `and`. */
-function parseQuery(q: string, context: { isTrashed: (file: FakeFile) => boolean }): (file: FakeFile) => boolean {
+function parseQuery(
+  q: string,
+  context: { isTrashed: (file: FakeFile) => boolean; resolveId: (id: string) => string },
+): (file: FakeFile) => boolean {
   const tokens = tokenize(q);
   let position = 0;
   const peek = (): string | undefined => tokens[position];
@@ -766,7 +772,8 @@ function parseQuery(q: string, context: { isTrashed: (file: FakeFile) => boolean
   const term = (): ((file: FakeFile) => boolean) => {
     const token = peek();
     if (token?.startsWith("'")) {
-      const id = literal();
+      // `'root' in parents` is My Drive, as in Drive.
+      const id = context.resolveId(literal());
       expect('in');
       expect('parents');
       return (file) => file.parents.includes(id);

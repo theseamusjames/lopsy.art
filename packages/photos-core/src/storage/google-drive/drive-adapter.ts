@@ -36,6 +36,21 @@ const CHUNK_GRANULARITY = 256 * KIB;
 /** IDs fetched per files.generateIds call. */
 const ID_BATCH = 100;
 const RATE_LIMIT_REASONS = new Set(['rateLimitExceeded', 'userRateLimitExceeded']);
+/** Drive's alias for the user's My Drive folder, accepted wherever a file ID is. */
+export const MY_DRIVE = 'root';
+const MY_DRIVE_FOLDER: StoredFile = {
+  id: MY_DRIVE,
+  name: 'My Drive',
+  parentId: null,
+  isFolder: true,
+  size: 0,
+  mimeType: DRIVE_FOLDER_MIME_TYPE,
+  modifiedTime: new Date(0).toISOString(),
+  sha256: null,
+  revision: '',
+  properties: {},
+  trashed: false,
+};
 
 export type FetchFunction = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -100,6 +115,8 @@ export class GoogleDriveAdapter implements StorageAdapter {
   private readonly upload: string;
   private readonly bucket: TokenBucket;
   private readonly sessions: UploadSessionStore | null;
+  /** My Drive's real ID, once a create there has shown it; files there name it as their parent. */
+  private myDriveId: string | null = null;
   private readonly idPool: string[] = [];
   private idRefill: Promise<void> | null = null;
 
@@ -123,15 +140,21 @@ export class GoogleDriveAdapter implements StorageAdapter {
     this.bucket = new TokenBucket(options.requestsPerSecond ?? 10, this.now, this.sleep);
   }
 
-  async getRoot(): Promise<StoredFile> {
-    return toStoredFile(await this.json({ method: 'GET', url: this.url('/files/root', { fields: FILE_FIELDS }) }));
+  /**
+   * My Drive, without asking Drive for it: under the `drive.file` scope the
+   * folder itself is not a file the app may read (`files.get` on `root`
+   * answers 404), though the app may create in it and list what it made
+   * there. Its ID here is Drive's alias, {@link MY_DRIVE}.
+   */
+  getRoot(): Promise<StoredFile> {
+    return Promise.resolve(MY_DRIVE_FOLDER);
   }
 
   async createFolder(parentId: FileId, name: string, properties: Readonly<Record<string, string>> = {}): Promise<StoredFile> {
     const id = await this.takeId(undefined);
-    const metadata = { id, name, mimeType: DRIVE_FOLDER_MIME_TYPE, parents: [parentId], appProperties: properties };
-    return this.idempotentCreate(id, undefined, async () =>
-      toStoredFile(
+    const metadata = { id, name, mimeType: DRIVE_FOLDER_MIME_TYPE, ...parentsOf(parentId), appProperties: properties };
+    const created = await this.idempotentCreate(id, undefined, async () =>
+      this.stored(
         await this.json({
           method: 'POST',
           url: this.url('/files', { fields: FILE_FIELDS }),
@@ -140,17 +163,24 @@ export class GoogleDriveAdapter implements StorageAdapter {
         }),
       ),
     );
+    return this.createdIn(parentId, created);
   }
 
   async createFile(file: NewFile, content: Blob, options: WriteOptions = {}): Promise<StoredFile> {
+    return this.createdIn(file.parentId, await this.createContent(file, content, options));
+  }
+
+  private async createContent(file: NewFile, content: Blob, options: WriteOptions): Promise<StoredFile> {
     throwIfAborted(options.signal);
     const resumed = await this.resumeSaved('create', content, options, (stored) => {
-      if (stored.parentId !== file.parentId || stored.name !== file.name) return false;
+      // Until a create has shown this adapter My Drive's real ID, a file there still names it as its parent.
+      const sameParent = stored.parentId === file.parentId || (file.parentId === MY_DRIVE && this.myDriveId === null);
+      if (!sameParent || stored.name !== file.name) return false;
       return Object.entries(file.properties ?? {}).every(([key, value]) => stored.properties[key] === value);
     });
     if (resumed) return resumed;
     const id = await this.takeId(options.signal);
-    const metadata = { id, name: file.name, mimeType: file.mimeType, parents: [file.parentId], appProperties: file.properties ?? {} };
+    const metadata = { id, name: file.name, mimeType: file.mimeType, ...parentsOf(file.parentId), appProperties: file.properties ?? {} };
     if (content.size >= this.resumableThreshold) {
       return this.resumable('POST', `${this.upload}/files`, 'create', metadata, file.mimeType, content, options);
     }
@@ -163,7 +193,7 @@ export class GoogleDriveAdapter implements StorageAdapter {
     ]);
     options.onProgress?.(0, content.size);
     const result = await this.idempotentCreate(id, options.signal, async () =>
-      toStoredFile(
+      this.stored(
         await this.json({
           method: 'POST',
           url: `${this.upload}/files?${query({ uploadType: 'multipart', fields: FILE_FIELDS })}`,
@@ -193,7 +223,7 @@ export class GoogleDriveAdapter implements StorageAdapter {
       return this.resumable('PATCH', path, id, {}, mimeType, content, options);
     }
     options.onProgress?.(0, content.size);
-    const result = toStoredFile(
+    const result = this.stored(
       await this.json({
         method: 'PATCH',
         url: `${path}?${query({ uploadType: 'media', fields: FILE_FIELDS })}`,
@@ -213,12 +243,12 @@ export class GoogleDriveAdapter implements StorageAdapter {
   async move(id: FileId, newParentId: FileId): Promise<StoredFile> {
     const current = await this.json({ method: 'GET', url: this.url(`/files/${encodeURIComponent(id)}`, { fields: 'parents' }) });
     const parents = isRecord(current) && Array.isArray(current.parents) ? current.parents.filter(isString) : [];
-    return toStoredFile(
+    return this.stored(
       await this.json({
         method: 'PATCH',
         url: this.url(`/files/${encodeURIComponent(id)}`, {
           addParents: newParentId,
-          removeParents: parents.filter((parent) => parent !== newParentId).join(','),
+          removeParents: parents.filter((parent) => parent !== newParentId && this.parentIdOf(parent) !== newParentId).join(','),
           fields: FILE_FIELDS,
         }),
         headers: { 'Content-Type': 'application/json; charset=UTF-8' },
@@ -228,8 +258,9 @@ export class GoogleDriveAdapter implements StorageAdapter {
   }
 
   async getFile(id: FileId): Promise<StoredFile | null> {
+    if (id === MY_DRIVE) return MY_DRIVE_FOLDER;
     try {
-      return toStoredFile(await this.json({ method: 'GET', url: this.url(`/files/${encodeURIComponent(id)}`, { fields: FILE_FIELDS }) }));
+      return this.stored(await this.json({ method: 'GET', url: this.url(`/files/${encodeURIComponent(id)}`, { fields: FILE_FIELDS }) }));
     } catch (error) {
       if (isStorageError(error) && error.code === 'not-found') return null;
       throw error;
@@ -310,7 +341,7 @@ export class GoogleDriveAdapter implements StorageAdapter {
     for (const raw of body.changes) {
       if (!isRecord(raw) || !isString(raw.fileId)) continue;
       if (raw.removed === true || !isRecord(raw.file)) changes.push({ fileId: raw.fileId, file: null });
-      else changes.push({ fileId: raw.fileId, file: toStoredFile(raw.file) });
+      else changes.push({ fileId: raw.fileId, file: this.stored(raw.file) });
     }
     const next = isString(body.nextPageToken) ? body.nextPageToken : null;
     const fresh = isString(body.newStartPageToken) ? body.newStartPageToken : null;
@@ -379,13 +410,34 @@ export class GoogleDriveAdapter implements StorageAdapter {
     return `${this.api}${path}?${query(params)}`;
   }
 
+  /** A file resource as a StoredFile, with My Drive as a parent named the way `getRoot` names it. */
+  private stored(raw: unknown): StoredFile {
+    const file = toStoredFile(raw);
+    return file.parentId === null ? file : { ...file, parentId: this.parentIdOf(file.parentId) };
+  }
+
+  private parentIdOf(driveId: string): FileId {
+    return driveId === this.myDriveId ? MY_DRIVE : driveId;
+  }
+
+  /**
+   * A file this adapter has just created in `parentId`. One created in My
+   * Drive is how the adapter learns My Drive's real ID, which Drive gives
+   * as the parent of everything there.
+   */
+  private createdIn(parentId: FileId, file: StoredFile): StoredFile {
+    if (parentId !== MY_DRIVE || file.parentId === null || file.parentId === MY_DRIVE) return file;
+    this.myDriveId = file.parentId;
+    return { ...file, parentId: MY_DRIVE };
+  }
+
   private patchMetadata(id: FileId, metadata: Record<string, unknown>): Promise<StoredFile> {
     return this.json({
       method: 'PATCH',
       url: this.url(`/files/${encodeURIComponent(id)}`, { fields: FILE_FIELDS }),
       headers: { 'Content-Type': 'application/json; charset=UTF-8' },
       body: JSON.stringify(metadata),
-    }).then(toStoredFile);
+    }).then((raw) => this.stored(raw));
   }
 
   private async listAll(q: string): Promise<StoredFile[]> {
@@ -396,7 +448,7 @@ export class GoogleDriveAdapter implements StorageAdapter {
       if (pageToken !== null) params.pageToken = pageToken;
       const body = await this.json({ method: 'GET', url: this.url('/files', params) });
       if (!isRecord(body) || !Array.isArray(body.files)) throw unexpected('files.list');
-      for (const raw of body.files) files.push(toStoredFile(raw));
+      for (const raw of body.files) files.push(this.stored(raw));
       pageToken = isString(body.nextPageToken) ? body.nextPageToken : null;
     } while (pageToken !== null);
     return files;
@@ -481,7 +533,7 @@ export class GoogleDriveAdapter implements StorageAdapter {
     let file: StoredFile;
     if (status.status !== 308) {
       await this.sessions.delete(key);
-      file = toStoredFile(await this.readBody(status, options.signal, (r) => r.json()));
+      file = this.stored(await this.readBody(status, options.signal, (r) => r.json()));
     } else {
       file = await this.sendChunks(saved.sessionUri, target, content, options, receivedBytes(status.headers.get('Range')));
     }
@@ -574,7 +626,7 @@ export class GoogleDriveAdapter implements StorageAdapter {
         options.onProgress?.(offset, total);
         continue;
       }
-      const file = toStoredFile(await this.readBody(response, signal, (r) => r.json()));
+      const file = this.stored(await this.readBody(response, signal, (r) => r.json()));
       if (this.sessions && options.resumeKey !== undefined) await this.sessions.delete(options.resumeKey);
       options.onProgress?.(total, total);
       return file;
@@ -798,6 +850,11 @@ function errorCode(status: number, reason: string): StorageErrorCode {
   if (status >= 500) return 'unknown';
   if (status >= 400) return 'invalid';
   return 'unknown';
+}
+
+/** `parents` for a new file. One for My Drive names none: that is where Drive puts a file without any. */
+function parentsOf(parentId: FileId): { parents?: string[] } {
+  return parentId === MY_DRIVE ? {} : { parents: [parentId] };
 }
 
 function toStoredFile(raw: unknown): StoredFile {

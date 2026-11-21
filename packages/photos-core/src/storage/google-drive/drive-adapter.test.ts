@@ -3,7 +3,7 @@ import { StaticTokenSource } from '../../auth/static-token-source';
 import { runAdapterContract } from '../adapter-contract';
 import { sha256Hex } from '../content-hash';
 import type { NewFile, StorageAdapter } from '../types';
-import { escapeQueryString, GoogleDriveAdapter, type GoogleDriveAdapterOptions } from './drive-adapter';
+import { escapeQueryString, GoogleDriveAdapter, MY_DRIVE, type GoogleDriveAdapterOptions } from './drive-adapter';
 import { createFakeDrive, type FakeDrive, type FakeDriveOptions } from './fake-drive';
 import { MemoryUploadSessionStore } from './upload-sessions';
 
@@ -53,13 +53,55 @@ runAdapterContract('GoogleDriveAdapter (fake Drive, small pages, resumable uploa
 
 describe('GoogleDriveAdapter', () => {
   it('maps the Drive root and files', async () => {
-    const { adapter, drive } = setup();
+    const { adapter } = setup();
     const root = await adapter.getRoot();
     expect(adapter.kind).toBe('google-drive');
-    expect(root).toMatchObject({ id: drive.rootId, parentId: null, isFolder: true, name: 'My Drive' });
+    expect(root).toMatchObject({ id: MY_DRIVE, parentId: null, isFolder: true, name: 'My Drive' });
     const folder = await adapter.createFolder(root.id, 'Photonamous', { 'lp.role': 'library' });
     expect(folder.revision).not.toBe('');
     expect(folder.sha256).toBeNull();
+  });
+
+  // The drive.file scope: My Drive is not a file the app may read, so `files.get` on it answers 404.
+  it('creates and lists in My Drive without reading My Drive itself', async () => {
+    const posted: string[] = [];
+    const { adapter, drive } = setup({}, {
+      fetch: async (input, init) => {
+        const request = new Request(input, init);
+        if (request.method === 'POST') posted.push(await request.clone().text());
+        return drive.fetch(request);
+      },
+    });
+    const root = await adapter.getRoot();
+    expect(drive.requests).toHaveLength(0);
+    await expect(drive.fetch(`https://www.googleapis.com/drive/v3/files/root?fields=id`, { headers: { Authorization: 'Bearer test-token' } })).resolves.toMatchObject({ status: 404 });
+
+    const folder = await adapter.createFolder(root.id, 'Photonamous');
+    const file = await adapter.createFile({ parentId: root.id, name: 'a.txt', mimeType: 'text/plain' }, new Blob(['a']));
+    // Naming no parent is how Drive is told "My Drive".
+    expect(posted).toHaveLength(2);
+    for (const body of posted) expect(body).not.toContain('"parents"');
+    // The first request is this test's own read of My Drive, above.
+    const sent = drive.requests.slice(1).map((request) => request.url.pathname);
+    expect(sent.filter((path) => path.endsWith(`/files/${drive.rootId}`) || path.endsWith('/files/root'))).toEqual([]);
+
+    expect(folder.parentId).toBe(root.id);
+    expect(file.parentId).toBe(root.id);
+    expect((await adapter.listChildren(root.id)).map((child) => [child.name, child.parentId]).sort()).toEqual([
+      ['Photonamous', root.id],
+      ['a.txt', root.id],
+    ]);
+    expect((await adapter.getFile(folder.id))?.parentId).toBe(root.id);
+    expect(await adapter.getFile(root.id)).toEqual(root);
+
+    // Into a folder and back: My Drive goes to Drive as its alias, and is never both added and removed.
+    const inside = await adapter.move(file.id, folder.id);
+    expect(inside.parentId).toBe(folder.id);
+    const back = await adapter.move(file.id, root.id);
+    expect(back.parentId).toBe(root.id);
+    const last = drive.requests[drive.requests.length - 1];
+    expect(last?.url.searchParams.get('addParents')).toBe(MY_DRIVE);
+    expect(last?.url.searchParams.get('removeParents')).toBe(folder.id);
   });
 
   it('names fields on every request', async () => {
@@ -116,16 +158,16 @@ describe('GoogleDriveAdapter', () => {
   it('refreshes the token once on a 401', async () => {
     const tokens = new StaticTokenSource(['old', 'new']);
     const { adapter, drive } = setup({ tokens: ['old', 'new'] }, { tokenSource: tokens });
-    await adapter.getRoot();
+    await adapter.getChangeCursor();
     drive.revokeToken('old');
-    await adapter.getRoot();
+    await adapter.getChangeCursor();
     expect(tokens.invalidations).toBe(1);
     expect(drive.requests[drive.requests.length - 1]?.headers.get('Authorization')).toBe('Bearer new');
   });
 
   it('reports auth when the refreshed token is refused too', async () => {
     const { adapter, tokens } = setup({ tokens: ['someone-else'] });
-    await expect(adapter.getRoot()).rejects.toMatchObject({ code: 'auth', retryable: false, status: 401 });
+    await expect(adapter.getChangeCursor()).rejects.toMatchObject({ code: 'auth', retryable: false, status: 401 });
     expect(tokens.invalidations).toBe(2);
   });
 
@@ -133,7 +175,7 @@ describe('GoogleDriveAdapter', () => {
     const { adapter, drive, sleeps } = setup();
     drive.failNext({ type: 'status', status: 429, retryAfterSeconds: 7 });
     drive.failNext({ type: 'status', status: 429 });
-    await adapter.getRoot();
+    await adapter.getChangeCursor();
     expect(sleeps).toEqual([7000, 2500]);
   });
 
@@ -143,22 +185,21 @@ describe('GoogleDriveAdapter', () => {
     drive.failNext({ type: 'status', status: 403, reason: 'rateLimitExceeded' });
     drive.failNext({ type: 'status', status: 500 });
     drive.failNext({ type: 'network' });
-    const root = await adapter.getRoot();
-    expect(root.isFolder).toBe(true);
+    expect(await adapter.getChangeCursor()).not.toBe('');
     expect(sleeps).toEqual([1500, 2500, 4500, 8500]);
   });
 
   it('gives up after five attempts', async () => {
     const { adapter, drive } = setup();
     for (let i = 0; i < 6; i++) drive.failNext({ type: 'status', status: 429 });
-    await expect(adapter.getRoot()).rejects.toMatchObject({ code: 'rate-limited', retryable: true });
+    await expect(adapter.getChangeCursor()).rejects.toMatchObject({ code: 'rate-limited', retryable: true });
     expect(drive.requests).toHaveLength(5);
   });
 
   it('does not retry other 403s', async () => {
     const { adapter, drive } = setup();
     drive.failNext({ type: 'status', status: 403, reason: 'forbidden' });
-    await expect(adapter.getRoot()).rejects.toMatchObject({ code: 'invalid', retryable: false, status: 403 });
+    await expect(adapter.getChangeCursor()).rejects.toMatchObject({ code: 'invalid', retryable: false, status: 403 });
     expect(drive.requests).toHaveLength(1);
   });
 

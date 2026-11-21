@@ -310,7 +310,27 @@ https://github.com/theseamusjames/sample-raf-images).
 ## 6. What needs a real Google account to verify
 
 The code is tested against a fake Drive and a stub of Google sign-in.
-These need a real account, in a real browser, before Phase 1
+
+**Checked with a real account (2026-11-21, Brave, `http://localhost:5174`,
+consent screen in Testing):**
+
+- Sign-in with the four scopes, and the library created as `Photonamous/`
+  in My Drive.
+- `files.get` on `root` answers 404 ("File not found: <My Drive's ID>")
+  under `drive.file`: My Drive is not a file the app may read. The adapter
+  no longer asks for it. It creates in My Drive by naming no parent, and
+  the fake Drive now answers the same 404.
+- The storage quota, a 203 KB import (multipart upload) and a 9.0 MB one.
+  The second goes up resumably in two chunks, so the upload's `Location`
+  and the 308's `Range` are readable under CORS (part of S1).
+- After a reload, **Continue as …** reopened the library with both photos
+  and no consent screen.
+
+Not exercised that day: an upload resuming after a reload, the token
+refresh near expiry, the Picker, sharing, a RAW file, and the production
+CSP.
+
+These still need a real account, in a real browser, before Phase 1
 (spec 12, spikes S1 to S3; Appendix A):
 
 - **S1, uploads and CSP.** That the browser can read the resumable upload's
