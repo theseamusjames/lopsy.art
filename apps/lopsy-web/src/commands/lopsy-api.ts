@@ -4,8 +4,8 @@ import {
   describeThrown,
   type CommandErrorCode,
   type CommandSurface,
-} from '../commands/command';
-import type { CommandDescription, RunOptions } from '../commands/registry';
+} from './command';
+import type { CommandDescription, RunOptions } from './registry';
 
 /**
  * The codes `lopsy.run` can answer with: a command's own (it refused), or
@@ -34,7 +34,7 @@ export type LopsyOutcome =
   | { readonly ok: true; readonly results: unknown[] }
   | { readonly ok: false; readonly error: LopsyError };
 
-/** `window.lopsy` on the agent page. */
+/** `window.lopsy`: the command API that agents call. */
 export interface LopsyApi {
   /** The document commands: id, summary and params of each, as JSON. */
   describe(): CommandDescription[];
@@ -58,6 +58,13 @@ export interface LopsyApiSource {
 export interface LopsyEnvironment {
   /** The check the page uses to show its WebGL2 warning: without WebGL2 no engine ever starts. */
   hasWebGL2(): boolean;
+}
+
+declare global {
+  interface Window {
+    /** The command API, set by the page entries in every build, production included. */
+    lopsy?: LopsyApi;
+  }
 }
 
 const SURFACE = 'document' satisfies CommandSurface;

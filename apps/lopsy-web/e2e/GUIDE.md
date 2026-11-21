@@ -190,6 +190,11 @@ steps before UI steps where the order does not matter, so they run on
 both pages. The production build is checked by `npm run test:e2e:preview`
 (`e2e/agent-preview.spec.ts`).
 
+A spec outside `e2e/api/` may call the public `window.lopsy` when what it
+tests is that API on a page (`skill-recipes.spec.ts`,
+`lopsy-api-editor.spec.ts`, with `e2e/lopsy-api-helpers.ts`); everything a
+person does in it still goes through the UI.
+
 ### Characterization specs (`e2e/surface-*.spec.ts`)
 
 These are UI specs that pin what each menu item, key handler and

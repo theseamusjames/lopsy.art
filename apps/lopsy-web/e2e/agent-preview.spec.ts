@@ -2,8 +2,8 @@
  * Smoke test of the production build (the `preview` project, LOPSY_PREVIEW=1,
  * `npm run test:e2e:preview`): every other spec runs on the dev server, where
  * the dev hooks exist and the pages are not built. Here the agent page loads
- * from dist/agent/index.html, `window.lopsy` is its only API, and the editor
- * at `/` has none.
+ * from dist/agent/index.html with `window.lopsy` as its only API, and the
+ * editor at `/` offers the same `window.lopsy`.
  */
 import { test, expect, type Page } from './fixtures';
 
@@ -68,9 +68,28 @@ test('/agent redirects to the built page', async ({ page }) => {
   await page.waitForFunction(() => !!(window as unknown as PreviewWindow).lopsy);
 });
 
-test('the built editor at / has no window.lopsy and no dev hooks', async ({ page }) => {
+test('the built editor at / offers window.lopsy and no dev hooks, and a document made through it opens the editor', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('dialog', { name: 'New Document' })).toBeVisible();
-  expect(await page.evaluate(() => 'lopsy' in window)).toBe(false);
+  await page.waitForFunction(() => !!(window as unknown as PreviewWindow).lopsy);
   expect(await devHooksPresent(page)).toEqual([]);
+
+  const ids = await page.evaluate(() => (window as unknown as PreviewWindow).lopsy!.describe().map((d) => d.id));
+  expect(ids).toContain('doc.new');
+  expect(ids.some((id) => id.startsWith('ui.'))).toBe(false);
+
+  const outcome = await page.evaluate(() =>
+    (window as unknown as PreviewWindow).lopsy!.run([
+      { op: 'doc.new', width: 64, height: 48 },
+      { op: 'layer.add' },
+      { op: 'doc.info' },
+    ]),
+  );
+  if (!outcome.ok) throw new Error(`the calls failed: ${outcome.error.code}: ${outcome.error.message}`);
+  if (!('results' in outcome)) throw new Error('expected a list of results');
+  const info = outcome.results.at(-1) as { history: { undo: string[] } };
+  expect(info.history.undo).toEqual(['New Document', 'Add Layer']);
+  await expect(page.getByRole('dialog', { name: 'New Document' })).toHaveCount(0);
+  await expect(page.locator('nav[aria-label="Application menu"]')).toBeVisible();
+  await expect(page.locator('[data-layer-id]').filter({ hasText: 'Layer 2' })).toBeVisible();
 });

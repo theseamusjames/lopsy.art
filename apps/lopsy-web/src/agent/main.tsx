@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AgentApp } from './AgentApp';
-import { createLopsyApi, type LopsyApi } from './lopsy-api';
+import { createLopsyApi } from '../commands/lopsy-api';
 import { dropNotifications } from './drop-notifications';
 import { checkWebGL2Support } from '../components/WebGL2Warning/WebGL2Warning';
 import { describeCommands, runInvocation, runInvocations } from '../commands';
@@ -11,13 +11,6 @@ import { installDevHooks } from '../dev-hooks';
 import '../styles/fonts.css';
 import '../styles/tokens.css';
 import '../styles/reset.css';
-
-declare global {
-  interface Window {
-    /** The command API, on the agent page only, in every build. */
-    lopsy?: LopsyApi;
-  }
-}
 
 // The same test hooks as the editor (dev builds only), so the API specs run on both pages.
 installDevHooks();

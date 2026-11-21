@@ -9,38 +9,17 @@
  */
 import { test, expect, type Page } from './fixtures';
 import { serveFontsOffline } from './font-fixtures';
+import {
+  expectDocumentCommandsOnly,
+  lopsy,
+  lopsyResult,
+  waitForLopsy,
+  type Description,
+  type Invocation,
+  type LopsyWindow,
+} from './lopsy-api-helpers';
 
-interface Invocation {
-  readonly op: string;
-  readonly [param: string]: unknown;
-}
-
-interface LopsyError {
-  name: string;
-  code: string;
-  message: string;
-  result?: unknown;
-  completed?: unknown[];
-  index?: number;
-}
-
-type Outcome =
-  | { ok: true; result: unknown }
-  | { ok: true; results: unknown[] }
-  | { ok: false; error: LopsyError };
-
-interface Description {
-  id: string;
-  summary: string;
-  surface: string;
-  params: Record<string, unknown>;
-}
-
-interface AgentWindow {
-  lopsy?: {
-    describe: () => Description[];
-    run: (invocation: unknown) => Promise<Outcome>;
-  };
+interface AgentWindow extends LopsyWindow {
   __lopsyCommands?: {
     describe: (surface?: string) => Description[];
     run: (invocation: unknown) => Promise<unknown>;
@@ -62,19 +41,7 @@ const EDITOR_UI = [
 
 async function openAgentPage(page: Page): Promise<void> {
   await page.goto('/agent/');
-  await page.waitForFunction(() => !!(window as unknown as AgentWindow).lopsy);
-}
-
-async function lopsy(page: Page, invocation: Invocation | readonly Invocation[]): Promise<Outcome> {
-  return page.evaluate((payload) => (window as unknown as AgentWindow).lopsy!.run(payload), invocation as unknown);
-}
-
-/** Runs through window.lopsy and returns the result, failing the test on an error outcome. */
-async function lopsyResult<T>(page: Page, invocation: Invocation): Promise<T> {
-  const outcome = await lopsy(page, invocation);
-  if (!outcome.ok) throw new Error(`${invocation.op} failed: ${outcome.error.code}: ${outcome.error.message}`);
-  if (!('result' in outcome)) throw new Error('expected a single result');
-  return outcome.result as T;
+  await waitForLopsy(page);
 }
 
 async function expectNoEditorUi(page: Page): Promise<void> {
@@ -141,9 +108,8 @@ test.describe('agent page', () => {
         ui: w.__lopsyCommands!.describe('ui').map((d) => d.id),
       };
     });
-    expect(agent.length).toBeGreaterThan(100);
+    expectDocumentCommandsOnly(agent);
     expect(agent).toEqual(registry);
-    expect(agent.every((d) => d.surface === 'document')).toBe(true);
     expect(ui.length).toBeGreaterThan(0);
     expect(agent.map((d) => d.id)).not.toContain(ui[0]);
   });

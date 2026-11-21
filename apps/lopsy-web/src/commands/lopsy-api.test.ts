@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CommandError, SettleTimeoutError } from '../commands/command';
-import { createRegistry } from '../commands/registry';
+import { CommandError, SettleTimeoutError } from './command';
+import { createRegistry } from './registry';
 import { LOPSY_ERROR_CODES, NO_WEBGL2_MESSAGE, createLopsyApi } from './lopsy-api';
 
 afterEach(() => {

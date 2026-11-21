@@ -50,9 +50,10 @@ src/
       gesture-session.ts  # Canvas pointer down/move/up state machine, shared by
                           # the canvas hook and the gesture commands
   agent/            # The agent page (agent/index.html, served at /agent/):
-                    # the canvas alone, with the command API as window.lopsy
+                    # the canvas alone, driven through window.lopsy
   commands/         # Command registry and the commands, one directory per
-                    # family (layer/, filter/, ui/, ...); see Commands below
+                    # family (layer/, filter/, ui/, ...); see Commands below.
+                    # lopsy-api.ts is window.lopsy, set by both pages' entries
   components/       # Reusable UI components (Button, Slider, etc.)
     ComponentName/
       ComponentName.tsx

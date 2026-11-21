@@ -4,11 +4,24 @@ import { App } from './app/App';
 import { initWasm } from './engine-wasm/wasm-bridge';
 import { prefetchFontPreviewsBlob } from './utils/font-loader';
 import { installDevHooks } from './dev-hooks';
+import { checkWebGL2Support } from './components/WebGL2Warning/WebGL2Warning';
+import { describeCommands, runInvocation, runInvocations } from './commands';
+import { createLopsyApi } from './commands/lopsy-api';
 import './styles/fonts.css';
 import './styles/tokens.css';
 import './styles/reset.css';
 
 installDevHooks();
+
+// One answer for the page and the API: without WebGL2 the editor shows its warning, no engine ever
+// starts, and every call is answered 'unavailable' at once instead of waiting for one.
+const hasWebGL2 = checkWebGL2Support();
+
+// The command API agents call, in every build: the document commands only, as on the agent page.
+window.lopsy = createLopsyApi(
+  { describe: describeCommands, runInvocation, runAll: runInvocations },
+  { hasWebGL2: () => hasWebGL2 },
+);
 
 // Prevent browser zoom so Ctrl+wheel and pinch gestures only affect the canvas.
 // Register at window + capture phase so nothing can stop propagation first.
@@ -43,6 +56,6 @@ if (!root) {
 
 createRoot(root).render(
   <StrictMode>
-    <App />
+    <App hasWebGL2={hasWebGL2} />
   </StrictMode>,
 );
