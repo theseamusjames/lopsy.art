@@ -1,16 +1,16 @@
 # Lopsy
 
-> Lopsy is a free, open-source image editor that runs entirely in the browser at https://lopsy.art: layers, masks, blend modes, layer effects, gradients, brushes, text with Google Fonts, filters, and PNG/JPEG/PSD export. It has no backend: images are made in the browser tab. Agents make images on its agent page, https://lopsy.art/agent/, which shows the canvas alone and runs every editing operation as a named command through `window.lopsy`, from any browser where you can run JavaScript in the page.
+> Lopsy is a free, open-source image editor that runs entirely in the browser at https://lopsy.art: layers, masks, blend modes, layer effects, gradients, brushes, text with Google Fonts, filters, and PNG/JPEG/PSD export. It has no backend: images are made in the browser tab. Agents make images on the editor page itself, https://lopsy.art/, which runs every editing operation as a named command through `window.lopsy`, from any browser where you can run JavaScript in the page; a person can work in the same document at the same time.
 
-To make an image with Lopsy, read SKILL.md first. It covers reaching the agent page from any browser, the command API's contract, step-by-step recipes and the behaviours to know. Use FEATURES.md to look up exactly what each tool, filter and effect does.
+To make an image with Lopsy, read SKILL.md first. It covers reaching the editor's command API from any browser, working alongside a person, the API's contract, step-by-step recipes and the behaviours to know. Use FEATURES.md to look up exactly what each tool, filter and effect does.
 
 The source is on GitHub at https://github.com/theseamusjames/lopsy.art, and we accept pull requests written by AI agents. AGENTS.md explains how to make one we can merge.
 
 ## For agents
 
-- [SKILL.md](https://lopsy.art/SKILL.md): how to create images with Lopsy programmatically, through the agent page's command API. Covers setup in any browser, getting image files out and in, the API's contract, tested recipes, what the API does not offer, and an optional ready-made driver.
+- [SKILL.md](https://lopsy.art/SKILL.md): how to create images with Lopsy programmatically, through the editor page's command API, `window.lopsy`. Covers setup in any browser, working alongside a person, getting image files out and in, the API's contract, tested recipes, what the API does not offer, and an optional ready-made driver.
 - [FEATURES.md](https://lopsy.art/FEATURES.md): the exhaustive feature catalog, with every tool, option range and behaviour.
-- [Agent page](https://lopsy.art/agent/): the canvas alone, driven through `window.lopsy` (`lopsy.describe()` lists every command).
+- [Editor](https://lopsy.art/): the page with `window.lopsy` (`lopsy.describe()` lists every command).
 
 ## Contributing
 

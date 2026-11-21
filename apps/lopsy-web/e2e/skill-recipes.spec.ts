@@ -1,12 +1,13 @@
 /**
- * SKILL.md, the public guide to making images through the agent page's
- * command API, must not drift from the code. This spec reads it from disk and:
+ * SKILL.md, the public guide to making images through the editor page's
+ * command API (window.lopsy on `/`), must not drift from the code. This spec
+ * reads it from disk and:
  *
  * - runs every recipe (a ```json block after `<!-- recipe: name -->`) through
- *   window.lopsy on a fresh agent page, and checks the complete composition's
+ *   window.lopsy on a fresh editor page, and checks the complete composition's
  *   export;
  * - evaluates every snippet (a ```js block after `<!-- snippet: name -->`) in
- *   a fresh agent page, as an agent's browser tool would, and checks it does
+ *   a fresh editor page, as an agent's browser tool would, and checks it does
  *   what the guide says;
  * - checks that every command id the guide names is one lopsy.describe() lists,
  *   and that the driver's HTTP transport is named only in its appendix;
@@ -99,8 +100,8 @@ function resolveFiles(value: unknown, photoBase64: string): unknown {
   return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, resolveFiles(v, photoBase64)]));
 }
 
-async function openAgentPage(page: Page): Promise<void> {
-  await page.goto('/agent/');
+async function openEditor(page: Page): Promise<void> {
+  await page.goto('/');
   await page.waitForFunction(() => !!(window as unknown as Partial<AgentWindow>).lopsy);
 }
 
@@ -135,7 +136,7 @@ async function startDriver(baseURL: string, testInfo: TestInfo): Promise<Started
   const driverPath = join(dir, name);
   writeFileSync(driverPath, source);
   const port = await freePort();
-  const driver = spawnDriver(driverPath, dir, { LOPSY_URL: `${baseURL}/agent/`, DRIVER_PORT: String(port), OUT_DIR: outDir });
+  const driver = spawnDriver(driverPath, dir, { LOPSY_URL: `${baseURL}/`, DRIVER_PORT: String(port), OUT_DIR: outDir });
   return { driver, dir, outDir, port };
 }
 
@@ -157,7 +158,7 @@ function pngSize(bytes: Buffer): { width: number; height: number } {
 
 test.describe('SKILL.md', () => {
   test.beforeEach(({ browserName, isMobile }) => {
-    test.skip(browserName !== 'chromium' || isMobile, 'the guide says the agent page is tested in desktop Chromium');
+    test.skip(browserName !== 'chromium' || isMobile, 'the guide says the editor is tested in desktop Chromium');
   });
 
   test('has its recipes and its composition', () => {
@@ -175,7 +176,7 @@ test.describe('SKILL.md', () => {
       test(`${recipe.name} runs as written on a fresh page`, async ({ page }) => {
         test.setTimeout(120_000);
         await serveFontsOffline(page);
-        await openAgentPage(page);
+        await openEditor(page);
         const invocations = resolveFiles(recipe.invocations, readFileSync(PHOTO_FIXTURE).toString('base64'));
         const outcome = await page.evaluate((list) => (window as unknown as AgentWindow).lopsy.run(list), invocations);
         if (!outcome.ok) throw new Error(`${recipe.name} failed at [${outcome.error.index}]: ${outcome.error.code}: ${outcome.error.message}`);
@@ -204,7 +205,7 @@ test.describe('SKILL.md', () => {
   });
 
   test('names only commands that exist', async ({ page }) => {
-    await openAgentPage(page);
+    await openEditor(page);
     const ids = await page.evaluate(() => (window as unknown as AgentWindow).lopsy.describe().map((c) => c.id));
     const families = new Set(ids.map((id) => id.split('.')[0]));
     // The driver's own code (path.join, ...) is JavaScript, not command ids.
@@ -239,34 +240,60 @@ test.describe('SKILL.md', () => {
     });
 
     test('the first call paints, and a screenshot of the page shows the document', async ({ page }) => {
-      await openAgentPage(page);
+      await openEditor(page);
       const outcome = (await page.evaluate(snippet('first-call'))) as Outcome;
       expect(outcome).toMatchObject({ ok: true, results: expect.any(Array) });
-      // An 800 × 600 white document with a 300 × 200 red rectangle, shown at 100% in a 1280 × 720 window.
-      const shot = await page.screenshot();
-      const counts = await page.evaluate(async (b64) => {
+      // An 800 × 600 white document with a 300 × 200 red rectangle, fitted into the editor's canvas
+      // area among the menus and panels. The whole window, as an agent's screenshot tool takes it.
+      const shot = await page.screenshot({ path: 'e2e/screenshots/skill-first-call.png' });
+      const found = await page.evaluate(async (b64) => {
         const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
         const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
         const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
         const ctx = canvas.getContext('2d')!;
         ctx.drawImage(bitmap, 0, 0);
-        const data = ctx.getImageData(0, 0, bitmap.width, bitmap.height).data;
+        const { width, height } = bitmap;
+        const data = ctx.getImageData(0, 0, width, height).data;
+        const rgb = (i: number) => [data[i]!, data[i + 1]!, data[i + 2]!] as const;
+        // The rectangle's colour on screen is not #e63946 exactly (the canvas is colour-managed):
+        // take the commonest strong red, which the Color panel's few red pixels cannot outnumber.
+        const reds = new Map<number, number>();
+        for (let i = 0; i < data.length; i += 4) {
+          const [r, g, b] = rgb(i);
+          if (r > 200 && g < 100 && b < 100) reds.set((r << 16) | (g << 8) | b, (reds.get((r << 16) | (g << 8) | b) ?? 0) + 1);
+        }
+        const mode = [...reds.entries()].sort((a, b) => b[1] - a[1])[0]![0];
+        const target = [mode >> 16, (mode >> 8) & 255, mode & 255];
+        const columns = new Array<number>(width).fill(0);
+        const rows = new Array<number>(height).fill(0);
         let red = 0;
         let white = 0;
         for (let i = 0; i < data.length; i += 4) {
-          const [r, g, b] = [data[i]!, data[i + 1]!, data[i + 2]!];
-          if (r > 200 && g < 100 && b < 100) red += 1;
+          const [r, g, b] = rgb(i);
+          if (Math.abs(r - target[0]!) <= 4 && Math.abs(g - target[1]!) <= 4 && Math.abs(b - target[2]!) <= 4) {
+            red += 1;
+            columns[(i / 4) % width]! += 1;
+            rows[Math.floor(i / 4 / width)]! += 1;
+          }
           if (r > 245 && g > 245 && b > 245) white += 1;
         }
-        return { red, white };
+        // Columns and rows the rectangle crosses: each holds a whole side of it.
+        const redWidth = columns.filter((n) => n > 50).length;
+        const redHeight = rows.filter((n) => n > 50).length;
+        return { red, white, redWidth, redHeight };
       }, shot.toString('base64'));
-      expect(counts.red).toBeGreaterThan(300 * 200 * 0.95);
-      expect(counts.red).toBeLessThan(300 * 200 * 1.05);
-      expect(counts.white).toBeGreaterThan((800 * 600 - 300 * 200) * 0.95);
+      // The rectangle is there, solid, at the document's scale (fitted, so 100% or less).
+      const zoom = found.redWidth / 300;
+      expect(zoom).toBeGreaterThan(0.5);
+      expect(zoom).toBeLessThanOrEqual(1.01);
+      expect(found.redHeight / 200).toBeCloseTo(zoom, 1);
+      expect(found.red).toBeGreaterThan(found.redWidth * found.redHeight * 0.97);
+      // And the white rest of the document around it, at the same scale.
+      expect(found.white).toBeGreaterThan((800 * 600 - 300 * 200) * zoom * zoom * 0.95);
     });
 
     test('the describe expressions return what the guide says', async ({ page }) => {
-      await openAgentPage(page);
+      await openEditor(page);
       const all = await page.evaluate(() => (window as unknown as AgentWindow).lopsy.describe().map((c) => c.id));
 
       const list = (await page.evaluate(snippet('describe-list'))) as string;
@@ -285,7 +312,7 @@ test.describe('SKILL.md', () => {
     });
 
     test('the download snippet downloads a PNG of the document and returns only its name and size', async ({ page }) => {
-      await openAgentPage(page);
+      await openEditor(page);
       await page.evaluate(() => (window as unknown as AgentWindow).lopsy.run([
         { op: 'doc.new', width: 320, height: 200 },
         { op: 'color.set', foreground: '#2a9d8f' },
@@ -306,7 +333,7 @@ test.describe('SKILL.md', () => {
         contentType: 'image/jpeg',
         headers: { 'access-control-allow-origin': '*' },
       }));
-      await openAgentPage(page);
+      await openEditor(page);
       await page.evaluate(() => (window as unknown as AgentWindow).lopsy.run({ op: 'doc.new', width: 400, height: 300 }));
       const source = snippet('fetch-image');
       expect(source).toContain(`('${SNIPPET_IMAGE_URL}')`);
@@ -321,7 +348,7 @@ test.describe('SKILL.md', () => {
     });
 
     test('the renderer expression names the WebGL renderer', async ({ page }) => {
-      await openAgentPage(page);
+      await openEditor(page);
       const renderer = await page.evaluate(snippet('renderer'));
       expect(typeof renderer).toBe('string');
       expect(renderer).not.toBe('no WebGL2');

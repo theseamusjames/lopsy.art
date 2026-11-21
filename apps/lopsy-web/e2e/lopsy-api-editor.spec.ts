@@ -21,6 +21,7 @@ interface DocumentInfo {
   layers: Array<{ id: string; name: string; type: string; locked: boolean; isActive: boolean }>;
   selection: { active: boolean; bounds: { x: number; y: number; width: number; height: number } | null };
   history: { undo: string[]; redo: string[] };
+  foregroundColor: string;
   activeTool: string;
 }
 
@@ -100,6 +101,38 @@ async function openHistoryPanel(page: Page) {
 
 /** One Dismiss button per toast showing. */
 const toasts = (page: Page) => page.locator('[role="status"] button[aria-label="Dismiss"]');
+
+/** The person types a foreground colour into the Color panel's hex field. */
+async function pickForeground(page: Page, hex: string): Promise<void> {
+  const field = page.locator('[aria-label="Hex color value"]');
+  if (!(await field.isVisible())) await page.locator('button[aria-label="Color panel"]').click();
+  await field.fill(hex.replace('#', ''));
+  await field.press('Enter');
+}
+
+/** The person's brush stroke across the document, with the Brush tool's key. */
+async function personStroke(page: Page): Promise<void> {
+  await page.keyboard.press('b');
+  await drag(page, { x: 60, y: 200 }, { x: 300, y: 200 });
+}
+
+/** A red 60 px square on a new layer, selected, which the person scales from its corner with the Move tool. */
+async function personPendingScale(page: Page): Promise<DocumentInfo> {
+  await lopsyResult(page, { op: 'layer.add' });
+  await lopsy(page, [
+    { op: 'color.set', foreground: '#ff0000' },
+    { op: 'select.rect', x: 100, y: 100, width: 60, height: 60 },
+    { op: 'paint.fill' },
+  ]);
+  await page.keyboard.press('v');
+  await drag(page, { x: 160, y: 160 }, { x: 190, y: 190 });
+  const pending = await docInfo(page);
+  expect(pending.history.undo.at(-1)).toBe('Transform');
+  // Pending: the selection is still the square's, and the scaled pixels show beyond it.
+  expect(pending.selection.bounds).toEqual({ x: 100, y: 100, width: 60, height: 60 });
+  expect(await sample(page, 185, 185)).toBe('#ff0000');
+  return pending;
+}
 
 test.describe('window.lopsy on the editor', () => {
   test('exists on the first-run screen, offers the document commands, and doc.new opens the editor', async ({ page }) => {
@@ -230,20 +263,7 @@ test.describe('window.lopsy on the editor', () => {
   test('while the person has a Move transform pending, layer.transform is refused and changes nothing', async ({ page }) => {
     await openEditor(page);
     await agentNewDocument(page);
-    await lopsyResult(page, { op: 'layer.add' });
-    await lopsy(page, [
-      { op: 'color.set', foreground: '#ff0000' },
-      { op: 'select.rect', x: 100, y: 100, width: 60, height: 60 },
-      { op: 'paint.fill' },
-    ]);
-
-    // The person scales the selected square from its bottom-right handle with the Move tool.
-    await page.keyboard.press('v');
-    await drag(page, { x: 160, y: 160 }, { x: 190, y: 190 });
-    const pending = await docInfo(page);
-    expect(pending.history.undo.at(-1)).toBe('Transform');
-    expect(pending.selection.active).toBe(true);
-    expect(await sample(page, 185, 185)).toBe('#ff0000');
+    const pending = await personPendingScale(page);
 
     const outcome = await lopsy(page, { op: 'layer.transform', rotate: 90 });
     expect(outcome).toMatchObject({ ok: false, error: { code: 'refused', message: expect.stringContaining('A marquee is active') } });
@@ -356,6 +376,120 @@ test.describe('window.lopsy on the editor', () => {
     expect((await docInfo(page)).history.undo).toEqual(['New Document', 'Brush', 'Add Layer', 'Brush', 'Brush']);
     expect(await sample(page, 175, 55)).toBe('#000000');
     expect(await sample(page, 175, 95)).toBe('#000000');
+  });
+
+  for (const op of ['paint.fill', 'paint.stroke'] as const) {
+    test(`${op} commits the person's pending Move transform and paints inside the transformed selection`, async ({ page }) => {
+      await openEditor(page);
+      await agentNewDocument(page);
+      await personPendingScale(page);
+
+      const paint = op === 'paint.fill'
+        ? { op }
+        : { op, points: [{ x: 150, y: 185 }, { x: 300, y: 185 }] };
+      expect(await lopsy(page, [{ op: 'color.set', foreground: '#0000ff' }, paint])).toMatchObject({ ok: true });
+
+      const info = await docInfo(page);
+      expect(info.history.undo).toEqual(['New Document', 'Add Layer', 'Fill', 'Transform', op === 'paint.fill' ? 'Fill' : 'Brush']);
+      // Committed: the selection now hugs the scaled square, about 90 px a side from (100, 100).
+      expect(info.selection.active).toBe(true);
+      expect(info.selection.bounds!.x).toBeGreaterThanOrEqual(98);
+      expect(info.selection.bounds!.width).toBeGreaterThan(85);
+      // The paint lands where only the scaled square reaches, and nowhere outside it.
+      expect(await sample(page, 185, 185)).toBe('#0000ff');
+      expect(await sample(page, 250, 185)).toBe('#ffffff');
+      expect(await sample(page, 50, 50)).toBe('#ffffff');
+      await page.screenshot({ path: `e2e/screenshots/lopsy-api-editor-pending-transform-${op.replace('.', '-')}.png` });
+    });
+  }
+
+  test('a foreground the person picks in the Color panel is the one the agent fills with', async ({ page }) => {
+    await openEditor(page);
+    await agentNewDocument(page);
+    await pickForeground(page, '#2a9d8f');
+
+    expect(await lopsy(page, [
+      { op: 'select.rect', x: 10, y: 10, width: 50, height: 50 },
+      { op: 'paint.fill' },
+      { op: 'select.none' },
+    ])).toMatchObject({ ok: true });
+    expect((await docInfo(page)).foregroundColor).toBe('#2a9d8f');
+    expect(await sample(page, 30, 30)).toBe('#2a9d8f');
+    expect(await sample(page, 100, 100)).toBe('#ffffff');
+    await page.screenshot({ path: 'e2e/screenshots/lopsy-api-editor-person-colour.png' });
+  });
+
+  test('doc.new and doc.open replace the person\'s unsaved document without asking', async ({ page }) => {
+    await openEditor(page);
+    await agentNewDocument(page);
+    const saved = await lopsyResult<{ base64: string }>(page, { op: 'doc.save' });
+    const dialogs: string[] = [];
+    page.on('dialog', (dialog) => {
+      dialogs.push(dialog.type());
+      void dialog.dismiss();
+    });
+
+    for (const replace of [{ op: 'doc.new', ...DOC }, { op: 'doc.open', base64: saved.base64, name: 'checkpoint.lopsy' }]) {
+      await personStroke(page);
+      expect(await sample(page, 180, 200), replace.op).toBe('#000000');
+      expect((await docInfo(page)).history.undo.at(-1), replace.op).toBe('Brush');
+
+      expect(await lopsy(page, replace), replace.op).toMatchObject({ ok: true });
+      expect(dialogs, replace.op).toEqual([]);
+      expect(await sample(page, 180, 200), replace.op).toBe('#ffffff');
+      await expect.poll(() => screenColor(page, 180, 200)).toEqual([255, 255, 255]);
+      // The person's undo key cannot bring the stroke back.
+      await page.keyboard.press('ControlOrMeta+z');
+      expect(await sample(page, 180, 200), replace.op).toBe('#ffffff');
+      expect((await docInfo(page)).history.undo, replace.op).not.toContain('Brush');
+    }
+  });
+
+  test('a read leaves the person\'s text editing open; an edit commits what they typed', async ({ page }) => {
+    await openEditor(page);
+    await agentNewDocument(page);
+    await page.keyboard.press('t');
+    const at = await docToScreen(page, 100, 100);
+    await page.mouse.click(at.x, at.y);
+    await page.keyboard.type('Hello');
+
+    const editing = await docInfo(page);
+    const text = editing.layers.find((l) => l.type === 'text')!;
+    expect(text.name).toBe('Text 1');
+    expect(editing.history.undo).toEqual(['New Document']);
+    await page.screenshot({ path: 'e2e/screenshots/lopsy-api-editor-person-typing.png' });
+
+    expect(await lopsy(page, { op: 'layer.add', name: 'Agent' })).toMatchObject({ ok: true });
+    const after = await docInfo(page);
+    expect(after.layers.find((l) => l.id === text.id)?.name).toBe('Hello');
+    expect(after.history.undo).toEqual(expect.arrayContaining(['Add Text Layer', 'Text', 'Add Layer', 'Rename Layer']));
+    expect(after.layers.find((l) => l.isActive)?.name).toBe('Agent');
+    await page.screenshot({ path: 'e2e/screenshots/lopsy-api-editor-typing-committed.png' });
+  });
+
+  test('a reload brings back the person\'s panel layout but no document, colour or tool option', async ({ page }) => {
+    await openEditor(page);
+    await agentNewDocument(page);
+    await openHistoryPanel(page);
+    await pickForeground(page, '#123456');
+    await lopsyResult(page, { op: 'tool.set', tool: 'brush', options: { size: 77 } });
+    expect((await docInfo(page)).foregroundColor).toBe('#123456');
+    // The document has unsaved changes, so the browser asks before the reload.
+    page.on('dialog', (dialog) => void dialog.accept());
+
+    await page.reload();
+    await waitForLopsy(page);
+    await expect(page.getByRole('dialog', { name: 'New Document' })).toBeVisible();
+    expect(await lopsy(page, { op: 'doc.info' })).toMatchObject({ ok: false, error: { code: 'unavailable' } });
+
+    await agentNewDocument(page);
+    await expect(page.locator('section[role="tabpanel"][aria-label="History"]')).toBeVisible();
+    const info = await docInfo(page);
+    expect(info.foregroundColor).toBe('#000000');
+    expect(info.activeTool).toBe('move');
+    expect(info.history.undo).toEqual(['New Document']);
+    const brush = await lopsyResult<{ tools: { brush: { size: { value: number } } } }>(page, { op: 'tool.describe', tool: 'brush' });
+    expect(brush.tools.brush.size.value).toBe(10);
   });
 
   test('without WebGL2 the editor shows its warning and every call is answered unavailable at once', async ({ page }) => {

@@ -4,36 +4,38 @@ description: >
   Make images with Lopsy (https://lopsy.art), a free, open-source image editor
   that runs entirely in the browser: layers, masks, blend modes, layer effects,
   gradients, brushes, shapes, text with Google Fonts, filters, adjustments and
-  PNG/JPEG/WebP export. Its agent page runs every editing operation as a named
-  command with checked parameters. Use this when you need to make a poster,
+  PNG/JPEG/WebP export. The editor page offers every editing operation as a
+  named command with checked parameters, through `window.lopsy`, and a person
+  can work in the same document. Use this when you need to make a poster,
   illustration, logo, cover, social image or any other raster artwork
   programmatically, from any browser you can run JavaScript in.
 ---
 
 # Making images with Lopsy
 
-Lopsy is an image editor that runs entirely in the browser. Its **agent page**,
-<https://lopsy.art/agent/>, shows the document canvas and nothing else: no
-menus, panels or tools to click. You make an image by calling commands on it,
-through `window.lopsy`, from any browser where you can run JavaScript in the
-page. There is no backend and no account: the image is made in that browser
-tab, and you take the files away with export and save commands.
+Lopsy is an image editor that runs entirely in the browser, at
+<https://lopsy.art/>. The editor page, the same one a person uses, has
+`window.lopsy`: you make an image by calling commands on it, from any browser
+where you can run JavaScript in the page, and a person can work in the same
+document beside you. There is no backend and no account: the image is made in
+that browser tab, and you take the files away with export and save commands.
 
 This file covers everything you need to do that reliably:
 
 1. [Setup](#setup): open the page, call `window.lopsy`, read the commands.
-2. [Getting image bytes out and in](#getting-image-bytes-out-and-in).
-3. [The loop](#the-loop): plan, build in stages, look, checkpoint, export.
-4. [The contract](#the-contract): invocations, results, errors, coordinates,
+2. [Working alongside a person](#working-alongside-a-person).
+3. [Getting image bytes out and in](#getting-image-bytes-out-and-in).
+4. [The loop](#the-loop): plan, build in stages, look, checkpoint, export.
+5. [The contract](#the-contract): invocations, results, errors, coordinates,
    layers, and the ambient state every painting command reads.
-5. [Command families](#command-families): what there is, and how to read the
+6. [Command families](#command-families): what there is, and how to read the
    full parameter list.
-6. [Recipes](#recipes): tested invocation lists for shapes, light, gradients,
+7. [Recipes](#recipes): tested invocation lists for shapes, light, gradients,
    brushes, type, effects, filters, masks, adjustments, transforms and a
    complete poster.
-7. [What the API does not offer](#what-the-api-does-not-offer).
-8. [Behaviours worth knowing](#behaviours-worth-knowing).
-9. [Appendix: a ready-made driver](#appendix-a-ready-made-driver).
+8. [What the API does not offer](#what-the-api-does-not-offer).
+9. [Behaviours worth knowing](#behaviours-worth-knowing).
+10. [Appendix: a ready-made driver](#appendix-a-ready-made-driver).
 
 Related resources:
 
@@ -51,23 +53,27 @@ Related resources:
 
 ## Setup
 
-Open <https://lopsy.art/agent/> in a browser where you can evaluate
-JavaScript in the page, wait until `window.lopsy` exists, and call it. How
-you get JavaScript into the page is up to you: an automation library
-(Playwright, Puppeteer, Selenium, the DevTools protocol) driving a headless
-or headed browser; a browser tool your agent harness gives you over a
-browser session, possibly the user's own browser (one tool runs JavaScript
-in the page, another takes screenshots); or a person pasting into the
-DevTools console. With a shell, Node and no browser tool, use the
-[ready-made driver](#appendix-a-ready-made-driver). Whichever you use:
+Open <https://lopsy.art/> in a browser where you can evaluate JavaScript in
+the page, wait until `window.lopsy` exists, and call it. The page opens on a
+New Document screen with `window.lopsy` already there; `doc.new` replaces
+that screen with the editor. How you get JavaScript into the page is up to
+you: an automation library (Playwright, Puppeteer, Selenium, the DevTools
+protocol) driving a headless or headed browser; a browser tool your agent
+harness gives you over a browser session, possibly the user's own browser
+(one tool runs JavaScript in the page, another takes screenshots); or a
+person pasting into the DevTools console. With a shell, Node and no browser
+tool, use the [ready-made driver](#appendix-a-ready-made-driver). Whichever
+you use:
 
 - **Keep one page open for the whole piece.** The document lives in that
-  tab; a reload or navigating away loses it. [Checkpoint](#the-loop) as you go.
+  tab; a reload or navigating away loses it (with unsaved changes the browser
+  asks first), and the next visit brings back the panel layout but no
+  document, colours or tool options. [Checkpoint](#the-loop) as you go.
 - **The browser needs WebGL2.** Desktop Chrome and Edge have it with
   hardware acceleration on. A headless Chromium on a machine with no GPU
   needs software WebGL (SwiftShader): start it with
   `--use-gl=angle --use-angle=swiftshader --enable-webgl --ignore-gpu-blocklist`.
-  Without WebGL2 the page shows a warning instead of the canvas, and every
+  Without WebGL2 the page shows a warning instead of the editor, and every
   `lopsy.run` answers at once with `unavailable` and a message that says so.
 - **The page is tested in Chromium**, the engine of Chrome and Edge. It
   needs nothing beyond WebGL2, so other browsers may work, but they are not
@@ -115,9 +121,39 @@ lopsy.describe().filter((c) => c.id.startsWith('filter.'))
 
 Browsers pause animation frames in background tabs, and the engine draws on
 animation frames. A headless page is always visible. In a headed browser,
-keep the agent page the front tab: in a background tab, commands wait and
+keep the editor the front tab: in a background tab, commands wait and
 then fail with `unavailable` or `unsettled`, and the message says *The page
 is a background tab … make it the visible tab*.
+
+## Working alongside a person
+
+The editor is the page a person uses, so someone may be working in it while
+you do. There is one document, one undo history and one set of tools:
+
+- **They see your work as you make it**: your layers in the Layers panel,
+  your steps in the History panel. They can undo your steps with the undo
+  key, and `history.undo` undoes theirs as it would yours.
+- **You see theirs**: `doc.info` reports their layers, history, active layer
+  and tool. Between two of your calls they may have painted, undone, switched
+  layers or tools, changed colours or selected something: call `doc.info`
+  before a stage that depends on the state.
+- **The ambient state is shared.** The tool, its options, the colours and
+  the selection are the ones their toolbox, options bar and Color panel set:
+  a foreground they pick in the Color panel is what your `paint.fill` uses.
+  Set what a stage relies on ([Ambient state](#ambient-state)).
+- **Don't replace their document.** `doc.new` and `doc.open` discard the open
+  document and its history without asking, unsaved or not (File > New asks
+  first when there is unsaved work). Call `doc.info` first, and make or open
+  a document over theirs only when that is what you were asked to do.
+- **Wait while they are mid-action.** Two states refuse every call with
+  `unavailable`. The refused step did not run: wait a moment and send it
+  again (in a batch, the invocations from `error.index` on).
+  - `The person has a dialog open with a live preview on the layer. Nothing was run. Send the call again once they apply or cancel it.`
+  - `A drag or scroll on the canvas is in progress. Nothing was run. Send the call again once it is released.`
+
+A refusal reaches you as the error only (a `clipboard.copy` refused on a
+group shows the person nothing). Their text being typed and a transform they
+have pending are under [Behaviours](#behaviours-worth-knowing).
 
 ## Getting image bytes out and in
 
@@ -130,15 +166,17 @@ decode each `base64` and write it to a file there. **With only a JavaScript
 tool and screenshots**, look with a screenshot and take files away as
 downloads.
 
-**Looking by screenshot.** The page shows the document alone on a dark grey
-background, fitted into the window with a margin when it is created or
-opened (never above 100%). A screenshot of the page is the quickest look,
-but it is not the image: transparency shows as a checkerboard, the
-selection's outline and the Move tool's handles are drawn over it, mask edit
-mode tints what the mask hides, a large document is scaled down, and the
-colours can differ from your hex values. `view.render` gives the image
-itself, at the size you ask for, with none of that; `view.sample` reads an
-exact colour.
+**Looking by screenshot.** A screenshot of the page is the whole editor:
+the menu bar, the toolbox, the options bar, the panels, and between them the
+canvas area with rulers along its top and left and the document fitted into
+it when it is created or opened (never above 100%; the person may zoom or
+pan it since). It is the quickest look at your work and at what the person
+sees, but it is not the image: transparency shows as a checkerboard, guides,
+the selection's outline and the Move tool's handles are drawn over it, mask
+edit mode tints what the mask hides, the document is usually scaled down,
+and the colours can differ from your hex values. `view.render` gives the
+image itself, at the size you ask for, with none of that; `view.sample`
+reads an exact colour.
 
 **Downloading a file.** This runs one invocation whose result carries a
 file (any of those above), has the browser download it to its downloads
@@ -259,7 +297,7 @@ the message starts with `[index] op:`.
 | `invalid` | The params are wrong. The message names the bad one and what it accepts (`select.rect: width must be a finite number from 1 to 49152, got -5`; `unknown param "w"; allowed: x, y, width, height, mode`). | Fix the params. |
 | `refused` | The editor will not do that in its current state. The message says why and usually what to do (`A selection is active … deselect first (select.none)`). | Change the state, then retry. |
 | `not-found` | An unknown command, layer, node or path. Unknown commands come with suggestions (`Did you mean: filter.gaussian-blur, …`). | Correct the name; [`lopsy.describe()`](#reading-the-commands) or `doc.info` lists what exists. |
-| `unavailable` | Nothing to act on yet: no document open (`No document is open`), the engine not started, or the graphics context lost and being restored. | Create or open a document; otherwise wait a moment and retry. |
+| `unavailable` | Nothing to act on yet: no document open (`No document is open`), the engine not started, or the graphics context lost and being restored. Or the person is in the middle of something, and the step was not run ([Working alongside a person](#working-alongside-a-person)). | Create or open a document; otherwise wait a moment and retry. |
 | `unsettled` | The command's change **was applied**, but the engine did not finish drawing it within 10 s. Its result is on `error.result`. | **Do not run it again.** Wait, then check with `view.render` or `doc.info`. |
 | `internal` | The editor hit a bug. The step that failed **may or may not have been applied**; in a batch, the steps before it (`error.completed`) were. The message names the error. | Call `doc.info` (and `view.render`) before deciding what to redo, and report it with the message and the batch that caused it. |
 
@@ -315,7 +353,8 @@ the options bar. Set them first:
   the families).
 
 Nothing resets between commands or between documents: `doc.new` keeps the
-colours, the tool options and the active tool you had before. Set everything a stage relies on at
+colours, the tool options and the active tool you had before, and a person
+on the page changes the same settings. Set everything a stage relies on at
 the start of the stage. There are no per-call overrides.
 
 Commands that drive a tool make it the **active tool** first, as clicking it
@@ -366,7 +405,7 @@ Every command's summary names the UI control it matches and its history label.
 ## Recipes
 
 Each recipe is a complete invocation list that runs as written on a fresh
-page (they are tested against the agent page). Pass one to `lopsy.run` as it
+page (they are tested against the editor). Pass one to `lopsy.run` as it
 is, then adapt it. Apart from the photo recipe, which needs a photo's bytes
 in place of `"<base64 of photo.jpg>"`, they need nothing but the page.
 
@@ -1108,7 +1147,7 @@ These have no command. Don't hunt for them:
 
 ## Behaviours worth knowing
 
-Each of these was checked on the agent page.
+Each of these was checked on the editor page.
 
 - **A new document** is a white `Background`, an empty `Layer 1` (active) and
   the root group `Project`. It changes nothing else: the colours, the tool
@@ -1129,8 +1168,6 @@ Each of these was checked on the agent page.
 - **After `text.add`, the text settings belong to the new text layer.**
   `text.set-font` restyles it and `tool.set` on the text tool is refused until
   another layer is active.
-- **`text.edit` loads the edited layer's colour into the foreground**, and its
-  style into the text options.
 - **The Shape tool's fill starts as the foreground colour** the first time it
   is chosen on a page, unless `tool.set` has given it a `fillColor` already.
 - **In mask edit mode the brush and pencil always hide and the eraser always
@@ -1144,6 +1181,11 @@ Each of these was checked on the agent page.
 - **`view.sample` reads the canvas as the Eyedropper does**: in mask edit
   mode that includes the mask overlay's tint. `view.render` and `doc.export`
   give the image itself.
+- **Your next edit commits text the person is typing** (checked with
+  `layer.add`), keeping what they typed; a read such as `doc.info` does not.
+- **A Move transform the person has pending** refuses `layer.transform` (the
+  message says what to do); `paint.fill` or `paint.stroke` commits it and
+  paints inside the transformed selection.
 - **The undo history holds 50 steps.** Older steps fall off the bottom.
   Save projects as checkpoints instead of relying on deep undo.
 - **Fonts download on first use.** `fontLoaded: false` (after 20 s without
@@ -1213,10 +1255,10 @@ not expose its port (no tunnel, port forward or proxy).
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `LOPSY_URL` | `https://lopsy.art/agent/` | Point at a local dev server instead (`http://localhost:5173/agent/`). |
+| `LOPSY_URL` | `https://lopsy.art/` | Point at a local dev server instead (`http://localhost:5173/`). |
 | `DRIVER_PORT` | `47391` | Change if the port is taken. |
 | `OUT_DIR` | `./lopsy-out` | Where renders, exports and projects are written. `$file` can read from here and from the directory the driver runs in. |
-| `HEADED` | unset | `1` shows the browser window. Keep the agent page the visible tab (see [Setup](#the-page-must-be-the-visible-tab)). |
+| `HEADED` | unset | `1` shows the browser window, where a person can watch and work in the same document. Keep the editor the visible tab (see [Setup](#the-page-must-be-the-visible-tab)). |
 | `REAL_GPU` | unset | `1` uses the GPU instead of SwiftShader (on Linux through ANGLE's GL/EGL backend). Much faster on a machine with a GPU. |
 
 The driver prints the WebGL renderer at startup: if it names SwiftShader
@@ -1228,13 +1270,13 @@ Tested against lopsy.art with Playwright 1.58.2.
 
 <!-- driver: lopsy-driver.mjs -->
 ```js
-// lopsy-driver.mjs — keeps ONE Lopsy agent page open and runs the commands POSTed to it.
+// lopsy-driver.mjs — keeps ONE Lopsy editor page open and runs the commands POSTed to it.
 import { chromium } from 'playwright';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const LOPSY_URL = process.env.LOPSY_URL ?? 'https://lopsy.art/agent/';
+const LOPSY_URL = process.env.LOPSY_URL ?? 'https://lopsy.art/';
 const PORT = Number(process.env.DRIVER_PORT ?? 47391);
 const OUT = process.env.OUT_DIR ?? './lopsy-out';
 fs.mkdirSync(OUT, { recursive: true });
