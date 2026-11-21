@@ -4,7 +4,7 @@ import { test, expect } from './fixtures';
 // The agent-facing documents (SKILL.md, FEATURES.md, llms.txt) are
 // published at the site root, linked from Help → Agents and announced, with
 // window.lopsy, in a comment at the top of <body> on the editor. Agents use
-// window.lopsy on the editor itself, so none of them sends an agent to /agent/.
+// window.lopsy on the editor itself, so none of them sends an agent elsewhere.
 
 test.describe('agent docs', () => {
   test('Help → Agents opens llms.txt in a new tab', async ({ page, context }) => {
@@ -59,21 +59,10 @@ test.describe('agent docs', () => {
     expect(firstBodyComment).toContain('We accept pull');
   });
 
-  test('SKILL.md sends agents to the editor, not the agent page', () => {
+  test('SKILL.md sends agents to the editor', () => {
     const skill = readFileSync('SKILL.md', 'utf8');
     expect(skill).not.toMatch(/\/agent\b|agent page/i);
     expect(skill).toContain('Open <https://lopsy.art/>');
     expect(skill).toContain("const LOPSY_URL = process.env.LOPSY_URL ?? 'https://lopsy.art/';");
-  });
-
-  test('the agent page announces the same documents in <body>', async ({ page }) => {
-    await page.goto('/agent/');
-    const firstBodyComment = await page.evaluate(() => {
-      const node = Array.from(document.body.childNodes).find((n) => n.nodeType !== Node.TEXT_NODE);
-      return node?.nodeType === Node.COMMENT_NODE ? node.textContent ?? '' : '';
-    });
-    for (const doc of ['/llms.txt', '/SKILL.md', '/FEATURES.md']) {
-      expect(firstBodyComment, doc).toContain(doc);
-    }
   });
 });

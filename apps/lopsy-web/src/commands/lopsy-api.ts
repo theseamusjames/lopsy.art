@@ -62,7 +62,7 @@ export interface LopsyEnvironment {
 
 declare global {
   interface Window {
-    /** The command API, set by the page entries in every build, production included. */
+    /** The command API, set by the editor's entry in every build, production included. */
     lopsy?: LopsyApi;
   }
 }

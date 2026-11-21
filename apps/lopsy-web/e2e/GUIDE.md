@@ -160,10 +160,9 @@ store or the commands. Specs under `e2e/api/` test the command API
 (`src/commands/`) instead, and are the only specs that may call
 `window.__lopsyCommands`, always through `e2e/api/harness.ts`:
 
-- Import `test` and `expect` from `./harness`. Each test starts on its
-  project's page (`/` for `chromium`, `/agent/` for `agent`) with the API
-  installed and **no document**: create one with `doc.new` or
-  `createDocument` from `../helpers`.
+- Import `test` and `expect` from `./harness`. Each test starts on the
+  editor (`/`) with the API installed and **no document**: create one with
+  `doc.new` or `createDocument` from `../helpers`.
 - `run(page, { op, ...params })` (or an array, for a batch) returns the
   result; a refusal rejects with an `ApiError` carrying `code` and
   `message`. `runError(page, invocation)` returns that `{ code, message }`
@@ -180,20 +179,15 @@ store or the commands. Specs under `e2e/api/` test the command API
   the UI does that the command doesn't; `ignore` is a last resort, and
   each key in it needs a comment saying why.
 
-API specs run on the `chromium` project (the editor) and again on the
-`agent` project, against the agent page (`/agent/`: the canvas alone,
-driven through `window.lopsy`; `e2e/agent-page.spec.ts`). That page has
-no editor UI, so the harness skips a test there, with the reason, at its
-first UI step: `compareUiAndApi`, or `page.keyboard`, `page.mouse`, a
-`getBy*` or a locator other than the canvas container. Write API-only
-steps before UI steps where the order does not matter, so they run on
-both pages. The production build is checked by `npm run test:e2e:preview`
-(`e2e/agent-preview.spec.ts`).
+API specs run on the `chromium` project only. The production build is
+checked by `npm run test:e2e:preview` (`e2e/build-preview.spec.ts`).
 
 A spec outside `e2e/api/` may call the public `window.lopsy` when what it
 tests is that API on a page (`skill-recipes.spec.ts`,
 `lopsy-api-editor.spec.ts`, with `e2e/lopsy-api-helpers.ts`); everything a
-person does in it still goes through the UI.
+person does in it still goes through the UI. Like the API specs, such a
+spec tests the API in desktop Chromium only: it skips itself on the other
+projects.
 
 ### Characterization specs (`e2e/surface-*.spec.ts`)
 

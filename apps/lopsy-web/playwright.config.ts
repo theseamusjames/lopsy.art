@@ -3,7 +3,6 @@ import { createHash } from 'node:crypto';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gpuArgs, isHardwareGpu } from './e2e/gpu-args';
-import type { ApiOptions } from './e2e/api/harness';
 
 /**
  * `reuseExistingServer` only checks that *something* listens on the port, not
@@ -22,8 +21,8 @@ const port = Number(process.env.VITE_PORT ?? 41000 + portOffset);
 /**
  * LOPSY_PREVIEW=1 (npm run test:e2e:preview, which builds first) also serves
  * the production build with `vite preview` and adds the `preview` project,
- * which runs e2e/agent-preview.spec.ts against it: the agent page's
- * window.lopsy and the multi-page build exist for real only there. Without
+ * which runs e2e/build-preview.spec.ts against it: the production build's
+ * window.lopsy, without the dev hooks, exists for real only there. Without
  * it the config has no preview server or project.
  */
 const isPreview = process.env.LOPSY_PREVIEW === '1';
@@ -44,9 +43,9 @@ const chromium = {
   launchOptions: { args: gpuArgs },
 };
 
-const PREVIEW_SPEC = /agent-preview\.spec\.ts/;
+const PREVIEW_SPEC = /build-preview\.spec\.ts/;
 
-export default defineConfig<ApiOptions>({
+export default defineConfig({
   testDir: './e2e',
   timeout: 600000,
   workers: 2,
@@ -63,15 +62,9 @@ export default defineConfig<ApiOptions>({
       use: chromium,
     },
     {
-      // The command-API specs again, on the agent page (the canvas alone, no editor UI).
-      name: 'agent',
-      testMatch: /e2e[\\/]api[\\/].*\.spec\.ts$/,
-      use: { ...chromium, apiPage: '/agent/' },
-    },
-    {
       name: 'firefox',
       // The command-API specs test the commands, not the browser: one engine is enough.
-      testIgnore: [/e2e[\\/]api[\\/]/, /agent-page\.spec\.ts/, PREVIEW_SPEC],
+      testIgnore: [/e2e[\\/]api[\\/]/, PREVIEW_SPEC],
       use: {
         ...devices['Desktop Firefox'],
         launchOptions: {

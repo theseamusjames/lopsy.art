@@ -106,7 +106,7 @@ function readPresentedCanvas(canvas: HTMLCanvasElement): ReadPixelsResult {
 // Expose stores for e2e tests
 /**
  * The dev-only test hooks on `window` (stores, pixel readers, `__lopsyCommands`)
- * that the e2e specs read. Installed by both pages' entries; a no-op outside
+ * that the e2e specs read. Installed by the editor's entry; a no-op outside
  * a dev build.
  */
 export function installDevHooks(): void {

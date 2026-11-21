@@ -6,19 +6,11 @@
  * by `src/dev-hooks.ts` in dev builds), and comparison specs check that a
  * command leaves the document exactly as the matching UI action does.
  *
- * They run on two pages: the editor ('/', the chromium project) and the
- * agent page ('/agent/', the agent project, the `apiPage` option). The
- * agent page has no editor UI, so there a test is skipped, with the reason,
- * at the first UI step it takes: compareUiAndApi, or a member of `page`
- * that drives or reads the UI (keyboard, mouse, a locator other than the
- * canvas container).
- *
  *   test, expect                   The shared fixtures (console-error guard,
  *                                  layer readers, wgpu waits), plus an
- *                                  automatic step that opens the project's
- *                                  page and waits for the command API. No
- *                                  document is created: `doc.new` is under
- *                                  test.
+ *                                  automatic step that opens '/' and waits
+ *                                  for the command API. No document is
+ *                                  created: `doc.new` is under test.
  *   run(page, invocation | [...])  Run one command or a batch. A refusal
  *                                  rejects with an ApiError {code, message},
  *                                  plus `result` for 'unsettled' and
@@ -117,76 +109,21 @@ type Outcome =
   | { ok: false; error: { isCommandError: true } & CommandErrorPayload }
   | { ok: false; error: { isCommandError: false; message: string } };
 
-export interface ApiOptions {
-  /**
-   * The page the specs run on: '/' (the editor) or '/agent/' (the agent
-   * page, the canvas alone), set by the Playwright project.
-   */
-  apiPage: string;
-}
-
-const EDITOR_PAGE = '/';
-
-/** The page each test's `page` opened, so compareUiAndApi can tell the agent page. */
-const openedPages = new WeakMap<Page, string>();
-
-/**
- * Members of Page that drive or read the editor's UI. The agent page has
- * none, so a test that reaches for one is skipped there at that point,
- * after the API steps before it have run.
- */
-const UI_MEMBERS = new Set<PropertyKey>([
-  'keyboard', 'mouse', 'touchscreen',
-  'click', 'dblclick', 'fill', 'press', 'type', 'hover', 'tap', 'check', 'uncheck', 'setChecked',
-  'selectOption', 'setInputFiles', 'dragAndDrop', 'focus', 'dispatchEvent',
-  'getByRole', 'getByText', 'getByLabel', 'getByPlaceholder', 'getByAltText', 'getByTitle', 'getByTestId',
-  'frameLocator', '$eval', '$$eval',
-]);
-/** Members taking a selector, allowed for the one element both pages have: the canvas container. */
-const SELECTOR_MEMBERS = new Set<PropertyKey>(['locator', 'waitForSelector', '$', '$$']);
-const CANVAS_CONTAINER = '[data-testid="canvas-container"]';
-
-function skipUiOnly(what: string): never {
-  test.info().skip(true, `UI-only: uses ${what}, and the agent page has no editor UI`);
-  throw new Error('unreachable: testInfo.skip throws');
-}
-
-/** The page, refusing (by skipping the test) every member that needs the editor's UI. */
-function withoutUi(page: Page): Page {
-  return new Proxy(page, {
-    get(target, prop) {
-      if (UI_MEMBERS.has(prop)) skipUiOnly(`page.${String(prop)}`);
-      const value: unknown = Reflect.get(target, prop, target);
-      if (typeof value !== 'function') return value;
-      if (!SELECTOR_MEMBERS.has(prop)) return value.bind(target);
-      return (selector: unknown, ...rest: unknown[]) => {
-        if (selector !== CANVAS_CONTAINER) skipUiOnly(`page.${String(prop)}(${JSON.stringify(selector)})`);
-        return (value as (...args: unknown[]) => unknown).call(target, selector, ...rest);
-      };
-    },
-  });
-}
-
-export const test = base.extend<ApiOptions & { _commandApi: void }>({
-  apiPage: [EDITOR_PAGE, { option: true }],
-  page: async ({ page, apiPage }, use) => {
-    await use(apiPage === EDITOR_PAGE ? page : withoutUi(page));
-  },
+export const test = base.extend<{ _commandApi: void }>({
   _commandApi: [
     // Depends on the init-script fixtures so their scripts are in place before the page loads.
-    async ({ page, apiPage, _layerImageReader, _settledWaits }, use) => {
+    async ({ page, _layerImageReader, _settledWaits }, use) => {
       void _layerImageReader;
       void _settledWaits;
-      openedPages.set(page, apiPage);
-      await openCommandApi(page, apiPage);
+      await openCommandApi(page);
       await use();
     },
     { auto: true },
   ],
 });
 
-async function openCommandApi(page: Page, path: string): Promise<void> {
-  await page.goto(path);
+async function openCommandApi(page: Page): Promise<void> {
+  await page.goto('/');
   await page.waitForFunction(() => !!(window as unknown as CommandsWindow).__lopsyCommands);
 }
 
@@ -484,7 +421,7 @@ async function freshSide(
   operation: (page: Page) => Promise<void>,
 ): Promise<DocSnapshot> {
   // A reload, so UI state one side leaves behind (tool, colours, dialogs) cannot leak into the other.
-  await openCommandApi(page, EDITOR_PAGE);
+  await openCommandApi(page);
   await createDocument(page, options.width ?? 200, options.height ?? 150, options.transparent ?? false);
   await page.waitForSelector('[data-testid="canvas-container"]');
   await settle(page, 300);
@@ -505,9 +442,6 @@ function without(snap: DocSnapshot, ignore: readonly (keyof DocSnapshot)[]): Par
  * size made by the same helper, and asserts the two snapshots are equal.
  */
 export async function compareUiAndApi(page: Page, options: CompareOptions): Promise<Comparison> {
-  if ((openedPages.get(page) ?? EDITOR_PAGE) !== EDITOR_PAGE) {
-    skipUiOnly('compareUiAndApi, which runs the operation through the editor\'s menus and panels');
-  }
   const ui = await freshSide(page, options, options.viaUi);
   const api = await freshSide(page, options, options.viaApi);
   const ignore = [...(options.ignore ?? []), ...(options.withEditorState ? [] : ['editor' as const])];

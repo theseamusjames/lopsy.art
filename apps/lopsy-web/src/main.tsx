@@ -17,7 +17,7 @@ installDevHooks();
 // starts, and every call is answered 'unavailable' at once instead of waiting for one.
 const hasWebGL2 = checkWebGL2Support();
 
-// The command API agents call, in every build: the document commands only, as on the agent page.
+// The command API agents call, in every build: the document commands only.
 window.lopsy = createLopsyApi(
   { describe: describeCommands, runInvocation, runAll: runInvocations },
   { hasWebGL2: () => hasWebGL2 },

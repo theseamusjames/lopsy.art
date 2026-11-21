@@ -8,7 +8,7 @@
  *
  * Documents are 200x150 with a white Background. Layer 1 holds black
  * vertical stripes 10 px wide every 20 px (x 0..10, 20..30, ...), drawn with
- * commands so the API-only tests run on the agent page too.
+ * commands.
  */
 import { test, expect, run, runError, compareUiAndApi, type Page } from './harness';
 import { docToScreen } from '../helpers';

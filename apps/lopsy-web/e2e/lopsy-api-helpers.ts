@@ -1,8 +1,8 @@
 /**
  * Calling the public command API, `window.lopsy`, from a spec, as an agent
  * would: through `page.evaluate`, getting back the JSON outcome. For specs
- * that test that API on a page (`agent-page.spec.ts`,
- * `lopsy-api-editor.spec.ts`); the command specs in `e2e/api/` use their
+ * that test that API on the editor (`lopsy-api-editor.spec.ts`,
+ * `build-preview.spec.ts`); the command specs in `e2e/api/` use their
  * harness instead.
  */
 import { expect, type Page } from './fixtures';
@@ -60,7 +60,7 @@ export async function lopsyDescribe(page: Page): Promise<Description[]> {
   return page.evaluate(() => (window as unknown as LopsyWindow).lopsy!.describe());
 }
 
-/** What describe() must be on any page: the document commands, each once, as JSON, and no ui command. */
+/** What describe() must be: the document commands, each once, as JSON, and no ui command. */
 export function expectDocumentCommandsOnly(description: readonly Description[]): void {
   expect(description.length).toBeGreaterThan(100);
   expect(description.every((d) => d.surface === 'document')).toBe(true);

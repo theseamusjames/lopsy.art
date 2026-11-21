@@ -135,6 +135,10 @@ async function personPendingScale(page: Page): Promise<DocumentInfo> {
 }
 
 test.describe('window.lopsy on the editor', () => {
+  test.beforeEach(({ browserName, isMobile }) => {
+    test.skip(browserName !== 'chromium' || isMobile, 'the guide says the API is tested in desktop Chromium');
+  });
+
   test('exists on the first-run screen, offers the document commands, and doc.new opens the editor', async ({ page }) => {
     await openEditor(page);
     const firstRun = page.getByRole('dialog', { name: 'New Document' });
@@ -218,7 +222,7 @@ test.describe('window.lopsy on the editor', () => {
     await expect(layerRow(page, 'Layer 2')).toBeVisible();
   });
 
-  test('a ui command is answered as an unknown command, as on the agent page, and opens nothing', async ({ page }) => {
+  test('a ui command is answered as an unknown command and opens nothing', async ({ page }) => {
     await openEditor(page);
     await agentNewDocument(page);
     for (const op of ['ui.layer-properties', 'ui.view.fit', 'ui.dialog.filter']) {
@@ -232,6 +236,46 @@ test.describe('window.lopsy on the editor', () => {
     }
     await expect(page.locator('[role="dialog"]')).toHaveCount(0);
     expect((await docInfo(page)).history.undo).toEqual(['New Document']);
+  });
+
+  test('run() resolves to an outcome for every kind of refusal, and for a batch', async ({ page }) => {
+    await openEditor(page);
+    expect(await lopsy(page, { op: 'doc.new', width: 0, height: 10 })).toMatchObject({
+      ok: false,
+      error: { name: 'CommandError', code: 'invalid' },
+    });
+    expect(await lopsy(page, { op: 'doc.nwe' })).toMatchObject({
+      ok: false,
+      error: { code: 'not-found', message: expect.stringContaining('Did you mean: doc.new') },
+    });
+    await agentNewDocument(page);
+
+    const batch = await lopsy(page, [{ op: 'layer.add' }, { op: 'color.set', foreground: '#ff0000' }]);
+    expect(batch).toMatchObject({ ok: true, results: [{ id: expect.any(String) }, { foreground: '#ff0000' }] });
+
+    const failed = await lopsy(page, [{ op: 'layer.add' }, { op: 'layer.select', layer: 'No such layer' }, { op: 'layer.add' }]);
+    expect(failed).toMatchObject({
+      ok: false,
+      error: { code: 'not-found', index: 1, completed: [{ id: expect.any(String) }], message: expect.stringMatching(/^\[1\] layer\.select: /) },
+    });
+    // The step after the failure did not run.
+    const info = await docInfo(page);
+    expect(info.layers.filter((l) => l.type !== 'group').map((l) => l.name)).toEqual(['Background', 'Layer 1', 'Layer 2', 'Layer 3']);
+    await expect(layerRow(page, 'Layer 3')).toBeVisible();
+    await expect(layerRow(page, 'Layer 4')).toHaveCount(0);
+  });
+
+  test('a new document leaves the active tool as it was', async ({ page }) => {
+    await openEditor(page);
+    await agentNewDocument(page);
+    expect((await docInfo(page)).activeTool).toBe('move');
+    const stroked = await lopsy(page, [
+      { op: 'paint.stroke', points: [{ x: 20, y: 20 }, { x: 120, y: 90 }] },
+      { op: 'doc.new', ...DOC },
+    ]);
+    expect(stroked.ok, JSON.stringify(stroked)).toBe(true);
+    expect((await docInfo(page)).activeTool).toBe('brush');
+    await expect(page.locator('[data-tool-id="brush"]')).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('a refusal the menu toasts reaches the agent as an error and shows the person no toast', async ({ page }) => {

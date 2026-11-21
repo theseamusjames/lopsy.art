@@ -10,10 +10,10 @@ Read `SPEC.md` for the full product specification.
 ## Additional Guides
 - `e2e/GUIDE.md` — read this before writing any e2e tests.
 - `SKILL.md` — public guide for agents that create images through the
-  agent page's command API (published at `/SKILL.md`, along with
+  editor's command API, `window.lopsy` (published at `/SKILL.md`, along with
   `FEATURES.md`; indexed by `public/llms.txt`).
   `e2e/skill-recipes.spec.ts` runs its driver, every recipe and every
-  JavaScript snippet against the agent page and checks that every command
+  JavaScript snippet against the editor page and checks that every command
   id it names exists, so update it in the same change when you rename a
   command or change what a recipe or snippet relies on (a param, a
   refusal, an ambient-state rule, a result's fields).
@@ -49,11 +49,10 @@ src/
     interactions/
       gesture-session.ts  # Canvas pointer down/move/up state machine, shared by
                           # the canvas hook and the gesture commands
-  agent/            # The agent page (agent/index.html, served at /agent/):
-                    # the canvas alone, driven through window.lopsy
   commands/         # Command registry and the commands, one directory per
                     # family (layer/, filter/, ui/, ...); see Commands below.
-                    # lopsy-api.ts is window.lopsy, set by both pages' entries
+                    # lopsy-api.ts is window.lopsy, set by the editor's
+                    # entry (main.tsx)
   components/       # Reusable UI components (Button, Slider, etc.)
     ComponentName/
       ComponentName.tsx

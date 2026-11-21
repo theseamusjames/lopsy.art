@@ -21,7 +21,7 @@ What you may be looking for:
   only; bugs live in GitHub issues.
 - **The guide for agents that make images through the command API**:
   `apps/lopsy-web/SKILL.md` (published at `/SKILL.md`). Its driver,
-  recipes and snippets are tested against the agent page
+  recipes and snippets are tested against the editor page
   (`e2e/skill-recipes.spec.ts`): update it when a command it names changes.
 - **How to write e2e tests**: `apps/lopsy-web/e2e/GUIDE.md`. Read it before
   writing one.

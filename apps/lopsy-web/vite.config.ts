@@ -1,4 +1,4 @@
-import { defineConfig, type Connect, type Plugin } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import wasm from 'vite-plugin-wasm';
 import topLevelAwait from 'vite-plugin-top-level-await';
@@ -69,26 +69,6 @@ function wasmFreshnessCheck(): Plugin {
   };
 }
 
-/**
- * `/agent` is a directory (agent/index.html): redirect it to `/agent/` in the
- * dev and preview servers, as Cloudflare Pages does for directory URLs and
- * as the site plugin does for `/tutorials` and `/blog`.
- */
-function agentPageSlash(): Plugin {
-  const redirect = (server: { middlewares: Connect.Server }) => {
-    server.middlewares.use((req, res, next) => {
-      const [path, query] = (req.url ?? '').split('?');
-      if (path !== '/agent') return next();
-      res.writeHead(301, { Location: `/agent/${query === undefined ? '' : `?${query}`}` }).end();
-    });
-  };
-  return {
-    name: 'agent-page-slash',
-    configureServer: redirect,
-    configurePreviewServer: redirect,
-  };
-}
-
 export default defineConfig({
   base: '/',
   plugins: [
@@ -96,7 +76,6 @@ export default defineConfig({
     wasm(),
     topLevelAwait(),
     wasmFreshnessCheck(),
-    agentPageSlash(),
     rendererPlugin({ root: resolve(__dirname) }),
     sitePlugin({
       tutorialsDir: resolve(__dirname, 'tutorials'),
@@ -127,11 +106,6 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 750,
     rollupOptions: {
-      // Two pages: the editor, and the agent page (the canvas alone, driven through window.lopsy).
-      input: {
-        index: resolve(__dirname, 'index.html'),
-        agent: resolve(__dirname, 'agent/index.html'),
-      },
       onwarn(warning, defaultHandler) {
         // Suppress eval warning from wasm-pack generated code
         if (warning.code === 'EVAL' && warning.id?.includes('lopsy_wasm')) return;
