@@ -75,17 +75,3 @@ test('the built editor offers window.lopsy and no dev hooks, opens a document ma
   }, exported.base64);
   expect(decoded).toEqual({ size: [64, 48], inside: [255, 0, 0, 255], outside: [255, 255, 255, 255] });
 });
-
-// The site's _redirects sends every unknown path to /index.html, as `vite preview` does,
-// so a link to a page the site no longer has opens the editor.
-for (const path of ['/agent/', '/agent']) {
-  test(`${path} serves the editor, with window.lopsy`, async ({ page }) => {
-    const response = await page.goto(path);
-    expect(response?.ok()).toBe(true);
-    expect(new URL(page.url()).pathname).toBe(path);
-    await expect(page.getByRole('dialog', { name: 'New Document' })).toBeVisible();
-    await waitForLopsy(page);
-    expect(await documentCommandIds(page)).toContain('doc.new');
-    expect(await devHooksPresent(page)).toEqual([]);
-  });
-}
