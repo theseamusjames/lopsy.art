@@ -20,9 +20,9 @@ What you may be looking for:
 - **The feature catalog**: `apps/lopsy-web/FEATURES.md`. Current behaviour
   only; bugs live in GitHub issues.
 - **The guide for agents that make images through the command API**:
-  `apps/lopsy-web/SKILL.md` (published at `/SKILL.md`). Its driver and
-  recipes are tested against the agent page (`e2e/skill-recipes.spec.ts`):
-  update it when a command it names changes.
+  `apps/lopsy-web/SKILL.md` (published at `/SKILL.md`). Its driver,
+  recipes and snippets are tested against the editor page
+  (`e2e/skill-recipes.spec.ts`): update it when a command it names changes.
 - **How to write e2e tests**: `apps/lopsy-web/e2e/GUIDE.md`. Read it before
   writing one.
 - **The command registry the menus, keys and panels run through**: the

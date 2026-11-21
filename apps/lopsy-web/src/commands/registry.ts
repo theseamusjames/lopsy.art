@@ -57,8 +57,9 @@ export interface StartOptions {
 export interface RunOptions {
   /**
    * Only commands on this surface are callable: any other id is answered as
-   * an unknown command, with suggestions drawn from this surface alone. The
-   * agent page offers 'document', since a 'ui' command needs the editor's UI.
+   * an unknown command, with suggestions drawn from this surface alone.
+   * window.lopsy offers 'document': a 'ui' command does what a menu item does
+   * that is not a document edit (a dialog, a view setting, a file picker).
    */
   readonly surface?: CommandSurface;
 }

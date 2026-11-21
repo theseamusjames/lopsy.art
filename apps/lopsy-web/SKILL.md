@@ -4,34 +4,38 @@ description: >
   Make images with Lopsy (https://lopsy.art), a free, open-source image editor
   that runs entirely in the browser: layers, masks, blend modes, layer effects,
   gradients, brushes, shapes, text with Google Fonts, filters, adjustments and
-  PNG/JPEG/WebP export. Its agent page runs every editing operation as a named
-  command with checked parameters. Use this when you need to make a poster,
+  PNG/JPEG/WebP export. The editor page offers every editing operation as a
+  named command with checked parameters, through `window.lopsy`, and a person
+  can work in the same document. Use this when you need to make a poster,
   illustration, logo, cover, social image or any other raster artwork
-  programmatically, from a browser you control with Playwright.
+  programmatically, from any browser you can run JavaScript in.
 ---
 
 # Making images with Lopsy
 
-Lopsy is an image editor that runs entirely in the browser. Its **agent page**,
-<https://lopsy.art/agent/>, shows the document canvas and nothing else: no
-menus, panels or tools to click. You make an image by calling commands on it,
-through `window.lopsy`, from a browser you control with Playwright. There is
-no backend and no account: the image is made in that browser tab, and you
-take the files away with export and save commands.
+Lopsy is an image editor that runs entirely in the browser, at
+<https://lopsy.art/>. The editor page, the same one a person uses, has
+`window.lopsy`: you make an image by calling commands on it, from any browser
+where you can run JavaScript in the page, and a person can work in the same
+document beside you. There is no backend and no account: the image is made in
+that browser tab, and you take the files away with export and save commands.
 
 This file covers everything you need to do that reliably:
 
-1. [Setup](#setup): install Playwright, save the driver, start it.
-2. [The loop](#the-loop): plan, build in stages, look, checkpoint, export.
-3. [The contract](#the-contract): invocations, results, errors, coordinates,
+1. [Setup](#setup): open the page, call `window.lopsy`, read the commands.
+2. [Working alongside a person](#working-alongside-a-person).
+3. [Getting image bytes out and in](#getting-image-bytes-out-and-in).
+4. [The loop](#the-loop): plan, build in stages, look, checkpoint, export.
+5. [The contract](#the-contract): invocations, results, errors, coordinates,
    layers, and the ambient state every painting command reads.
-4. [Command families](#command-families): what there is, and how to read the
+6. [Command families](#command-families): what there is, and how to read the
    full parameter list.
-5. [Recipes](#recipes): tested invocation lists for shapes, light, gradients,
+7. [Recipes](#recipes): tested invocation lists for shapes, light, gradients,
    brushes, type, effects, filters, masks, adjustments, transforms and a
    complete poster.
-6. [What the API does not offer](#what-the-api-does-not-offer).
-7. [Behaviours worth knowing](#behaviours-worth-knowing).
+8. [What the API does not offer](#what-the-api-does-not-offer).
+9. [Behaviours worth knowing](#behaviours-worth-knowing).
+10. [Appendix: a ready-made driver](#appendix-a-ready-made-driver).
 
 Related resources:
 
@@ -49,259 +53,207 @@ Related resources:
 
 ## Setup
 
-You need Node 18+ and Playwright's Chromium.
+Open <https://lopsy.art/> in a browser where you can evaluate JavaScript in
+the page, wait until `window.lopsy` exists, and call it. The page opens on a
+New Document screen with `window.lopsy` already there; `doc.new` replaces
+that screen with the editor. How you get JavaScript into the page is up to
+you: an automation library (Playwright, Puppeteer, Selenium, the DevTools
+protocol) driving a headless or headed browser; a browser tool your agent
+harness gives you over a browser session, possibly the user's own browser
+(one tool runs JavaScript in the page, another takes screenshots); or a
+person pasting into the DevTools console. With a shell, Node and no browser
+tool, use the [ready-made driver](#appendix-a-ready-made-driver). Whichever
+you use:
 
-```bash
-mkdir lopsy-work && cd lopsy-work
-npm init -y
-npm install --save-exact playwright@1.58.2
-npx playwright install chromium
-```
+- **Keep one page open for the whole piece.** The document lives in that
+  tab; a reload or navigating away loses it (with unsaved changes the browser
+  asks first), and the next visit brings back the panel layout but no
+  document, colours or tool options. [Checkpoint](#the-loop) as you go.
+- **The browser needs WebGL2.** Desktop Chrome and Edge have it with
+  hardware acceleration on. A headless Chromium on a machine with no GPU
+  needs software WebGL (SwiftShader): start it with
+  `--use-gl=angle --use-angle=swiftshader --enable-webgl --ignore-gpu-blocklist`.
+  Without WebGL2 the page shows a warning instead of the editor, and every
+  `lopsy.run` answers at once with `unavailable` and a message that says so.
+- **The page is tested in Chromium**, the engine of Chrome and Edge. It
+  needs nothing beyond WebGL2, so other browsers may work, but they are not
+  tested.
+- **The page must be the visible tab** ([below](#the-page-must-be-the-visible-tab)).
 
-Save [the driver](#the-driver) below as `lopsy-driver.mjs`, then start it
-in the background and leave it running for the whole session:
+`lopsy.run` returns a promise of the result envelope, which tools that
+evaluate JavaScript in a page wait for:
 
-```bash
-node lopsy-driver.mjs > driver.log 2>&1 &
-```
-
-It opens <https://lopsy.art/agent/> headless and listens on
-`http://127.0.0.1:47391`. It is **local-only**: it listens on the loopback
-interface and refuses any request a web page makes, so only programs on your
-machine can use it. Do not expose its port (no tunnel, port forward or proxy).
-Useful environment variables:
-
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `LOPSY_URL` | `https://lopsy.art/agent/` | Point at a local dev server instead (`http://localhost:5173/agent/`). |
-| `DRIVER_PORT` | `47391` | Change if the port is taken. |
-| `OUT_DIR` | `./lopsy-out` | Where renders, exports and projects are written. `$file` can read from here and from the directory the driver runs in. |
-| `HEADED` | unset | `1` shows the browser window. Keep the agent page the visible tab (see [the contract](#the-page-must-be-the-visible-tab)). |
-| `REAL_GPU` | unset | `1` uses the GPU instead of SwiftShader (on Linux through ANGLE's GL/EGL backend). Much faster on a machine with a GPU. |
-
-### The driver
-
-The driver keeps **one** page open for the whole session, so the document
-lives between your requests, and turns HTTP into calls to `window.lopsy`:
-
-- `POST /run` with a JSON body, one invocation or an array of them, runs it
-  and answers with the result envelope as JSON.
-- Any `base64` field in a result (renders, exports, saved projects) is written
-  to `OUT_DIR` and replaced by `file`, the path it went to, so image bytes
-  never land in your context. `POST /run?name=poster` names those files
-  `poster-NNN.png`; a name is a plain file name (letters, digits, `-`, `_`,
-  `.`), never a path.
-- The other way round, `{ "$file": "path" }` anywhere in a request is
-  replaced by that file's bytes as base64, for `doc.open` and
-  `layer.add-image`. A relative path is relative to the directory the driver
-  runs in, and the file must be inside that directory or `OUT_DIR` (after
-  following symlinks): copy anything else in first.
-- A failure comes back with the page's console errors since the request
-  began, as `consoleErrors`. What the driver itself refuses (a body that is
-  not JSON, a `$file` outside those directories, a bad `name`) comes back as
-  HTTP 400 with code `driver`, before anything runs; HTTP 500 with code
-  `driver` means the browser or the driver itself failed (see `driver.log`).
-- `GET /describe` lists every command with its one-sentence summary;
-  `GET /describe?op=layer.effects` returns one command's full parameter
-  schema; `GET /describe?family=filter` every command in a family.
-- `POST /quit` closes the browser and stops the driver.
-
-Tested against lopsy.art with Playwright 1.58.2. Save it as `lopsy-driver.mjs`.
-
-<!-- driver: lopsy-driver.mjs -->
+<!-- snippet: first-call -->
 ```js
-// lopsy-driver.mjs — keeps ONE Lopsy agent page open and runs the commands POSTed to it.
-import { chromium } from 'playwright';
-import http from 'node:http';
-import fs from 'node:fs';
-import path from 'node:path';
-
-const LOPSY_URL = process.env.LOPSY_URL ?? 'https://lopsy.art/agent/';
-const PORT = Number(process.env.DRIVER_PORT ?? 47391);
-const OUT = process.env.OUT_DIR ?? './lopsy-out';
-fs.mkdirSync(OUT, { recursive: true });
-// $file reads only from these: the directory the driver runs in, and OUT_DIR.
-const READABLE = [process.cwd(), OUT].map((dir) => fs.realpathSync(dir));
-
-// SwiftShader makes WebGL2 work on any headless/CI machine; a real GPU is much
-// faster. Headless Chromium on Linux falls back to SwiftShader unless ANGLE is
-// told to use the GPU's GL driver; elsewhere no flags pick the GPU.
-const GPU_ARGS = process.platform === 'linux' ? ['--use-gl=angle', '--use-angle=gl-egl', '--ignore-gpu-blocklist'] : [];
-const browser = await chromium.launch({
-  headless: process.env.HEADED !== '1',
-  args: process.env.REAL_GPU === '1' ? GPU_ARGS : ['--use-gl=angle', '--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'],
-});
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
-let consoleErrors = [];
-page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
-page.on('pageerror', (e) => consoleErrors.push(String(e)));
-await page.goto(LOPSY_URL);
-await page.waitForFunction(() => !!window.lopsy, null, { timeout: 60000 });
-const RENDERER = await page.evaluate(() => {
-  const gl = document.createElement('canvas').getContext('webgl2');
-  const info = gl?.getExtension('WEBGL_debug_renderer_info');
-  return gl ? String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER)) : 'no WebGL2';
-});
-console.log(`renderer: ${RENDERER}`);
-if (process.env.REAL_GPU === '1' && /SwiftShader/i.test(RENDERER)) {
-  console.log('warning: REAL_GPU=1 but the browser fell back to SwiftShader; adjust GPU_ARGS (see SKILL.md)');
-}
-
-// Image and project bytes never come back to you: each `base64` field in a
-// result is written to OUT_DIR and replaced by `file`, the path it went to.
-let fileN = 0;
-function saveFiles(value, name) {
-  if (Array.isArray(value)) return value.map((v) => saveFiles(v, name));
-  if (value === null || typeof value !== 'object') return value;
-  const out = {};
-  for (const [key, v] of Object.entries(value)) {
-    if (key === 'base64' && typeof v === 'string') {
-      const ext = plainName(String(value.ext ?? String(value.mime).split('/').pop()), 'the file extension');
-      fileN += 1;
-      const file = path.join(OUT, `${name}-${String(fileN).padStart(3, '0')}.${ext}`);
-      fs.writeFileSync(file, Buffer.from(v, 'base64'));
-      out.file = file;
-    } else {
-      out[key] = saveFiles(v, name);
-    }
-  }
-  return out;
-}
-// The other way: { "$file": "path" } anywhere in a request is replaced by that
-// file's bytes as base64, for doc.open and layer.add-image.
-function loadFiles(value) {
-  if (Array.isArray(value)) return value.map(loadFiles);
-  if (value === null || typeof value !== 'object') return value;
-  if (typeof value.$file === 'string') return fs.readFileSync(readablePath(value.$file)).toString('base64');
-  return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, loadFiles(v)]));
-}
-class DriverError extends Error {}
-function readablePath(file) {
-  let real;
-  try { real = fs.realpathSync(file); } catch (err) { throw new DriverError(`$file ${file}: ${err.message}`); }
-  if (READABLE.some((dir) => real === dir || real.startsWith(dir + path.sep))) return real;
-  throw new DriverError(`$file ${file} is outside the driver's directory and OUT_DIR: copy it into one of them`);
-}
-// A name from a request becomes part of a file name in OUT_DIR, never a path.
-function plainName(name, what) {
-  if (/^[\w.-]+$/.test(name) && !name.includes('..')) return name;
-  throw new DriverError(`${what} ${JSON.stringify(name)} must be letters, digits, '-', '_' and '.', with no path in it`);
-}
-
-// GET /describe: one line per command. ?op=layer.effects: that command's full
-// schema. ?family=filter: every filter command's.
-async function describe(query) {
-  const all = await page.evaluate(() => window.lopsy.describe());
-  const op = query.get('op');
-  const family = query.get('family');
-  if (op) return all.find((c) => c.id === op) ?? { error: `no command ${op}; GET /describe lists them` };
-  if (family) return all.filter((c) => c.id.startsWith(`${family}.`));
-  return all.map((c) => `${c.id}: ${c.summary}`).join('\n') + '\n';
-}
-
-// Only this machine may use the driver. It listens on 127.0.0.1, and refuses a
-// request addressed to any other host name (a web page reaching it by DNS
-// rebinding) or sent by a web page (browsers add Origin or Sec-Fetch-Site).
-const HOSTS = [`127.0.0.1:${PORT}`, `localhost:${PORT}`];
-function isFromThisMachine(req) {
-  const site = req.headers['sec-fetch-site'];
-  return HOSTS.includes(req.headers.host) && req.headers.origin === undefined
-    && (site === undefined || site === 'none' || site === 'same-origin');
-}
-
-async function readJson(req) {
-  const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  // Decoded once: a character split between two chunks would not survive decoding each.
-  const body = Buffer.concat(chunks).toString('utf8');
-  try { return JSON.parse(body); } catch (err) { throw new DriverError(`the body is not JSON: ${err.message}`); }
-}
-
-http.createServer(async (req, res) => {
-  const url = new URL(req.url ?? '/', 'http://localhost');
-  const send = (status, body) => {
-    const isText = typeof body === 'string';
-    res.writeHead(status, { 'content-type': isText ? 'text/plain' : 'application/json' });
-    res.end(isText ? body : JSON.stringify(body, null, 1) + '\n');
-  };
-  if (!isFromThisMachine(req)) return send(403, 'refused: the driver serves only requests from this machine, not web pages\n');
-  const route = `${req.method} ${url.pathname}`;
-  try {
-    if (route === 'GET /describe') return send(200, await describe(url.searchParams));
-    if (route === 'POST /quit') {
-      send(200, 'bye\n');
-      await browser.close();
-      process.exit(0);
-    }
-    if (route !== 'POST /run') return send(['/run', '/quit', '/describe'].includes(url.pathname) ? 405 : 404, 'POST /run, POST /quit, GET /describe\n');
-    // POST /run?name=poster names the files this request writes poster-NNN.<ext>.
-    const name = plainName(url.searchParams.get('name') ?? 'out', 'name');
-    const invocation = loadFiles(await readJson(req));
-    consoleErrors = [];
-    const outcome = saveFiles(await page.evaluate((inv) => window.lopsy.run(inv), invocation), name);
-    if (!outcome.ok && consoleErrors.length > 0) outcome.consoleErrors = consoleErrors;
-    send(200, outcome);
-  } catch (err) {
-    if (err instanceof DriverError) return send(400, { ok: false, error: { code: 'driver', message: err.message } });
-    send(500, { ok: false, error: { code: 'driver', message: String(err?.stack ?? err) }, consoleErrors });
-  }
-}).listen(PORT, '127.0.0.1', () => console.log(`lopsy driver on http://127.0.0.1:${PORT} → ${LOPSY_URL}`));
+lopsy.run([
+  { op: 'doc.new', width: 800, height: 600 },
+  { op: 'color.set', foreground: '#e63946' },
+  { op: 'select.rect', x: 100, y: 100, width: 300, height: 200 },
+  { op: 'paint.fill' },
+  { op: 'select.none' },
+])
 ```
 
-Send a stage as a JSON file:
+JSON is JavaScript: every recipe below can be passed to `lopsy.run` as it is.
 
-```bash
-cat > steps/01-sky.json <<'EOF'
-[
-  { "op": "doc.new", "width": 1200, "height": 800 },
-  { "op": "layer.set", "name": "Sky" },
-  { "op": "tool.set", "tool": "gradient", "options": { "type": "linear",
-    "stops": [{ "position": 0, "color": "#1b2a4a" }, { "position": 1, "color": "#f2a541" }] } },
-  { "op": "paint.gradient", "from": { "x": 600, "y": 0 }, "to": { "x": 600, "y": 800 } },
-  { "op": "view.render", "maxSize": 800 }
-]
-EOF
-curl -s --data-binary @steps/01-sky.json 127.0.0.1:47391/run
+### Reading the commands
+
+`lopsy.describe()` returns, synchronously, all ~140 commands with their full
+parameter schemas: over 100 KB. Ask for what you need instead: every id with
+its summary, one command's schema, or every command in one family.
+
+<!-- snippet: describe-list -->
+```js
+lopsy.describe().map((c) => `${c.id}: ${c.summary}`).join('\n')
 ```
 
-Always send files with `--data-binary @file`: `--data` strips newlines, and
-shell quoting mangles JSON. The answer's last result holds
-`"file": "lopsy-out/out-001.png"`: open that image and look at it.
+<!-- snippet: describe-op -->
+```js
+lopsy.describe().find((c) => c.id === 'layer.effects')
+```
+
+<!-- snippet: describe-family -->
+```js
+lopsy.describe().filter((c) => c.id.startsWith('filter.'))
+```
+
+### The page must be the visible tab
+
+Browsers pause animation frames in background tabs, and the engine draws on
+animation frames. A headless page is always visible. In a headed browser,
+keep the editor the front tab: in a background tab, commands wait and
+then fail with `unavailable` or `unsettled`, and the message says *The page
+is a background tab … make it the visible tab*.
+
+## Working alongside a person
+
+The editor is the page a person uses, so someone may be working in it while
+you do. There is one document, one undo history and one set of tools:
+
+- **They see your work as you make it**: your layers in the Layers panel,
+  your steps in the History panel. They can undo your steps with the undo
+  key, and `history.undo` undoes theirs as it would yours.
+- **You see theirs**: `doc.info` reports their layers, history, active layer
+  and tool. Between two of your calls they may have painted, undone, switched
+  layers or tools, changed colours or selected something: call `doc.info`
+  before a stage that depends on the state.
+- **The ambient state is shared.** The tool, its options, the colours and
+  the selection are the ones their toolbox, options bar and Color panel set:
+  a foreground they pick in the Color panel is what your `paint.fill` uses.
+  Set what a stage relies on ([Ambient state](#ambient-state)).
+- **Don't replace their document.** `doc.new` and `doc.open` discard the open
+  document and its history without asking, unsaved or not (File > New asks
+  first when there is unsaved work). Call `doc.info` first, and make or open
+  a document over theirs only when that is what you were asked to do.
+- **Wait while they are mid-action.** Two states refuse every call with
+  `unavailable`. The refused step did not run: wait a moment and send it
+  again (in a batch, the invocations from `error.index` on).
+  - `The person has a dialog open with a live preview on the layer. Nothing was run. Send the call again once they apply or cancel it.`
+  - `A drag or scroll on the canvas is in progress. Nothing was run. Send the call again once it is released.`
+
+A refusal reaches you as the error only (a `clipboard.copy` refused on a
+group shows the person nothing). Their text being typed and a transform they
+have pending are under [Behaviours](#behaviours-worth-knowing).
+
+## Getting image bytes out and in
+
+The results of `view.render`, `view.render-layer`, `doc.export`,
+`doc.export-psd` and `doc.save` carry a file as `base64`, beside its `mime`
+(and `ext`, except for renders) and, for images, its `width` and `height`. A
+render is easily hundreds of kilobytes of base64: never print it or bring it
+into your context. **From a script**, return the envelope to the script,
+decode each `base64` and write it to a file there. **With only a JavaScript
+tool and screenshots**, look with a screenshot and take files away as
+downloads.
+
+**Looking by screenshot.** A screenshot of the page is the whole editor:
+the menu bar, the toolbox, the options bar, the panels, and between them the
+canvas area with rulers along its top and left and the document fitted into
+it when it is created or opened (never above 100%; the person may zoom or
+pan it since). It is the quickest look at your work and at what the person
+sees, but it is not the image: transparency shows as a checkerboard, guides,
+the selection's outline and the Move tool's handles are drawn over it, mask
+edit mode tints what the mask hides, the document is usually scaled down,
+and the colours can differ from your hex values. `view.render` gives the
+image itself, at the size you ask for, with none of that; `view.sample`
+reads an exact colour.
+
+**Downloading a file.** This runs one invocation whose result carries a
+file (any of those above), has the browser download it to its downloads
+folder as `poster.png`, and returns only the name and size:
+
+<!-- snippet: download -->
+```js
+(async (invocation, name) => {
+  const out = await lopsy.run(invocation);
+  if (!out.ok) return out;
+  const { base64, mime, ext = mime.split('/').pop() } = out.result;
+  const blob = await (await fetch(`data:${mime};base64,${base64}`)).blob();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${name}.${ext}`;
+  a.click();
+  return { downloaded: a.download, bytes: blob.size };
+})({ op: 'doc.export', format: 'png' }, 'poster')
+```
+
+### Bytes in
+
+`doc.open` and `layer.add-image` take a file's bytes as base64. In this
+guide they are written `"<base64 of photo.jpg>"`: put the real base64 in
+that string. From a script, read the file and encode it there. With only a
+JavaScript tool, have the page fetch the image and convert it:
+
+<!-- snippet: fetch-image -->
+```js
+(async (url) => {
+  const blob = await (await fetch(url)).blob();
+  const base64 = await new Promise((done) => {
+    const reader = new FileReader();
+    reader.onload = () => done(String(reader.result).split(',')[1]);
+    reader.readAsDataURL(blob);
+  });
+  return lopsy.run({ op: 'layer.add-image', base64, name: url.split('/').pop() });
+})('https://example.com/photo.jpg')
+```
+
+The page puts no limit on what it fetches, but a browser reads another
+site's file only when that site allows it (`Access-Control-Allow-Origin`);
+when it does not, `fetch` rejects with a `TypeError`.
 
 ## The loop
 
 A finished piece takes dozens to hundreds of commands. Don't send one giant
 list and rerun it from the top whenever something is off. Work in stages on
-the one document the driver keeps open:
+the one document the page keeps open:
 
 1. **Plan before you touch the editor.** Decide the concept, the document
    size, a palette of 4–8 hex colours, and the layer stack from back to front,
    with a name for each layer. Compute geometry in code (polygons, curves,
    grids, text positions) so shapes line up exactly.
-2. **Build in stages**, one request per stage (background, main shapes,
+2. **Build in stages**, one `lopsy.run` per stage (background, main shapes,
    detail, type, effects, finishing), each a batch of related commands. Put
    every element on its own layer, so it can be moved, recoloured or given
    effects later.
-3. **Look after every stage.** End each batch with
-   `{ "op": "view.render", "maxSize": 800 }` and open the PNG it wrote. Check
-   that the stage did what you intended before you send the next one. Most
+3. **Look after every stage**: take a screenshot of the page, or end the
+   batch with `{ "op": "view.render", "maxSize": 800 }` and open the PNG.
+   Check that the stage did what you intended before you send the next one. Most
    mistakes are cheap to undo straight away (`history.undo`) and expensive to
    find later. `view.render-layer` shows one layer alone, and `view.sample`
    reads one pixel's colour; `doc.info` lists the layers, the selection, the
    colours, the active tool and the history.
-4. **Checkpoint** after each stage that took real work:
-   `POST /run?name=checkpoint` with `{ "op": "doc.save" }` writes a `.lopsy`
-   project. If the page is reloaded or something goes wrong, reopen it:
+4. **Checkpoint** after each stage that took real work: `{ "op": "doc.save" }`
+   returns a `.lopsy` project; keep the file (write or download it). If the
+   page is reloaded or something goes wrong, reopen it:
 
    ```json
-   { "op": "doc.open", "base64": { "$file": "lopsy-out/checkpoint-007.lopsy" }, "name": "checkpoint.lopsy" }
+   { "op": "doc.open", "base64": "<base64 of checkpoint.lopsy>", "name": "checkpoint.lopsy" }
    ```
 
    A reopened project keeps its layers, masks, effects, text, adjustments,
    paths and guides, and starts a fresh undo history.
 5. **Export** with `{ "op": "doc.export", "format": "png" }` (or `jpeg`,
    `webp`, `bmp`) and look at the exported file itself.
-6. **Quit the driver** when you're done: `curl -s -X POST 127.0.0.1:47391/quit`.
 
 ## The contract
 
@@ -314,7 +266,7 @@ sits beside it.
 { "op": "select.rect", "x": 40, "y": 40, "width": 200, "height": 120 }
 ```
 
-`lopsy.run` (and `POST /run`) takes one invocation or an array. An array runs
+`lopsy.run` takes one invocation or an array. An array runs
 **in order** and **stops at the first failure**: the commands after it do not
 run, and the ones before it stay done.
 
@@ -344,14 +296,14 @@ the message starts with `[index] op:`.
 | --- | --- | --- |
 | `invalid` | The params are wrong. The message names the bad one and what it accepts (`select.rect: width must be a finite number from 1 to 49152, got -5`; `unknown param "w"; allowed: x, y, width, height, mode`). | Fix the params. |
 | `refused` | The editor will not do that in its current state. The message says why and usually what to do (`A selection is active … deselect first (select.none)`). | Change the state, then retry. |
-| `not-found` | An unknown command, layer, node or path. Unknown commands come with suggestions (`Did you mean: filter.gaussian-blur, …`). | Correct the name; `GET /describe` or `doc.info` lists what exists. |
-| `unavailable` | Nothing to act on yet: no document open (`No document is open`), the engine not started, or the graphics context lost and being restored. | Create or open a document; otherwise wait a moment and retry. |
+| `not-found` | An unknown command, layer, node or path. Unknown commands come with suggestions (`Did you mean: filter.gaussian-blur, …`). | Correct the name; [`lopsy.describe()`](#reading-the-commands) or `doc.info` lists what exists. |
+| `unavailable` | Nothing to act on yet: no document open (`No document is open`), the engine not started, or the graphics context lost and being restored. Or the person is in the middle of something, and the step was not run ([Working alongside a person](#working-alongside-a-person)). | Create or open a document; otherwise wait a moment and retry. |
 | `unsettled` | The command's change **was applied**, but the engine did not finish drawing it within 10 s. Its result is on `error.result`. | **Do not run it again.** Wait, then check with `view.render` or `doc.info`. |
 | `internal` | The editor hit a bug. The step that failed **may or may not have been applied**; in a batch, the steps before it (`error.completed`) were. The message names the error. | Call `doc.info` (and `view.render`) before deciding what to redo, and report it with the message and the batch that caused it. |
 
 `unavailable` also answers every call at once, before anything runs, when the
-browser has no WebGL2 (the message says so): use a real GPU, or the SwiftShader
-flags the driver passes by default.
+browser has no WebGL2 (the message says so): use a real GPU, or software
+WebGL (see [Setup](#setup)).
 
 ### Coordinates
 
@@ -395,14 +347,14 @@ the options bar. Set them first:
   into the background.
 - `tool.set` sets a tool's options: brush size and hardness, gradient type
   and stops, shape kind and colours, the marquees' feather, text size and
-  alignment, wand tolerance… `GET /describe?op=tool.describe` then
-  `{ "op": "tool.describe", "tool": "brush" }` lists every option with its
-  range and current value.
+  alignment, wand tolerance… `{ "op": "tool.describe", "tool": "brush" }`
+  lists every option with its range and current value.
 - `text.set-font` sets the font family, weight and style (`text.fonts` lists
   the families).
 
 Nothing resets between commands or between documents: `doc.new` keeps the
-colours, the tool options and the active tool you had before. Set everything a stage relies on at
+colours, the tool options and the active tool you had before, and a person
+on the page changes the same settings. Set everything a stage relies on at
 the start of the stage. There are no per-call overrides.
 
 Commands that drive a tool make it the **active tool** first, as clicking it
@@ -423,18 +375,10 @@ between commands. A large document on a software renderer can take a few
 seconds per heavy command (see [Behaviours](#behaviours-worth-knowing)); a
 command that is still drawing after 10 s comes back `unsettled`.
 
-### The page must be the visible tab
-
-Browsers pause animation frames in background tabs, and the engine draws on
-animation frames. Headless pages are always visible, so the driver's page is
-fine. In a headed browser, keep the agent page the front tab: in a background
-tab, commands wait and then fail with `unavailable` or `unsettled`, and the
-message says *The page is a background tab … make it the visible tab*.
-
 ## Command families
 
 About 140 commands, in 19 families. This table is a map; the parameters are
-in `GET /describe?family=<family>` (or `?op=<id>`), which is always current.
+in [`lopsy.describe()`](#reading-the-commands), which is always current.
 Every command's summary names the UI control it matches and its history label.
 
 | Family | For | Most useful |
@@ -461,8 +405,9 @@ Every command's summary names the UI control it matches and its history label.
 ## Recipes
 
 Each recipe is a complete invocation list that runs as written on a fresh
-page (they are tested against the agent page). Send one as it is, then adapt
-it. Apart from the photo recipe, they need nothing but the page.
+page (they are tested against the editor). Pass one to `lopsy.run` as it
+is, then adapt it. Apart from the photo recipe, which needs a photo's bytes
+in place of `"<base64 of photo.jpg>"`, they need nothing but the page.
 
 <!-- recipe: flat-shapes -->
 ```json
@@ -778,7 +723,7 @@ as clicking into the text does: set the colour again before you paint.
 **Layer effects.** `layer.effects` sets any of `dropShadow`, `stroke`,
 `outerGlow`, `innerGlow` and `colorOverlay` on a raster or text layer; fields
 you leave out keep their values, so `{ "enabled": true }` alone turns an
-effect on with its defaults. `GET /describe?op=layer.effects` has each
+effect on with its defaults. Its entry in `lopsy.describe()` has each
 field's range. Effects stay live and follow the layer's pixels. A group has
 no effects: give each layer its own. Many live effects slow every later
 command down on a software renderer; once a layer's look is final,
@@ -834,8 +779,8 @@ makes active first (here Badge, while Neon was active).
 the selection when there is one (the Dots gradient and its halftone stay in
 their rectangle). Params you leave out take the filter dialog's defaults.
 Some enum values are the dialog's labels, capitalised as shown there
-(`"Mono"`, `"Gaussian"`, `"Canvas"`), so read them from
-`GET /describe?family=filter`. Useful for illustration: `add-noise` (grain:
+(`"Mono"`, `"Gaussian"`, `"Canvas"`), so read them from the filter family
+in `lopsy.describe()`. Useful for illustration: `add-noise` (grain:
 fill a layer mid-grey, add mono noise, set it to `overlay`), `texture`
 (Grain, Rough, Canvas, Streaks, Cells), `halftone`, `pixelate`, `posterize`,
 `threshold`, `oil-paint`, `cel-shading`; `clouds`, `fibers`, `smoke`,
@@ -1069,7 +1014,7 @@ everything in it.
 ```json
 [
   { "op": "doc.new", "width": 800, "height": 600 },
-  { "op": "layer.add-image", "base64": { "$file": "photo.jpg" }, "name": "photo.jpg" },
+  { "op": "layer.add-image", "base64": "<base64 of photo.jpg>", "name": "photo.jpg" },
   { "op": "select.none" },
   { "op": "layer.set", "name": "Photo" },
   { "op": "filter.desaturate" },
@@ -1083,9 +1028,8 @@ everything in it.
 ```
 
 **Placing an image.** `layer.add-image` takes an image file's bytes (PNG,
-JPEG, GIF, BMP or WebP) as base64; with the driver, `{ "$file": "photo.jpg" }`
-reads a file of yours. The image becomes a new layer named `Pasted Layer`
-above the active layer, centred and **shrunk to fit** when it is larger than
+JPEG, GIF, BMP or WebP) as base64 ([Bytes in](#bytes-in)). The image becomes
+a new layer named `Pasted Layer` above the active layer, centred and **shrunk to fit** when it is larger than
 the canvas. As with a paste in the UI, its pixels become the selection and
 the Move tool is chosen, so `select.none` before anything else (the selection
 would constrain filters and paint, and `layer.move` refuses while it is
@@ -1180,8 +1124,7 @@ seconds.
 ]
 ```
 
-Through the driver, the last two results carry the paths of an 800 × 533
-preview and the 1200 × 800 PNG. In real work you would send this as four or
+The last two results carry an 800 × 533 preview and the 1200 × 800 PNG. In real work you would send this as four or
 five stages and look at each one; it is one list here so it can be tested
 whole.
 
@@ -1204,7 +1147,7 @@ These have no command. Don't hunt for them:
 
 ## Behaviours worth knowing
 
-Each of these was checked on the agent page.
+Each of these was checked on the editor page.
 
 - **A new document** is a white `Background`, an empty `Layer 1` (active) and
   the root group `Project`. It changes nothing else: the colours, the tool
@@ -1225,8 +1168,6 @@ Each of these was checked on the agent page.
 - **After `text.add`, the text settings belong to the new text layer.**
   `text.set-font` restyles it and `tool.set` on the text tool is refused until
   another layer is active.
-- **`text.edit` loads the edited layer's colour into the foreground**, and its
-  style into the text options.
 - **The Shape tool's fill starts as the foreground colour** the first time it
   is chosen on a page, unless `tool.set` has given it a `fillColor` already.
 - **In mask edit mode the brush and pencil always hide and the eraser always
@@ -1240,23 +1181,247 @@ Each of these was checked on the agent page.
 - **`view.sample` reads the canvas as the Eyedropper does**: in mask edit
   mode that includes the mask overlay's tint. `view.render` and `doc.export`
   give the image itself.
+- **Your next edit commits text the person is typing** (checked with
+  `layer.add`), keeping what they typed; a read such as `doc.info` does not.
+- **A Move transform the person has pending** refuses `layer.transform` (the
+  message says what to do); `paint.fill` or `paint.stroke` commits it and
+  paints inside the transformed selection.
 - **The undo history holds 50 steps.** Older steps fall off the bottom.
   Save projects as checkpoints instead of relying on deep undo.
 - **Fonts download on first use.** `fontLoaded: false` (after 20 s without
   the font) means the change was made in a fallback face; it switches when the
   font arrives. Don't repeat the command.
-- **Headless rendering is software WebGL (SwiftShader), and slower than a
-  GPU.** Simple commands take milliseconds, but a large layer effect or a
-  `view.render` of a 3000 × 2000 document takes seconds. Keep documents
-  around 1000–2000 px on the long side, render previews with `maxSize`, and
-  use `REAL_GPU=1` when the machine has a GPU. The driver prints the WebGL
-  renderer at startup: if it names SwiftShader under `REAL_GPU=1`, the GPU
-  was not picked up. Edit `GPU_ARGS` in the driver for your platform (on
-  Linux, `--use-angle=vulkan --enable-features=Vulkan --ignore-gpu-blocklist`
-  is the other combination known to work).
+- **Software WebGL is much slower than a GPU.** A browser with no GPU (a
+  headless Chromium on most servers, or one started with the SwiftShader
+  flags) renders in software: simple commands take milliseconds, but a large
+  layer effect or a `view.render` of a 3000 × 2000 document takes seconds.
+  Keep documents around 1000–2000 px on the long side, render previews with
+  `maxSize`, and use the GPU when the machine has one. This names the
+  renderer the page gets (SwiftShader, or another software renderer such as
+  llvmpipe, when there is no GPU):
+
+  <!-- snippet: renderer -->
+  ```js
+  (() => {
+    const gl = document.createElement('canvas').getContext('webgl2');
+    const info = gl?.getExtension('WEBGL_debug_renderer_info');
+    return gl ? String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER)) : 'no WebGL2';
+  })()
+  ```
 - **Exports are wide-gamut.** PNGs from `doc.export` and `view.render` carry a
   Display P3 colour profile: your hex values are written unchanged and tagged
   P3, so a colour-managed viewer shows them a little more saturated than the
   same hex in sRGB. That's expected, not a bug.
 - **Something that looks like a bug may be one.** Search
   <https://github.com/theseamusjames/lopsy.art/issues> for workarounds.
+
+## Appendix: a ready-made driver
+
+If you have a shell with Node 18+ and no browser tool of your own, this is
+one way to reach the page; nothing above depends on it. The driver keeps
+**one** headless Chromium page open and turns HTTP on `127.0.0.1:47391` into
+`window.lopsy` calls. Install Playwright's Chromium, save the driver below as
+`lopsy-driver.mjs`, then start it (the last line) and leave it running:
+
+```bash
+mkdir lopsy-work && cd lopsy-work
+npm init -y
+npm install --save-exact playwright@1.58.2
+npx playwright install chromium
+node lopsy-driver.mjs > driver.log 2>&1 &
+```
+
+It is **local-only**: it listens on the loopback interface and refuses any
+request a web page makes, so only programs on your machine can use it. Do
+not expose its port (no tunnel, port forward or proxy).
+
+- `POST /run` with a JSON body, one invocation or an array, runs it and
+  answers with the result envelope. Each `base64` field in the result is
+  written to `OUT_DIR` and replaced by `file`, its path; `POST /run?name=poster`
+  names those files `poster-NNN.png` (a plain file name, never a path).
+- `{ "$file": "path" }` anywhere in a request is replaced by that file's
+  bytes as base64: use it wherever this guide writes `"<base64 of …>"`. The
+  file must be inside the directory the driver runs in or `OUT_DIR` (after
+  following symlinks): copy anything else in first.
+- A failure comes back with the page's console errors since the request
+  began, as `consoleErrors`. What the driver refuses (a body that is not
+  JSON, a `$file` outside those directories, a bad `name`) is HTTP 400 with
+  code `driver`, before anything runs; HTTP 500 with code `driver` means the
+  browser or the driver failed (see `driver.log`).
+- `GET /describe` lists every command with its summary; `?op=layer.effects`
+  returns one command's schema, `?family=filter` a family's.
+- `POST /quit` closes the browser and stops the driver; send it when you're
+  done (`curl -s -X POST 127.0.0.1:47391/quit`).
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `LOPSY_URL` | `https://lopsy.art/` | Point at a local dev server instead (`http://localhost:5173/`). |
+| `DRIVER_PORT` | `47391` | Change if the port is taken. |
+| `OUT_DIR` | `./lopsy-out` | Where renders, exports and projects are written. `$file` can read from here and from the directory the driver runs in. |
+| `HEADED` | unset | `1` shows the browser window, where a person can watch and work in the same document. Keep the editor the visible tab (see [Setup](#the-page-must-be-the-visible-tab)). |
+| `REAL_GPU` | unset | `1` uses the GPU instead of SwiftShader (on Linux through ANGLE's GL/EGL backend). Much faster on a machine with a GPU. |
+
+The driver prints the WebGL renderer at startup: if it names SwiftShader
+under `REAL_GPU=1`, the GPU was not picked up. Edit `GPU_ARGS` for your
+platform (on Linux, `--use-angle=vulkan --enable-features=Vulkan
+--ignore-gpu-blocklist` is the other combination known to work).
+
+Tested against lopsy.art with Playwright 1.58.2.
+
+<!-- driver: lopsy-driver.mjs -->
+```js
+// lopsy-driver.mjs — keeps ONE Lopsy editor page open and runs the commands POSTed to it.
+import { chromium } from 'playwright';
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const LOPSY_URL = process.env.LOPSY_URL ?? 'https://lopsy.art/';
+const PORT = Number(process.env.DRIVER_PORT ?? 47391);
+const OUT = process.env.OUT_DIR ?? './lopsy-out';
+fs.mkdirSync(OUT, { recursive: true });
+// $file reads only from these: the directory the driver runs in, and OUT_DIR.
+const READABLE = [process.cwd(), OUT].map((dir) => fs.realpathSync(dir));
+
+// SwiftShader makes WebGL2 work on any headless/CI machine; a real GPU is much
+// faster. Headless Chromium on Linux falls back to SwiftShader unless ANGLE is
+// told to use the GPU's GL driver; elsewhere no flags pick the GPU.
+const GPU_ARGS = process.platform === 'linux' ? ['--use-gl=angle', '--use-angle=gl-egl', '--ignore-gpu-blocklist'] : [];
+const browser = await chromium.launch({
+  headless: process.env.HEADED !== '1',
+  args: process.env.REAL_GPU === '1' ? GPU_ARGS : ['--use-gl=angle', '--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'],
+});
+const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+let consoleErrors = [];
+page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
+page.on('pageerror', (e) => consoleErrors.push(String(e)));
+await page.goto(LOPSY_URL);
+await page.waitForFunction(() => !!window.lopsy, null, { timeout: 60000 });
+const RENDERER = await page.evaluate(() => {
+  const gl = document.createElement('canvas').getContext('webgl2');
+  const info = gl?.getExtension('WEBGL_debug_renderer_info');
+  return gl ? String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER)) : 'no WebGL2';
+});
+console.log(`renderer: ${RENDERER}`);
+if (process.env.REAL_GPU === '1' && /SwiftShader/i.test(RENDERER)) {
+  console.log('warning: REAL_GPU=1 but the browser fell back to SwiftShader; adjust GPU_ARGS (see SKILL.md)');
+}
+
+// Image and project bytes never come back to you: each `base64` field in a
+// result is written to OUT_DIR and replaced by `file`, the path it went to.
+let fileN = 0;
+function saveFiles(value, name) {
+  if (Array.isArray(value)) return value.map((v) => saveFiles(v, name));
+  if (value === null || typeof value !== 'object') return value;
+  const out = {};
+  for (const [key, v] of Object.entries(value)) {
+    if (key === 'base64' && typeof v === 'string') {
+      const ext = plainName(String(value.ext ?? String(value.mime).split('/').pop()), 'the file extension');
+      fileN += 1;
+      const file = path.join(OUT, `${name}-${String(fileN).padStart(3, '0')}.${ext}`);
+      fs.writeFileSync(file, Buffer.from(v, 'base64'));
+      out.file = file;
+    } else {
+      out[key] = saveFiles(v, name);
+    }
+  }
+  return out;
+}
+// The other way: { "$file": "path" } anywhere in a request is replaced by that
+// file's bytes as base64, for doc.open and layer.add-image.
+function loadFiles(value) {
+  if (Array.isArray(value)) return value.map(loadFiles);
+  if (value === null || typeof value !== 'object') return value;
+  if (typeof value.$file === 'string') return fs.readFileSync(readablePath(value.$file)).toString('base64');
+  return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, loadFiles(v)]));
+}
+class DriverError extends Error {}
+function readablePath(file) {
+  let real;
+  try { real = fs.realpathSync(file); } catch (err) { throw new DriverError(`$file ${file}: ${err.message}`); }
+  if (READABLE.some((dir) => real === dir || real.startsWith(dir + path.sep))) return real;
+  throw new DriverError(`$file ${file} is outside the driver's directory and OUT_DIR: copy it into one of them`);
+}
+// A name from a request becomes part of a file name in OUT_DIR, never a path.
+function plainName(name, what) {
+  if (/^[\w.-]+$/.test(name) && !name.includes('..')) return name;
+  throw new DriverError(`${what} ${JSON.stringify(name)} must be letters, digits, '-', '_' and '.', with no path in it`);
+}
+
+// GET /describe: one line per command. ?op=layer.effects: that command's full
+// schema. ?family=filter: every filter command's.
+async function describe(query) {
+  const all = await page.evaluate(() => window.lopsy.describe());
+  const op = query.get('op');
+  const family = query.get('family');
+  if (op) return all.find((c) => c.id === op) ?? { error: `no command ${op}; GET /describe lists them` };
+  if (family) return all.filter((c) => c.id.startsWith(`${family}.`));
+  return all.map((c) => `${c.id}: ${c.summary}`).join('\n') + '\n';
+}
+
+// Only this machine may use the driver. It listens on 127.0.0.1, and refuses a
+// request addressed to any other host name (a web page reaching it by DNS
+// rebinding) or sent by a web page (browsers add Origin or Sec-Fetch-Site).
+const HOSTS = [`127.0.0.1:${PORT}`, `localhost:${PORT}`];
+function isFromThisMachine(req) {
+  const site = req.headers['sec-fetch-site'];
+  return HOSTS.includes(req.headers.host) && req.headers.origin === undefined
+    && (site === undefined || site === 'none' || site === 'same-origin');
+}
+
+async function readJson(req) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  // Decoded once: a character split between two chunks would not survive decoding each.
+  const body = Buffer.concat(chunks).toString('utf8');
+  try { return JSON.parse(body); } catch (err) { throw new DriverError(`the body is not JSON: ${err.message}`); }
+}
+
+http.createServer(async (req, res) => {
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  const send = (status, body) => {
+    const isText = typeof body === 'string';
+    res.writeHead(status, { 'content-type': isText ? 'text/plain' : 'application/json' });
+    res.end(isText ? body : JSON.stringify(body, null, 1) + '\n');
+  };
+  if (!isFromThisMachine(req)) return send(403, 'refused: the driver serves only requests from this machine, not web pages\n');
+  const route = `${req.method} ${url.pathname}`;
+  try {
+    if (route === 'GET /describe') return send(200, await describe(url.searchParams));
+    if (route === 'POST /quit') {
+      send(200, 'bye\n');
+      await browser.close();
+      process.exit(0);
+    }
+    if (route !== 'POST /run') return send(['/run', '/quit', '/describe'].includes(url.pathname) ? 405 : 404, 'POST /run, POST /quit, GET /describe\n');
+    // POST /run?name=poster names the files this request writes poster-NNN.<ext>.
+    const name = plainName(url.searchParams.get('name') ?? 'out', 'name');
+    const invocation = loadFiles(await readJson(req));
+    consoleErrors = [];
+    const outcome = saveFiles(await page.evaluate((inv) => window.lopsy.run(inv), invocation), name);
+    if (!outcome.ok && consoleErrors.length > 0) outcome.consoleErrors = consoleErrors;
+    send(200, outcome);
+  } catch (err) {
+    if (err instanceof DriverError) return send(400, { ok: false, error: { code: 'driver', message: err.message } });
+    send(500, { ok: false, error: { code: 'driver', message: String(err?.stack ?? err) }, consoleErrors });
+  }
+}).listen(PORT, '127.0.0.1', () => console.log(`lopsy driver on http://127.0.0.1:${PORT} → ${LOPSY_URL}`));
+```
+
+Send a stage as a JSON file, always with `--data-binary @file` (`--data`
+strips newlines, and shell quoting mangles JSON):
+
+```bash
+cat > steps/01-sky.json <<'EOF'
+[
+  { "op": "doc.new", "width": 1200, "height": 800 },
+  { "op": "color.set", "foreground": "#1b2a4a" },
+  { "op": "paint.fill" },
+  { "op": "view.render", "maxSize": 800 }
+]
+EOF
+curl -s --data-binary @steps/01-sky.json 127.0.0.1:47391/run
+```
+
+The answer's last result holds `"file": "lopsy-out/out-001.png"`: open that
+image and look at it.

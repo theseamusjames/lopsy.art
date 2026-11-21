@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CommandError, SettleTimeoutError } from '../commands/command';
-import { createRegistry } from '../commands/registry';
+import { CommandError, SettleTimeoutError } from './command';
+import { createRegistry } from './registry';
 import { LOPSY_ERROR_CODES, NO_WEBGL2_MESSAGE, createLopsyApi } from './lopsy-api';
+import { CANVAS_DRAG_MESSAGE, LIVE_PREVIEW_MESSAGE } from './preflight';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -225,5 +226,10 @@ describe('the guide', () => {
   it('documents every error code lopsy.run can answer with', () => {
     const table = GUIDE.slice(GUIDE.indexOf('### Errors'), GUIDE.indexOf('### Coordinates'));
     for (const code of LOPSY_ERROR_CODES) expect(table, code).toContain(`| \`${code}\` |`);
+  });
+
+  it('quotes the refusals a person mid-action causes exactly, as the preflight words them', () => {
+    const section = GUIDE.slice(GUIDE.indexOf('## Working alongside a person'), GUIDE.indexOf('## Getting image bytes out and in'));
+    for (const message of [LIVE_PREVIEW_MESSAGE, CANVAS_DRAG_MESSAGE]) expect(section).toContain(`\`${message}\``);
   });
 });

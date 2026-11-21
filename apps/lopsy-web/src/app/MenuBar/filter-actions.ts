@@ -14,6 +14,7 @@ import { flushLayerSync } from '../../engine-wasm/engine-sync';
 import { filterRegistry } from '../../filters/filter-registry';
 import type { FilterDefinition } from '../../filters/filter-types';
 import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
+import { setLivePreviewShowing } from '../live-preview';
 import {
   commitFilterPreview,
   isFilteringMask,
@@ -86,6 +87,7 @@ export function beginFilterPreview(): void {
   const state = useEditorStore.getState();
   flushLayerSync(state);
   runOnFilterTarget(engine, target, () => saveFilterPreview(engine, target.layerId));
+  setLivePreviewShowing(true);
   // saveFilterPreview calls ensure_layer_full_size on the WASM side to
   // guarantee the preview snapshot is doc-sized. Reconcile JS bounds so a
   // subsequent syncLayers push does not clobber the engine's expanded
@@ -113,6 +115,7 @@ export function previewGenericFilter(id: FilterDialogId, values: Record<string, 
 
 /** Cancel the filter preview and restore the original layer. */
 export function cancelFilterPreviewSession(): void {
+  setLivePreviewShowing(false);
   const engine = getEngine();
   if (!engine) return;
   const activeId = useEditorStore.getState().document.activeLayerId;
@@ -127,6 +130,7 @@ export function cancelFilterPreviewSession(): void {
 
 /** Apply the filter for real, push history, and clean up the preview. */
 export function applyGenericFilterWithPreview(id: FilterDialogId, values: Record<string, number>): void {
+  setLivePreviewShowing(false);
   const filter = filterRegistry[id];
   if (!filter) return;
   const target = resolveFilterTarget();

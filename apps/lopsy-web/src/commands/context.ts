@@ -40,7 +40,7 @@ export function requireEngine(): Engine {
 }
 
 /**
- * The API's preflight (registry setPreflight): refuses while the engine's
+ * Part of the API's preflight (apiPreflight in preflight.ts): refuses while the engine's
  * graphics context is lost, where GPU work would be dropped. Only once an
  * engine exists: before the first document there is none, and doc.new and
  * the commands that never touch the engine must still run. The UI does not

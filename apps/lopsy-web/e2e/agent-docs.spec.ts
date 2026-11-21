@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 import { test, expect } from './fixtures';
 
 // The agent-facing documents (SKILL.md, FEATURES.md, llms.txt) are
-// published at the site root, linked from Help → Agents and announced, with the
-// agent page, in a comment at the top of <body> on the editor and the agent page.
+// published at the site root, linked from Help → Agents and announced, with
+// window.lopsy, in a comment at the top of <body> on the editor.
 
 test.describe('agent docs', () => {
   test('Help → Agents opens llms.txt in a new tab', async ({ page, context }) => {
@@ -37,7 +37,7 @@ test.describe('agent docs', () => {
     expect(llmsText).toContain('https://lopsy.art/SKILL.md');
     expect(llmsText).not.toContain('SKILL-UI');
     expect(llmsText).toContain('https://lopsy.art/FEATURES.md');
-    expect(llmsText).toContain('https://lopsy.art/agent/');
+    expect(llmsText).toContain('https://lopsy.art/)');
     expect(llmsText).toContain('window.lopsy');
     expect(llmsText).not.toContain('no API');
     expect(llmsText).toContain('https://github.com/theseamusjames/lopsy.art');
@@ -48,8 +48,7 @@ test.describe('agent docs', () => {
       const node = Array.from(document.body.childNodes).find((n) => n.nodeType !== Node.TEXT_NODE);
       return node?.nodeType === Node.COMMENT_NODE ? node.textContent ?? '' : '';
     });
-    expect(firstBodyComment).toContain('/agent/');
-    expect(firstBodyComment).toContain('window.lopsy');
+    expect(firstBodyComment).toContain('this page has window.lopsy');
     expect(firstBodyComment).toContain('/llms.txt');
     expect(firstBodyComment).toContain('/SKILL.md');
     expect(firstBodyComment).toContain('/FEATURES.md');
@@ -57,14 +56,9 @@ test.describe('agent docs', () => {
     expect(firstBodyComment).toContain('We accept pull');
   });
 
-  test('the agent page announces the same documents in <body>', async ({ page }) => {
-    await page.goto('/agent/');
-    const firstBodyComment = await page.evaluate(() => {
-      const node = Array.from(document.body.childNodes).find((n) => n.nodeType !== Node.TEXT_NODE);
-      return node?.nodeType === Node.COMMENT_NODE ? node.textContent ?? '' : '';
-    });
-    for (const doc of ['/llms.txt', '/SKILL.md', '/FEATURES.md']) {
-      expect(firstBodyComment, doc).toContain(doc);
-    }
+  test('SKILL.md sends agents to the editor', () => {
+    const skill = readFileSync('SKILL.md', 'utf8');
+    expect(skill).toContain('Open <https://lopsy.art/>');
+    expect(skill).toContain("const LOPSY_URL = process.env.LOPSY_URL ?? 'https://lopsy.art/';");
   });
 });

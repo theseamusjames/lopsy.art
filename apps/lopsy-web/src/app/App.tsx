@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { WebGL2Warning, checkWebGL2Support } from '../components/WebGL2Warning/WebGL2Warning';
+import { WebGL2Warning } from '../components/WebGL2Warning/WebGL2Warning';
 import { LiquifyPanel } from '../components/LiquifyPanel/LiquifyPanel';
 import { Toolbox } from '../toolbox/Toolbox';
 import { LayerPanel } from '../panels/LayerPanel/LayerPanel';
@@ -46,8 +46,12 @@ import { useReleaseToolbarButtonFocus } from './toolbar-button-focus';
 import { openProjectFromQuery } from '../io/project-url';
 import styles from './App.module.css';
 
-export function App() {
-  const [hasWebGL2] = useState(() => checkWebGL2Support());
+interface AppProps {
+  /** checkWebGL2Support(), asked once by the entry so the page and window.lopsy agree. */
+  hasWebGL2: boolean;
+}
+
+export function App({ hasWebGL2 }: AppProps) {
   useReleaseToolbarButtonFocus();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);

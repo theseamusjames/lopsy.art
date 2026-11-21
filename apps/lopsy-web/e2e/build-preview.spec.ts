@@ -1,9 +1,8 @@
 /**
  * Smoke test of the production build (the `preview` project, LOPSY_PREVIEW=1,
  * `npm run test:e2e:preview`): every other spec runs on the dev server, where
- * the dev hooks exist and the pages are not built. Here the agent page loads
- * from dist/agent/index.html, `window.lopsy` is its only API, and the editor
- * at `/` has none.
+ * the dev hooks exist and nothing is built. Here the editor loads from
+ * dist/index.html with `window.lopsy` as its only API.
  */
 import { test, expect, type Page } from './fixtures';
 
@@ -23,32 +22,48 @@ async function devHooksPresent(page: Page): Promise<string[]> {
   return page.evaluate((names) => names.filter((name) => name in window), DEV_HOOKS);
 }
 
-test('the built agent page offers window.lopsy and no dev hooks, and exports the image it was asked for', async ({ page }) => {
-  const response = await page.goto('/agent/');
-  expect(response?.ok()).toBe(true);
-  expect(await page.title()).toBe('Lopsy — Agent page');
+async function waitForLopsy(page: Page): Promise<void> {
   await page.waitForFunction(() => !!(window as unknown as PreviewWindow).lopsy);
-  expect(await devHooksPresent(page)).toEqual([]);
-  expect(await page.evaluate(() => typeof (window as unknown as { lopsy: unknown }).lopsy)).toBe('object');
+}
 
-  const ids = await page.evaluate(() => (window as unknown as PreviewWindow).lopsy!.describe().map((d) => d.id));
+async function documentCommandIds(page: Page): Promise<string[]> {
+  return page.evaluate(() => (window as unknown as PreviewWindow).lopsy!.describe().map((d) => d.id));
+}
+
+test('the built editor offers window.lopsy and no dev hooks, opens a document made through it, and exports the image it was asked for', async ({ page }) => {
+  const response = await page.goto('/');
+  expect(response?.ok()).toBe(true);
+  await expect(page.getByRole('dialog', { name: 'New Document' })).toBeVisible();
+  await waitForLopsy(page);
+  expect(await devHooksPresent(page)).toEqual([]);
+
+  const ids = await documentCommandIds(page);
   expect(ids).toContain('doc.new');
   expect(ids.some((id) => id.startsWith('ui.'))).toBe(false);
 
   const outcome = await page.evaluate(() =>
     (window as unknown as PreviewWindow).lopsy!.run([
       { op: 'doc.new', width: 64, height: 48 },
+      { op: 'layer.add' },
       { op: 'color.set', foreground: '#ff0000' },
       { op: 'select.rect', x: 8, y: 8, width: 16, height: 16 },
       { op: 'paint.fill' },
+      { op: 'select.none' },
+      { op: 'doc.info' },
       { op: 'doc.export', format: 'png' },
     ]),
   );
-  if (!outcome.ok) throw new Error(`the recipe failed: ${outcome.error.code}: ${outcome.error.message}`);
+  if (!outcome.ok) throw new Error(`the calls failed: ${outcome.error.code}: ${outcome.error.message}`);
   if (!('results' in outcome)) throw new Error('expected a list of results');
+  const info = outcome.results.at(-2) as { history: { undo: string[] } };
+  expect(info.history.undo).toEqual(['New Document', 'Add Layer', 'Fill']);
+  await expect(page.getByRole('dialog', { name: 'New Document' })).toHaveCount(0);
+  await expect(page.locator('nav[aria-label="Application menu"]')).toBeVisible();
+  await expect(page.locator('[data-layer-id]').filter({ hasText: 'Layer 2' })).toBeVisible();
+  await expect(page.locator('[data-testid="canvas-container"] canvas[aria-label="Drawing canvas"]')).toBeVisible();
+
   const exported = outcome.results.at(-1) as { base64: string; width: number; height: number; mime: string };
   expect({ width: exported.width, height: exported.height, mime: exported.mime }).toEqual({ width: 64, height: 48, mime: 'image/png' });
-
   const decoded = await page.evaluate(async (b64) => {
     const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
     const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
@@ -59,18 +74,4 @@ test('the built agent page offers window.lopsy and no dev hooks, and exports the
     return { size: [bitmap.width, bitmap.height], inside: at(15, 15), outside: at(40, 30) };
   }, exported.base64);
   expect(decoded).toEqual({ size: [64, 48], inside: [255, 0, 0, 255], outside: [255, 255, 255, 255] });
-  await expect(page.locator('[data-testid="canvas-container"] canvas[aria-label="Drawing canvas"]')).toBeVisible();
-});
-
-test('/agent redirects to the built page', async ({ page }) => {
-  await page.goto('/agent');
-  expect(new URL(page.url()).pathname).toBe('/agent/');
-  await page.waitForFunction(() => !!(window as unknown as PreviewWindow).lopsy);
-});
-
-test('the built editor at / has no window.lopsy and no dev hooks', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByRole('dialog', { name: 'New Document' })).toBeVisible();
-  expect(await page.evaluate(() => 'lopsy' in window)).toBe(false);
-  expect(await devHooksPresent(page)).toEqual([]);
 });

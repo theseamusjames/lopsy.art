@@ -278,6 +278,14 @@ test.describe('the command API', () => {
     expect((await describe(page)).map((c) => c.id).sort()).toEqual([...all, ...ui].map((c) => c.id).sort());
   });
 
+  test('window.lopsy.describe() is exactly the registry\'s document commands', async ({ page }) => {
+    const registry = await describe(page, 'document');
+    const offered = await page.evaluate(() =>
+      (window as unknown as { lopsy?: { describe: () => unknown } }).lopsy!.describe(),
+    );
+    expect(offered).toEqual(registry);
+  });
+
   test('a batch runs in order and returns each result', async ({ page }) => {
     const results = await run<unknown[]>(page, [
       { op: 'doc.new', width: 30, height: 20 },

@@ -10,12 +10,13 @@ Read `SPEC.md` for the full product specification.
 ## Additional Guides
 - `e2e/GUIDE.md` — read this before writing any e2e tests.
 - `SKILL.md` — public guide for agents that create images through the
-  agent page's command API (published at `/SKILL.md`, along with
+  editor's command API, `window.lopsy` (published at `/SKILL.md`, along with
   `FEATURES.md`; indexed by `public/llms.txt`).
-  `e2e/skill-recipes.spec.ts` runs its driver and every recipe against the
-  agent page and checks that every command id it names exists, so update
-  it in the same change when you rename a command or change what a recipe
-  relies on (a param, a refusal, an ambient-state rule).
+  `e2e/skill-recipes.spec.ts` runs its driver, every recipe and every
+  JavaScript snippet against the editor page and checks that every command
+  id it names exists, so update it in the same change when you rename a
+  command or change what a recipe or snippet relies on (a param, a
+  refusal, an ambient-state rule, a result's fields).
 - `FEATURES.md` — the feature catalog. Describe current behaviour only: no
   bug tracking ("Known defect" notes, issue/PR numbers, "fixed in #N"
   history). Bugs live in GitHub issues; fix history lives in commits and PRs.
@@ -48,10 +49,10 @@ src/
     interactions/
       gesture-session.ts  # Canvas pointer down/move/up state machine, shared by
                           # the canvas hook and the gesture commands
-  agent/            # The agent page (agent/index.html, served at /agent/):
-                    # the canvas alone, with the command API as window.lopsy
   commands/         # Command registry and the commands, one directory per
-                    # family (layer/, filter/, ui/, ...); see Commands below
+                    # family (layer/, filter/, ui/, ...); see Commands below.
+                    # lopsy-api.ts is window.lopsy, set by the editor's
+                    # entry (main.tsx)
   components/       # Reusable UI components (Button, Slider, etc.)
     ComponentName/
       ComponentName.tsx
@@ -216,10 +217,18 @@ deferred layer crop pending (`deferred-crop-on-switch.ts`), or 30 passes
 in a row that rendered with none of those outstanding (something, such as
 the pointer over the canvas, keeps the canvas dirty). It rejects
 `unavailable` while the graphics context is lost; on the same path, a
-preflight (`setPreflight`, wired in `index.ts` to `gpuContextPreflight`
-in `context.ts`) refuses a call before `run` while an engine exists and
-its context is lost. `start`, the UI's path, consults neither, so a menu
-item or key still runs its function then. It only waits: it never runs a crop or a readback
+preflight (`setPreflight`, wired in `index.ts` to `apiPreflight` in
+`preflight.ts`) refuses a call, and each step of a batch as it starts,
+before `run`: while an engine exists and its context is lost
+(`gpuContextPreflight`), then while the person is mid-action
+(`personActivityPreflight`): a dialog's live preview is on a layer
+(`isLivePreviewShowing` in `app/live-preview.ts`, set by the filter,
+Color LUT and Pattern Fill preview functions) or a press, pan or scroll on
+the canvas is under way (the UI store's `isInteracting`, which the gesture
+commands also set for their own press and clear before they resolve).
+Each refuses every command with `unavailable`, nothing run. `start`, the
+UI's path, consults neither the wait nor the preflight, so a menu item or
+key still runs its function then. It only waits: it never runs a crop or a readback
 itself. `settles` changes this: `false` for commands that never touch the
 document or the engine, only tool settings, colours, guides or the UI
 (zoom, view toggles, `color.*`, `tool.*`, `guide.*`), which must work with
