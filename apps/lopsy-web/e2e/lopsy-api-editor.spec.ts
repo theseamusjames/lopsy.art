@@ -252,6 +252,112 @@ test.describe('window.lopsy on the editor', () => {
     expect(await sample(page, 120, 170)).toBe('#ff0000');
   });
 
+  for (const ending of ['Cancel', 'Apply'] as const) {
+    test(`while a filter's live preview shows, a call is refused unchanged; after ${ending} it runs`, async ({ page }) => {
+      await openEditor(page);
+      await agentNewDocument(page);
+      // A blue square, and red as the colour for the fill the agent will ask for.
+      const setup = await lopsy(page, [
+        { op: 'color.set', foreground: '#0000ff' },
+        { op: 'select.rect', x: 100, y: 100, width: 100, height: 100 },
+        { op: 'paint.fill' },
+        { op: 'select.none' },
+        { op: 'color.set', foreground: '#ff0000' },
+      ]);
+      const redFill = [{ op: 'select.rect', x: 10, y: 10, width: 30, height: 30 }, { op: 'paint.fill' }, { op: 'select.none' }];
+      expect(setup.ok, JSON.stringify(setup)).toBe(true);
+      const history = await openHistoryPanel(page);
+
+      await page.locator('nav[aria-label="Application menu"]').getByText('Filter', { exact: true }).click();
+      await page.getByRole('menuitem', { name: /^Gaussian Blur/ }).click();
+      const dialog = page.getByRole('dialog').filter({ hasText: 'Gaussian Blur' });
+      await expect(dialog).toBeVisible();
+
+      // Preview off: the dialog alone does not stop a call.
+      expect(await lopsy(page, { op: 'doc.info' })).toMatchObject({ ok: true });
+
+      // Just left of the square's edge: the preview's blur spreads blue onto it, on screen.
+      const unblurred = await screenColor(page, 97, 150);
+      await dialog.getByLabel('Preview').check();
+      await expect.poll(() => screenColor(page, 97, 150)).not.toEqual(unblurred);
+      const rowsBefore = await history.getByRole('button').allTextContents();
+      const fillCorner = await screenColor(page, 20, 20);
+
+      for (const invocation of [{ op: 'paint.fill' }, { op: 'doc.info' }, { op: 'color.set', foreground: '#00ff00' }]) {
+        expect(await lopsy(page, invocation), invocation.op).toEqual({
+          ok: false,
+          error: {
+            name: 'CommandError',
+            code: 'unavailable',
+            message: 'The person has a dialog open with a live preview on the layer. Nothing was run. Send the call again once they apply or cancel it.',
+          },
+        });
+      }
+      expect(await lopsy(page, redFill)).toMatchObject({ ok: false, error: { code: 'unavailable', index: 0, completed: [] } });
+      await expect(history.getByRole('button')).toHaveText(rowsBefore);
+      expect(await screenColor(page, 20, 20)).toEqual(fillCorner);
+      await page.screenshot({ path: `e2e/screenshots/lopsy-api-editor-preview-refused-${ending.toLowerCase()}.png` });
+
+      await dialog.getByRole('button', { name: ending }).click();
+      await expect(dialog).toHaveCount(0);
+
+      expect(await lopsy(page, redFill)).toMatchObject({ ok: true });
+      const info = await docInfo(page);
+      expect(info.history.undo).toEqual(
+        ending === 'Apply' ? ['New Document', 'Fill', 'Gaussian Blur', 'Fill'] : ['New Document', 'Fill', 'Fill'],
+      );
+      expect(info.foregroundColor).toBe('#ff0000');
+      expect(await sample(page, 20, 20)).toBe('#ff0000');
+      // The square's left edge: blurred into the white after Apply, as sharp as it was after Cancel.
+      const edge = await sample(page, 100, 150);
+      if (ending === 'Apply') expect(['#0000ff', '#ffffff']).not.toContain(edge);
+      else expect(edge).toBe('#0000ff');
+      expect(await sample(page, 150, 150)).toBe('#0000ff');
+      await expect.poll(() => screenColor(page, 20, 20)).toEqual([255, 0, 0]);
+      await page.screenshot({ path: `e2e/screenshots/lopsy-api-editor-preview-after-${ending.toLowerCase()}.png` });
+    });
+  }
+
+  test('while the person holds a brush stroke, calls are refused; the stroke stays whole and the calls then run', async ({ page }) => {
+    await openEditor(page);
+    await agentNewDocument(page);
+    await page.keyboard.press('b');
+
+    const start = await docToScreen(page, 60, 200);
+    const middle = await docToScreen(page, 180, 200);
+    const end = await docToScreen(page, 300, 250);
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(middle.x, middle.y, { steps: 10 });
+
+    const busy = 'A drag or scroll on the canvas is in progress. Nothing was run. Send the call again once it is released.';
+    const stroke = { op: 'paint.stroke', points: [{ x: 50, y: 50 }, { x: 300, y: 60 }] };
+    for (const invocation of [stroke, { op: 'layer.add' }]) {
+      expect(await lopsy(page, invocation), invocation.op).toEqual({
+        ok: false,
+        error: { name: 'CommandError', code: 'unavailable', message: busy },
+      });
+    }
+
+    await page.mouse.move(end.x, end.y, { steps: 10 });
+    await page.mouse.up();
+
+    const info = await docInfo(page);
+    expect(info.history.undo).toEqual(['New Document', 'Brush']);
+    expect(info.layers.filter((l) => l.type !== 'group').map((l) => l.name)).toEqual(['Background', 'Layer 1']);
+    // The person's stroke, before and after the refused calls, and none of the agent's.
+    expect(await sample(page, 120, 200)).toBe('#000000');
+    expect(await sample(page, 280, 240)).toBe('#000000');
+    expect(await sample(page, 175, 55)).toBe('#ffffff');
+    await page.screenshot({ path: 'e2e/screenshots/lopsy-api-editor-held-stroke.png' });
+
+    // Released: the same calls run, and a batch of two gestures does not refuse its own second step.
+    expect(await lopsy(page, [{ op: 'layer.add' }, stroke, { ...stroke, points: [{ x: 50, y: 90 }, { x: 300, y: 100 }] }])).toMatchObject({ ok: true });
+    expect((await docInfo(page)).history.undo).toEqual(['New Document', 'Brush', 'Add Layer', 'Brush', 'Brush']);
+    expect(await sample(page, 175, 55)).toBe('#000000');
+    expect(await sample(page, 175, 95)).toBe('#000000');
+  });
+
   test('without WebGL2 the editor shows its warning and every call is answered unavailable at once', async ({ page }) => {
     await page.addInitScript(() => {
       const original = HTMLCanvasElement.prototype.getContext;

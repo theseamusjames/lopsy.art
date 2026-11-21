@@ -218,10 +218,18 @@ deferred layer crop pending (`deferred-crop-on-switch.ts`), or 30 passes
 in a row that rendered with none of those outstanding (something, such as
 the pointer over the canvas, keeps the canvas dirty). It rejects
 `unavailable` while the graphics context is lost; on the same path, a
-preflight (`setPreflight`, wired in `index.ts` to `gpuContextPreflight`
-in `context.ts`) refuses a call before `run` while an engine exists and
-its context is lost. `start`, the UI's path, consults neither, so a menu
-item or key still runs its function then. It only waits: it never runs a crop or a readback
+preflight (`setPreflight`, wired in `index.ts` to `apiPreflight` in
+`preflight.ts`) refuses a call, and each step of a batch as it starts,
+before `run`: while an engine exists and its context is lost
+(`gpuContextPreflight`), then while the person is mid-action
+(`personActivityPreflight`): a dialog's live preview is on a layer
+(`isLivePreviewShowing` in `app/live-preview.ts`, set by the filter,
+Color LUT and Pattern Fill preview functions) or a press, pan or scroll on
+the canvas is under way (the UI store's `isInteracting`, which the gesture
+commands also set for their own press and clear before they resolve).
+Each refuses every command with `unavailable`, nothing run. `start`, the
+UI's path, consults neither the wait nor the preflight, so a menu item or
+key still runs its function then. It only waits: it never runs a crop or a readback
 itself. `settles` changes this: `false` for commands that never touch the
 document or the engine, only tool settings, colours, guides or the UI
 (zoom, view toggles, `color.*`, `tool.*`, `guide.*`), which must work with

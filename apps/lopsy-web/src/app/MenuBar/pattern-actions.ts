@@ -4,6 +4,7 @@ import { readLayerPixels, getLayerTextureDimensions, getLayerEngineBounds, filte
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { usePatternStore, generateThumbnail } from '../pattern-store';
 import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
+import { setLivePreviewShowing } from '../live-preview';
 import type { PatternDefinition, PatternFillSettings } from '../pattern-store';
 import { extractSelectionPattern } from './pattern-extract';
 import { guardPixelWrite } from '../../layers/paint-target';
@@ -132,6 +133,7 @@ export function beginPatternPreview(): void {
   const engine = getEngine();
   if (!engine) return;
   saveFilterPreview(engine, activeId);
+  setLivePreviewShowing(true);
   // saveFilterPreview expands the layer texture to doc size — reconcile
   // JS bounds so the next syncLayers push does not clobber it (#771).
   syncLayerAfterFullSize(engine, activeId);
@@ -156,6 +158,7 @@ export function previewPatternFill(patternId: string, settings: PatternFillSetti
 }
 
 export function cancelPatternPreview(): void {
+  setLivePreviewShowing(false);
   const engine = getEngine();
   if (!engine) return;
   restoreFilterPreview(engine);
@@ -168,6 +171,7 @@ export function cancelPatternPreview(): void {
 }
 
 export function applyPatternFillWithPreview(patternId: string, settings: PatternFillSettings): void {
+  setLivePreviewShowing(false);
   const pattern = usePatternStore.getState().patterns.find((p) => p.id === patternId);
   if (!pattern) return;
 
