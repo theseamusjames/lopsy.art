@@ -180,6 +180,11 @@ export function beginLayerTransformSession(box: TransformState): LayerTransformB
     if (x !== undefined && y !== undefined && width > 0 && height > 0) contentRects.set(id, { x, y, width, height });
   }
   if (contentRects.size === 0) return 'nothing';
+  // Only a lifted layer's pixels follow the box; storing the map on any other
+  // text layer would leave its transform disagreeing with its glyphs (#1799).
+  for (const id of textPlacements.keys()) {
+    if (!contentRects.has(id)) textPlacements.delete(id);
+  }
   live = { layerIds: targets, contentRects, textPlacements };
   useUIStore.getState().setLayerTransform(box);
   return 'begun';
@@ -269,6 +274,11 @@ function syncSessionTextTransforms(session: LiveSession): void {
 export function markLayerTransformDirty(): void {
   if (!live) return;
   for (const id of live.layerIds) clearJsPixelData(id);
+  // A session the engine already dropped moved no pixels on this drag
+  // (`renderLayerTransform` did nothing), so its text keeps its transform:
+  // storing the box's map would leave the glyphs upright under it (#1799).
+  const engine = getEngine();
+  if (!engine || !hasLayerTransform(engine)) return;
   syncSessionTextTransforms(live);
 }
 
