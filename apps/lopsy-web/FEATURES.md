@@ -2529,7 +2529,7 @@ A `role="status"` footer across the bottom of the window. Left group: the zoom p
 
 ### Modifier Keys Mid-Drag
 
-No canvas gesture listens to the keyboard while the button is down. Every drag reads Shift, Alt and Cmd from its pointer events — the press, each pointer-move, and for the Shape tool the release — so a key pressed or released with the pointer held still takes effect at the next movement, or not at all. Only three things react to the key itself: the paint tools' shift-hold line preview (Shift, Cmd, Ctrl), the selection tools' handle cursor (Shift, Alt) and the `grab` cursor (Space). Ctrl is not read by any drag (see *⌘ and Ctrl* under [Global UI Conventions](#global-ui-conventions)).
+No canvas gesture listens to the keyboard while the button is down. Every drag reads Shift, Alt and Cmd from its pointer events — the press, each pointer-move, and for the Shape tool the release — so a key pressed or released with the pointer held still takes effect at the next movement, or not at all. Only three things react to the key itself: the paint tools' shift-hold line preview (Shift, Cmd, Ctrl), the selection tools' handle cursor (Shift, Alt) and the `grab` cursor (Space). Ctrl is read by only one kind of drag: the transform handles, where it stands in for Cmd (see *⌘ and Ctrl* under [Global UI Conventions](#global-ui-conventions)).
 
 | Gesture | Read once, at the press | Re-read on every move | At release |
 |---|---|---|---|
@@ -2538,7 +2538,7 @@ No canvas gesture listens to the keyboard while the button is down. Every drag r
 | Lasso, Magnetic Lasso, Magic Wand | Shift / Alt combine mode | nothing | — |
 | Shape | — | Cmd 1:1 | Cmd re-read for Path output and for a Pixels shape past the canvas edge |
 | Gradient | — | Cmd 15° | last render kept |
-| Transform handles (Move tool, drag-out selection tools, live text) | whether the press grabs the handle (Shift / Alt with a selection tool) | Cmd uniform scale / 15° rotate | last step kept |
+| Transform handles (Move tool, drag-out selection tools, live text) | whether the press grabs the handle (Shift / Alt with a selection tool) | Cmd or Ctrl uniform scale / 15° rotate | last step kept |
 | Tilt-Shift angle dial | — | Cmd 15° | — |
 | Move | Alt duplicate | nothing (Shift is ignored) | — |
 | Path / Pen | Cmd convert or pull handles | nothing | — |
