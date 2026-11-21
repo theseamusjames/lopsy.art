@@ -29,6 +29,11 @@ is `docs/photonamous-spec.md`; running and setup are in
   picks photos already in Drive with Google's Picker and adds them to the
   library; Settings chooses whether they are moved into `Originals/` or
   left where they are.
+- **Where the library lives** is named in the header, beside the
+  wordmark: "Google Drive", "This browser" or the folder's name. The
+  Google account's email is not shown there; it is in Settings (This
+  device > Library), the import dialog's free-space line and the start
+  screen's "Continue as …" button.
 - **Close this library** (header) goes back to the start screen.
 - **Layout in storage.** A `Photonamous/` folder holds `Originals/`
   (filed by capture year and month), `Lopsy documents/`, `Exports/` and

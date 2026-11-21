@@ -20,7 +20,7 @@ export type StorageChoice = 'google-drive' | 'browser' | 'local-folder';
 
 export interface Connection {
   readonly session: LibrarySession;
-  /** For the header: the account email, "This browser" or the folder's name. */
+  /** The account email, "This browser" or the folder's name. Settings shows it; the header does unless it is an email. */
   readonly accountLabel: string;
 }
 

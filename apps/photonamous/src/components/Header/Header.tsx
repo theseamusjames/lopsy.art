@@ -13,6 +13,7 @@ import { Popover } from '../Popover/Popover';
 import { SyncPanel } from '../SyncPanel/SyncPanel';
 import { ShortcutHelp } from '../ShortcutHelp/ShortcutHelp';
 import { describeSync } from '../SyncPanel/sync-words';
+import { describeWhere } from './where-words';
 import styles from './Header.module.css';
 
 export function Header() {
@@ -41,6 +42,7 @@ export function Header() {
 
   if (!connection) return null;
   const exportCount = selectionSize > 0 ? selectionSize : focus !== null ? 1 : 0;
+  const where = describeWhere(connection.session.adapter.kind, connection.accountLabel);
 
   const icon =
     status.state === 'syncing' ? (
@@ -69,8 +71,8 @@ export function Header() {
     <header className={styles.header}>
       <div className={styles.identity}>
         <span className={styles.brand}>Photonamous</span>
-        <span className={styles.where} title={connection.accountLabel}>
-          {connection.accountLabel}
+        <span className={styles.where} title={where}>
+          {where}
         </span>
       </div>
 
