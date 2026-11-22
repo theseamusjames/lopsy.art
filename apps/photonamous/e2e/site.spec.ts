@@ -200,6 +200,22 @@ for (const { path, title, heading, other } of DOCUMENTS) {
   });
 }
 
+test('the start screen links to the Privacy Policy and the Terms', async ({ page }) => {
+  // Google's review wants the policy linked from the home page, at the address given on the consent screen.
+  for (const { path, heading, other } of DOCUMENTS) {
+    await page.goto('/');
+    const name = other.name === 'Terms' ? 'Privacy' : 'Terms';
+    const link = page.getByRole('navigation', { name: 'About Photonamous' }).getByRole('link', { name, exact: true });
+    await expect(link).toHaveAttribute('href', path);
+    await link.click();
+    await expect(page).toHaveURL(new RegExp(`${path}$`));
+    await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
+    // And back to the app.
+    await page.getByRole('navigation', { name: 'Photonamous' }).getByRole('link', { name: 'Open the app' }).click();
+    await expect(page.getByRole('navigation', { name: 'About Photonamous' })).toBeVisible();
+  }
+});
+
 test('the Privacy Policy says what Google asks an app using Drive to say', async ({ page }) => {
   await page.goto('/privacy');
   const policy = page.getByRole('main');
