@@ -3,7 +3,8 @@ import { openGeneratedImage, openHarness, waitForReady } from './harness';
 
 /**
  * Clipping warnings (spec 5.4): the histogram's highlight and shadow
- * indicators, and J, paint clipped pixels on the live frame only.
+ * indicators, the moon and sun under the photo, and J, paint clipped
+ * pixels on the live frame only.
  */
 
 /** Pure-red pixels (the highlight warning's colour) in a PNG or JPEG, decoded in the page. */
@@ -84,6 +85,39 @@ test('the highlight warning paints blown pixels red on screen, never in the expo
   await page.keyboard.press('j');
   await expect(page.getByTestId('clip-highlights')).toHaveAttribute('aria-pressed', 'false');
   await expect.poll(() => liveRed(page), { timeout: 15_000 }).toBe(0);
+});
+
+test('the moon and sun under the photo are the same toggles as the histogram markers', async ({ page }) => {
+  await openHarness(page);
+  await openGeneratedImage(page, 640, 480, 'image/jpeg', ['#404040', '#ffffff', '#ffffff']);
+  await waitForReady(page);
+  await expect(page.getByTestId('histogram')).toHaveAttribute('data-ready', 'true');
+  const sun = page.getByTestId('stage-clip-highlights');
+  const moon = page.getByTestId('stage-clip-shadows');
+  // Lit where the photo clips, and saying how much, as the histogram's marker does.
+  await expect(sun).toHaveAttribute('data-clipped', 'true');
+  await expect(moon).not.toHaveAttribute('data-clipped', 'true');
+  expect(await sun.getAttribute('title')).toBe(await page.getByTestId('clip-highlights').getAttribute('title'));
+
+  await sun.click();
+  await expect(sun).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('clip-highlights')).toHaveAttribute('aria-pressed', 'true');
+  await expect(moon).toHaveAttribute('aria-pressed', 'false');
+  await expect.poll(() => liveRed(page), { timeout: 15_000 }).toBeGreaterThan(1000);
+
+  // Either control turns it off again.
+  await page.getByTestId('clip-highlights').click();
+  await expect(sun).toHaveAttribute('aria-pressed', 'false');
+  await expect.poll(() => liveRed(page), { timeout: 15_000 }).toBe(0);
+
+  // From the keyboard, and J still moves both.
+  await moon.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('clip-shadows')).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('j');
+  await expect(sun).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('j');
+  await expect(moon).toHaveAttribute('aria-pressed', 'false');
 });
 
 test('Alt while dragging Whites shows the highlight clipping for the drag only', async ({ page }) => {

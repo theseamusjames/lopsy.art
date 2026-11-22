@@ -304,14 +304,18 @@ to the library**.
   one pixel of the photo to one pixel of the screen) and the zoom level,
   which works as Lopsy's does: drag left or right on it to zoom out or in
   (1 % a pixel, 10 % to 400 %), and double-click it for 100 %. On the
-  right, two icon buttons: **Before** (or hold `\`) and **Split** (before
-  and after side by side, with a divider to drag).
+  right, the two clipping warnings (a moon for shadows, a sun for
+  highlights; see Histogram below), then two icon buttons: **Before** (or
+  hold `\`) and **Split** (before and after side by side, with a divider
+  to drag).
 - **Pixel readout**: the rendered colour under the pointer (R G B,
   0–255).
 - **Histogram** of the rendered edit, updated as it changes. Its shadow
   and highlight markers light when the photo clips, and clicking them
   shows clipped pixels on the photo (blue at black, red at white; never
-  in exports or previews); **J** toggles both. Holding Alt (Option)
+  in exports or previews); **J** toggles both. The moon and sun buttons
+  in the bar under the photo are the same two toggles: each lights when
+  its end clips and is pressed while its warning shows. Holding Alt (Option)
   while dragging Blacks or Whites shows that side's clipping, and while
   dragging a Sharpen slider shows what is being sharpened.
 - **Straighten**: Angle (−45..45°), and **Level**: draw along something
@@ -591,8 +595,9 @@ best-practice rules at each step; the `a11y-*.spec.ts` and
   - The zoom level under the photo is a button: Enter or Space gives
     100 %, and the arrow keys step to the next 10 % (Right and Up in,
     Left and Down out) without changing photo.
-  - The histogram's clipping markers are outlined, or filled when that
-    end clips; its channels are solid, dashed and dotted lines, named in
+  - The histogram's clipping markers, and the moon and sun under the
+    photo, are outlined, or filled when that end clips; the histogram's
+    channels are solid, dashed and dotted lines, named in
     a key. The current history step and version are marked by a bar as
     well as by colour.
   - Exposure and Angle tell screen readers their units ("+0.50 EV").

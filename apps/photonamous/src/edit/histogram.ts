@@ -84,6 +84,13 @@ export function formatShare(share: number): string {
   return `${pct < 10 ? pct.toFixed(1) : Math.round(pct)} %`;
 }
 
+/** The tooltip of a clipping toggle: how much of the photo clips at that end, and what a click shows. */
+export function clippingTitle(side: keyof Clipping, share: number): string {
+  return side === 'shadows'
+    ? `Shadows at black: ${formatShare(share)}. Click to show them in blue (J).`
+    : `Highlights at white: ${formatShare(share)}. Click to show them in red (J).`;
+}
+
 export interface ToneShares {
   /** Share of the luminance in the darkest third of the range, 0..1. */
   readonly dark: number;

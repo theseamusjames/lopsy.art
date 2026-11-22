@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BINS, clipping, describeHistogram, formatShare, histogramPath, innerMax, isClipped, parseHistogram, sharedMax, toneShares } from './histogram';
+import { BINS, clipping, clippingTitle, describeHistogram, formatShare, histogramPath, innerMax, isClipped, parseHistogram, sharedMax, toneShares } from './histogram';
 
 function bins(fill: (channel: number, bin: number) => number): Uint32Array {
   const out = new Uint32Array(BINS * 4);
@@ -64,6 +64,11 @@ describe('clipping', () => {
     expect(isClipped(clip.shadows)).toBe(true);
     expect(isClipped(0.001)).toBe(false);
     expect(formatShare(0.0042)).toBe('0.4 %');
+  });
+
+  it('titles each toggle with its share and its colour on the photo', () => {
+    expect(clippingTitle('shadows', 0.0042)).toBe('Shadows at black: 0.4 %. Click to show them in blue (J).');
+    expect(clippingTitle('highlights', 0.25)).toBe('Highlights at white: 25 %. Click to show them in red (J).');
   });
 });
 

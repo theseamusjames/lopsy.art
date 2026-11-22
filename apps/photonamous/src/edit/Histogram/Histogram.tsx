@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { clipping, describeHistogram, formatShare, histogramPath, isClipped, parseHistogram, sharedMax } from '../histogram';
+import { clipping, clippingTitle, describeHistogram, histogramPath, isClipped, parseHistogram, sharedMax } from '../histogram';
 import { useClippingWarning } from '../clipping-warning';
 import styles from './Histogram.module.css';
 
@@ -73,7 +73,7 @@ export function Histogram({ bins }: HistogramProps) {
           aria-pressed={warning.shadows}
           aria-label="Show shadow clipping"
           aria-keyshortcuts="J"
-          title={`Shadows at black: ${formatShare(shadows)}. Click to show them in blue (J).`}
+          title={clippingTitle('shadows', shadows)}
           onClick={() => warning.toggle('shadows')}
         >
           <svg className={styles.marker} viewBox="0 0 10 10" aria-hidden="true">
@@ -89,7 +89,7 @@ export function Histogram({ bins }: HistogramProps) {
           aria-pressed={warning.highlights}
           aria-label="Show highlight clipping"
           aria-keyshortcuts="J"
-          title={`Highlights at white: ${formatShare(highlights)}. Click to show them in red (J).`}
+          title={clippingTitle('highlights', highlights)}
           onClick={() => warning.toggle('highlights')}
         >
           <svg className={styles.marker} viewBox="0 0 10 10" aria-hidden="true">

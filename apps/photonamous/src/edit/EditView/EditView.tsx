@@ -48,6 +48,7 @@ import { Modal } from '../../components/Modal/Modal';
 import type { PhotoInfo } from '../../engine/develop-engine';
 import type { DevelopProfile } from '../../engine/profiles';
 import { Histogram } from '../Histogram/Histogram';
+import { ClippingButtons } from '../ClippingButtons/ClippingButtons';
 import { CropTool } from '../CropTool/CropTool';
 import { WhiteBalanceMenu } from '../WhiteBalanceMenu/WhiteBalanceMenu';
 import { WhiteBalancePicker } from '../WhiteBalancePicker/WhiteBalancePicker';
@@ -1042,6 +1043,7 @@ export function EditView({
               />
             </div>
             <div className={styles.toolGroup}>
+              <ClippingButtons bins={histogram} isDisabled={!canEdit} />
               <button
                 type="button"
                 className={styles.iconButton}

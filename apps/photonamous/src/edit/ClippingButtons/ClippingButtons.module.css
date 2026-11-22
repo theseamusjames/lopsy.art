@@ -1,0 +1,49 @@
+.buttons {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.button[aria-pressed='true'] {
+  background: var(--color-bg-active);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+/* The histogram markers' colours: the icon is filled as well, so it does not rest on colour alone. */
+.button[data-side='shadows'][data-clipped]:not(:disabled) {
+  color: var(--color-accent);
+}
+
+.button[data-side='highlights'][data-clipped]:not(:disabled) {
+  color: var(--color-warning);
+}
+
+.button:disabled {
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+}
