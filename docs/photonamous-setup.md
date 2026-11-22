@@ -106,8 +106,7 @@ data on a device apart from another's.
      `https://photonamous.com/terms` (`apps/photonamous/privacy.html` and
      `terms.html`). Google's review wants the policy on the app's own
      domain, linked from the home page (the start screen links to it), at
-     the same address as given here. Fill in what those two pages mark
-     "To fill in" before publishing them.
+     the same address as given here.
    - Data access (scopes): `.../auth/drive.file` and nothing else. Remove
      `openid`, `.../auth/userinfo.email` and `.../auth/userinfo.profile`
      if the project has them from before 2026-11-21: the app no longer

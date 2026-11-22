@@ -185,14 +185,6 @@ strong {
   margin-top: 0;
 }
 
-/* Something the operator has still to decide. It must not reach a published page: grep for "To fill in". */
-.fill {
-  padding: 0 var(--space-1);
-  color: var(--color-warning);
-  border: 1px dashed var(--color-warning);
-  border-radius: var(--radius-sm);
-}
-
 .foot {
   padding-top: var(--space-5);
   padding-bottom: var(--space-8);
@@ -232,8 +224,7 @@ strong {
   a,
   .home,
   .dated,
-  .foot,
-  .fill {
+  .foot {
     color: #000;
   }
 
