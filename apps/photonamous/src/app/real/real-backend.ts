@@ -12,7 +12,7 @@ import { IndexedDbLocalStore } from '@lopsy/photos-core/library/local-store';
 import { openBrowserStorage, openPickedFolder } from '@lopsy/photos-core/storage/local-folder-adapter';
 import { GoogleDriveAdapter } from '@lopsy/photos-core/storage/google-drive/drive-adapter';
 import { IndexedDbUploadSessionStore } from '@lopsy/photos-core/storage/google-drive/upload-sessions';
-import { AccountMismatchError, fetchGoogleAccount, GoogleTokenSource } from '@lopsy/photos-core/auth/google-token-source';
+import { AccountMismatchError, fetchDriveAccountId, GoogleTokenSource } from '@lopsy/photos-core/auth/google-token-source';
 import { isStorageError } from '@lopsy/photos-core/storage/errors';
 import { resumeImports, startImport } from '@lopsy/photos-core/import/importer';
 import { OpfsStagingStore, type StagingStore } from '@lopsy/photos-core/import/staging';
@@ -52,6 +52,7 @@ import { createEngineExportRenderer, type EngineRenderer } from '../../engine/ex
 import { PreviewRefresher } from '../preview-refresh';
 import { useUi } from '../store';
 import {
+  DRIVE_LABEL,
   describeDevice,
   libraryStoreName,
   loadLastConnection,
@@ -75,7 +76,7 @@ interface SessionExtras {
   readonly kind: StorageChoice;
   /** The unguarded session, for repair (setOriginalStatus). */
   readonly raw: PhotosLibrarySession;
-  /** The Google `sub`, folder name or 'opfs'; and the email or folder name. */
+  /** Drive's ID for the Google account, the folder name or 'opfs'; and what the storage is called. */
   readonly owner: string;
   readonly label: string;
   readonly tokenSource: GoogleTokenSource | null;
@@ -85,9 +86,8 @@ interface SessionExtras {
   readonly queue: ImportQueueStore | null;
 }
 
-/** The device-cache folder for an account: the Google `sub`, or 'local' for a picked folder. */
 /**
- * The device-cache folder for a storage: the Google `sub` for Drive; for a
+ * The device-cache folder for a storage: Drive's ID for the account; for a
  * picked folder, the folder's own identity (its storage root id), so two
  * folders (or a copy of one, whose file ids repeat) never share cached
  * previews. Null for the browser's own storage, which needs no cache.
@@ -102,10 +102,10 @@ export function cacheAccountId(kind: StorageChoice, owner: string, rootId: strin
   return /^[A-Za-z0-9_-]{1,128}$/.test(owner) ? owner : null;
 }
 
-/** Refuses a token for a different Google account than the library's. */
-export function checkSameAccount(expected: { readonly id: string; readonly email: string }, actual: { readonly id: string; readonly email: string }): void {
-  if (expected.id !== actual.id) {
-    throw new Error(`You signed in as ${actual.email}, but this library belongs to ${expected.email}. Sign in with ${expected.email} to keep saving.`);
+/** Refuses a token for a different Google account than the library's. The app knows the accounts only by Drive's ID, so it cannot name them. */
+export function checkSameAccount(expectedId: string, actualId: string): void {
+  if (expectedId !== actualId) {
+    throw new Error('You signed in with a different Google account than the one this library is in. Sign in with that account to keep saving.');
   }
 }
 
@@ -285,15 +285,15 @@ export class RealBackend implements PhotosBackend {
           }
           throw error;
         }
-        const account = await fetchGoogleAccount(token);
-        tokenSource.rememberAccount(account);
-        tokenOptions.expectedAccountId = account.id;
+        // All the app learns about the account: Drive's opaque ID for it, to keep its data on this device apart.
+        const accountId = await fetchDriveAccountId(token);
+        tokenOptions.expectedAccountId = accountId;
         const adapter = new GoogleDriveAdapter({
           tokenSource,
-          label: account.email,
-          uploadSessions: new IndexedDbUploadSessionStore(uploadSessionStoreName(account.id)),
+          label: DRIVE_LABEL,
+          uploadSessions: new IndexedDbUploadSessionStore(uploadSessionStoreName(accountId)),
         });
-        return { adapter, owner: account.id, label: account.email, tokenSource };
+        return { adapter, owner: accountId, label: DRIVE_LABEL, tokenSource };
       }
     }
   }
@@ -304,9 +304,9 @@ export class RealBackend implements PhotosBackend {
     if (extras && tokenSource) {
       const token = await tokenSource.requestInteractive();
       // The popup lets the user pick any account; only the library's own may write to it.
-      const account = await fetchGoogleAccount(token);
+      const accountId = await fetchDriveAccountId(token);
       try {
-        checkSameAccount({ id: extras.owner, email: extras.label }, account);
+        checkSameAccount(extras.owner, accountId);
       } catch (error) {
         tokenSource.invalidate();
         throw error;

@@ -6,7 +6,7 @@ const APP = 'https://photos.test/';
 test('a page reaches the fake Drive and the GIS stub', async ({ page }) => {
   const drive = await routeFakeDrive(page);
   await page.route(APP, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Fake Drive</title>' }));
-  await page.addInitScript(gisStubInitScript('test-token', 'tester@example.com'));
+  await page.addInitScript(gisStubInitScript('test-token'));
   await page.goto(APP);
 
   const result = await page.evaluate(async () => {
@@ -15,13 +15,14 @@ test('a page reaches the fake Drive and the GIS stub', async ({ page }) => {
     const token = await new Promise<string>((resolve) => {
       const client = oauth2.initTokenClient({
         client_id: 'client',
-        scope: 'openid https://www.googleapis.com/auth/drive.file',
+        scope: 'https://www.googleapis.com/auth/drive.file',
         callback: (response: { access_token: string }) => resolve(response.access_token),
       });
       client.requestAccessToken({ prompt: '' });
     });
     const auth = { Authorization: `Bearer ${token}` };
-    const me = await (await fetch(`${api}/oauth2/v3/userinfo`, { headers: auth })).json();
+    const me = await (await fetch(`${api}/drive/v3/about?fields=user(permissionId)`, { headers: auth })).json();
+    const whoAmI = await fetch(`${api}/oauth2/v3/userinfo`, { headers: auth });
 
     const init = await fetch(`${api}/upload/drive/v3/files?uploadType=resumable&fields=id`, {
       method: 'POST',
@@ -36,7 +37,8 @@ test('a page reaches the fake Drive and the GIS stub', async ({ page }) => {
     const refused = await fetch(`${api}/drive/v3/about?fields=storageQuota`, { headers: { Authorization: 'Bearer wrong' } });
     return {
       token,
-      email: me.email,
+      account: me.user.permissionId,
+      whoAmIStatus: whoAmI.status,
       sessionFound: session.includes('upload_id='),
       partialStatus: partial.status,
       partialRange: partial.headers.get('Range'),
@@ -49,7 +51,8 @@ test('a page reaches the fake Drive and the GIS stub', async ({ page }) => {
 
   expect(result).toMatchObject({
     token: 'test-token',
-    email: 'tester@example.com',
+    account: '01234567890123456789',
+    whoAmIStatus: 401,
     sessionFound: true,
     partialStatus: 308,
     partialRange: 'bytes=0-4',

@@ -20,11 +20,3 @@ export interface TokenSource {
   /** Forget the current token, e.g. after a 401, so the next getToken refreshes. */
   invalidate(): void;
 }
-
-export interface GoogleAccount {
-  /** Google's stable user ID (`sub`); local data is partitioned by it. */
-  readonly id: string;
-  readonly email: string;
-  readonly name: string;
-  readonly pictureUrl: string | null;
-}

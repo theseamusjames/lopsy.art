@@ -8,7 +8,9 @@
  * appProperties, trashed state (inherited from trashed folders), revisions,
  * SHA-256 checksums, multipart and resumable uploads (status queries and
  * partial chunks included), alt=media with Range, the `q` subset the
- * adapter writes, the changes feed, about.get and the userinfo endpoint.
+ * adapter writes, the changes feed and about.get (the quota, and the
+ * account's ID). Its userinfo endpoint refuses every token, as Google's
+ * refuses one for Drive files only: the app never asks who the user is.
  * It checks the bearer token and that every API request names `fields`,
  * and it can inject the failures Drive produces in practice.
  */
@@ -49,7 +51,8 @@ export interface FakeDriveOptions {
   /** Largest page the changes feed and file lists return, whatever pageSize asks for. */
   readonly maxPageSize?: number;
   readonly now?: () => Date;
-  readonly account?: { readonly sub: string; readonly email: string; readonly name: string };
+  /** The account's ID in Drive (`about.user.permissionId`). */
+  readonly account?: { readonly permissionId: string };
   /**
    * Answers CORS preflights and adds CORS headers, for serving the fake to a
    * page through Playwright's page.route (the page's origin differs from
@@ -119,7 +122,7 @@ export function createFakeDrive(options: FakeDriveOptions = {}): FakeDrive {
   const tokens = new Set(options.tokens ?? ['test-token']);
   const now = options.now ?? (() => new Date());
   const maxPageSize = options.maxPageSize ?? 1000;
-  const account = options.account ?? { sub: '1234567890', email: 'tester@example.com', name: 'Test User' };
+  const account = options.account ?? { permissionId: '01234567890123456789' };
   let storageLimit: number | null = options.storageLimit ?? null;
   let nextId = 1;
   let order = 0;
@@ -492,9 +495,8 @@ export function createFakeDrive(options: FakeDriveOptions = {}): FakeDrive {
     const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
     if (!tokens.has(token)) throw new HttpError(401, 'authError', 'Invalid Credentials');
 
-    if (path === '/oauth2/v3/userinfo') {
-      return json(200, { sub: account.sub, email: account.email, name: account.name, picture: 'https://example.com/me.png' });
-    }
+    // The token is for Drive files only, as the app's is: Google would not say who the user is.
+    if (path === '/oauth2/v3/userinfo') throw new HttpError(401, 'authError', 'The token carries no scope for userinfo');
 
     const isSessionPut = method === 'PUT' && url.searchParams.has('upload_id');
     if (!isSessionPut && !url.searchParams.has('fields')) {
@@ -503,7 +505,13 @@ export function createFakeDrive(options: FakeDriveOptions = {}): FakeDrive {
     if (isSessionPut) return sessionPut(request, url, failure?.type === 'drop-chunk' ? failure : null);
 
     if (path === `${API}/about` && method === 'GET') {
-      return json(200, { storageQuota: { usage: String(usage()), ...(storageLimit === null ? {} : { limit: String(storageLimit) }) } });
+      const fields = url.searchParams.get('fields') ?? '';
+      return json(200, {
+        ...(fields.includes('user') ? { user: { permissionId: account.permissionId } } : {}),
+        ...(fields.includes('storageQuota')
+          ? { storageQuota: { usage: String(usage()), ...(storageLimit === null ? {} : { limit: String(storageLimit) }) } }
+          : {}),
+      });
     }
     if (path === `${API}/changes/startPageToken` && method === 'GET') {
       return json(200, { startPageToken: String(changes.length + 1) });

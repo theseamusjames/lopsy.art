@@ -152,9 +152,10 @@ app is that second app.
 1. The user opens the app at `photonamous.com` and sees a short
    page: what the app does, that photos live in their own Google Drive,
    and a **Sign in with Google** button.
-2. Google's consent screen asks for the basic profile and "the specific
-   Google Drive files you use with this app". If the user unticks Drive,
-   the app explains why it needs it and offers to ask again.
+2. Google's consent screen asks for one thing, "the specific Google Drive
+   files you use with this app": no name, email address or profile. If
+   the user refuses it, the app explains why it needs it and offers to
+   ask again.
 3. The app looks for an existing library: a folder this app created and
    tagged as one (6.5). If there is none, it creates `Photonamous` in My
    Drive with its four subfolders and a `README.txt`.
@@ -552,21 +553,27 @@ directory is picked up from where the deploy runs.
 
 **Client.** Google Identity Services, token model:
 `google.accounts.oauth2.initTokenClient`.
-- Scopes: `openid email profile https://www.googleapis.com/auth/drive.file`.
+- Scope: `https://www.googleapis.com/auth/drive.file`, and nothing else.
+  The app does not ask who the user is, so the consent screen lists only
+  Drive.
 - Google lets users untick individual scopes, so after every grant the
   app checks that Drive was included (`hasGrantedAllScopes`).
 
-**Identity.** The user's stable ID is the `sub` from the userinfo
-endpoint. Everything stored on the device is partitioned by `sub`, so two
-Google accounts on one browser never mix.
+**Identity.** The app needs to tell one Google account from another, not
+to know whose it is. Its ID for an account is Drive's own,
+`about.user.permissionId`, read with `fields=user(permissionId)` so the
+name, email and photo Drive could also return never arrive. Everything
+stored on the device is partitioned by that ID (written `<sub>` below,
+from when it was the userinfo `sub`), so two Google accounts on one
+browser never mix, and a reconnect with another account is refused.
 
 **The token.**
 - It lives in memory only, never in `localStorage` or IndexedDB.
 - One tab, the sync leader (6.6), requests tokens and shares them with
   the app's other tabs over BroadcastChannel, so several tabs do not
   each open a popup.
-- The last email is kept in `localStorage` and passed as `login_hint` to
-  skip the account chooser.
+- No `login_hint` is passed: the app has no email to pass, so Google's
+  popup shows its account chooser.
 
 **Expiry.** Tokens last about an hour, and the token model has no refresh
 token.
@@ -1565,8 +1572,8 @@ The step-by-step version for the proof of concept is `photonamous-setup.md`.
 - [ ] OAuth consent screen: External, app name, logo, support email,
       `photonamous.com` as the authorized domain, verified in Search
       Console; a privacy policy
-      page; a terms page. Scopes `openid`, `email`, `profile`,
-      `drive.file`. Status: Testing, with test users.
+      page; a terms page. Scope `drive.file` only. Status: Testing, with
+      test users.
 - [ ] OAuth client, Web application, with JavaScript origins
       `https://photonamous.com` and `http://localhost:<dev port>`. With the helper, also the redirect
       URI `<app URL>/auth/callback`.
@@ -1626,7 +1633,7 @@ feature: `apps/photonamous/FEATURES.md`. How the library database works:
 
 | Spec | Built |
 |---|---|
-| 5.1 First run | Three kinds of storage: Google Drive (GIS token model, `drive.file`), a folder on this computer (Chromium) and this browser (OPFS). Reconnecting checks it is the same Google account. |
+| 5.1 First run | The start screen is the landing page: a demonstration video beside the wordmark, one line and **Try it now**, which opens three steps (connect, upload, edit) over **Sign in with Google**. Production offers Google Drive only (GIS token model, `drive.file` and no other scope: the app never asks who the user is); a folder on this computer (Chromium) and this browser (OPFS) are offered by development builds, since storage a browser may clear is too easily lost for a photo library. Reconnecting checks it is the same Google account. |
 | 5.2 Library | Grid (sizes, sorting, windowed for large libraries), Single, Compare and Cull. Ratings, labels, drop, titles, captions, keywords, albums (whole photos or single versions), the Info panel. Filters with counts, text search, saved searches, dates, imports, bursts. Stacks of RAW+JPEG pairs, versions and Lopsy documents. Library undo (⌘Z) for marks, keywords, albums, deletes and versions. Delete to trash and restore. Check library: orphans, missing, trashed, changed and left-over files, with repair. |
 | 5.3, 6.8 Import | Files, folders, and Add from Google Drive (Picker). Duplicates by SHA-256 (named before importing), RAW+JPEG pairs, embedded previews, EXIF, XMP sidecars with their develop settings (`crs:`) mapped (`xmp/crs-mapping.ts`), a preset, album and keywords to apply. Staged in OPFS, resumable uploads with checksum verification, retry with backoff, Retry for parked items. Survives a reload; one tab at a time claims an import. |
 | 5.4, 6.10 Edit | Profile (Standard and the Fujifilm looks from the base curves, Neutral, Monochrome), White balance (As shot, Auto, the camera's presets, picker, Kelvin for RAW), Tone with Auto, Curves (luminance, red, green, blue), Color with Color by hue, Color Grading, Local contrast (large details, small details, haze), Sharpness & noise, Framing (crop with aspect presets, straighten with a Level tool, rotate, flip both ways), Finish (vignette amount, midpoint, roundness, feather; grain), Masks (up to 8 linear or radial gradients with their own tone, white balance and saturation). Histogram with clipping warnings (J, and Alt while dragging Blacks, Whites or sharpening). History with click-back, Versions, Presets (built-in and the user's, previewed on hover), Copy and Paste edits, Before and after (toggle and split), filmstrip. Edits run on a working image of at most 4096 px; full resolution loads at 50 % zoom and for output. |

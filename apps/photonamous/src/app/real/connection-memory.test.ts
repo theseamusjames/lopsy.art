@@ -13,11 +13,25 @@ describe('last connection', () => {
     const last = { kind: 'local-folder' as const, label: 'Pictures' };
     expect(parseLastConnection(serializeLastConnection(last))).toEqual(last);
     expect(parseLastConnection(null)).toBeNull();
-    const drive = { kind: 'google-drive' as const, label: 'a@b.c', accountId: '123' };
+    const drive = { kind: 'google-drive' as const, label: 'Google Drive', accountId: '123' };
     expect(parseLastConnection(serializeLastConnection(drive))).toEqual(drive);
     expect(parseLastConnection('{')).toBeNull();
     expect(parseLastConnection('{"kind":"ftp","label":"x"}')).toBeNull();
     expect(parseLastConnection('{"kind":"browser"}')).toBeNull();
+  });
+});
+
+describe('a Drive connection remembered by a build that asked who the user was', () => {
+  const old = '{"kind":"google-drive","label":"someone@example.com","accountId":"109876543210987654321"}';
+
+  it('is offered again without the email or the Google ID it kept', () => {
+    expect(parseLastConnection(old)).toEqual({ kind: 'google-drive', label: 'Google Drive' });
+  });
+
+  it('is written back without them', () => {
+    const kept = serializeLastConnection(parseLastConnection(old) ?? { kind: 'browser', label: '' });
+    expect(kept).not.toContain('someone@example.com');
+    expect(kept).not.toContain('109876543210987654321');
   });
 });
 

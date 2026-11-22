@@ -4,7 +4,7 @@
  * them with page.evaluate and assert on the plain data they return.
  */
 
-import { fetchGoogleAccount, GoogleTokenSource } from '../../src/auth/google-token-source';
+import { fetchDriveAccountId, GoogleTokenSource } from '../../src/auth/google-token-source';
 import { StaticTokenSource } from '../../src/auth/static-token-source';
 import { OpfsBlobCache } from '../../src/cache/opfs-blob-cache';
 import { IndexedDbLocalStore } from '../../src/library/local-store';
@@ -156,12 +156,12 @@ export const harness = {
     return { usage: await cache.usage(), present };
   },
 
-  async gisToken(): Promise<{ interactive: string; silent: string; email: string }> {
+  async gisToken(): Promise<{ interactive: string; silent: string; accountId: string; scope: unknown }> {
     const source = new GoogleTokenSource({ clientId: 'test-client' });
     const interactive = await source.requestInteractive();
     const silent = await source.getToken();
-    const account = await fetchGoogleAccount(silent);
-    return { interactive, silent, email: account.email };
+    const accountId = await fetchDriveAccountId(silent);
+    return { interactive, silent, accountId, scope: Reflect.get(Reflect.get(window, '__lopsyGisStub') ?? {}, 'scope') };
   },
 
   /** Starts a resumable upload; resolves once Drive confirmed its first chunk, while the rest is still in flight. */

@@ -56,7 +56,7 @@ export type FetchFunction = (input: RequestInfo | URL, init?: RequestInit) => Pr
 
 export interface GoogleDriveAdapterOptions {
   readonly tokenSource: TokenSource;
-  /** Shown in the UI: the account's email. */
+  /** Shown in the UI. */
   readonly label: string;
   readonly fetch?: FetchFunction;
   readonly sleep?: (ms: number) => Promise<void>;

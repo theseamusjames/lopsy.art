@@ -15,11 +15,10 @@ describe('device cache partition', () => {
 });
 
 describe('checkSameAccount', () => {
-  const owner = { id: '1', email: 'owner@example.com' };
   it('accepts the same account', () => {
-    expect(() => checkSameAccount(owner, { id: '1', email: 'owner@example.com' })).not.toThrow();
+    expect(() => checkSameAccount('1', '1')).not.toThrow();
   });
-  it('refuses another account, naming both', () => {
-    expect(() => checkSameAccount(owner, { id: '2', email: 'other@example.com' })).toThrow(/other@example\.com.*owner@example\.com/);
+  it('refuses another account', () => {
+    expect(() => checkSameAccount('1', '2')).toThrow(/different Google account/);
   });
 });

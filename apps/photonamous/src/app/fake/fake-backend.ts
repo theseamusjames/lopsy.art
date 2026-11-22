@@ -29,7 +29,7 @@ import { importedFileOf, readFakePreview, rememberImportedFile, rememberPreview 
 import { seedLibrary } from './fake-seed';
 
 const LABELS: Record<StorageChoice, string> = {
-  'google-drive': 'you@example.com',
+  'google-drive': 'Google Drive',
   browser: 'This browser',
   'local-folder': 'Pictures',
 };

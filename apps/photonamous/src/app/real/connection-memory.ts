@@ -9,11 +9,14 @@ import type { StorageChoice } from '../backend';
 /** The last storage the user opened, so the start screen can offer it again. */
 export interface LastConnection {
   readonly kind: StorageChoice;
-  /** For the button: the account email or the folder's name. */
+  /** For the button: the folder's name; for Google Drive, `DRIVE_LABEL`. */
   readonly label: string;
-  /** Google's `sub`, so reconnecting accepts only that account. */
+  /** Drive's ID for the Google account (`fetchDriveAccountId`), so reconnecting accepts only that account. */
   readonly accountId?: string;
 }
+
+/** What a Drive library is called wherever a storage has a name: the app does not know whose Drive it is. */
+export const DRIVE_LABEL = 'Google Drive';
 
 /** What the start screen offers before the full list of choices. */
 export interface ReconnectOffer {
@@ -39,14 +42,17 @@ export function parseLastConnection(raw: string | null): LastConnection | null {
   const kind: unknown = Reflect.get(value, 'kind');
   const label: unknown = Reflect.get(value, 'label');
   if (typeof kind !== 'string' || !KINDS.has(kind) || typeof label !== 'string') return null;
-  const accountId: unknown = Reflect.get(value, 'accountId');
+  if (kind !== 'google-drive') return { kind: kind as StorageChoice, label };
+  // A build that asked Google who the user was kept their email as the label and their `sub` as
+  // `accountId`. Neither is read: the Drive library is offered again, and the next sign-in says whose it is.
+  const accountId: unknown = Reflect.get(value, 'driveAccountId');
   return typeof accountId === 'string' && accountId !== ''
-    ? { kind: kind as StorageChoice, label, accountId }
-    : { kind: kind as StorageChoice, label };
+    ? { kind, label: DRIVE_LABEL, accountId }
+    : { kind, label: DRIVE_LABEL };
 }
 
 export function serializeLastConnection(last: LastConnection): string {
-  return JSON.stringify({ kind: last.kind, label: last.label, ...(last.accountId ? { accountId: last.accountId } : {}) });
+  return JSON.stringify({ kind: last.kind, label: last.label, ...(last.accountId ? { driveAccountId: last.accountId } : {}) });
 }
 
 /**
@@ -109,7 +115,11 @@ export function describeDevice(userAgent: string): string {
 
 export function loadLastConnection(): LastConnection | null {
   try {
-    return parseLastConnection(localStorage.getItem(LAST_CONNECTION_KEY));
+    const raw = localStorage.getItem(LAST_CONNECTION_KEY);
+    const last = parseLastConnection(raw);
+    // What an earlier build wrote (an email, a Google `sub`) is replaced by what this one keeps.
+    if (last !== null && raw !== serializeLastConnection(last)) saveLastConnection(last);
+    return last;
   } catch {
     return null;
   }

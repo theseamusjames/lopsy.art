@@ -40,8 +40,8 @@ from `photonamous.com`):
 | Library state and outbox | IndexedDB `photonamous:<kind>:<account or folder name>` |
 | The picked folder's handle | IndexedDB `photonamous-folders` |
 | Drive upload sessions | IndexedDB `photonamous-uploads:<account>` |
-| Downloaded originals and previews (Drive) | OPFS `<Google account id>/originals/`, `…/previews/` |
-| Last storage used, last Google email | localStorage `photonamous.last-connection`, `photonamous.google-email` |
+| Downloaded originals and previews (Drive) | OPFS `<Drive's ID for the account>/originals/`, `…/previews/` |
+| Last storage used | localStorage `photonamous.last-connection` (for Drive: Drive's ID for the account, never an email) |
 
 **To wipe it:** DevTools > Application > Storage > **Clear site data**,
 with the page open at `http://localhost:5174`. Files in a picked folder
@@ -86,9 +86,11 @@ dev servers with each other's URL set.
 ## 3. Google Cloud setup
 
 What the code asks for (`packages/photos-core/src/auth/google-token-source.ts`):
-the Google Identity Services token model with the scopes
-`openid email profile https://www.googleapis.com/auth/drive.file`, and the
-userinfo endpoint for the account.
+the Google Identity Services token model with one scope,
+`https://www.googleapis.com/auth/drive.file`. It does not ask who the user
+is. The one thing it reads about the account is Drive's opaque ID for it
+(`about.get` with `fields=user(permissionId)`), which keeps one account's
+data on a device apart from another's.
 
 1. **Project.** In the Google Cloud console, create a project (for example
    "Photonamous").
@@ -99,9 +101,11 @@ userinfo endpoint for the account.
    - User type **External**; app name **Photonamous**, support email,
      developer contact.
    - Authorized domain `photonamous.com`.
-   - Data access (scopes): `openid`, `.../auth/userinfo.email`,
-     `.../auth/userinfo.profile`, `.../auth/drive.file`. All are
-     non-sensitive, so no verification is needed for Testing.
+   - Data access (scopes): `.../auth/drive.file` and nothing else. Remove
+     `openid`, `.../auth/userinfo.email` and `.../auth/userinfo.profile`
+     if the project has them from before 2026-11-21: the app no longer
+     asks for them. `drive.file` is non-sensitive, so no verification is
+     needed for Testing.
    - Publishing status **Testing**. Add every Google account that will
      sign in as a **test user** (at most 100). In Testing, a grant expires
      after seven days.
@@ -159,8 +163,8 @@ these were checked against what was:
 - *CORS*, by live preflight requests from `https://lopsy.art` and
   `http://localhost:5174`: the resumable-upload initiation allows
   `authorization, content-type, x-upload-content-type,
-  x-upload-content-length`; `alt=media` reads allow `range`; userinfo and
-  `oauth2.googleapis.com/revoke` allow the app's origin. Repeated on
+  x-upload-content-length`; `alt=media` reads allow `range`; userinfo (no
+  longer called) and `oauth2.googleapis.com/revoke` allow the app's origin. Repeated on
   2026-11-19 from `https://photonamous.com`, with the same answers. Whether a
   successful initiation exposes `Location`, and a 308 exposes `Range`,
   needs a signed-in request: an unauthenticated 401 exposes neither. The
@@ -170,8 +174,8 @@ these were checked against what was:
   the live `accounts.google.com/gsi/client`: `initTokenClient` takes
   `client_id`, `scope`, `callback`, `error_callback`, `prompt` (`''`,
   `none`, `consent`, `select_account`) and `login_hint` (an email or the
-  account's `sub`; `hint` is deprecated); `hasGrantedAllScopes(response,
-  scope)` exists. The token client opens `accounts.google.com/o/oauth2/v2/auth`
+  account's `sub`; `hint` is deprecated; the app passes none, having
+  neither); `hasGrantedAllScopes(response, scope)` exists. The token client opens `accounts.google.com/o/oauth2/v2/auth`
   in a popup and may frame `accounts.google.com/o/oauth2/iframe`; the
   CSP allows both.
 - *The Picker*, against `@types/google.picker` 0.0.52 and Google

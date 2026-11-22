@@ -77,11 +77,16 @@ test('OpfsBlobCache evicts least recently used and survives a reload', async ({ 
   expect(await call(page, 'blobCacheReopen')).toEqual({ usage: 10, present: ['a', 'c', 'd'] });
 });
 
-test('GoogleTokenSource uses the GIS stub and the routed userinfo', async ({ page }) => {
+test('GoogleTokenSource uses the GIS stub, asks only for Drive files and reads the account from Drive', async ({ page }) => {
   await routeFakeDrive(page);
-  await page.addInitScript(gisStubInitScript('test-token', 'tester@example.com'));
+  await page.addInitScript(gisStubInitScript('test-token'));
   await open(page);
-  expect(await call(page, 'gisToken')).toEqual({ interactive: 'test-token', silent: 'test-token', email: 'tester@example.com' });
+  expect(await call(page, 'gisToken')).toEqual({
+    interactive: 'test-token',
+    silent: 'test-token',
+    accountId: '01234567890123456789',
+    scope: 'https://www.googleapis.com/auth/drive.file',
+  });
 });
 
 test('a resumable upload continues after a reload mid-upload, and reads stream progress', async ({ page }) => {

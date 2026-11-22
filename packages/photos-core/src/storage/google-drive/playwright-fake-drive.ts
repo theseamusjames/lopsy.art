@@ -24,7 +24,7 @@ type FulfillBody = NonNullable<Parameters<Route['fulfill']>[0]>['body'];
 const DROPPED_REQUEST_HEADERS = new Set(['host', 'connection', 'content-length', 'accept-encoding', 'origin', 'referer']);
 
 /**
- * Routes googleapis.com (the Drive API, uploads, userinfo) to `drive`, and
+ * Routes googleapis.com (the Drive API and uploads) to `drive`, and
  * answers token revocation at oauth2.googleapis.com. Returns the drive so
  * a test can inspect it or inject failures.
  */
@@ -79,14 +79,16 @@ function toNodeBuffer(bytes: Uint8Array): FulfillBody {
  * `window.google.accounts.oauth2`: initTokenClient's requestAccessToken
  * calls back with `token`, hasGrantedAllScopes is true, revoke succeeds.
  * GoogleTokenSource then skips loading the real GIS script. The stub also
- * exposes `window.__lopsyGisStub` ({ token, email, requests }) for tests.
+ * exposes `window.__lopsyGisStub` ({ token, scope, requests }) for tests:
+ * `scope` is what the app asked Google for.
  */
-export function gisStubInitScript(token = 'test-token', email = 'tester@example.com'): string {
+export function gisStubInitScript(token = 'test-token'): string {
   return `(() => {
-  const stub = { token: ${JSON.stringify(token)}, email: ${JSON.stringify(email)}, requests: [] };
+  const stub = { token: ${JSON.stringify(token)}, scope: null, requests: [] };
   window.__lopsyGisStub = stub;
   const oauth2 = {
     initTokenClient(config) {
+      stub.scope = config.scope;
       return {
         requestAccessToken(overrides) {
           stub.requests.push(overrides || {});
