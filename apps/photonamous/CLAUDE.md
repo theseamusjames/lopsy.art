@@ -104,6 +104,9 @@ npm run test:e2e:photos    # Playwright
 npm run build:photos       # apps/photonamous/dist; the engine must be built first
 npm run serve:photos       # that dist/ the way Cloudflare Pages serves it (_redirects, _headers), port 4180
 npm run test:e2e:site      # builds, runs site.spec.ts and offline.spec.ts against it (playwright.site.config.ts), cleans up
+
+# The start screen's video, recorded from the app: docs/photonamous-demo-reel.md has the whole recipe
+REEL_PHOTOS=<library folder> REEL_HERO=<DSCF8078.RAF> npm exec -w photonamous -- playwright test -c e2e/demo-reel.config.ts
 ```
 
 The service worker (`src/sw/`, emitted as `/sw.js` by

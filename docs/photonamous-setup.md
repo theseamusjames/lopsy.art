@@ -138,6 +138,11 @@ data on a device apart from another's.
    Restart `npm run dev` or `npm run dev:photonamous`. The start screen now offers **Google
    Drive** too. The library is created as `Photonamous/` in your My Drive.
 
+**The start screen's video** (`apps/photonamous/src/components/DemoReel/`)
+is a trailer recorded from the app itself, not edited by hand.
+`docs/photonamous-demo-reel.md` says how it is made, what each of its
+files is, and how to record it again or change it.
+
 **Add from Google Drive** (the Picker) is offered when both
 `VITE_GOOGLE_API_KEY` and `VITE_GOOGLE_APP_ID` are set. The app ID is
 required with the `drive.file` scope: it is what grants the app the files
