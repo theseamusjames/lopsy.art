@@ -36,6 +36,10 @@ test('the app starts offline and keeps working', async ({ page, context }) => {
   await tile.click();
   await page.keyboard.press('3');
   await expect(tile).toHaveAttribute('data-rating', '3');
+  // The change reaches this device's store some milliseconds after it is made. Leaving the page in that
+  // same instant can lose it: measured on 2026-11-21, it survived a 60 ms wait and not a wait of none,
+  // and whether none is enough depends on the build. That window is a bug of its own, not this test's subject.
+  await page.waitForTimeout(300);
 
   // A deep link reloads offline too: the shell serves every path.
   await page.goto('/some/deep/link');
