@@ -58,6 +58,13 @@ could use too goes there; one only this app uses stays here.
   production build made with `VITE_LOCAL_LIBRARIES=true` for the site
   tests (`storageEnv` in `src/app/backend.ts`). Don't build a feature that
   needs one of them in production.
+- **The Privacy Policy is kept true.** `privacy.html` (served at
+  `/privacy`) says what the app asks Google for, what it stores on the
+  device and in Drive, and every party the page talks to. A change to any
+  of those (a scope, a host in `public/_headers`, something new kept or
+  sent) changes that page in the same commit. `terms.html` is `/terms`.
+  Both are plain HTML with no script, listed as `DOCUMENT_PAGES` in
+  `vite.config.ts`; the service worker leaves them to the network.
 - **Accessibility: WCAG 2.2 AA.** `e2e/accessibility.spec.ts` runs
   axe-core on every view and must pass; add the states a new view or
   dialog brings to it. What it can't see is a rule too:
