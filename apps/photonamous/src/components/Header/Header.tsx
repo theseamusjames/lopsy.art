@@ -12,6 +12,7 @@ import { ImportButton } from '../ImportButton/ImportButton';
 import { Popover } from '../Popover/Popover';
 import { SyncPanel } from '../SyncPanel/SyncPanel';
 import { ShortcutHelp } from '../ShortcutHelp/ShortcutHelp';
+import { Wordmark } from '../Wordmark/Wordmark';
 import { describeSync } from '../SyncPanel/sync-words';
 import { describeWhere } from './where-words';
 import styles from './Header.module.css';
@@ -70,7 +71,7 @@ export function Header() {
   return (
     <header className={styles.header}>
       <div className={styles.identity}>
-        <span className={styles.brand}>Photonamous</span>
+        <Wordmark size="header" />
         <span className={styles.where} title={where}>
           {where}
         </span>
