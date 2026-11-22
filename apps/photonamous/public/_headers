@@ -17,6 +17,8 @@
 #   base) and the engine's workers; manifest-src 'self': the web manifest.
 # - No Cross-Origin-Opener-Policy: it would cut the sign-in popup and the
 #   Lopsy handoff off from their openers (6.4, 6.12).
+# A host added here is another party the page talks to: say so in the
+# Privacy Policy (privacy.html) in the same change.
 /*
   Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://accounts.google.com/gsi/ https://apis.google.com; connect-src 'self' https://www.googleapis.com https://oauth2.googleapis.com https://content.googleapis.com https://accounts.google.com; frame-src https://accounts.google.com https://docs.google.com https://drive.google.com; img-src 'self' blob: data: https://*.googleusercontent.com; worker-src 'self' blob:; manifest-src 'self'; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'
   X-Content-Type-Options: nosniff

@@ -5,6 +5,10 @@
  * The worker serves the app shell offline. It never touches requests to
  * other origins (Google sign-in, the Drive API, the Picker) and never
  * caches Drive content: originals and previews have their own OPFS caches.
+ * The Privacy Policy and Terms are documents, not the app: the worker
+ * leaves them to the network too, so what is read is always what is
+ * published, and offline they fail as any page does instead of showing the
+ * app in their place.
  */
 
 export const CACHE_PREFIX = 'photonamous-shell-';
@@ -17,6 +21,8 @@ export interface PrecacheManifest {
   readonly files: readonly string[];
   /** Lower-case hex SHA-256 of each file's bytes, by path. */
   readonly hashes: Readonly<Record<string, string>>;
+  /** Pages that are not the app (`/privacy`, `/terms`): never precached, never answered by the worker. */
+  readonly documents?: readonly string[];
 }
 
 export function cacheName(manifest: PrecacheManifest): string {
@@ -26,6 +32,12 @@ export function cacheName(manifest: PrecacheManifest): string {
 /** Caches an older build left behind, to delete when this one activates. */
 export function staleCaches(names: readonly string[], current: string): string[] {
   return names.filter((name) => name.startsWith(CACHE_PREFIX) && name !== current);
+}
+
+/** Whether a path is one of the build's document pages, however Pages spells it (`/privacy`, `/privacy/`, `/privacy.html`). */
+export function isDocumentPage(pathname: string, manifest: PrecacheManifest): boolean {
+  const path = pathname.replace(/\.html$/, '').replace(/(.)\/$/, '$1');
+  return (manifest.documents ?? []).includes(path);
 }
 
 export type FetchPlan =
@@ -44,6 +56,7 @@ export function planFetch(
   if (request.method !== 'GET') return { kind: 'pass' };
   const url = new URL(request.url);
   if (url.origin !== scopeOrigin || !url.pathname.startsWith(manifest.base)) return { kind: 'pass' };
+  if (isDocumentPage(url.pathname, manifest)) return { kind: 'pass' };
   if (request.mode === 'navigate') return { kind: 'navigate', fallback: manifest.base };
   if (manifest.files.includes(url.pathname)) return { kind: 'precached', path: url.pathname };
   return { kind: 'pass' };

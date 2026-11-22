@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { expect, test, type Page } from '@playwright/test';
 import { generatedJpeg, importFiles, tiles } from './library';
 
@@ -5,9 +7,19 @@ import { generatedJpeg, importFiles, tiles } from './library';
  * Smoke test of Photonamous' production build at `/` on its own origin, as
  * on photonamous.com (playwright.site.config.ts): it loads with its CSP and
  * no COOP, with no CSP violation, failed request or console error; deep
- * links get the app; and Edit in Lopsy opens lopsy.art, the build's
- * default.
+ * links get the app; Edit in Lopsy opens lopsy.art, the build's default;
+ * and the Privacy Policy and Terms are pages of their own, readable
+ * without script, accessible, and left alone by the service worker.
  */
+
+const AXE_SOURCE = readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.min.js'), 'utf8');
+const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
+
+/** The pages that are documents, not the app (vite.config.ts, DOCUMENT_PAGES). */
+const DOCUMENTS = [
+  { path: '/privacy', title: 'Privacy Policy · Photonamous', heading: 'Privacy Policy', other: { name: 'Terms', href: '/terms' } },
+  { path: '/terms', title: 'Terms of Service · Photonamous', heading: 'Terms of Service', other: { name: 'Privacy', href: '/privacy' } },
+] as const;
 
 interface Problems {
   readonly list: string[];
@@ -73,7 +85,9 @@ test('search engines may list it', async ({ page }) => {
 
   const sitemap = await page.request.get('/sitemap.xml');
   expect(sitemap.status()).toBe(200);
-  expect(await sitemap.text()).toContain('<loc>https://photonamous.com/</loc>');
+  const listed = await sitemap.text();
+  expect(listed).toContain('<loc>https://photonamous.com/</loc>');
+  for (const { path } of DOCUMENTS) expect(listed).toContain(`<loc>https://photonamous.com${path}</loc>`);
 });
 
 test('a deep link gets the app', async ({ page }) => {
@@ -109,4 +123,124 @@ test('Edit in Lopsy opens lopsy.art', async ({ page, context }) => {
   expect(url.origin).toBe('https://lopsy.art');
   expect(url.pathname).toBe('/');
   expect(url.searchParams.get('photos-handoff')).toBeTruthy();
+});
+
+/**
+ * axe-core's WCAG 2.2 AA rules on the page as it stands. The source is
+ * evaluated from here, not added as a script element, which the site's
+ * CSP would refuse.
+ */
+async function axeViolations(page: Page): Promise<string[]> {
+  await page.evaluate(AXE_SOURCE);
+  return page.evaluate(async (tags) => {
+    const axe = Reflect.get(window, 'axe') as {
+      run: (context: Document, options: object) => Promise<{
+        passes: unknown[];
+        violations: { id: string; help: string; nodes: { target: string[] }[] }[];
+      }>;
+    };
+    const result = await axe.run(document, { runOnly: { type: 'tag', values: tags }, resultTypes: ['violations'] });
+    // A scan that checked nothing would pass too.
+    if (result.passes.length === 0) return ['axe-core ran no rule on this page'];
+    return result.violations.map((v) => `${v.id}: ${v.help} (${v.nodes.map((n) => n.target.join(' ')).join(', ')})`);
+  }, AXE_TAGS);
+}
+
+for (const { path, title, heading, other } of DOCUMENTS) {
+  test(`${path} is a page of its own, readable without script`, async ({ page }) => {
+    const problems = watch(page);
+    const response = await page.goto(path);
+    expect(response?.status()).toBe(200);
+    expect(response?.headers()['content-security-policy']).toContain("default-src 'self'");
+    expect(response?.headers()['x-robots-tag']).toBeUndefined();
+    await expect(page).toHaveTitle(title);
+    await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', `https://photonamous.com${path}`);
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /\S/);
+
+    // The words are in the HTML itself: nothing has to run for a reader, or Google's review, to see them.
+    await expect(page.locator('script')).toHaveCount(0);
+    // Styled by the shared tokens and fonts.
+    await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(30, 30, 30)');
+    expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toContain('Inter');
+    await page.evaluate(() => document.fonts.ready);
+    expect(await page.evaluate(() => document.fonts.check('16px Inter'))).toBe(true);
+
+    // The way back to the app, and across to the other document.
+    const nav = page.getByRole('navigation', { name: 'Photonamous' });
+    await expect(nav.getByRole('link', { name: 'Open the app' })).toHaveAttribute('href', '/');
+    await expect(nav.getByRole('link', { name: other.name })).toHaveAttribute('href', other.href);
+    await expect(nav.locator('[aria-current="page"]')).toHaveAttribute('href', path);
+
+    // Asked for by its file name, Pages sends the reader to the one address.
+    const byFile = await page.request.get(`${path}.html`, { maxRedirects: 0 });
+    expect(byFile.status()).toBe(308);
+    expect(byFile.headers()['location']).toBe(path);
+
+    await page.waitForLoadState('networkidle');
+    expect(await cspViolations(page)).toEqual([]);
+    expect(problems.list).toEqual([]);
+  });
+
+  test(`${path} meets WCAG 2.2 AA, on a desktop and on a phone`, async ({ page }) => {
+    await page.goto(path);
+    expect(await axeViolations(page)).toEqual([]);
+
+    await page.setViewportSize({ width: 320, height: 640 });
+    await page.goto(path);
+    // Reflow (1.4.10): no sideways scrolling at 320 CSS px.
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    expect(await axeViolations(page)).toEqual([]);
+
+    // The keyboard reaches the skip link first, and it shows.
+    await page.keyboard.press('Tab');
+    const skip = page.getByRole('link', { name: /^Skip to the/ });
+    await expect(skip).toBeFocused();
+    await expect(skip).toBeInViewport();
+  });
+}
+
+test('the Privacy Policy says what Google asks an app using Drive to say', async ({ page }) => {
+  await page.goto('/privacy');
+  const policy = page.getByRole('main');
+  // How the app accesses, uses, stores and shares Google user data, each under its own heading.
+  for (const name of ['What it can access', 'What it does with it', 'Where it is stored', 'Who it is shared with']) {
+    await expect(policy.getByRole('heading', { name })).toBeVisible();
+  }
+  await expect(policy).toContainText('See, edit, create and delete only the specific Google Drive files you use with this app');
+  await expect(policy).toContainText('including the Limited Use requirements');
+  await expect(policy.getByRole('link', { name: 'Google API Services User Data Policy' })).toHaveAttribute(
+    'href',
+    'https://developers.google.com/terms/api-services-user-data-policy',
+  );
+  await expect(policy.getByRole('heading', { name: 'Keeping and deleting your data' })).toBeVisible();
+});
+
+test('the service worker leaves the Privacy Policy and Terms to the network', async ({ page, context }) => {
+  await page.goto('/');
+  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
+
+  // They are not part of the offline shell.
+  const cached = await page.evaluate(async () => {
+    const paths: string[] = [];
+    for (const name of await caches.keys()) {
+      for (const request of await (await caches.open(name)).keys()) paths.push(new URL(request.url).pathname);
+    }
+    return paths;
+  });
+  expect(cached).toContain('/');
+  expect(cached.filter((path) => /privacy|terms/.test(path))).toEqual([]);
+
+  // With the worker in control, each is still its own page, not the app.
+  for (const { path, heading } of DOCUMENTS) {
+    await page.goto(path);
+    await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
+  }
+
+  // Offline, the app's own paths get the shell, and a document fails as any page does: the app never stands in for it.
+  await context.setOffline(true);
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Photonamous' })).toBeVisible();
+  await expect(page.goto('/privacy')).rejects.toThrow(/ERR_INTERNET_DISCONNECTED/);
+  await context.setOffline(false);
 });

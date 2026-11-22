@@ -3,6 +3,7 @@ import { hasWaitingUpdate, SKIP_WAITING } from './register';
 import {
   cacheName,
   CACHE_PREFIX,
+  isDocumentPage,
   matchesBuild,
   mayRequestUpdate,
   planFetch,
@@ -47,6 +48,18 @@ describe('the service worker', async () => {
     expect(plan('https://www.googleapis.com/', 'navigate')).toEqual({ kind: 'pass' });
     expect(plan('https://lopsy.art/', 'navigate')).toEqual({ kind: 'pass' });
     expect(plan('https://lopsy.art/assets/index-1.js')).toEqual({ kind: 'pass' });
+  });
+
+  it('leaves the document pages to the network, however their path is spelled', () => {
+    const withDocuments: PrecacheManifest = { ...manifest, documents: ['/privacy', '/terms'] };
+    const planPage = (path: string) => planFetch({ url: `https://photonamous.com${path}`, mode: 'navigate', method: 'GET' }, origin, withDocuments);
+    for (const path of ['/privacy', '/terms', '/privacy/', '/terms.html', '/privacy?from=start']) {
+      expect(planPage(path)).toEqual({ kind: 'pass' });
+    }
+    // Only those pages: the app's own paths still get the shell.
+    expect(planPage('/privacy/elsewhere')).toEqual({ kind: 'navigate', fallback: '/' });
+    expect(planPage('/')).toEqual({ kind: 'navigate', fallback: '/' });
+    expect(isDocumentPage('/privacy', manifest)).toBe(false);
   });
 
   it('keeps to its base when that is below the root', async () => {

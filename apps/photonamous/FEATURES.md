@@ -452,6 +452,23 @@ never talks to Google. Lopsy's side is in `apps/lopsy-web/FEATURES.md`
   render Lopsy would refuse (the wrong size, over 1 GB) is reported to
   Lopsy as a failure and the tab stays open to say so.
 
+## Privacy Policy and Terms
+
+- **Privacy Policy** (`/privacy`) and **Terms of Service** (`/terms`) are
+  pages of their own, not screens of the app: plain HTML with no script,
+  so they can be read with scripting off and by Google's review of the
+  sign-in. Each has the way back to the app and a link to the other, a
+  skip link, and the shared tokens and fonts; they reflow to a phone and
+  print in black on white.
+- The Privacy Policy says what the app does with Google data under four
+  headings (what it can access, what it does with it, where it is stored,
+  who it is shared with), names Google Analytics and Cloudflare, and says
+  how to remove everything. The Terms are short: free, as is, no
+  liability for lost data, the user's files are theirs.
+- The service worker leaves both to the network. They are not in the
+  offline shell, so a change to their words is not a new version of the
+  app, and offline they fail as any page does.
+
 ## Errors
 
 - If the app stops rendering, it shows **Something went wrong** with

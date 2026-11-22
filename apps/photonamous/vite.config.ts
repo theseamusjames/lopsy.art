@@ -8,6 +8,13 @@ import { serviceWorkerPlugin } from './scripts/vite-plugin-service-worker';
 const repoRoot = resolve(__dirname, '../..');
 
 /**
+ * Pages that are documents and not the app: `<name>.html` beside
+ * index.html, served by Pages at `/<name>`. They are plain HTML with no
+ * script, and the service worker leaves them to the network.
+ */
+const DOCUMENT_PAGES = ['privacy', 'terms'];
+
+/**
  * Photonamous, served at `/` on its own origin (photonamous.com in
  * production, docs/photonamous-spec.md 6.3).
  *
@@ -17,7 +24,7 @@ const repoRoot = resolve(__dirname, '../..');
  * from there.
  */
 export default defineConfig({
-  plugins: [react(), wasm(), topLevelAwait(), serviceWorkerPlugin()],
+  plugins: [react(), wasm(), topLevelAwait(), serviceWorkerPlugin({ documentPages: DOCUMENT_PAGES })],
   worker: {
     format: 'es',
     plugins: () => [wasm(), topLevelAwait()],
@@ -42,5 +49,11 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 750,
+    rollupOptions: {
+      input: {
+        index: resolve(__dirname, 'index.html'),
+        ...Object.fromEntries(DOCUMENT_PAGES.map((name) => [name, resolve(__dirname, `${name}.html`)])),
+      },
+    },
   },
 });

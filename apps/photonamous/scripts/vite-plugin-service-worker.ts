@@ -15,6 +15,11 @@ import type { Plugin, ResolvedConfig } from 'vite';
  * the worker checks cached bytes against the checksums before serving
  * them (spec 6.13: a script on the same origin could write the cache).
  *
+ * The document pages (`documentPages`: the Privacy Policy and Terms) are
+ * not part of the shell. They are left out of the precache, so a change to
+ * their words is not a new version of the app, and their paths are written
+ * into the manifest for the worker to leave to the network.
+ *
  * Production builds only; the dev server never registers a worker.
  */
 
@@ -41,7 +46,13 @@ function filesUnder(dir: string): string[] {
   return files;
 }
 
-export function serviceWorkerPlugin(): Plugin {
+export interface ServiceWorkerOptions {
+  /** Names of the pages that are documents, not the app: `<name>.html` in the build, `<base><name>` on the site. */
+  readonly documentPages?: readonly string[];
+}
+
+export function serviceWorkerPlugin(options: ServiceWorkerOptions = {}): Plugin {
+  const documentPages = options.documentPages ?? [];
   let config: ResolvedConfig;
   return {
     name: 'photonamous-service-worker',
@@ -61,12 +72,13 @@ export function serviceWorkerPlugin(): Plugin {
       }
       if (!worker.code.includes(PLACEHOLDER)) this.error(`${WORKER_FILE} lost its manifest placeholder`);
     },
-    writeBundle(options) {
-      const outDir = options.dir ?? config.build.outDir;
+    writeBundle(output) {
+      const outDir = output.dir ?? config.build.outDir;
       const base = config.base;
       const hashes: Record<string, string> = {};
       for (const name of filesUnder(outDir).sort()) {
         if (SKIPPED.some((pattern) => pattern.test(name))) continue;
+        if (documentPages.some((page) => name === `${page}.html`)) continue;
         const path = name === 'index.html' ? base : `${base}${name}`;
         hashes[path] = createHash('sha256').update(readFileSync(join(outDir, name))).digest('hex');
       }
@@ -75,7 +87,8 @@ export function serviceWorkerPlugin(): Plugin {
         .update(Object.entries(hashes).map(([path, sha]) => `${path} ${sha}`).join('\n'))
         .digest('hex')
         .slice(0, 16);
-      const manifest = JSON.stringify({ version, base, files: Object.keys(hashes), hashes });
+      const documents = documentPages.map((page) => `${base}${page}`);
+      const manifest = JSON.stringify({ version, base, files: Object.keys(hashes), hashes, documents });
       const workerPath = join(outDir, WORKER_FILE);
       writeFileSync(workerPath, readFileSync(workerPath, 'utf8').split(PLACEHOLDER).join(manifest));
     },

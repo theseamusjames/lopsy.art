@@ -1,0 +1,253 @@
+<!doctype html>
+<!--
+  Photonamous' Privacy Policy, served at /privacy. The text is the policy:
+  it must say only what the code does. When a change adds a host to
+  public/_headers, stores something new on the device or in Drive, or asks
+  Google for anything more, change this page in the same commit.
+  Phrases marked "To fill in" are the operator's to decide before this is
+  published.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#1e1e1e" />
+    <link rel="icon" type="image/png" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <title>Privacy Policy · Photonamous</title>
+    <meta name="description" content="What Photonamous does with your data: your photos stay in your own Google Drive and your browser, and we never learn your name or email address." />
+    <link rel="canonical" href="https://photonamous.com/privacy" />
+    <link rel="stylesheet" href="/src/legal/legal.css" />
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to the policy</a>
+    <header class="top">
+      <a class="home" href="/">Photonamous</a>
+      <nav aria-label="Photonamous">
+        <ul>
+          <li><a href="/">Open the app</a></li>
+          <li><a href="/privacy" aria-current="page">Privacy</a></li>
+          <li><a href="/terms">Terms</a></li>
+        </ul>
+      </nav>
+    </header>
+
+    <main id="content" class="page">
+      <h1>Privacy Policy</h1>
+      <p class="dated">Effective <span class="fill">[To fill in: effective date]</span></p>
+
+      <div class="summary">
+        <p>
+          Photonamous is a photo library and RAW editor that runs in your web browser, at photonamous.com. It is run by
+          <span class="fill">[To fill in: operator’s legal name]</span> (“we”).
+        </p>
+        <p>
+          <strong>The short version:</strong> Photonamous has no accounts, and we run no server that receives your photos. Your photos,
+          your edits and your library are kept in your own Google Drive and in your browser. We never see them, and we never learn your
+          name or your email address. Two services work on our behalf: Google Analytics, which gives us usage statistics that do not say
+          who you are, and Cloudflare, the web host, which handles the requests your browser makes for the site.
+        </p>
+      </div>
+
+      <h2 id="what">What we collect, and what we don’t</h2>
+
+      <h3 id="identity">Your name and email address: not collected</h3>
+      <p>
+        There is no Photonamous account. When you sign in with Google, you give the app permission to use Google Drive and nothing else.
+        The app does not ask Google for your name, email address or profile picture, and Google does not send them.
+      </p>
+
+      <h3 id="photos">Your photos, edits and library: never sent to us</h3>
+      <p>They are kept in two places, both yours:</p>
+      <ul>
+        <li>
+          <strong>Your Google Drive.</strong> The app creates a folder named “Photonamous” there and keeps in it your original photos,
+          documents saved from Lopsy, your exports, and the library’s own data: its record of your edits, ratings, keywords and
+          settings, preview images, and a short note of each device you have used (such as “Chrome on macOS”, the app’s version and
+          when it was last used).
+        </li>
+        <li>
+          <strong>This browser, on your device.</strong> The app keeps working copies in your browser’s storage so that it is quick and
+          works offline: a copy of the library’s data, previews, photos you have opened or are importing, changes waiting to be saved,
+          and a few settings.
+        </li>
+      </ul>
+      <p>
+        These travel directly between your browser and Google. They do not pass through, and are not stored on, any server of ours. We
+        cannot see them, and we cannot recover or delete them for you.
+      </p>
+
+      <h2 id="google">How Photonamous uses your Google data</h2>
+      <p>
+        Photonamous asks Google for one permission, which Google describes as “See, edit, create and delete only the specific Google
+        Drive files you use with this app” (the <code>drive.file</code> scope).
+      </p>
+      <h3 id="google-access">What it can access</h3>
+      <ul>
+        <li>The files and folders the app itself creates in your Drive: the “Photonamous” folder and what is in it.</li>
+        <li>
+          Files you choose for it yourself with Google’s file picker, when you use <strong>Add from Google Drive</strong>. The app can
+          then read those files, wherever in your Drive they are.
+        </li>
+        <li>How much Drive storage you have used and have left, so the app can show you.</li>
+        <li>Drive’s ID number for your Google account, described <a href="#account-id">below</a>.</li>
+      </ul>
+      <p>It cannot see or open anything else in your Drive, and it has no access to the rest of your Google account.</p>
+
+      <h3 id="google-use">What it does with it</h3>
+      <ul>
+        <li>
+          It uses these files only to do what you see it do: store, show, organise, edit and export your photos, and keep your library
+          the same on each device you sign in from.
+        </li>
+        <li>
+          A photo you add with the picker is read, added to your library and labelled as part of it. Depending on the choice you make
+          in Settings, it is moved into the “Photonamous” folder or left where it is.
+        </li>
+        <li>
+          When you delete a photo in the app, its file is moved to Google Drive’s trash. The only files the app deletes outright are
+          its own out-of-date copies of the library’s data.
+        </li>
+      </ul>
+
+      <h3 id="google-storage">Where it is stored</h3>
+      <p>
+        In your Google Drive and in this browser, as described above, and nowhere else. The access token Google issues is held only in
+        the page’s memory. It expires after about an hour, and the app asks Google to revoke it when you close your library.
+      </p>
+
+      <h3 id="google-sharing">Who it is shared with</h3>
+      <p>
+        No one. We do not receive your Google data, so we cannot share it, sell it, use it for advertising, let anyone read it, or use
+        it to develop or train artificial intelligence or machine learning models. Two things happen only when you ask for them:
+      </p>
+      <ul>
+        <li>
+          <strong>Copy share link</strong> on an export asks Google Drive to make that one export’s folder viewable by anyone who has
+          the link. You can stop sharing it in the app or in Google Drive.
+        </li>
+        <li><strong>Edit in Lopsy</strong> hands a photo to Lopsy inside your browser, described <a href="#lopsy">below</a>.</li>
+      </ul>
+      <p>
+        Photonamous’ use of information received from Google APIs will adhere to the
+        <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including
+        the Limited Use requirements.
+      </p>
+
+      <h3 id="account-id">The account ID kept in your browser</h3>
+      <p>
+        So that two Google accounts used in the same browser never mix, the app asks Google Drive for its ID for your account. It is a
+        number that says nothing about who you are. The app keeps it only in this browser’s storage, uses it to keep each account’s
+        working copies apart and to reconnect to the right account, and never sends it to us or to anyone else.
+      </p>
+
+      <h2 id="analytics">Usage statistics (Google Analytics)</h2>
+      <p>
+        We use Google Analytics to count visits and to learn which parts of Photonamous are used. It is the only usage tracking on the
+        site.
+      </p>
+      <ul>
+        <li>
+          It sets cookies in your browser to tell one visitor from another, and may record the pages and screens you open, actions such
+          as pressing a button, your browser, device type and language, the site you came from, and your approximate location (country
+          and city). Google Analytics works that location out from your IP address and does not log or store the address itself.
+        </li>
+        <li>
+          We do not send it your photos, file names, anything from your Google Drive, or your account ID. We do not use it for
+          advertising.
+        </li>
+        <li>
+          Google Analytics keeps visit-level records for up to 14 months. Totals that identify no one may be kept longer.
+        </li>
+      </ul>
+      <p>
+        To opt out, install the
+        <a href="https://tools.google.com/dlpage/gaoptout">Google Analytics Opt-out Browser Add-on</a>, or block cookies for
+        photonamous.com; Photonamous works the same without it. Google explains
+        <a href="https://policies.google.com/technologies/partner-sites">how it uses information from sites that use its services</a>.
+      </p>
+
+      <h2 id="hosting">Our web host (Cloudflare)</h2>
+      <p>
+        Photonamous is a set of static files served by Cloudflare. Like any web host, Cloudflare handles each request your browser
+        makes for those files, which includes your IP address, your browser’s description of itself, the file requested and the time,
+        in order to deliver the site and protect it from abuse. Cloudflare may show us totals, such as how many requests the site
+        received. We run no server, database or log of our own.
+        <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare’s privacy policy</a> describes what it does with this
+        information.
+      </p>
+
+      <h2 id="others">Other services</h2>
+      <h3 id="google-services">Google</h3>
+      <p>
+        Signing in, the file picker and Google Drive are Google’s services. Your use of them is covered by
+        <a href="https://policies.google.com/privacy">Google’s Privacy Policy</a>, and Google knows that you use Photonamous with your
+        account, as it does for any app you connect.
+      </p>
+      <h3 id="lopsy">Lopsy</h3>
+      <p>
+        <strong>Edit in Lopsy</strong> opens Lopsy, a separate image editor at lopsy.art, in another tab and hands the photo to it
+        directly, inside your browser. The photo is not uploaded to a server on the way. When you save back, Lopsy hands the result to
+        Photonamous the same way, and Photonamous saves it to your Google Drive. Lopsy is a separate site, and opening it is a visit to
+        that site.
+      </p>
+
+      <h2 id="security">Security</h2>
+      <p>
+        Everything the app sends travels between your browser and Google over an encrypted connection (HTTPS). In your Google Drive,
+        your files are protected by Google and by your Google account. The copies in your browser are as private as your device and
+        browser profile are: someone who can use your browser profile can open them.
+      </p>
+
+      <h2 id="deleting">Keeping and deleting your data</h2>
+      <p>We hold none of your photos or library data, so there is nothing for us to keep or delete. You can remove everything yourself:</p>
+      <ul>
+        <li>
+          <strong>Sign out.</strong> <strong>Close this library</strong> in the app signs you out and revokes the app’s access token.
+        </li>
+        <li>
+          <strong>Remove the app’s permission.</strong> In your Google Account, open
+          <a href="https://myaccount.google.com/connections">Third-party apps and services</a> and remove Photonamous.
+        </li>
+        <li>
+          <strong>Delete the files.</strong> Delete the “Photonamous” folder in Google Drive. Photos you added from elsewhere in your
+          Drive and chose to leave in place stay where they are.
+        </li>
+        <li>
+          <strong>Clear this browser’s copies.</strong> Clear the site data for photonamous.com in your browser’s settings, on each
+          device and browser you have used.
+        </li>
+      </ul>
+
+      <h2 id="rights">Your rights</h2>
+      <p>
+        Depending on where you live, the law may give you rights over information about you, such as to see it, correct it or have it
+        deleted. The only information we can see is the usage statistics described above, which do not tell us who you are. If you
+        have a question or a request, <a href="#contact">contact us</a> and we will help as far as we can. For what Google holds, use the controls in your Google Account.
+      </p>
+
+      <h2 id="children">Children</h2>
+      <p>
+        Photonamous is not directed to children under 13, and we do not knowingly collect personal information from them.
+      </p>
+
+      <h2 id="changes">Changes to this policy</h2>
+      <p>
+        If the policy changes, we will publish the new version on this page and change the date at the top. We have no email address
+        for you, so we cannot write to tell you; please look here from time to time. Earlier versions can be seen in the history of
+        the <a href="https://github.com/theseamusjames/lopsy.art">public source repository</a>.
+      </p>
+
+      <h2 id="contact">Contact</h2>
+      <p>Questions about this policy: <span class="fill">[To fill in: contact address]</span>.</p>
+    </main>
+
+    <footer class="foot">
+      <p>
+        Adapted, with changes, from the <a href="https://github.com/basecamp/policies">Basecamp open-source policies</a> /
+        <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.
+      </p>
+      <p><a href="/">Photonamous</a> · <a href="/terms">Terms of Service</a></p>
+    </footer>
+  </body>
+</html>
