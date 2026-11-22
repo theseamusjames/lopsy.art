@@ -11,7 +11,8 @@ interface ModalProps {
   children: ReactNode;
   /** Buttons along the bottom. */
   footer?: ReactNode;
-  width?: 'sm' | 'md' | 'lg';
+  /** `xl` is for a dialog that lays its content out in columns: wider, with a larger title and more padding. */
+  width?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
 /** The first thing to focus: a `data-autofocus` element, else the first control in the body or footer, else the dialog. */

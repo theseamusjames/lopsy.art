@@ -1,0 +1,56 @@
+/* A line drawing on the app's darkest ground: grey lines, and the accent for what the step is about. */
+.art {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.line {
+  stroke: var(--ph-text-muted);
+}
+
+.faint {
+  stroke: var(--color-border-strong);
+}
+
+.dashed {
+  stroke: var(--color-border-strong);
+  stroke-dasharray: 4 5;
+}
+
+/* Drawn over what is behind it. */
+.paper {
+  stroke: var(--ph-text-muted);
+  fill: var(--color-bg-primary);
+}
+
+.accent {
+  stroke: var(--color-accent);
+}
+
+.thin {
+  stroke: var(--color-accent);
+  stroke-width: 1.75;
+}
+
+.chosen {
+  stroke: var(--color-accent);
+  fill: var(--color-accent-subtle);
+}
+
+.tint {
+  stroke: none;
+  fill: var(--color-accent-subtle);
+}
+
+.knob {
+  stroke: var(--color-accent);
+  fill: var(--color-bg-primary);
+}

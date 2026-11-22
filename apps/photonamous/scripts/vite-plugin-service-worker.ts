@@ -21,8 +21,12 @@ import type { Plugin, ResolvedConfig } from 'vite';
 const ENTRY = 'src/sw/service-worker.ts';
 const WORKER_FILE = 'sw.js';
 const PLACEHOLDER = '__PRECACHE_MANIFEST__';
-/** Files Pages reads as configuration, and nothing a page loads. */
-const SKIPPED = [/^_headers$/, /^_redirects$/, /\.map$/, /^edit-harness\.html$/, /^sw\.js$/];
+/**
+ * Files Pages reads as configuration, and nothing a page loads; and the
+ * start screen's demo reel, megabytes a signed-in user never plays (its
+ * poster is precached, so the start screen is whole offline without it).
+ */
+const SKIPPED = [/^_headers$/, /^_redirects$/, /\.map$/, /^edit-harness\.html$/, /^sw\.js$/, /\.mp4$/];
 
 function filesUnder(dir: string): string[] {
   const files: string[] = [];

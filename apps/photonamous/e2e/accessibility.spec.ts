@@ -1,16 +1,14 @@
-import { createRequire } from 'node:module';
 import { writeFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
+import { axeViolations } from './axe';
 import { generatedJpeg, importStrip, tiles, toast } from './library';
 
 /**
  * Accessibility (WCAG 2.2 AA): axe-core's rules run on every view of the
  * app as a user reaches it, in the library on "This browser". A11Y_REPORT
- * names a JSON file to write every violation to.
+ * names a JSON file to write every violation to. What only a build with
+ * Google sign-in shows is in accessibility.drive.spec.ts.
  */
-
-const AXE = createRequire(import.meta.url).resolve('axe-core/axe.min.js');
-const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
 
 interface Violation {
   readonly state: string;
@@ -25,24 +23,7 @@ const found: Violation[] = [];
 test.use({ actionTimeout: 15_000 });
 
 async function scan(page: Page, state: string): Promise<void> {
-  await page.waitForTimeout(300);
-  const hasAxe = await page.evaluate(() => 'axe' in window);
-  if (!hasAxe) await page.addScriptTag({ path: AXE });
-  const violations = await page.evaluate(async (tags) => {
-    const axe = Reflect.get(window, 'axe') as {
-      run: (context: Document, options: object) => Promise<{
-        violations: { id: string; impact: string | null; help: string; nodes: { target: string[]; html: string; failureSummary?: string }[] }[];
-      }>;
-    };
-    const result = await axe.run(document, { runOnly: { type: 'tag', values: tags }, resultTypes: ['violations'] });
-    return result.violations.map((v) => ({
-      id: v.id,
-      impact: v.impact,
-      help: v.help,
-      nodes: v.nodes.map((n) => ({ target: n.target.join(' '), html: n.html.slice(0, 240), summary: (n.failureSummary ?? '').slice(0, 400) })),
-    }));
-  }, TAGS);
-  for (const v of violations) found.push({ state, ...v });
+  for (const v of await axeViolations(page)) found.push({ state, ...v });
 }
 
 async function step(page: Page, state: string, action: () => Promise<void>): Promise<void> {

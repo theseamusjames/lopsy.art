@@ -13,7 +13,8 @@ test('Google Drive: share an export folder by link, then stop sharing', async ({
   const drive = await routeFakeDrive(context);
   await page.addInitScript(gisStubInitScript());
   await page.goto('/');
-  await page.getByRole('button', { name: /Google Drive/ }).click();
+  await page.getByRole('button', { name: 'Try it now' }).click();
+  await page.getByRole('button', { name: 'Sign in with Google' }).click();
   await expect(page.getByText('Your library is empty')).toBeVisible({ timeout: 30_000 });
 
   await importFiles(page, [{ name: 'harbour.jpg', buffer: await generatedJpeg(page, 190) }]);

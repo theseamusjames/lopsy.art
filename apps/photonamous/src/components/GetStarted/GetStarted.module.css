@@ -1,0 +1,133 @@
+/* Three steps side by side, each a drawing over its words. */
+.steps {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-6);
+  padding-top: var(--space-2);
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.name {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-ui);
+  line-height: 1.25;
+  color: var(--color-text-primary);
+}
+
+.number {
+  font-size: var(--font-size-md);
+  color: var(--ph-accent-text);
+}
+
+.words {
+  margin-top: var(--space-2);
+  font-size: var(--font-size-lg);
+  line-height: 1.5;
+  color: var(--ph-text-muted);
+}
+
+/* The way in, under the steps and in the middle. */
+.signIn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: 500px;
+  margin: var(--space-8) auto var(--space-2);
+  text-align: center;
+}
+
+/*
+ * Sign in with Google, dark theme, to Google's sign-in branding guidelines:
+ * its fill, edge and text colours, a 40px or taller button, Roboto Medium
+ * where the visitor has it. Those values are Google's, not this app's tokens.
+ */
+.google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  background: #131314;
+  border: 1px solid #8e918f;
+  border-radius: var(--radius-round);
+  color: #e3e3e3;
+  font-family: Roboto, var(--font-ui);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.google:hover:not(:disabled) {
+  background: #1f1f20;
+}
+
+.google:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+}
+
+.google:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.fine {
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  color: var(--ph-text-muted);
+}
+
+.error {
+  color: var(--ph-error-text);
+  font-size: var(--font-size-md);
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* A narrow window: the steps one under another, each drawing beside its words. */
+@media (max-width: 760px) {
+  .steps {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-5);
+  }
+
+  .step {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .art {
+    flex: none;
+    width: 112px;
+  }
+
+  .words {
+    font-size: var(--font-size-md);
+  }
+
+  .signIn {
+    margin-top: var(--space-6);
+  }
+}

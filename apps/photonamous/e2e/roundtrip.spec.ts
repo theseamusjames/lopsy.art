@@ -190,7 +190,7 @@ test('a Lopsy layer is graded in Photonamous and comes back as one undoable step
   ]);
   await photos.waitForURL(/grade=/);
   await expect(photos.getByTestId('edit-view')).toHaveAttribute('data-status', 'ready', { timeout: 60_000 });
-  await expect(photos.getByRole('heading', { name: 'Where should your library live?' })).toHaveCount(0);
+  await expect(photos.getByRole('button', { name: /This browser/ })).toHaveCount(0);
 
   // Darken it: Exposure -1.
   const exposure = photos.getByLabel('Exposure value');

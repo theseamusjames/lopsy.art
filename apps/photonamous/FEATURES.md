@@ -7,33 +7,72 @@ is `docs/photonamous-spec.md`; running and setup are in
 
 ## Storage and sign-in
 
-- **Start screen.** "Where should your library live?" offers up to three
-  choices; a build offers only those it can serve:
-  - **Google Drive**: the library lives in the user's own Drive, so every
-    computer that signs in sees the same library. Offered only in builds
-    with a Google client ID (`VITE_GOOGLE_CLIENT_ID`).
+- **Start screen.** The page a visitor lands on, in two columns. The left
+  two thirds is a short film of the app; the right third, which stays in
+  view, has the wordmark as wide as the column, the line "Your photos.
+  Your cloud storage. Completely free.", **Try it now**, and links to
+  Privacy and Terms, with GitHub's mark at the right linking to the
+  source. On a window under 860 px wide
+  the film sits above the rest and the page scrolls.
+- **Try it now** opens **How it works**: three steps side by side, each
+  with a drawing. Step 1, Connect with Google: Photonamous has access
+  only to the one folder it creates in the visitor's Drive. Step 2,
+  Upload your photos: RAW, JPG, PNG and other common types, stored in
+  their Drive and nowhere else. Step 3, Edit and export. Under them is
+  **Sign in with Google**, which has focus, and a line saying what Google
+  will ask. On a narrow window the steps stack. A failed sign-in is said
+  under the button.
+- **The film** on the left is a silent trailer of about 24 seconds, cut
+  from the app itself and looping: the library under the title "Your
+  photos."; a photo picked and given five stars; a timelapse of a real
+  edit of a RAW file, all 41 of its steps, under "Professional editing."
+  and "In your web browser."; before and after under the split divider;
+  "No servers."; "Your own cloud storage."; the library in Google Drive,
+  clicked through from its folder to a day's originals; "Completely
+  free.", which dissolves into an end card, the wordmark and "Your photos on your
+  own cloud storage." over a photograph from the library.
+  It starts by itself, muted,
+  from a poster; a **Pause the film** button stops it. A visitor who asked
+  for reduced motion or to save data gets the poster and **Play the
+  film**, and the video is not downloaded until they press it. What it
+  shows and says is also there as text for assistive technology. It is
+  under two megabytes (AV1, with H.264 for browsers without it) and is not
+  part of the offline shell.
+- **Google Drive is the only storage a production build offers.** The
+  library lives in the user's own Drive, so every computer that signs in
+  sees the same library. It needs a Google client ID
+  (`VITE_GOOGLE_CLIENT_ID`); a production build without one says sign-in
+  is not set up.
+- **Libraries on this computer are for development.** A development build
+  (and a production build made with `VITE_LOCAL_LIBRARIES=true`, as the
+  site tests are) also offers, under "Development builds only":
   - **This browser**: private storage inside this browser on this computer
     (the origin private file system). Clearing the browser's data removes
     it.
   - **A folder on this computer**: the user picks a folder; photos and the
     library are kept there as ordinary files. Needs the File System Access
     API (Chromium).
-- **Reopening.** The library from the last visit is offered first ("Open
-  your library in this browser", "Reopen the folder …", "Continue as
-  <account>"), with the other choices below it.
-- **Sign-in.** Google sign-in asks for the `drive.file` scope only, so the
-  app sees just the files it made or the user picked. Tokens stay in
-  memory. When a token can no longer be refreshed, the header offers
+- **Reopening.** The library from the last visit is offered first
+  ("Open your Google Drive library", with **Use a different Google
+  account** under it; in development also "Open your library in this browser" and "Reopen
+  the folder …").
+- **Sign-in.** Google sign-in asks for one thing, the `drive.file` scope,
+  so the app sees just the files it made or the user picked. It does not
+  ask for the name, email address or profile, and never learns them. To
+  keep one Google account's library apart from another's in the same
+  browser, and to refuse a reconnect with the wrong account, it reads
+  Drive's own opaque ID for the account and nothing else about it. With
+  no email to hint with, Google's window shows its account chooser.
+  Tokens stay in memory. When a token can no longer be refreshed, the header offers
   **Reconnect Google Drive**; nothing else is lost.
 - **Add from Google Drive…** (the Import menu, Drive libraries only):
   picks photos already in Drive with Google's Picker and adds them to the
   library; Settings chooses whether they are moved into `Originals/` or
   left where they are.
 - **Where the library lives** is named in the header, beside the
-  wordmark: "Google Drive", "This browser" or the folder's name. The
-  Google account's email is not shown there; it is in Settings (This
-  device > Library), the import dialog's free-space line and the start
-  screen's "Continue as …" button.
+  wordmark: "Google Drive", "This browser" or the folder's name. A Drive
+  library is called "Google Drive" everywhere (Settings, the import
+  dialog's free-space line): the app does not know whose it is.
 - **Close this library** (header) goes back to the start screen.
 - **Layout in storage.** A `Photonamous/` folder holds `Originals/`
   (filed by capture year and month), `Lopsy documents/`, `Exports/` and

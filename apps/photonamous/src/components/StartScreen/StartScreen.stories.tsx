@@ -3,14 +3,23 @@ import { StartScreen } from './StartScreen';
 
 const meta: Meta<typeof StartScreen> = {
   component: StartScreen,
+  parameters: { layout: 'fullscreen' },
+  decorators: [
+    (Story) => (
+      <div style={{ height: '100vh' }}>
+        <Story />
+      </div>
+    ),
+  ],
 };
 
 export default meta;
 type Story = StoryObj<typeof StartScreen>;
 
-export const Choose: Story = {
+/** A first visit to photonamous.com: Try it now opens the three steps and Sign in with Google (the GetStarted stories). */
+export const FirstVisit: Story = {
   args: {
-    choices: ['google-drive', 'local-folder', 'browser'],
+    choices: ['google-drive'],
     offer: null,
     connecting: null,
     error: null,
@@ -21,5 +30,21 @@ export const Choose: Story = {
     onTakeOver: () => undefined,
   },
 };
-export const Connecting: Story = { args: { ...Choose.args, connecting: 'browser' } };
-export const Failed: Story = { args: { ...Choose.args, error: 'The folder could not be opened.' } };
+
+/** Someone who has signed in here before. */
+export const Returning: Story = {
+  args: { ...FirstVisit.args, offer: { kind: 'google-drive', label: 'Google Drive', automatic: false } },
+};
+
+/** A development build also offers libraries on this computer. */
+export const Development: Story = { args: { ...FirstVisit.args, choices: ['google-drive', 'browser', 'local-folder'] } };
+
+export const Connecting: Story = { args: { ...FirstVisit.args, connecting: 'google-drive' } };
+
+export const Failed: Story = { args: { ...FirstVisit.args, error: 'The library could not be opened: Google refused the token.' } };
+
+/** The library is open in another tab of this browser. */
+export const OpenElsewhere: Story = { args: { ...Returning.args, busyKind: 'google-drive' } };
+
+/** A production build without a Google client ID has no way in. */
+export const NoSignIn: Story = { args: { ...FirstVisit.args, choices: [] } };

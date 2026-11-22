@@ -32,7 +32,8 @@ async function drivePaths(drive: FakeDrive): Promise<string[]> {
 
 async function signIn(page: Page): Promise<void> {
   await page.goto('/');
-  await page.getByRole('button', { name: /Google Drive/ }).click();
+  await page.getByRole('button', { name: 'Try it now' }).click();
+  await page.getByRole('button', { name: 'Sign in with Google' }).click();
 }
 
 test('Google Drive: the library in Drive, and a second device sees it', async ({ page, browser }) => {
@@ -40,7 +41,11 @@ test('Google Drive: the library in Drive, and a second device sees it', async ({
   await page.addInitScript(gisStubInitScript());
   await signIn(page);
   await expect(page.getByText('Your library is empty')).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText('tester@example.com')).toBeVisible();
+  // The header says where the library is. The app asked Google for Drive files and nothing about the user.
+  await expect(page.getByRole('banner')).toContainText('Google Drive');
+  expect(await page.evaluate(() => Reflect.get(Reflect.get(window, '__lopsyGisStub') ?? {}, 'scope'))).toBe(
+    'https://www.googleapis.com/auth/drive.file',
+  );
 
   await importFiles(page, [{ name: 'harbour.jpg', buffer: await generatedJpeg(page, 190) }]);
   await page.getByRole('button', { name: /^All photos/ }).click();
