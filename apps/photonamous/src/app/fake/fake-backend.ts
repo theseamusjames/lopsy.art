@@ -12,6 +12,7 @@ import type { FileId, StorageQuota } from '@lopsy/photos-core/storage/types';
 import type { RepairReport } from '@lopsy/photos-core/library/repair';
 import {
   browserStorageChoices,
+  storageEnv,
   type Connection,
   type DeviceInfo,
   type EditPreviews,
@@ -214,7 +215,7 @@ export class FakeBackend implements PhotosBackend {
   constructor(private readonly seedCount: number) {}
 
   listStorageOptions(): readonly StorageChoice[] {
-    const choices = browserStorageChoices({ googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID });
+    const choices = browserStorageChoices(storageEnv());
     return choices.includes('browser') ? choices : ['browser', ...choices];
   }
 

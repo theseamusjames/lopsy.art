@@ -212,10 +212,32 @@ export class ConnectCancelled extends Error {
   }
 }
 
-/** Choices the browser itself can support, before any backend is asked. */
-export function browserStorageChoices(env: { readonly googleClientId: string | undefined }): StorageChoice[] {
+/** What decides the storage a build offers. */
+export interface StorageEnv {
+  /** `VITE_GOOGLE_CLIENT_ID`; without it there is no Google sign-in. */
+  readonly googleClientId: string | undefined;
+  /** Whether libraries kept on this computer (this browser, a picked folder) are offered. */
+  readonly localLibraries: boolean;
+}
+
+/**
+ * This build's storage settings. Libraries on this computer are for
+ * development and tests: storage the browser may clear is too easily lost
+ * for a photo library, so a production build offers cloud storage only,
+ * unless it was built with `VITE_LOCAL_LIBRARIES=true` (the site tests are).
+ */
+export function storageEnv(): StorageEnv {
+  return {
+    googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+    localLibraries: import.meta.env.DEV || import.meta.env.VITE_LOCAL_LIBRARIES === 'true',
+  };
+}
+
+/** Choices this build offers and the browser can support, before any backend is asked. */
+export function browserStorageChoices(env: StorageEnv): StorageChoice[] {
   const choices: StorageChoice[] = [];
   if (env.googleClientId) choices.push('google-drive');
+  if (!env.localLibraries) return choices;
   if (typeof navigator !== 'undefined' && navigator.storage && 'getDirectory' in navigator.storage) {
     choices.push('browser');
   }

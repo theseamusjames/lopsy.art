@@ -53,6 +53,11 @@ could use too goes there; one only this app uses stays here.
 - **Tests never talk to Google.** Unit tests use the memory adapter or
   the fake Drive in `packages/photos-core`. E2E tests use the local
   adapter in the browser.
+- **Production is Google Drive only.** The libraries on this computer
+  (This browser, A folder) are offered by development builds, and by a
+  production build made with `VITE_LOCAL_LIBRARIES=true` for the site
+  tests (`storageEnv` in `src/app/backend.ts`). Don't build a feature that
+  needs one of them in production.
 - **Accessibility: WCAG 2.2 AA.** `e2e/accessibility.spec.ts` runs
   axe-core on every view and must pass; add the states a new view or
   dialog brings to it. What it can't see is a rule too:

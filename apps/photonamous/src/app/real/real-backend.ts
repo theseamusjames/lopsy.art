@@ -33,6 +33,7 @@ import { createBrowserPreviewRenderer } from '@lopsy/photos-core/import/browser-
 import { startExport } from '@lopsy/photos-core/export/exporter';
 import {
   browserStorageChoices,
+  storageEnv,
   ConnectCancelled,
   type Connection,
   type ConnectOptions,
@@ -203,7 +204,7 @@ export class RealBackend implements PhotosBackend {
   private readonly previewRenderer = createBrowserPreviewRenderer();
 
   listStorageOptions(): readonly StorageChoice[] {
-    return browserStorageChoices({ googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID });
+    return browserStorageChoices(storageEnv());
   }
 
   async getReconnectOffer(): Promise<ReconnectOffer | null> {

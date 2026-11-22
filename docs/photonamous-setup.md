@@ -16,8 +16,10 @@ npm run dev:photonamous     # http://localhost:5174 (npm run dev starts Lopsy wi
 The engine build needs Rust and `wasm-pack` (root `CLAUDE.md`). It is
 needed once, and again after engine changes.
 
-With no Google client ID configured, the start screen offers two kinds of
-storage:
+The dev server's start screen offers, under "Development builds only",
+two kinds of storage on this computer. A production build offers neither:
+it is Google Drive or nothing, unless it is built with
+`VITE_LOCAL_LIBRARIES=true`, as `npm run test:e2e:site` builds it.
 
 - **This browser**: the browser's private file system (OPFS). Nothing is
   visible on disk.

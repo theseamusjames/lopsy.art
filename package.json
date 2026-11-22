@@ -31,7 +31,7 @@
     "test:watch": "npm run test:watch -w lopsy-web --",
     "test:e2e": "npm run test:e2e -w lopsy-web --",
     "test:e2e:photos": "npm run test:e2e -w photonamous --",
-    "test:e2e:site": "VITE_LOPSY_URL= VITE_GOOGLE_CLIENT_ID= VITE_GOOGLE_API_KEY= VITE_GOOGLE_APP_ID= npm run build:photos && (npm exec -w photonamous -- playwright test -c playwright.site.config.ts; status=$?; rm -rf apps/photonamous/dist; exit $status)",
+    "test:e2e:site": "VITE_LOCAL_LIBRARIES=true VITE_LOPSY_URL= VITE_GOOGLE_CLIENT_ID= VITE_GOOGLE_API_KEY= VITE_GOOGLE_APP_ID= npm run build:photos && (npm exec -w photonamous -- playwright test -c playwright.site.config.ts; status=$?; rm -rf apps/photonamous/dist; exit $status)",
     "parity:record": "npm run parity:record -w lopsy-web --",
     "parity:check": "npm run parity:check -w lopsy-web --",
     "tutorial:upload": "npm run tutorial:upload -w lopsy-web --",

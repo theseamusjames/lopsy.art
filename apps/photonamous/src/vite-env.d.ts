@@ -7,6 +7,8 @@ interface ImportMetaEnv {
   readonly VITE_GOOGLE_API_KEY?: string;
   /** Cloud project number; the Picker's app ID. */
   readonly VITE_GOOGLE_APP_ID?: string;
+  /** `true` offers libraries on this computer (this browser, a folder) in a production build too; development always does. */
+  readonly VITE_LOCAL_LIBRARIES?: string;
   /** Lopsy's URL, for handoffs. Defaults to http://localhost:5173/ in development and https://lopsy.art/ in a build. */
   readonly VITE_LOPSY_URL?: string;
 }
