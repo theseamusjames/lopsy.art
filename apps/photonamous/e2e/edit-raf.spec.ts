@@ -49,7 +49,7 @@ test.describe('Edit view on a RAF', () => {
     console.log(`RAF working image ready after ${readyMs} ms`);
     expect(readyMs).toBeLessThan(45_000);
     // Fit shows the photo far below 50 % of its full size.
-    const fitPercent = Number((await page.getByTestId('zoom-readout').textContent())?.replace('%', ''));
+    const fitPercent = Number((await page.getByTestId('zoom-readout').inputValue()).replace('%', ''));
     expect(fitPercent).toBeLessThan(50);
 
     // On a RAW file the Temperature field reads and takes Kelvin.
@@ -111,6 +111,6 @@ test.describe('Edit view on a RAF', () => {
     await expect(page.getByTestId('loading-badge')).toHaveText('Loading full resolution…', { timeout: 30_000 });
     await expect(page.getByTestId('loading-badge')).toHaveCount(0, { timeout: 10 * 60_000 });
     console.log(`RAF full resolution after ${Date.now() - started} ms`);
-    await expect(page.getByTestId('zoom-readout')).toHaveText('100%');
+    await expect(page.getByTestId('zoom-readout')).toHaveValue('100%');
   });
 });

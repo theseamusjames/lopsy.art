@@ -104,14 +104,6 @@
   background: var(--color-bg-tertiary);
 }
 
-.zoomReadout {
-  min-width: 44px;
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  text-align: right;
-}
-
 .body {
   display: flex;
   flex: 1;

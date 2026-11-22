@@ -70,15 +70,16 @@ test('Edit in the library: history, versions, presets, copy and paste, filmstrip
   await page.getByRole('dialog', { name: /^Copy edits from/ }).getByRole('button', { name: 'Copy', exact: true }).click();
   const strip = edit.getByRole('navigation', { name: 'Filmstrip' });
   await expect(strip.getByRole('button')).toHaveCount(2);
-  // On the zoom level the arrows zoom rather than move along the filmstrip, and Space gives 100 %.
+  // In the zoom field Up and Down zoom, and Left and Right move the caret rather than along the filmstrip.
   const readout = edit.getByTestId('zoom-readout');
   await readout.focus();
-  await page.keyboard.press('ArrowLeft');
-  await expect(readout).not.toHaveText('100%');
-  await page.keyboard.press(' ');
-  await expect(readout).toHaveText('100%');
+  await page.keyboard.type('100');
+  await page.keyboard.press('Enter');
+  await expect(readout).toHaveValue('100%');
+  await page.keyboard.press('ArrowUp');
+  await expect(readout).toHaveValue('110%');
   await page.keyboard.press('ArrowRight');
-  await expect(readout).toHaveText('110%');
+  await page.keyboard.press('ArrowLeft');
   await page.waitForTimeout(500);
   await expect(edit.getByTitle(/\.jpg$/).first()).toHaveText(firstName);
   await readout.blur();

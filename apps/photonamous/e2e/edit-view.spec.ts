@@ -76,9 +76,9 @@ test.describe('Edit view on a JPEG', () => {
     await expect(before).toHaveAttribute('aria-pressed', 'false');
   });
 
-  test('the bar under the photo: Full, Fit, and a zoom level that drags, steps and double-clicks', async ({ page }) => {
+  test('the bar under the photo: Full, Fit, and a zoom level to type in', async ({ page }) => {
     const bar = page.getByRole('group', { name: 'View' });
-    const readout = bar.getByTestId('zoom-readout');
+    const zoom = bar.getByRole('textbox', { name: 'Zoom', exact: true });
     const fit = bar.getByRole('button', { name: 'Fit', exact: true });
     // Before and Split are icons only, named for screen readers.
     await expect(bar.getByRole('button', { name: 'Before', exact: true })).toHaveText('');
@@ -88,31 +88,42 @@ test.describe('Edit view on a JPEG', () => {
     expect((await bar.boundingBox())!.y).toBeGreaterThanOrEqual(stage.y + stage.height - 1);
 
     await bar.getByRole('button', { name: 'Full', exact: true }).click();
-    await expect(readout).toHaveText('100%');
-    await expect(readout).toHaveAccessibleName('Zoom 100%');
+    await expect(zoom).toHaveValue('100%');
+    await expect(bar.getByTestId('zoom-readout')).toHaveValue('100%');
 
-    // Dragging left on the level zooms out, 1 % a pixel.
-    const box = (await readout.boundingBox())!;
-    const y = box.y + box.height / 2;
-    await page.mouse.move(box.x + box.width / 2, y);
-    await page.mouse.down();
-    await page.mouse.move(box.x + box.width / 2 - 15, y, { steps: 3 });
-    await page.mouse.move(box.x + box.width / 2 - 30, y, { steps: 3 });
-    await page.mouse.up();
-    await expect(readout).toHaveText('70%');
-
-    // From the keyboard the arrows step by 10 % and Enter is the double-click.
-    await readout.focus();
-    await page.keyboard.press('ArrowRight');
-    await expect(readout).toHaveText('80%');
+    // A click selects the level, so typing replaces it; Enter takes it and keeps the field.
+    await zoom.click();
+    await page.keyboard.type('70');
     await page.keyboard.press('Enter');
-    await expect(readout).toHaveText('100%');
+    await expect(zoom).toHaveValue('70%');
+    await expect(zoom).toBeFocused();
+    await expect(fit).toHaveAttribute('aria-pressed', 'false');
 
-    await page.keyboard.press('ArrowLeft');
-    await page.keyboard.press('ArrowLeft');
-    await expect(readout).toHaveText('80%');
-    await readout.dblclick();
-    await expect(readout).toHaveText('100%');
+    // Up and Down step to the next 10 %.
+    await page.keyboard.press('ArrowUp');
+    await expect(zoom).toHaveValue('80%');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    await expect(zoom).toHaveValue('60%');
+
+    // The sign is optional, and a level outside the range is held to it.
+    await page.keyboard.type('1000 %');
+    await page.keyboard.press('Enter');
+    await expect(zoom).toHaveValue('400%');
+
+    // What is not a number puts the level back, and Escape drops what was typed without leaving the photo.
+    await page.keyboard.type('big');
+    await page.keyboard.press('Enter');
+    await expect(zoom).toHaveValue('400%');
+    await page.keyboard.type('25');
+    await page.keyboard.press('Escape');
+    await expect(zoom).toHaveValue('400%');
+    await expect(page.getByTestId('edit-view')).toBeVisible();
+
+    // Leaving the field takes what was typed.
+    await page.keyboard.type('150');
+    await fit.focus();
+    await expect(zoom).toHaveValue('150%');
 
     await fit.click();
     await expect(fit).toHaveAttribute('aria-pressed', 'true');
@@ -350,7 +361,7 @@ test.describe('Working image and keys', () => {
     await openGeneratedImage(page, 4000, 3000);
     await waitForReady(page);
     // Fit is far below the full image's size; the readout says so against the full image.
-    const fit = Number((await page.getByTestId('zoom-readout').textContent())?.replace('%', ''));
+    const fit = Number((await page.getByTestId('zoom-readout').inputValue()).replace('%', ''));
     expect(fit).toBeLessThan(40);
     await waitForPreview(page, 0);
     const preview = await imageStats(page, { kind: 'preview', index: 0, which: 'screen' });
@@ -372,9 +383,9 @@ test.describe('Working image and keys', () => {
     await openGeneratedImage(page, 4000, 3000);
     await waitForReady(page);
     await page.getByRole('button', { name: 'Full', exact: true }).click();
-    await expect(page.getByTestId('zoom-readout')).toHaveText('100%');
+    await expect(page.getByTestId('zoom-readout')).toHaveValue('100%');
     await expect(page.getByTestId('loading-badge')).toHaveCount(0, { timeout: 60_000 });
-    await expect(page.getByTestId('zoom-readout')).toHaveText('100%');
+    await expect(page.getByTestId('zoom-readout')).toHaveValue('100%');
   });
 
   test('? lists the shortcuts and Escape goes back, unless a tool is open', async ({ page }) => {

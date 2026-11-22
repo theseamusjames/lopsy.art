@@ -1,6 +1,5 @@
 import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent } from 'react';
 import { ArrowLeft, Check, ClipboardPaste, Copy, Crop, Spline, Eye, FlipVertical2, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcwSquare, RotateCwSquare, SplitSquareHorizontal, Undo2, X } from 'lucide-react';
-import { ZoomReadout } from '@lopsy/ui/ZoomReadout';
 import { DEFAULT_RECIPE, recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Asset, HistoryStep, Json, Preset, PresetId, Version, VersionId } from '@lopsy/photos-core/library/types';
 import {
@@ -49,6 +48,7 @@ import type { PhotoInfo } from '../../engine/develop-engine';
 import type { DevelopProfile } from '../../engine/profiles';
 import { Histogram } from '../Histogram/Histogram';
 import { ClippingButtons } from '../ClippingButtons/ClippingButtons';
+import { ZoomField } from '../ZoomField/ZoomField';
 import { CropTool } from '../CropTool/CropTool';
 import { WhiteBalanceMenu } from '../WhiteBalanceMenu/WhiteBalanceMenu';
 import { WhiteBalancePicker } from '../WhiteBalancePicker/WhiteBalancePicker';
@@ -1032,13 +1032,11 @@ export function EditView({
               >
                 Full
               </button>
-              <ZoomReadout
+              <ZoomField
                 zoom={view ? view.zoom * workingScale : 1}
                 onZoom={(next) => engine?.setZoom(next / workingScale)}
-                onReset={() => engine?.setZoom(1 / workingScale)}
-                disabled={!canEdit}
-                className={styles.zoomReadout}
-                hint={view?.isFit ? 'The whole photo fits. Drag left or right to zoom; double-click for full size, 100%' : "Of the photo's full size. Drag left or right to zoom; double-click for full size, 100%"}
+                isDisabled={!canEdit}
+                hint={view?.isFit ? 'Zoom: the whole photo fits. Type a level from 10 to 400% and press Enter' : "Zoom, of the photo's full size. Type a level from 10 to 400% and press Enter"}
                 data-testid="zoom-readout"
               />
             </div>

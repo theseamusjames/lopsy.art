@@ -302,8 +302,9 @@ to the library**.
   wheel.
 - **The bar under the photo.** On the left, **Fit** (⌘0), **Full** (⌘1:
   one pixel of the photo to one pixel of the screen) and the zoom level,
-  which works as Lopsy's does: drag left or right on it to zoom out or in
-  (1 % a pixel, 10 % to 400 %), and double-click it for 100 %. On the
+  a field to type in: a percentage from 10 to 400, with or without its
+  sign, taken on Enter or on leaving the field (a level outside the range
+  is held to it, and what is not a number puts the level back). On the
   right, the two clipping warnings (a moon for shadows, a sun for
   highlights; see Histogram below), then two icon buttons: **Before** (or
   hold `\`) and **Split** (before and after side by side, with a divider
@@ -592,9 +593,10 @@ best-practice rules at each step; the `a11y-*.spec.ts` and
   - With the photo focused, the arrow keys move a zoomed photo and + and
     − zoom. The before/after divider takes the arrow, Page, Home and End
     keys.
-  - The zoom level under the photo is a button: Enter or Space gives
-    100 %, and the arrow keys step to the next 10 % (Right and Up in,
-    Left and Down out) without changing photo.
+  - The zoom level under the photo is a text field named Zoom: Enter
+    takes what was typed and keeps the field, Up and Down step to the
+    next 10 %, and Escape drops what was typed without leaving the
+    photo.
   - The histogram's clipping markers, and the moon and sun under the
     photo, are outlined, or filled when that end clips; the histogram's
     channels are solid, dashed and dotted lines, named in

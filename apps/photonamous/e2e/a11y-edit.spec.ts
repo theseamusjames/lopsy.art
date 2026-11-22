@@ -244,14 +244,14 @@ test('tabs move with the arrow keys and sections fold from their headings', asyn
 test('the focused photo zooms with + and − and pans with the arrow keys', async ({ page }) => {
   await openPhoto(page);
   const readout = page.getByTestId('zoom-readout');
-  await expect(readout).toHaveText('100%');
+  await expect(readout).toHaveValue('100%');
   const stage = page.getByRole('group', { name: 'Photo', exact: true });
   await stage.focus();
   await page.keyboard.press('+');
-  await expect(readout).toHaveText('125%');
+  await expect(readout).toHaveValue('125%');
   await expect(page.getByRole('button', { name: 'Fit' })).toHaveAttribute('aria-pressed', 'false');
   await page.keyboard.press('-');
-  await expect(readout).toHaveText('100%');
+  await expect(readout).toHaveValue('100%');
   await page.keyboard.press('+');
 
   // The split divider sits on the photo, so it shows where the photo has moved to.
