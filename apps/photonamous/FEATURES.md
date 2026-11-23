@@ -9,7 +9,7 @@ is `docs/photonamous-spec.md`; running and setup are in
 
 - **Start screen.** The page a visitor lands on, in two columns. The left
   two thirds is a short film of the app; the right third, which stays in
-  view, has the wordmark as wide as the column, the line "Your photos.
+  view, has the wordmark in colour as wide as the column, the line "Your photos.
   Your cloud storage. Completely free.", **Try it now**, and links to
   Privacy and Terms, with GitHub's mark at the right linking to the
   source. On a window under 860 px wide

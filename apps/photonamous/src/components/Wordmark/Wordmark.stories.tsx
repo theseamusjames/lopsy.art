@@ -9,8 +9,8 @@ const meta: Meta<typeof Wordmark> = {
 export default meta;
 type Story = StoryObj<typeof Wordmark>;
 
-/** As in the header: 120 × 21. */
+/** As in the header: the one-colour mark, 120 × 21. */
 export const Header: Story = {};
 
-/** As on the start screen: as wide as its column, up to 560 px. */
+/** As on the start screen: the colour mark, as wide as its column, up to 560 px. */
 export const Start: Story = { args: { size: 'start' } };
