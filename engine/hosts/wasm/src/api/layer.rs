@@ -174,6 +174,15 @@ pub fn scale_layer_texture(engine: &mut Engine, layer_id: &str, new_w: u32, new_
     lopsy_engine::commands::layer::scale_layer_texture(&mut engine.inner, layer_id, new_w, new_h).map_err(|e| JsError::new(&e))
 }
 
+#[wasm_bindgen(js_name = "resampleLayerTexture")]
+#[allow(clippy::too_many_arguments)]
+pub fn resample_layer_texture(
+    engine: &mut Engine, layer_id: &str, new_w: u32, new_h: u32,
+    scale_x: f32, scale_y: f32, offset_x: f32, offset_y: f32,
+) -> Result<(), JsError> {
+    lopsy_engine::commands::layer::resample_layer_texture(&mut engine.inner, layer_id, new_w, new_h, scale_x, scale_y, offset_x, offset_y).map_err(|e| JsError::new(&e))
+}
+
 #[wasm_bindgen(js_name = "remapLayerMask")]
 pub fn remap_layer_mask(
     engine: &mut Engine,

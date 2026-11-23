@@ -6,8 +6,13 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('./settled', () => ({ settled: mocks.settled }));
 
+// The first test cold-imports the whole command registry (every family and
+// what it reaches), which can take longer than vitest's 5 s default while the
+// rest of the suite runs in parallel.
+const COLD_IMPORT_TIMEOUT_MS = 30_000;
+
 describe('commands entry point', () => {
-  it('installs settled as the default registry settle', async () => {
+  it('installs settled as the default registry settle', { timeout: COLD_IMPORT_TIMEOUT_MS }, async () => {
     const { defineCommand } = await import('./registry');
     const { runCommand } = await import('./index');
     defineCommand({

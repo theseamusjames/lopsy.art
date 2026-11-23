@@ -26,6 +26,9 @@ test-results/
 # Step screenshots the parity compositions write on every run
 apps/lopsy-web/e2e/screenshots/comp2-*.png
 apps/lopsy-web/e2e/screenshots/koi-fish-*.png
+# Screenshots the Image Size (#904) and canvas-op mask (#1357) specs write on every run
+apps/lopsy-web/e2e/screenshots/image-size-904-*.png
+apps/lopsy-web/e2e/screenshots/mask-*-1357*.png
 engine/test-output/
 apps/lopsy-web/tests/screenshots/
 

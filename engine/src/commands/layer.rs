@@ -292,6 +292,17 @@ pub fn scale_layer_texture(engine: &mut EngineInner, layer_id: &str, new_w: u32,
         
 }
 
+/// Resample a layer texture into `new_w` x `new_h` through
+/// `src_uv = dst_uv * (scale_x, scale_y) + (offset_x, offset_y)`; transparent
+/// outside the source.
+#[allow(clippy::too_many_arguments)]
+pub fn resample_layer_texture(
+    engine: &mut EngineInner, layer_id: &str, new_w: u32, new_h: u32,
+    scale_x: f32, scale_y: f32, offset_x: f32, offset_y: f32,
+) -> Result<(), String> {
+    layer_manager::resample_texture_region(&mut *engine, layer_id, new_w, new_h, [scale_x, scale_y], [offset_x, offset_y])
+}
+
 /// Resample a layer's mask to `dst_w` x `dst_h` through the inverse affine
 /// map `src = [a c; b d] * dst + (e, f)`, in mask pixels.
 pub fn remap_layer_mask(
