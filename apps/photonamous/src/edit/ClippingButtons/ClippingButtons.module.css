@@ -23,19 +23,16 @@
   color: var(--color-text-primary);
 }
 
-.button[aria-pressed='true'] {
-  background: var(--color-bg-active);
-  border-color: var(--color-border);
+/* That end of the photo clips: the icon is filled, and brighter. No hue: blue is kept for on. */
+.button[data-clipped]:not(:disabled) {
   color: var(--color-text-primary);
 }
 
-/* The histogram markers' colours: the icon is filled as well, so it does not rest on colour alone. */
-.button[data-side='shadows'][data-clipped]:not(:disabled) {
+/* On is blue, as Before and Split are beside them and as a pressed IconButton is. */
+.button[aria-pressed='true']:not(:disabled),
+.button[aria-pressed='true']:hover:not(:disabled) {
+  background: var(--color-accent-subtle);
   color: var(--color-accent);
-}
-
-.button[data-side='highlights'][data-clipped]:not(:disabled) {
-  color: var(--color-warning);
 }
 
 .button:disabled {

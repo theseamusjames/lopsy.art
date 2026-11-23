@@ -14,8 +14,8 @@ export interface ClippingButtonsProps {
  * The clipping warning's two toggles for the bar under the photo: a moon
  * for shadows at black, a sun for highlights at white. They are the
  * histogram's corner markers again, where the other view toggles are: an
- * icon is filled and coloured when that end of the photo clips, and
- * pressed while its warning is painted on the photo.
+ * icon is filled when that end of the photo clips, and blue, as Before
+ * and Split are, while its warning is painted on the photo.
  */
 export function ClippingButtons({ bins, isDisabled = false }: ClippingButtonsProps) {
   const clip = useMemo(() => {
