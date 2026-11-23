@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '../../../test/canvas-mock';
 import { describe, it, expect } from 'vitest';
-import { computeResizeImage, scaleGuidesForResize, scalePathsForResize } from './resize-image';
+import { computeResizeImage, planResampledSpan, scaleGuidesForResize, scalePathsForResize } from './resize-image';
 import { createRasterLayer, createTextLayer, DEFAULT_EFFECTS } from '../../../layers/layer-model';
 import type { DocumentState } from '../../../types';
 import type { RasterLayer, TextLayer } from '../../../types/layers';
@@ -59,11 +59,12 @@ describe('computeResizeImage', () => {
     };
     const result = computeResizeImage(doc, 0, 20, 20);
     const updated = result.document!.layers[0]! as RasterLayer;
-    // scaleX = scaleY = 1/3
-    expect(updated.width).toBe(10); // round(30 / 3)
-    expect(updated.height).toBe(7); // round(20 / 3)
-    expect(updated.x).toBe(3); // round(10 / 3)
-    expect(updated.y).toBe(2); // round(6 / 3)
+    // scaleX = scaleY = 1/3: the content covers x 3.33..13.33 and y 2..8.67,
+    // and the box snaps outward to the pixels it touches.
+    expect(updated.x).toBe(3);
+    expect(updated.width).toBe(11);
+    expect(updated.y).toBe(2);
+    expect(updated.height).toBe(7);
   });
 
   it('scales text layer position without converting to raster', () => {
@@ -208,5 +209,52 @@ describe('computeResizeImage — path-bound text (#1363)', () => {
     expect(scaled.pathAnchorX).toBe(50);
     expect(scaled.pathAnchorY).toBe(190);
     expect(scaled.x - scaled.pathAnchorX!).toBe(5);
+  });
+});
+
+describe('planResampledSpan (#1821)', () => {
+  const sourceAt = (span: ReturnType<typeof planResampledSpan>, newDocCoord: number, start: number, length: number) => {
+    const u = (newDocCoord - span.origin) / span.size;
+    return start + (u * span.uvScale + span.uvOffset) * length;
+  };
+
+  it('maps the content by exactly the document scale, not a per-layer rounded one', () => {
+    // Rows 976..1601 of a 1800-row document, halved: the content ends at
+    // 800.5, which a stretched 313-row texture would put at 801.
+    const span = planResampledSpan(976, 625, 0.5);
+    expect(span.origin).toBe(488);
+    expect(span.size).toBe(313);
+    expect(sourceAt(span, 800.5, 976, 625)).toBeCloseTo(1601, 9);
+    expect(sourceAt(span, 488, 976, 625)).toBeCloseTo(976, 9);
+  });
+
+  it('keeps two layers with a shared edge in register', () => {
+    const a = planResampledSpan(976, 625, 0.5);
+    const c = planResampledSpan(0, 1800, 0.5);
+    for (const y of [700.25, 799.5, 800.5]) {
+      expect(sourceAt(a, y, 976, 625)).toBeCloseTo(sourceAt(c, y, 0, 1800), 9);
+    }
+  });
+
+  it('snaps the box outward around a fractional origin', () => {
+    const span = planResampledSpan(101, 99, 0.5);
+    expect(span.origin).toBe(50);
+    expect(span.size).toBe(50);
+    expect(sourceAt(span, 50.5, 101, 99)).toBeCloseTo(101, 9);
+    expect(sourceAt(span, 100, 101, 99)).toBeCloseTo(200, 9);
+  });
+
+  it('is the identity when the scale is 1', () => {
+    expect(planResampledSpan(7, 13, 1)).toEqual({ origin: 7, size: 13, uvScale: 1, uvOffset: 0 });
+  });
+
+  it('does not add an empty pixel for float error on a whole edge', () => {
+    const span = planResampledSpan(30, 30, 1 / 3);
+    expect(span.origin).toBe(10);
+    expect(span.size).toBe(10);
+  });
+
+  it('keeps at least one pixel', () => {
+    expect(planResampledSpan(0, 1, 0.01).size).toBe(1);
   });
 });

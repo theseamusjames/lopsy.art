@@ -1988,7 +1988,11 @@ for Crop / Canvas Size / Image Size, `invalidateLayers()` for Rotate Image, and
   trims the document without resampling layer pixels. Entered in pixels or
   inches (see [The two dialogs](#the-two-dialogs)).
 - **Image Size…** (Image menu): new width/height that resamples the document,
-  in pixels or inches.
+  in pixels or inches. Every raster layer's content is scaled by exactly the
+  document factor: a layer cropped to its content gets a box snapped outward
+  to the whole pixels its scaled extent touches, and keeps its sub-pixel
+  origin inside it, so layers that line up before the resize still line up
+  after it.
 - **Border…** (Image menu): adds a "Border" layer in a chosen color, with one
   width for every side (**Symmetric**) or separate Top / Bottom / Left / Right
   widths (**Asymmetric**), in pixels. **Expand canvas** grows the document by
