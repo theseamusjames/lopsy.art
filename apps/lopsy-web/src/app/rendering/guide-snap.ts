@@ -3,12 +3,12 @@
  * dragging a guide out of the ruler, the guide's position is quantized
  * to reasonable layout fractions of the document dimension — the ones a
  * designer would actually use to line things up (halves, quarters,
- * eighths, sixteenths) plus thirds and sixths. Deliberately does NOT
- * include fifths, sevenths, ninths, elevenths, thirteenths — those never
- * come up in real layout and would compete with the useful fractions.
+ * eighths, sixteenths) plus thirds, fifths and sixths. Deliberately does
+ * NOT include sevenths, ninths, elevenths, thirteenths — those rarely come
+ * up in layout and would compete with the useful fractions.
  */
 
-const RATIONAL_DENOMINATORS = [2, 3, 4, 6, 8, 16] as const;
+const RATIONAL_DENOMINATORS = [2, 3, 4, 5, 6, 8, 16] as const;
 
 export interface Fraction {
   readonly num: number;
@@ -49,7 +49,7 @@ const FRACTIONS = FRACTIONS_TABLE.map((f) => f.value);
 
 /**
  * Snap `position` to the nearest fractional multiple of `docSize`. Uses
- * reduced fractions up to 1/16 plus thirds — i.e. the same set every
+ * reduced fractions up to 1/16 plus thirds, fifths and sixths — i.e. the same set every
  * layout guide reaches for. Returns the snapped integer position.
  */
 export function snapGuideToFraction(position: number, docSize: number): number {

@@ -33,6 +33,25 @@ select {
   color: inherit;
 }
 
+/* The browser's own dropdown arrow sits wherever its select padding leaves
+   it, which differs per engine and changes between browser releases (it
+   ended up jammed against the right border). Every dropdown draws the same
+   caret instead, with room reserved for it. The selector out-ranks the
+   modules' `.select` rules so their `background`/`padding` shorthands
+   cannot wipe the caret or its gap. */
+select:not([multiple]):not([size]) {
+  appearance: none;
+  padding-right: calc(var(--space-5) + var(--space-1));
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--color-text-secondary) 50%),
+    linear-gradient(135deg, var(--color-text-secondary) 50%, transparent 50%);
+  background-position:
+    right calc(var(--space-2) + var(--space-1)) center,
+    right var(--space-2) center;
+  background-size: var(--space-1) var(--space-1);
+  background-repeat: no-repeat;
+}
+
 button {
   cursor: pointer;
   border: none;
