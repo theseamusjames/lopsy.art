@@ -14,8 +14,14 @@
 //!    [`AUTO_MAX_EV`] either way, and never brightens so far that the 99th
 //!    percentile goes more than [`AUTO_HIGHLIGHT_ROOM`] stops above white.
 //!    Within ±0.05 EV it is left alone. It is the current exposure plus the
-//!    correction: the statistics include the current exposure, so pressing
-//!    Auto again converges.
+//!    whole correction, not a damped part of it: the statistics include the
+//!    current exposure, so a photo up to four stops off reaches its target
+//!    in one press and pressing Auto again leaves it there. A frame that is
+//!    measured poorly ([`is_poorly_measured`]: few pixels counted, nothing
+//!    brighter than noise, or no tonal range at all, as an all-black or
+//!    all-white frame) is moved at most [`AUTO_GUARDED_MAX_EV`], the reach
+//!    every frame had before, so a degenerate input cannot ask for more than
+//!    it did then.
 //! 2. **Whites** lifts the white end so the 99th percentile (after the new
 //!    exposure) reaches white when it falls short, up to +60; it is 0 when
 //!    the 99th percentile is at or above white.
@@ -51,8 +57,23 @@ pub const FLOOR_STOPS: f32 = -17.5;
 
 /// Where Exposure puts the median, in stops from middle grey.
 pub const AUTO_MID_STOPS: f32 = 0.0;
-/// Most exposure one Auto changes, EV.
-pub const AUTO_MAX_EV: f32 = 2.0;
+/// Most exposure one Auto changes, EV: enough that a photo four stops
+/// under or over is brought to its target in one press.
+pub const AUTO_MAX_EV: f32 = 4.0;
+/// Most exposure one Auto changes on a poorly measured frame
+/// ([`is_poorly_measured`]), EV: the reach every frame had before
+/// [`AUTO_MAX_EV`] was raised to four stops.
+pub const AUTO_GUARDED_MAX_EV: f32 = 2.0;
+/// The share of pixels counted below which a frame is poorly measured: its
+/// percentiles come from a few pixels at the statistics' size.
+pub const AUTO_MIN_SHARE: f32 = 0.05;
+/// The 99th percentile, in stops from middle grey, below which a frame
+/// holds nothing brighter than noise (12.5 stops below white): a black
+/// frame, whose median says nothing about how to expose it.
+pub const AUTO_DARK_FRAME_STOPS: f32 = -10.0;
+/// The 1st to 99th percentile spread, in stops, below which a frame has no
+/// tonal range: a uniform frame, as an all-white (clipped) one is.
+pub const AUTO_FLAT_STOPS: f32 = 1.0;
 /// How far above white Exposure may push the 99th percentile, in stops
 /// (Highlights can bring back three).
 pub const AUTO_HIGHLIGHT_ROOM: f32 = 2.0;
@@ -109,7 +130,8 @@ pub fn auto_tone_scene(stats: &[f32], current: &ToneSettings) -> ToneSettings {
     }
     let [p01, p05, _p25, p50, _p75, p95, p99] = [stats[1], stats[2], stats[3], stats[4], stats[5], stats[6], stats[7]];
 
-    let mut ev = (AUTO_MID_STOPS - p50).clamp(-AUTO_MAX_EV, AUTO_MAX_EV);
+    let reach = if is_poorly_measured(stats) { AUTO_GUARDED_MAX_EV } else { AUTO_MAX_EV };
+    let mut ev = (AUTO_MID_STOPS - p50).clamp(-reach, reach);
     if ev > 0.0 {
         ev = ev.min((WHITE_STOPS + AUTO_HIGHLIGHT_ROOM - p99).max(0.0));
     }
@@ -138,6 +160,15 @@ pub fn auto_tone_scene(stats: &[f32], current: &ToneSettings) -> ToneSettings {
         whites: whites.round(),
         blacks: blacks.round(),
     }
+}
+
+/// Whether `stats` ([`scene_statistics`]) describe a frame too poorly for
+/// Auto's full reach: fewer than [`AUTO_MIN_SHARE`] of the pixels counted,
+/// a 99th percentile below [`AUTO_DARK_FRAME_STOPS`] (a black frame), or a
+/// 1st to 99th percentile spread under [`AUTO_FLAT_STOPS`] (a uniform one).
+pub fn is_poorly_measured(stats: &[f32]) -> bool {
+    let (share, p01, p99) = (stats[0], stats[1], stats[7]);
+    share < AUTO_MIN_SHARE || p99 < AUTO_DARK_FRAME_STOPS || p99 - p01 < AUTO_FLAT_STOPS
 }
 
 /// [`auto_tone_scene`] with the current settings as JSON (the keys of
@@ -181,9 +212,9 @@ mod tests {
     #[test]
     fn a_dark_scene_is_brightened_toward_grey_and_converges() {
         let current = ToneSettings::default();
-        // Far too dark: at most two stops at once.
-        let a = auto_tone_scene(&scene_statistics(&scene(-6.0, 0.0)), &current);
-        assert!((a.exposure - 2.0).abs() < 1e-6, "{a:?}");
+        // Far too dark: at most four stops at once.
+        let a = auto_tone_scene(&scene_statistics(&scene(-9.0, -1.0)), &current);
+        assert!((a.exposure - 4.0).abs() < 1e-6, "{a:?}");
         // A stop dark: one stop; applied, the scene is a stop brighter and
         // the next Auto keeps the exposure.
         let b = auto_tone_scene(&scene_statistics(&scene(-3.0, 1.0)), &current);
@@ -208,6 +239,70 @@ mod tests {
         let a = auto_tone_scene(&st, &ToneSettings::default());
         assert!(a.whites > 0.0 && a.blacks < 0.0 && a.highlights == 0.0, "{a:?}");
         assert!(a.exposure.abs() < 0.3, "{a:?}");
+    }
+
+    /// `scene(lo, hi)` as a photo would read with `exposure` EV applied:
+    /// the statistics include the current exposure.
+    fn exposed(lo: f32, hi: f32, exposure: f32) -> [f32; SCENE_STATS_LEN] {
+        scene_statistics(&scene(lo + exposure, hi + exposure))
+    }
+
+    /// A photo `off` stops from a well-exposed scene of −4..4 stops (median
+    /// at middle grey, the 99th percentile 1.45 stops above white): one
+    /// press, and the exposure it sets.
+    fn one_press(off: f32) -> ToneSettings {
+        auto_tone_scene(&exposed(-4.0 + off, 4.0 + off, 0.0), &ToneSettings::default())
+    }
+
+    #[test]
+    fn a_photo_three_and_a_half_stops_off_reaches_its_target_in_one_press_and_stays() {
+        for off in [-4.0, -3.5, -2.5, 2.5, 3.5, 4.0] {
+            let first = one_press(off);
+            assert!((first.exposure + off).abs() < 0.051, "{off} stops off: one press set {first:?}");
+            // Pressed again on its own output: the scene now reads with the
+            // new exposure applied.
+            let second = auto_tone_scene(&exposed(-4.0 + off, 4.0 + off, first.exposure), &first);
+            assert!((second.exposure - first.exposure).abs() < 0.1, "{off} stops off: the second press moved {first:?} to {second:?}");
+            assert_eq!((second.whites, second.highlights, second.blacks, second.shadows), (first.whites, first.highlights, first.blacks, first.shadows));
+            eprintln!("{off:+} stops off: one press sets {:+.2} EV, the second {:+.2} EV more", first.exposure, second.exposure - first.exposure);
+        }
+        // Past the reach, the cap; a second press finishes the job.
+        let far = one_press(-6.0);
+        assert_eq!(far.exposure, AUTO_MAX_EV);
+        let next = auto_tone_scene(&exposed(-10.0, -2.0, far.exposure), &far);
+        assert!((next.exposure - 6.0).abs() < 0.051, "{next:?}");
+    }
+
+    #[test]
+    fn a_degenerate_frame_does_not_ask_for_an_absurd_exposure() {
+        let current = ToneSettings::default();
+        // All black: every pixel at the floor, 17.5 stops under grey.
+        let black = scene_statistics(&[0.0, 0.0, 0.0, 1.0].repeat(1000));
+        assert!(is_poorly_measured(&black));
+        let a = auto_tone_scene(&black, &current);
+        assert!(a.exposure.abs() <= AUTO_GUARDED_MAX_EV, "a black frame: {a:?}");
+        // Black with sensor noise, up to 1e-4 of white: still no picture.
+        let noisy: Vec<f32> = (0..1000).flat_map(|i| { let v = 1e-4 * ((i * 7919) % 1000) as f32 / 1000.0; [v, v, v, 1.0] }).collect();
+        let noisy = scene_statistics(&noisy);
+        assert!(is_poorly_measured(&noisy), "{noisy:?}");
+        assert!(auto_tone_scene(&noisy, &current).exposure.abs() <= AUTO_GUARDED_MAX_EV);
+        // All white: clipped at one level, four stops above white.
+        let white = scene_statistics(&[16.0, 16.0, 16.0, 1.0].repeat(1000));
+        assert!(is_poorly_measured(&white));
+        let w = auto_tone_scene(&white, &current);
+        assert!(w.exposure.abs() <= AUTO_GUARDED_MAX_EV, "an all-white frame: {w:?}");
+        // A tiny share counted: 2% of a dark scene opaque.
+        let mut cutout = scene(-9.0, -1.0);
+        for (i, p) in cutout.chunks_mut(4).enumerate() {
+            if i % 50 != 0 {
+                p[3] = 0.0;
+            }
+        }
+        let cutout = scene_statistics(&cutout);
+        assert!(cutout[0] < AUTO_MIN_SHARE && is_poorly_measured(&cutout));
+        assert_eq!(auto_tone_scene(&cutout, &current).exposure, AUTO_GUARDED_MAX_EV);
+        // A real dark photo is measured well and gets the full reach.
+        assert!(!is_poorly_measured(&scene_statistics(&scene(-9.0, -1.0))));
     }
 
     #[test]
