@@ -322,7 +322,10 @@ pub fn scene_reference(linear_rgba: &[f32], settings: &RawDevelopSettings) -> Ve
 pub fn tone_settings(settings: &RawDevelopSettings) -> crate::tone::ToneSettings<'_> {
     crate::tone::ToneSettings {
         saturation: settings.saturation,
-        highlight_desaturation: settings.highlight_desaturation,
+        // Clipped channels are reconstructed in the decode, so highlights
+        // keep their hue and the curve's shoulder and the output step's
+        // roll-off take them to white; greying them out would undo that.
+        highlight_desaturation: false,
         curve: settings.base_curve.as_deref().filter(|c| c.len() >= 2),
     }
 }

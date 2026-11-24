@@ -50,7 +50,9 @@ pub fn params(engine: &EngineInner, raw: Option<&RawDevelopState>) -> ToneParams
         Some(state) => {
             let s = &state.settings;
             let curve = s.base_curve.as_deref().filter(|c| c.len() >= 2 && state.curve_texture.is_some() && state.curve_size >= 2);
-            (s.saturation, s.highlight_desaturation, curve, state.curve_size)
+            // The grey-out is off, as in `lopsy_core::raf::develop::tone_settings`:
+            // the decode reconstructs clipped channels instead.
+            (s.saturation, false, curve, state.curve_size)
         }
         None => (1.0, false, None, 0),
     };
