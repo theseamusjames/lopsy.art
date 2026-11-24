@@ -439,6 +439,17 @@ pub fn set_develop_hdr(engine: &mut EngineInner, on: bool, peak: f32) {
     }
 }
 
+/// The HDR rendering of the document for a file
+/// (`compositor::composite_for_export_hdr_f32`): the whole export chain at
+/// the document's size, then the output step for linear Rec. 2020 with
+/// highlights up to `peak` (units of SDR white). `doc_width × doc_height`
+/// straight-alpha RGBA f32 texels, rows from the top; 1.0 is SDR white.
+/// Fails without the working space. The next frame rebuilds the live
+/// composite.
+pub fn read_hdr_output_f32(engine: &mut EngineInner, peak: f32) -> Read<Vec<f32>> {
+    compositor::composite_for_export_hdr_f32(engine, peak)
+}
+
 // ---------------------------------------------------------------------------
 // Tone, colour and curves on linear data (with the working space)
 // ---------------------------------------------------------------------------

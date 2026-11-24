@@ -60,6 +60,22 @@ pub fn set_develop_hdr(engine: &mut Engine, on: bool, peak: f32) {
 }
 
 readback_export! {
+    /// The HDR picture of the document for a file, with the working space:
+    /// the whole export chain at the document's size (not the screen's),
+    /// then the output step for linear Rec. 2020 with highlights rolled off
+    /// toward `peak` (units of SDR white; 4.0 to start). A `Float32Array` of
+    /// `docWidth × docHeight × 4` floats, RGBA, straight alpha, rows from
+    /// the top, 1.0 = SDR white: what `encodePqPng` and `computeGainMap`
+    /// take, the latter with `compositeForExport` as the SDR picture. Fails
+    /// without the working space. Replaces the live composite, so the next
+    /// frame rebuilds it: do not wrap with `'any-time'`.
+    #[wasm_bindgen(js_name = "readHdrOutputF32")]
+    pub fn read_hdr_output_f32(engine, peak: f32) -> Result<Vec<f32>> {
+        read(lopsy_engine::commands::develop::read_hdr_output_f32(engine, peak))
+    }
+}
+
+readback_export! {
     /// 1024 bins of the displayed result: red 0..=255, green, blue, then
     /// Rec. 709 luminance of the encoded values. With the working space,
     /// of the image rendered for sRGB whatever the screen is, without the

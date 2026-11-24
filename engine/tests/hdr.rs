@@ -282,6 +282,90 @@ fn hdr_document(w: u32, h: u32) -> Option<EngineInner> {
 }
 
 #[test]
+fn the_hdr_read_is_the_export_chain_then_the_file_output_and_survives_pq_png() {
+    let (w, h) = (32u32, 8u32);
+    let Some(mut engine) = hdr_document(w, h) else { return };
+    let hdr = now(commands::develop::read_hdr_output_f32(&mut engine, 4.0));
+    assert_eq!(hdr.len(), (w * h * 4) as usize);
+    // The read is the rendered image through the file output, at the
+    // document's size and whatever the screen is.
+    let rendered = now(commands::develop::read_rendered_f32(&mut engine));
+    let s = lopsy_engine::develop::output::hdr_settings_for(&engine, OutputTarget::LinearRec2020, 4.0);
+    let expected = lopsy_core::output::output_reference(&rendered, w, &s);
+    assert_within_halves("readHdrOutputF32 against the reference", &hdr, &expected, 4.0);
+    engine.set_screen_output(true, true);
+    assert_eq!(now(commands::develop::read_hdr_output_f32(&mut engine, 4.0)), hdr, "the read does not depend on the screen");
+    let wy = luma(Gamut::Rec2020);
+    let y = |p: &[f32]| wy[0] * p[0] + wy[1] * p[1] + wy[2] * p[2];
+    let top = hdr.chunks(4).map(y).fold(0.0f32, f32::max);
+    assert!(top > 1.5 && top < 4.0, "the brightest luminance is {top}");
+    assert!(hdr.chunks(4).all(|p| p[..3].iter().all(|&v| (0.0..=4.0).contains(&v)) && p[3] == 1.0));
+
+    // Through the PQ PNG and back: luminance within 0.1% (16-bit PQ steps
+    // are about 0.03% at these levels) plus a floor near black.
+    let png = lopsy_core::hdr_png::encode_pq_png(&hdr, w, h, lopsy_core::hdr_png::DEFAULT_SDR_WHITE_NITS).expect("PQ PNG");
+    let decoded = lopsy_core::decode::decode_png(&png).expect("decodes");
+    let lopsy_core::decode::DecodedPixels::RgbaF32(signal) = decoded.pixels else { panic!("a 16-bit PNG") };
+    let scale = lopsy_core::hdr_png::PQ_PEAK_NITS / f64::from(lopsy_core::hdr_png::DEFAULT_SDR_WHITE_NITS);
+    let mut worst = 0.0f64;
+    for (i, (want, got)) in hdr.chunks(4).zip(signal.chunks(4)).enumerate() {
+        let back: Vec<f32> = got[..3].iter().map(|&e| (lopsy_core::hdr_png::pq_decode(f64::from(e)) * scale) as f32).collect();
+        let (yw, yg) = (f64::from(y(want)), f64::from(y(&back)));
+        let off = (yg - yw).abs() / (yw + 1e-3);
+        worst = worst.max(off);
+        assert!(off <= 1e-3, "pixel {i}: luminance {yw} came back {yg}");
+    }
+    eprintln!("PQ PNG round trip: luminance within {:.4}%", worst * 100.0);
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn a_gain_map_from_the_hdr_read_and_the_8bit_export_rebuilds_the_hdr_luminance() {
+    use lopsy_core::color::ColorSpace;
+    use lopsy_core::gain_map::{compute_gain_map, GainMapScale, DEFAULT_OFFSET};
+    let (w, h) = (32u32, 8u32);
+    let Some(mut engine) = hdr_document(w, h) else { return };
+    let hdr = now(commands::develop::read_hdr_output_f32(&mut engine, 4.0));
+    let sdr = now(compositor::composite_for_export(&mut engine));
+    assert_eq!(sdr.len(), hdr.len(), "the same size");
+    let wy = luma(Gamut::Rec2020);
+    let ws = luma(Gamut::Srgb);
+    let decode8 = |v: u8| lopsy_core::working_space::srgb_decode(f32::from(v) / 255.0);
+    // The same picture in the same order: where the HDR picture is under
+    // white the SDR one has its luminance (the outputs agree there, but for
+    // the 8-bit step and the dither), and alpha is opaque in both.
+    let mut compared = 0;
+    for (i, (hp, sp)) in hdr.chunks(4).zip(sdr.chunks(4)).enumerate() {
+        assert_eq!((hp[3], sp[3]), (1.0, 255), "pixel {i}: straight, opaque alpha in both");
+        let yh = wy[0] * hp[0] + wy[1] * hp[1] + wy[2] * hp[2];
+        let ys = (0..3).map(|c| ws[c] * decode8(sp[c])).sum::<f32>();
+        if yh < 0.8 && hp[..3].iter().all(|&v| v < 0.8) {
+            compared += 1;
+            assert!((ys - yh).abs() <= 0.02 * yh + 2.0 / 255.0, "pixel {i} ({}, {}): SDR luminance {ys}, HDR {yh}", i as u32 % w, i as u32 / w);
+        }
+    }
+    assert!(compared > 40, "too few pixels under white to compare ({compared})");
+
+    let map = compute_gain_map(&hdr, &sdr, w, h, ColorSpace::Srgb, GainMapScale::Full).expect("gain map");
+    let m = map.metadata;
+    assert!(m.gain_map_max > 0.5, "the map holds highlights: {m:?}");
+    // As `gain_map.rs` documents and tests: applied to the SDR picture, the
+    // map gives back the HDR luminance to within half a code of its 8-bit
+    // step, `(Y + k) · (2^(span / 510) − 1)`.
+    let step = ((m.gain_map_max - m.gain_map_min) / 510.0).exp2() - 1.0;
+    let k = DEFAULT_OFFSET;
+    for (i, (hp, sp)) in hdr.chunks(4).zip(sdr.chunks(4)).enumerate() {
+        let code = f64::from(map.rgba[i * 4]);
+        let g = m.gain_map_min + (m.gain_map_max - m.gain_map_min) * code / 255.0;
+        let rebuilt: Vec<f64> = (0..3).map(|c| (f64::from(decode8(sp[c])) + m.offset_sdr) * g.exp2() - m.offset_hdr).collect();
+        let yg = (0..3).map(|c| f64::from(ws[c]) * rebuilt[c]).sum::<f64>();
+        let yw = f64::from(wy[0] * hp[0] + wy[1] * hp[1] + wy[2] * hp[2]);
+        assert!((yg - yw).abs() <= (yw + k) * step + 1e-5, "pixel {i}: rebuilt luminance {yg}, HDR {yw}");
+    }
+    assert_no_gpu_errors();
+}
+
+#[test]
 fn with_the_hdr_view_off_an_hdr_screen_is_given_the_sdr_rendering() {
     use lopsy_engine::develop::output::{live_settings, live_settings_on, settings_for, screen_target};
     let (w, h) = (32u32, 8u32);

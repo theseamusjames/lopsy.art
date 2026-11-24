@@ -1481,7 +1481,7 @@ fn composite_layers_for_export(engine: &mut EngineInner, output: ExportOutput) -
 }
 
 /// How far `composite_layers_for_export_with` takes the composite.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq)]
 enum ExportFinish {
     /// Every stage the export applies after the layers, the image
     /// adjustments only `with_adjustments`, and with the working space the
@@ -1492,12 +1492,21 @@ enum ExportFinish {
 }
 
 /// What an export's pixels are for, when the document has the working
-/// space: the output step's target, and whether they are read as 8 bits
-/// (dithered, for a RAW photo).
-#[derive(Clone, Copy, PartialEq, Eq)]
+/// space: the output step's target, whether they are read as 8 bits
+/// (dithered, for a RAW photo), and for an HDR target its peak in units of
+/// SDR white (ignored for an SDR one).
+#[derive(Clone, Copy, PartialEq)]
 pub struct ExportOutput {
     pub target: lopsy_core::output::OutputTarget,
     pub is_8bit: bool,
+    pub peak: f32,
+}
+
+impl ExportOutput {
+    /// An SDR export's output.
+    const fn sdr(target: lopsy_core::output::OutputTarget, is_8bit: bool) -> Self {
+        ExportOutput { target, is_8bit, peak: 1.0 }
+    }
 }
 
 /// The output of an export's `color_space` code (0 sRGB, 1 Display P3,
@@ -1642,7 +1651,11 @@ fn composite_layers_for_export_with(engine: &mut EngineInner, finish: ExportFini
     // Exports develop a RAW composite as the live frame does.
     run_develop_chain(engine, ChainRun::Export { with_adjustments });
     if engine.working_space.is_some() {
-        let settings = crate::develop::output::settings_for(engine, output.target, output.is_8bit, with_adjustments);
+        let settings = if output.target.is_hdr() {
+            crate::develop::output::hdr_settings_for(engine, output.target, output.peak)
+        } else {
+            crate::develop::output::settings_for(engine, output.target, output.is_8bit, with_adjustments)
+        };
         apply_output(engine, &settings);
     }
     Ok(())
@@ -1652,7 +1665,7 @@ fn composite_layers_for_export_with(engine: &mut EngineInner, finish: ExportFini
 pub fn composite_for_export(engine: &mut EngineInner) -> Read<Vec<u8>> {
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
-    let output = ExportOutput { target: lopsy_core::output::OutputTarget::Srgb, is_8bit: true };
+    let output = ExportOutput::sdr(lopsy_core::output::OutputTarget::Srgb, true);
     if let Err(e) = composite_layers_for_export(engine, output) {
         return Read::failed(e);
     }
@@ -1685,7 +1698,7 @@ async fn with_composite_for_reuse<T>(
     let lab = cx.with(|engine| -> Result<_, String> {
         let (doc_w, doc_h) = (engine.doc_width, engine.doc_height);
         // The composite is copied at the layer's precision, not read as bytes.
-        composite_layers_for_export(engine, ExportOutput { target: lopsy_core::output::OutputTarget::Srgb, is_8bit: false })?;
+        composite_layers_for_export(engine, ExportOutput::sdr(lopsy_core::output::OutputTarget::Srgb, false))?;
         // The live composite was replaced; the next frame must rebuild it.
         engine.needs_recomposite = true;
         let is_lab = engine.doc_color_mode == 1;
@@ -1763,7 +1776,7 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Read<Vec<u16>> {
 pub fn composite_for_export_u16_to(engine: &mut EngineInner, target: lopsy_core::output::OutputTarget) -> Read<Vec<u16>> {
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
-    let finish = ExportFinish::Full { with_adjustments: true, output: ExportOutput { target, is_8bit: false } };
+    let finish = ExportFinish::Full { with_adjustments: true, output: ExportOutput::sdr(target, false) };
     if let Err(e) = composite_layers_for_export_with(engine, finish) {
         return Read::failed(e);
     }
@@ -1790,6 +1803,28 @@ pub fn composite_for_export_u16_to(engine: &mut EngineInner, target: lopsy_core:
         }
         pixels
     })
+}
+
+/// The document composited as `composite_for_export` composites it (the
+/// image adjustments left out, as there; the working space never runs them
+/// anyway), then the output step for an HDR file: linear Rec. 2020, 1.0 =
+/// SDR white, highlights rolled off toward `peak` (units of SDR white,
+/// through `lopsy_core::output::hdr_peak`). Read as 32-bit float RGBA,
+/// straight alpha, `doc_width × doc_height` texels from the top row: what
+/// `lopsy_core::hdr_png::encode_pq_png` and `gain_map::compute_gain_map`
+/// take. At the document's size, whatever the screen is. Fails without the
+/// working space, since without it nothing is linear or above white.
+pub fn composite_for_export_hdr_f32(engine: &mut EngineInner, peak: f32) -> Read<Vec<f32>> {
+    if engine.working_space.is_none() {
+        return Read::failed("The document has no working space".to_string());
+    }
+    let (doc_w, doc_h) = (engine.doc_width, engine.doc_height);
+    let output = ExportOutput { target: lopsy_core::output::OutputTarget::LinearRec2020, is_8bit: false, peak };
+    if let Err(e) = composite_layers_for_export(engine, output) {
+        return Read::failed(e);
+    }
+    engine.needs_recomposite = true;
+    engine.gpu().read_rgba_f32(engine.composite_texture, 0, 0, doc_w, doc_h)
 }
 
 /// Replace a layer's pixels with the layer and its effects, rendered onto a
