@@ -4,7 +4,7 @@ import { readExifAt, readMetadata } from '../import/exif';
 import { getString, openTiff, readIfd } from '../import/tiff';
 import { buildPng } from '../import/test-support/builders';
 import { crc32 } from './crc32';
-import { applyExportMetadata, buildExportExif, insertJpegExif, insertPngExif, shutterToRational } from './exif-writer';
+import { applyExportMetadata, buildExportExif, insertJpegExif, insertPngExif, metadataWrittenByRenderer, shutterToRational } from './exif-writer';
 import { browserJpeg, testAsset } from './test-support/fixtures';
 import { DEFAULT_EXPORT_SETTINGS } from './types';
 import type { ExportSettings } from './types';
@@ -128,6 +128,21 @@ describe('EXIF writer', () => {
     const blob = await applyExportMetadata(new Blob([browserJpeg()], { type: 'image/jpeg' }), testAsset(), settings());
     expect(blob.type).toBe('image/jpeg');
     expect(readMetadata(new Uint8Array(await blob.arrayBuffer()))?.camera?.model).toBe('X100VI');
+  });
+
+  it('leaves a gain-map JPEG and a TIFF as rendered: their renderer writes the metadata', async () => {
+    const jpeg = new Blob([browserJpeg()], { type: 'image/jpeg' });
+    expect(metadataWrittenByRenderer('hdr-jpeg')).toBe(true);
+    expect(metadataWrittenByRenderer('tiff')).toBe(true);
+    expect(metadataWrittenByRenderer('hdr-png')).toBe(false);
+    expect(await applyExportMetadata(jpeg, testAsset(), { ...settings(), format: 'hdr-jpeg' })).toBe(jpeg);
+  });
+
+  it('puts EXIF in an HDR PNG as in any PNG', async () => {
+    const png = new Blob([buildPng({ width: 10, height: 20 })], { type: 'image/png' });
+    const out = await applyExportMetadata(png, testAsset(), { ...settings(), format: 'hdr-png', colorSpace: 'rec2020' });
+    expect(out).not.toBe(png);
+    expect(out.type).toBe('image/png');
   });
 
   it('parses shutter strings', () => {

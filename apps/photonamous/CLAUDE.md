@@ -54,6 +54,24 @@ it. Browser-encoded PNG and JPEG files are tagged with Lopsy's inserters
 (`@lopsy/image-metadata`). The status bar's engine and display state is
 `src/engine/engine-status.ts`.
 
+**HDR.** One edit, two ways out (plan decision 1), at one peak,
+`HDR_PEAK` (4, two stops above SDR white) in `develop-engine.ts`. Only
+the Edit view's engine (`createDevelopEngine(canvas, { isScreen: true })`)
+asks for an HDR canvas (`setScreenOutput(…, true)`: wgpu, the working
+space and `(dynamic-range: high)`), learns the truth from `screenIsHdr`,
+and keeps the SDR canvas when the request fails; the export and preview
+engines never ask, and a copy out of the canvas is always taken from an
+SDR configuration. `engine-status.ts` holds whether the canvas is HDR and
+the status bar's HDR switch (`setDevelopHdr`; in memory, never stored),
+and the histogram reads `readHdrHistogram` only while both are on. Auto
+tone and every other statistic read the SDR rendering. HDR files
+(`hdr-png`, `hdr-jpeg` in photos-core's `ExportFormat`) are made by
+`encodeHdr` at the document's full size, since the engine reads the HDR
+picture at the document's own size: `readHdrOutputF32` once, then
+`encodePqPng`; or for the gain-map JPEG `compositeForExport` and
+`computeGainMap`, the ordinary sRGB JPEG export as the base, the gain
+map's grey PNG encoded by the browser, then `assembleGainMapJpeg`.
+
 **Recipe to engine.** `src/engine/develop-stages.ts` is the one place
 that maps the recipe's tone, colour and curves onto the engine, and it
 has two paths, chosen once per engine with the working space

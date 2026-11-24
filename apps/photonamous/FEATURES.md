@@ -398,6 +398,14 @@ without a picture to edit here, and offers **Open in Lopsy** and **Back**.
   its end clips and is pressed while its warning shows. Holding Alt (Option)
   while dragging Blacks or Whites shows that side's clipping, and while
   dragging a Sharpen slider shows what is being sharpened.
+  While the Edit view shows the HDR rendering (an HDR display on WebGPU,
+  with the status bar's HDR switch on), the histogram draws that
+  rendering instead, from black to the HDR peak, with a dashed line and
+  the word "White" where ordinary white sits, so the part to its right is
+  brighter than white; its highlight marker then counts what reaches the
+  peak, as the clipping warning does on the photo. Its text alternative
+  says how much is brighter than white. Auto and every other reading use
+  the ordinary rendering whatever the view.
 - **Straighten**: Angle (−45..45°), and **Level**: draw along something
   that should be level (or upright) to set it.
 - **Profile**: for RAW, the camera's look first ("Camera (Velvia look)",
@@ -549,8 +557,34 @@ without a picture to edit here, and offers **Open in Lopsy** and **Back**.
   chosen, and every file says which space it is in: an ICC profile (and
   for a wide-gamut PNG a `cICP` chunk), or the `sRGB` chunk for an sRGB
   PNG.
+- **HDR files**, offered whatever the display (a file can be HDR even if
+  this screen is not), under their own heading in File type, each with a
+  line saying what it is:
+  - **HDR JPEG (gain map)**: an ordinary sRGB JPEG, the same picture as
+    the JPEG export at the same quality, carrying a half-size gain map
+    (ISO 21496-1, with the Ultra HDR metadata). It is designed to open
+    as an ordinary photo everywhere and with its highlights in HDR in
+    Chrome, Edge, Safari 26 and on Android. **Quality** applies to both
+    pictures.
+  - **HDR PNG (16-bit, PQ)**: 16-bit Rec. 2020 with the BT.2100 PQ curve
+    (`cICP`, with mastering and light-level chunks), SDR white at 203
+    cd/m², made for HDR viewers such as Safari 26. No quality setting.
+  Both hold highlights up to four times SDR white (two stops), the same
+  peak the HDR view shows, and are always made at the full size; neither
+  has a colour choice (the Colours field says what each is). A photo
+  with nothing brighter than white still exports; its file simply has no
+  headroom. They keep EXIF as the other formats do, and batch exports and
+  ZIPs work with them. They need floating-point rendering: on the 8-bit
+  fallback the dialog says they are not available, and why. A file that
+  cannot be made (a very large photo can need more memory than the
+  browser allows) fails with a message saying so, in the dialog and in a
+  toast. **Unverified by a person on an HDR display**: whether Chrome,
+  Edge and Android show the gain-map JPEG in HDR, and whether Safari and
+  Lightroom show the PQ PNG in HDR; Apple's ImageIO reads the gain map
+  back (plan decision 15).
 - **Size**: original, or by long edge, short edge or megapixels, with
-  **Don't enlarge** on by default.
+  **Don't enlarge** on by default. TIFF and the HDR files are always the
+  full size.
 - **Details in the file**: all (with **Remove location**, on by default;
   "Location will be kept" shows when it is off), copyright and contact
   only, or none; Creator and Copyright fields.
@@ -656,14 +690,28 @@ never talks to Google. Lopsy's side is in `apps/lopsy-web/FEATURES.md`
   "8-bit"; there the tone and colour sliders, curves and Auto work on the
   screen values after the RAW look, as they did before the linear working
   space, so the same edit looks somewhat different there.
+- **HDR on screen.** On WebGPU, while the display reports high dynamic
+  range, the Edit view's canvas is HDR (16-bit float, extended tone
+  mapping) and highlights above white show brighter than the page's
+  white, up to four times SDR white. Where the browser cannot make that
+  canvas, on WebGL and on a display without HDR, the photo shows as on
+  an ordinary screen, as before. Exports and previews never use it.
+  Whether the brightness actually shows has not been checked by a person
+  on an HDR display (plan decision 35).
 - **Status bar** along the bottom of the window, in the library and the
   Edit view (not on the start screen or in Full screen): at the left, the
   number of photos shown and, when any are, how many are selected; in the
   Edit view, the photo's size and the size it is being edited at ("full
   size" once the full resolution is loaded). At the right, the engine
   that draws (WebGPU or WebGL, once it has started) and the display's
-  colour (sRGB or Display P3). Each item says what it is to a screen
-  reader ("Renderer: WebGPU").
+  colour (sRGB or Display P3), then, while the canvas really is HDR,
+  "HDR" and a sun button beside it: pressed, the Edit view shows the HDR
+  rendering; not pressed, it shows the photo as an ordinary screen will,
+  which is how most people who receive it will see it. Its name says
+  what it does ("Show highlights in HDR"), it is a toggle (pressed or
+  not) reached with Tab, and its choice lasts until the page is closed;
+  it is not stored. Each item says what it is to a screen reader
+  ("Renderer: WebGPU").
 - **Graphics.** The editor draws with WebGPU where the browser offers
   it, and with WebGL otherwise, in the same visit and with nothing for
   the user to do. When WebGPU is offered but fails to start, the editor

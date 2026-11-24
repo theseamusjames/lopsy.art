@@ -6,8 +6,13 @@
 import type { Asset, AssetId, Version, VersionId } from '../library/types';
 import type { FileId } from '../storage/types';
 
-/** 'tiff' is 16-bit, Deflate-compressed, encoded by the engine (`exportTiff16`). */
-export type ExportFormat = 'jpeg' | 'png' | 'tiff';
+/**
+ * 'tiff' is 16-bit, Deflate-compressed, encoded by the engine (`exportTiff16`).
+ * The two HDR formats keep highlights above white: 'hdr-png' is a 16-bit
+ * PNG in BT.2100 PQ (Rec. 2020, `encodePqPng`), 'hdr-jpeg' an ordinary sRGB
+ * JPEG carrying a gain map (ISO 21496-1 and Ultra HDR, `assembleGainMapJpeg`).
+ */
+export type ExportFormat = 'jpeg' | 'png' | 'tiff' | 'hdr-png' | 'hdr-jpeg';
 
 export type ExportColorSpace = 'srgb' | 'display-p3' | 'rec2020';
 
@@ -46,6 +51,8 @@ const MIME_TYPES: Readonly<Record<ExportFormat, string>> = {
   jpeg: 'image/jpeg',
   png: 'image/png',
   tiff: 'image/tiff',
+  'hdr-png': 'image/png',
+  'hdr-jpeg': 'image/jpeg',
 };
 
 /** The media type of an exported file. */
@@ -55,14 +62,40 @@ export function mimeTypeFor(format: ExportFormat): string {
 
 /** Whether the format keeps 16 bits per channel. */
 export function isSixteenBit(format: ExportFormat): boolean {
-  return format === 'tiff';
+  return format === 'tiff' || format === 'hdr-png';
+}
+
+/** Whether the format keeps highlights above white (an HDR file). */
+export function isHdrFormat(format: ExportFormat): format is 'hdr-png' | 'hdr-jpeg' {
+  return format === 'hdr-png' || format === 'hdr-jpeg';
+}
+
+/** Whether the format is made at the photo's full size whatever the size setting says. */
+export function isAlwaysFullSize(format: ExportFormat): boolean {
+  return format === 'tiff' || isHdrFormat(format);
+}
+
+/** Whether the format's encoder takes the quality setting. The gain-map JPEG uses it for both of its pictures. */
+export function usesQuality(format: ExportFormat): boolean {
+  return format === 'jpeg' || format === 'hdr-jpeg';
+}
+
+/** Which way of writing metadata a format's file takes: the PNG's eXIf chunk, the JPEG's APP1, or none (the engine's TIFF). */
+export function containerOf(format: ExportFormat): 'png' | 'jpeg' | 'tiff' {
+  if (format === 'png' || format === 'hdr-png') return 'png';
+  if (format === 'tiff') return 'tiff';
+  return 'jpeg';
 }
 
 /**
  * The colour spaces offered for a format: Rec. 2020 bands badly in 8 bits,
- * so it needs 16: TIFF, or PNG at its default 16 bits.
+ * so it needs 16: TIFF, or PNG at its default 16 bits. An HDR format has
+ * one space and no choice: the PQ PNG is Rec. 2020, and the gain-map
+ * JPEG's base picture is sRGB (plan decision 36).
  */
 export function colorSpacesFor(format: ExportFormat, pngDepth: 8 | 16 = 16): readonly ExportColorSpace[] {
+  if (format === 'hdr-png') return ['rec2020'];
+  if (format === 'hdr-jpeg') return ['srgb'];
   const isWide = isSixteenBit(format) || (format === 'png' && pngDepth === 16);
   return isWide ? ['srgb', 'display-p3', 'rec2020'] : ['srgb', 'display-p3'];
 }
@@ -79,7 +112,15 @@ export function exportKeepsLocation(settings: Pick<ExportSettings, 'metadata' | 
 /** Why the settings cannot be used, or null when they can. */
 export function exportSettingsProblem(settings: ExportSettings): string | null {
   const space = settings.colorSpace ?? 'srgb';
-  if (!colorSpacesFor(settings.format, settings.pngDepth ?? 16).includes(space)) return 'Rec. 2020 needs a 16-bit file (TIFF, or a 16-bit PNG).';
+  if (isHdrFormat(settings.format)) {
+    if (settings.colorSpace !== undefined && !colorSpacesFor(settings.format).includes(settings.colorSpace)) {
+      return settings.format === 'hdr-png' ? 'An HDR PNG is always Rec. 2020.' : 'An HDR JPEG’s picture is always sRGB.';
+    }
+    // The engine reads the HDR picture at the photo's own size; it has no resized HDR read yet.
+    if (settings.maxLongEdge !== null || (settings.size !== undefined && settings.size.mode !== 'original') || settings.allowEnlarge === true) {
+      return 'HDR files are made at the original size.';
+    }
+  } else if (!colorSpacesFor(settings.format, settings.pngDepth ?? 16).includes(space)) return 'Rec. 2020 needs a 16-bit file (TIFF, or a 16-bit PNG).';
   // The engine writes 16-bit PNG at the photo's own size; a resized PNG is encoded by the browser in 8 bits.
   if (space === 'rec2020' && settings.format === 'png' && (settings.maxLongEdge !== null || (settings.size !== undefined && settings.size.mode !== 'original') || settings.allowEnlarge === true)) {
     return 'A Rec. 2020 PNG is made at the original size. Choose Original size, or TIFF.';
@@ -105,19 +146,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function exportSettingsFromJson(value: unknown): ExportSettings {
   const v = isRecord(value) ? value : {};
   const d = DEFAULT_EXPORT_SETTINGS;
-  const format: ExportFormat = v.format === 'png' || v.format === 'tiff' ? v.format : 'jpeg';
+  const format: ExportFormat =
+    v.format === 'png' || v.format === 'tiff' || v.format === 'hdr-png' || v.format === 'hdr-jpeg' ? v.format : 'jpeg';
   const space = v.colorSpace === 'display-p3' || v.colorSpace === 'rec2020' ? v.colorSpace : 'srgb';
+  const offered = colorSpacesFor(format, v.pngDepth === 8 ? 8 : 16);
   const quality = typeof v.quality === 'number' && v.quality >= 0 && v.quality <= 1 ? v.quality : d.quality;
   const edge = v.maxLongEdge;
   const maxLongEdge = typeof edge === 'number' && Number.isInteger(edge) && edge > 0 && edge <= 100_000 ? edge : null;
   return {
     format,
-    colorSpace: colorSpacesFor(format, v.pngDepth === 8 ? 8 : 16).includes(space) ? space : 'srgb',
+    colorSpace: offered.includes(space) ? space : (offered[0] ?? 'srgb'),
     quality,
-    maxLongEdge,
+    // An HDR file is always the full size (exportSettingsProblem).
+    maxLongEdge: isHdrFormat(format) ? null : maxLongEdge,
     // Settings saved before these fields: the size is what the long edge said.
-    size: exportSizeFromJson(v.size) ?? (maxLongEdge !== null ? { mode: 'long', px: maxLongEdge } : { mode: 'original' }),
-    allowEnlarge: v.allowEnlarge === true,
+    size:
+      isHdrFormat(format)
+        ? { mode: 'original' }
+        : (exportSizeFromJson(v.size) ?? (maxLongEdge !== null ? { mode: 'long', px: maxLongEdge } : { mode: 'original' })),
+    allowEnlarge: !isHdrFormat(format) && v.allowEnlarge === true,
     pngDepth: v.pngDepth === 8 ? 8 : 16,
     zip: v.zip !== false,
     metadata: v.metadata === 'copyright' || v.metadata === 'none' ? v.metadata : 'all',
@@ -148,7 +195,12 @@ export type ExportDestination =
   /** Blobs handed back to the app; several are also packed into one zip. */
   | { readonly kind: 'download'; readonly zipName?: string };
 
-/** Renders a version at the settings' size and format. The app implements it with the engine. */
+/**
+ * Renders a version at the settings' size and format. The app implements
+ * it with the engine. For 'hdr-jpeg' it also writes the EXIF the settings
+ * ask for (`buildExportExif`) into the base picture before the gain map is
+ * joined to it (exif-writer.ts `metadataWrittenByRenderer`).
+ */
 export interface ExportRenderer {
   render(asset: Asset, version: Version, settings: ExportSettings, signal: AbortSignal): Promise<Blob>;
 }

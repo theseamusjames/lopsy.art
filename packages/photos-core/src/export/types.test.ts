@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_EXPORT_SETTINGS, colorSpacesFor, exportSettingsFromJson, exportSettingsProblem } from './types';
+import {
+  DEFAULT_EXPORT_SETTINGS,
+  colorSpacesFor,
+  containerOf,
+  exportSettingsFromJson,
+  exportSettingsProblem,
+  isAlwaysFullSize,
+  isHdrFormat,
+  isSixteenBit,
+  mimeTypeFor,
+  usesQuality,
+} from './types';
 
 describe('export colour spaces', () => {
   it('offers Rec. 2020 for 16-bit files only: TIFF, and PNG at 16 bits', () => {
@@ -26,5 +37,42 @@ describe('export colour spaces', () => {
     expect(exportSettingsFromJson({ format: 'png', colorSpace: 'rec2020' }).colorSpace).toBe('rec2020');
     expect(exportSettingsFromJson({ format: 'png', pngDepth: 8, colorSpace: 'rec2020' }).colorSpace).toBe('srgb');
     expect(exportSettingsFromJson({ format: 'jpeg', colorSpace: 'rec2020' }).colorSpace).toBe('srgb');
+  });
+});
+
+describe('HDR export formats', () => {
+  it('has one colour space each and no choice', () => {
+    expect(colorSpacesFor('hdr-png')).toEqual(['rec2020']);
+    expect(colorSpacesFor('hdr-jpeg')).toEqual(['srgb']);
+  });
+
+  it('names what each is and how it is written', () => {
+    expect(isHdrFormat('hdr-png')).toBe(true);
+    expect(isHdrFormat('hdr-jpeg')).toBe(true);
+    expect(isHdrFormat('png')).toBe(false);
+    expect(mimeTypeFor('hdr-png')).toBe('image/png');
+    expect(mimeTypeFor('hdr-jpeg')).toBe('image/jpeg');
+    expect(containerOf('hdr-png')).toBe('png');
+    expect(containerOf('hdr-jpeg')).toBe('jpeg');
+    expect(isSixteenBit('hdr-png')).toBe(true);
+    expect(isAlwaysFullSize('hdr-jpeg')).toBe(true);
+    expect(isAlwaysFullSize('jpeg')).toBe(false);
+    expect(usesQuality('hdr-jpeg')).toBe(true);
+    expect(usesQuality('hdr-png')).toBe(false);
+  });
+
+  it('makes HDR files at the original size, in their own space', () => {
+    const base = { ...DEFAULT_EXPORT_SETTINGS, format: 'hdr-png' as const, colorSpace: 'rec2020' as const };
+    expect(exportSettingsProblem(base)).toBeNull();
+    expect(exportSettingsProblem({ ...base, size: { mode: 'long', px: 2048 } })).toBe('HDR files are made at the original size.');
+    expect(exportSettingsProblem({ ...base, colorSpace: 'srgb' })).toBe('An HDR PNG is always Rec. 2020.');
+    expect(exportSettingsProblem({ ...base, format: 'hdr-jpeg', colorSpace: 'display-p3' })).toBe('An HDR JPEG’s picture is always sRGB.');
+  });
+
+  it('reads a stored HDR preset back at full size in its own space', () => {
+    const png = exportSettingsFromJson({ format: 'hdr-png', colorSpace: 'srgb', maxLongEdge: 2048, size: { mode: 'long', px: 2048 } });
+    expect(png).toMatchObject({ format: 'hdr-png', colorSpace: 'rec2020', maxLongEdge: null, size: { mode: 'original' } });
+    expect(exportSettingsProblem(png)).toBeNull();
+    expect(exportSettingsFromJson({ format: 'hdr-jpeg' })).toMatchObject({ format: 'hdr-jpeg', colorSpace: 'srgb' });
   });
 });

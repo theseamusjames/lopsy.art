@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { BINS, clipping, clippingTitle, describeHistogram, formatShare, histogramPath, innerMax, isClipped, parseHistogram, sharedMax, toneShares } from './histogram';
+import {
+  BINS,
+  clipping,
+  clippingTitle,
+  describeHdrHistogram,
+  describeHistogram,
+  formatShare,
+  hdrHighlightTitle,
+  histogramPath,
+  innerMax,
+  isClipped,
+  parseHistogram,
+  shareAboveWhite,
+  sharedMax,
+  toneShares,
+  whiteMarkerX,
+} from './histogram';
 
 function bins(fill: (channel: number, bin: number) => number): Uint32Array {
   const out = new Uint32Array(BINS * 4);
@@ -88,5 +104,42 @@ describe('describeHistogram', () => {
 
   it('says when it has not been read', () => {
     expect(describeHistogram(null)).toBe('Histogram, not read yet');
+  });
+});
+
+describe('the HDR histogram', () => {
+  /** A histogram whose luminance has `counts` at the given bins, the other channels empty. */
+  const withLuminance = (counts: Record<number, number>) => {
+    const bins = new Uint32Array(BINS * 4);
+    for (const [bin, n] of Object.entries(counts)) {
+      bins[Number(bin)] = n;
+      bins[3 * BINS + Number(bin)] = n;
+    }
+    const h = parseHistogram(bins);
+    if (!h) throw new Error('empty');
+    return h;
+  };
+
+  it('puts white where the bins put it, as the paths place bin i', () => {
+    // 139.7 is white at a peak of 4 (hdrHistogramWhiteBin).
+    expect(whiteMarkerX(139.7, 256)).toBeCloseTo((139.7 / 255) * 256, 6);
+    expect(whiteMarkerX(255, 256)).toBe(256);
+    expect(whiteMarkerX(0, 256)).toBeNull();
+    expect(whiteMarkerX(300, 256)).toBeNull();
+    expect(whiteMarkerX(Number.NaN, 256)).toBeNull();
+  });
+
+  it('counts what is brighter than white', () => {
+    const h = withLuminance({ 100: 6, 139: 1, 140: 2, 255: 1 });
+    expect(shareAboveWhite(h, 139.7)).toBeCloseTo(0.3, 6);
+  });
+
+  it('says in words that white is marked and how much is above it', () => {
+    const h = withLuminance({ 100: 9, 200: 1 });
+    expect(describeHdrHistogram(h, 139.7)).toBe(
+      'HDR histogram, white marked at 55 % of the width: 10 % brighter than white, 0.0 % at the HDR peak, 0.0 % at black.',
+    );
+    expect(describeHdrHistogram(null, 139.7)).toBe('HDR histogram, not read yet');
+    expect(hdrHighlightTitle(0.004)).toBe('Highlights at the HDR peak: 0.4 %. Click to show them in red (J).');
   });
 });

@@ -1,11 +1,28 @@
 import { useMemo } from 'react';
-import { clipping, clippingTitle, describeHistogram, histogramPath, isClipped, parseHistogram, sharedMax } from '../histogram';
+import {
+  clipping,
+  clippingTitle,
+  describeHdrHistogram,
+  describeHistogram,
+  hdrHighlightTitle,
+  histogramPath,
+  isClipped,
+  parseHistogram,
+  sharedMax,
+  whiteMarkerX,
+} from '../histogram';
 import { useClippingWarning } from '../clipping-warning';
 import styles from './Histogram.module.css';
 
 export interface HistogramProps {
   /** The engine's 4 × 256 bins; null before the first read. */
   readonly bins: Uint32Array | null;
+  /**
+   * The bins are the HDR rendering's (the HDR view on an HDR canvas), and
+   * SDR white sits at this bin: a line marks it, and the chart to its right
+   * is brighter than white. Absent for the ordinary histogram.
+   */
+  readonly hdrWhiteBin?: number | null;
 }
 
 const WIDTH = 256;
@@ -26,34 +43,41 @@ const KEY = [
  * on the photo (J toggles both). Each channel has its own line style as
  * well as its colour, named in a key below.
  */
-export function Histogram({ bins }: HistogramProps) {
+export function Histogram({ bins, hdrWhiteBin = null }: HistogramProps) {
+  const whiteX = hdrWhiteBin === null ? null : whiteMarkerX(hdrWhiteBin, WIDTH);
   const drawn = useMemo(() => {
     const h = bins ? parseHistogram(bins) : null;
     if (!h) return null;
     const max = sharedMax(h);
+    const isHdr = hdrWhiteBin !== null;
     return {
       red: histogramPath(h.red, WIDTH, HEIGHT, max),
       green: histogramPath(h.green, WIDTH, HEIGHT, max),
       blue: histogramPath(h.blue, WIDTH, HEIGHT, max),
       luminance: histogramPath(h.luminance, WIDTH, HEIGHT, max),
       clip: clipping(h),
-      description: describeHistogram(h),
+      description: isHdr ? describeHdrHistogram(h, hdrWhiteBin) : describeHistogram(h),
     };
-  }, [bins]);
+  }, [bins, hdrWhiteBin]);
 
   const shadows = drawn?.clip.shadows ?? 0;
   const highlights = drawn?.clip.highlights ?? 0;
   const warning = useClippingWarning();
 
   return (
-    <figure className={styles.histogram} data-testid="histogram" data-ready={drawn ? 'true' : undefined}>
+    <figure
+      className={styles.histogram}
+      data-testid="histogram"
+      data-ready={drawn ? 'true' : undefined}
+      data-hdr={whiteX !== null ? 'true' : undefined}
+    >
       <div className={styles.frame}>
         <svg
           className={styles.chart}
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
           preserveAspectRatio="none"
           role="img"
-          aria-label={drawn?.description ?? describeHistogram(null)}
+          aria-label={drawn?.description ?? (whiteX !== null && hdrWhiteBin !== null ? describeHdrHistogram(null, hdrWhiteBin) : describeHistogram(null))}
         >
           {drawn && (
             <>
@@ -63,7 +87,16 @@ export function Histogram({ bins }: HistogramProps) {
               <path className={styles.luminance} d={drawn.luminance} />
             </>
           )}
+          {whiteX !== null && (
+            <line className={styles.white} x1={whiteX} y1={0} x2={whiteX} y2={HEIGHT} data-testid="histogram-white" />
+          )}
         </svg>
+        {whiteX !== null && (
+          // Named in words as well as drawn: right of the line is brighter than white.
+          <span className={styles.whiteLabel} style={{ '--x': `${(whiteX / WIDTH) * 100}%` } as React.CSSProperties} aria-hidden="true">
+            White
+          </span>
+        )}
         <button
           type="button"
           className={styles.clip}
@@ -89,7 +122,7 @@ export function Histogram({ bins }: HistogramProps) {
           aria-pressed={warning.highlights}
           aria-label="Show highlight clipping"
           aria-keyshortcuts="J"
-          title={clippingTitle('highlights', highlights)}
+          title={whiteX !== null ? hdrHighlightTitle(highlights) : clippingTitle('highlights', highlights)}
           onClick={() => warning.toggle('highlights')}
         >
           <svg className={styles.marker} viewBox="0 0 10 10" aria-hidden="true">

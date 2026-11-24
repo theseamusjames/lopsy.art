@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { expandTemplate, exportFileName, sanitizeFileName } from './file-names';
+import { expandTemplate, exportFileName, extensionFor, sanitizeFileName } from './file-names';
 import { testAsset, testVersion } from './test-support/fixtures';
 
 const ctx = { asset: testAsset(), version: testVersion({ name: 'Warm' }), seq: 7 };
@@ -30,5 +30,13 @@ describe('export file names', () => {
     expect(exportFileName('{name}', ctx, 'jpeg', taken)).toBe('DSCF1234 (3).jpg');
     expect(exportFileName('{name}', ctx, 'png', taken)).toBe('DSCF1234.png');
     expect(exportFileName('{title}', { ...ctx, asset: testAsset({ title: '' }) }, 'jpeg', taken)).toBe('export.jpg');
+  });
+});
+
+describe('HDR file extensions', () => {
+  it('are .png and .jpg, as the files they are', () => {
+    expect(extensionFor('hdr-png')).toBe('.png');
+    expect(extensionFor('hdr-jpeg')).toBe('.jpg');
+    expect(extensionFor('tiff')).toBe('.tif');
   });
 });

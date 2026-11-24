@@ -1,6 +1,6 @@
 import { uniqueName } from '../import/folders';
 import type { Asset, Version } from '../library/types';
-import type { ExportSettings } from './types';
+import { containerOf, type ExportSettings } from './types';
 
 export interface FileNameContext {
   readonly asset: Asset;
@@ -59,7 +59,8 @@ export function sanitizeFileName(name: string): string {
 }
 
 export function extensionFor(format: ExportSettings['format']): string {
-  return format === 'png' ? '.png' : format === 'tiff' ? '.tif' : '.jpg';
+  const container = containerOf(format);
+  return container === 'png' ? '.png' : container === 'tiff' ? '.tif' : '.jpg';
 }
 
 /**

@@ -122,3 +122,40 @@ export function describeHistogram(h: Histogram | null): string {
     `${formatShare(clip.shadows)} at black, ${formatShare(clip.highlights)} at white.`
   );
 }
+
+/**
+ * Where SDR white sits on a `width`-wide chart of the HDR histogram
+ * (`readHdrHistogram`, bin 255 at the HDR peak), given its bin
+ * (`hdrHistogramWhiteBin`, 139.7 at a peak of 4). Bin i is drawn at
+ * i × width / 255, as `histogramPath` places it. Null for a bin that is
+ * not on the chart.
+ */
+export function whiteMarkerX(whiteBin: number, width: number): number | null {
+  if (!Number.isFinite(whiteBin) || whiteBin <= 0 || whiteBin > BINS - 1) return null;
+  return (whiteBin / (BINS - 1)) * width;
+}
+
+/** Share of the luminance brighter than white on the HDR histogram, 0..1: the bins right of `whiteBin`. */
+export function shareAboveWhite(h: Histogram, whiteBin: number): number {
+  let above = 0;
+  h.luminance.forEach((count, i) => {
+    if (i > whiteBin) above += count;
+  });
+  return above / h.total;
+}
+
+/** The HDR histogram in words: how much is brighter than white, and how much reaches the HDR peak. */
+export function describeHdrHistogram(h: Histogram | null, whiteBin: number): string {
+  if (!h) return 'HDR histogram, not read yet';
+  const clip = clipping(h);
+  return (
+    `HDR histogram, white marked at ${Math.round((whiteBin / (BINS - 1)) * 100)} % of the width: ` +
+    `${formatShare(shareAboveWhite(h, whiteBin))} brighter than white, ${formatShare(clip.highlights)} at the HDR peak, ` +
+    `${formatShare(clip.shadows)} at black.`
+  );
+}
+
+/** The highlight toggle's tooltip in the HDR view, where the top bin is the HDR peak, not white. */
+export function hdrHighlightTitle(share: number): string {
+  return `Highlights at the HDR peak: ${formatShare(share)}. Click to show them in red (J).`;
+}

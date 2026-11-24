@@ -10,10 +10,13 @@
  */
 
 import {
+  compositeForExport as rawCompositeForExport,
   createEngine as rawCreateEngine,
   exportPng16 as rawExportPng16,
   exportTiff16 as rawExportTiff16,
   readDevelopHistogram as rawReadDevelopHistogram,
+  readHdrHistogram as rawReadHdrHistogram,
+  readHdrOutputF32 as rawReadHdrOutputF32,
   readSceneStatistics as rawReadSceneStatistics,
   rendererName as rawRendererName,
   resumeTask,
@@ -57,6 +60,15 @@ export const sampleNeutralWhiteBalance = readbacks.asyncReadback(rawSampleNeutra
  */
 export const readSceneStatistics = readbacks.asyncReadback(rawReadSceneStatistics, 'any-time');
 export const exportPng16 = readbacks.asyncReadback(rawExportPng16);
+/** The document as RGBA8 sRGB at its own size: the gain map's SDR picture. */
+export const compositeForExport = readbacks.asyncReadback(rawCompositeForExport);
+/**
+ * The HDR picture for a file (linear Rec. 2020 f32 at the document's
+ * size). It replaces the live composite, so it waits its turn.
+ */
+export const readHdrOutputF32 = readbacks.asyncReadback(rawReadHdrOutputF32);
+/** The HDR histogram (4 × 256 bins up to a peak). It changes nothing in the document. */
+export const readHdrHistogram = readbacks.asyncReadback(rawReadHdrHistogram, 'any-time');
 export const exportTiff16 = readbacks.asyncReadback(rawExportTiff16);
 
 /** Readbacks out, as Lopsy's `parkedReadbackCount`: always 0 on WebGL. */

@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent } from 'react';
+import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent } from 'react';
 import { ArrowLeft, Check, ClipboardCopy, ClipboardPaste, Copy, Crop, Spline, Eye, FlipVertical2, Download, FlipHorizontal2, History, Paintbrush, PanelLeftClose, PanelLeftOpen, Redo2, RotateCcwSquare, RotateCwSquare, SlidersHorizontal, SplitSquareHorizontal, Undo2, Wand2, X } from 'lucide-react';
 import { DEFAULT_RECIPE, recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Asset, HistoryStep, Json, Preset, PresetId, Version, VersionId } from '@lopsy/photos-core/library/types';
@@ -51,6 +51,7 @@ import { Modal } from '../../components/Modal/Modal';
 import type { PhotoInfo } from '../../engine/develop-engine';
 import type { DevelopProfile } from '../../engine/profiles';
 import { Histogram } from '../Histogram/Histogram';
+import { currentStatus, onStatusChange, showsHdr } from '../../engine/engine-status';
 import { ClippingButtons } from '../ClippingButtons/ClippingButtons';
 import { ZoomField } from '../ZoomField/ZoomField';
 import { CropTool } from '../CropTool/CropTool';
@@ -361,15 +362,18 @@ export function EditView({
   }, [engine, canEdit, status.kind, asset.id]);
   const photoInfo = photoInfoFor?.assetId === asset.id ? photoInfoFor.info : null;
 
-  const [histogram, setHistogram] = useState<Uint32Array | null>(null);
+  const [histogram, setHistogram] = useState<{ readonly bins: Uint32Array; readonly hdrWhiteBin: number | null } | null>(null);
+  // With the HDR view on an HDR canvas the histogram draws the HDR rendering, white marked; otherwise the ordinary one.
+  const engineStatus = useSyncExternalStore(onStatusChange, currentStatus);
+  const isHdrHistogram = showsHdr(engineStatus);
   useEffect(() => {
     if (!engine || !canEdit || draft) return;
     let isCancelled = false;
     const timer = setTimeout(() => {
-      engine
-        .readHistogram()
+      const read = isHdrHistogram ? engine.readHdrHistogram() : engine.readHistogram();
+      read
         .then((bins) => {
-          if (!isCancelled && bins) setHistogram(bins);
+          if (!isCancelled && bins) setHistogram({ bins, hdrWhiteBin: isHdrHistogram ? engine.hdrWhiteBin() : null });
         })
         .catch((err: unknown) => console.warn('Photonamous: the histogram could not be read', err));
     }, HISTOGRAM_DELAY_MS);
@@ -377,7 +381,7 @@ export function EditView({
       isCancelled = true;
       clearTimeout(timer);
     };
-  }, [engine, canEdit, status.kind, shownRecipe, isBefore, hidden, hiddenMasks, draft]);
+  }, [engine, canEdit, status.kind, shownRecipe, isBefore, hidden, hiddenMasks, draft, isHdrHistogram]);
 
   const handleAutoTone = useCallback(async () => {
     if (!engine) return;
@@ -948,7 +952,7 @@ export function EditView({
           {asset.fileName}
         </h1>
         {/* The tools, in groups with a line between them: clipping warnings, framing, undo and redo, then copy and paste edits. */}
-        <ClippingButtons bins={histogram} isDisabled={!canEdit} />
+        <ClippingButtons bins={histogram?.bins ?? null} isDisabled={!canEdit} isHdr={(histogram?.hdrWhiteBin ?? null) !== null} />
         <span className={styles.toolDivider} aria-hidden data-testid="tool-divider" />
         <div className={styles.toolGroup}>
           <button
@@ -1187,7 +1191,7 @@ export function EditView({
         <aside className={styles.side} aria-label="Edits">
         {openPanel !== null && (
         <div ref={panelRef} className={styles.panel} data-testid="edit-panel" data-panel={openPanel}>
-          <Histogram bins={histogram} />
+          <Histogram bins={histogram?.bins ?? null} hdrWhiteBin={histogram?.hdrWhiteBin ?? null} />
           {isAreasOpen && (
             <MaskPanel
               recipe={shownRecipe}

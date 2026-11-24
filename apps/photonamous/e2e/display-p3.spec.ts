@@ -122,4 +122,7 @@ test('a P3 display: the canvas is Display P3, and copies out of it are what they
   });
   // A WebGPU canvas says how the engine configured it (GPUCanvasContext.getConfiguration).
   expect(space).toBe('display-p3');
+  // A wide-gamut display that is not HDR: no HDR in the status bar and no HDR switch.
+  await expect(page.getByTestId('status-hdr')).toHaveCount(0);
+  await expect(page.getByTestId('status-hdr-view')).toHaveCount(0);
 });

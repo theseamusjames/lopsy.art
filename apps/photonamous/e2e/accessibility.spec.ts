@@ -133,6 +133,15 @@ test('every view, as a user reaches it', async ({ page }) => {
     await page.getByRole('banner').getByRole('button', { name: /^Export/ }).click();
     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 15_000 });
   });
+  // The HDR formats: each with its help line, no colour choice, the size fixed; the gain-map JPEG with Quality.
+  await step(page, 'export dialog, HDR JPEG', async () => {
+    await page.getByRole('radio', { name: 'HDR JPEG (gain map)' }).check();
+    await expect(page.getByRole('slider', { name: 'Quality' })).toBeVisible({ timeout: 15_000 });
+  });
+  await step(page, 'export dialog, HDR PNG', async () => {
+    await page.getByRole('radio', { name: 'HDR PNG (16-bit, PQ)' }).check();
+    await expect(page.getByText('HDR files are always the full size.')).toBeVisible({ timeout: 15_000 });
+  });
   await page.keyboard.press('Escape');
 
   await step(page, 'new version dialog', async () => {

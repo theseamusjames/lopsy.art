@@ -374,6 +374,16 @@ exports stay sRGB. It cannot show what a person sees on a real wide-gamut
 screen: look at one by eye after a change to colour. `e2e/export-color.spec.ts`
 checks each export's tag and that a Rec. 2020 file holds Rec. 2020 numbers.
 
+**HDR.** `e2e/hdr-display.spec.ts` starts its browser with
+`--force-color-profile=hdr10`: `(dynamic-range: high)` then matches, and
+on WebGPU the engine configures the canvas as `rgba16float` with extended
+tone mapping, so the status bar's HDR, its switch and the HDR histogram
+can be tested; on WebGL it checks that none of them shows. It cannot show
+whether highlights look brighter than white: that needs a person at an
+HDR display. `e2e/export-hdr.spec.ts` checks the HDR PNG's and the
+gain-map JPEG's structure and numbers on both builds; its RAW test reads
+`DSCF8005.RAF` from `LOPSY_RAF_SAMPLES` and exports it at full size.
+
 `test:e2e:site` builds Photonamous without the settings in `.env.local`,
 runs `site.spec.ts` and `offline.spec.ts` against the build
 (`apps/photonamous/playwright.site.config.ts`), then deletes it. To run one
@@ -397,8 +407,8 @@ preinstalled (some sandboxes and CI images):
 second is `VITE_PORT + 1`). The site test uses 4180; `SITE_PORT` moves it.
 Lopsy's suite picks a port from the checkout's path.
 
-The RAF editing test reads real camera files from `LOPSY_RAF_SAMPLES` and
-is skipped without it (samples:
+The RAF tests (editing, white balance, the HDR exports) read real camera files from `LOPSY_RAF_SAMPLES` and
+are skipped without it (samples:
 https://github.com/theseamusjames/sample-raf-images).
 
 ## 6. What needs a real Google account to verify

@@ -1,8 +1,11 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { ExportPreset, VersionId } from '@lopsy/photos-core/library/types';
 import {
   DEFAULT_EXPORT_SETTINGS,
   exportSettingsProblem,
+  isAlwaysFullSize,
+  isHdrFormat,
+  usesQuality,
   type ExportColorSpace,
   type ExportFormat,
   type ExportSettings,
@@ -11,7 +14,16 @@ import { expandTemplate, extensionFor, sanitizeFileName } from '@lopsy/photos-co
 import { getBackend } from '../../app/backend-registry';
 import { useExportPresets, useExportProgress, useLibraryView, useSession } from '../../app/hooks';
 import { tiffExportAvailable } from '../../app/export-capabilities';
-import { COLOR_SPACE_WORDS, locationKept, offeredColorSpaces } from '../../library/export-form';
+import {
+  COLOR_SPACE_WORDS,
+  HDR_FORMATS,
+  HDR_FORMAT_WORDS,
+  fixedColorWords,
+  hdrUnavailableReason,
+  locationKept,
+  offeredColorSpaces,
+} from '../../library/export-form';
+import { currentStatus, onStatusChange } from '../../engine/engine-status';
 import {
   DEFAULT_EXTRAS,
   extrasSettingKey,
@@ -43,11 +55,12 @@ function defaultName(): string {
   return `Export ${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** Settings and extras made consistent: a colour space the format can carry, TIFF at full size. */
+/** Settings and extras made consistent: a colour space the format can carry, TIFF and HDR files at full size. */
 function fit(settings: ExportSettings, extras: ExportExtras): { settings: ExportSettings; extras: ExportExtras } {
   const space = settings.colorSpace ?? 'srgb';
-  const fitted = offeredColorSpaces(settings.format, extras.pngDepth).includes(space) ? settings : { ...settings, colorSpace: 'srgb' as const };
-  const ex = settings.format === 'tiff' ? { ...extras, size: { mode: 'original' as const } } : extras;
+  const offered = offeredColorSpaces(settings.format, extras.pngDepth);
+  const fitted = offered.includes(space) ? settings : { ...settings, colorSpace: offered[0] ?? 'srgb' };
+  const ex = isAlwaysFullSize(settings.format) ? { ...extras, size: { mode: 'original' as const }, allowEnlarge: false } : extras;
   return { settings: { ...fitted, maxLongEdge: maxLongEdgeOf(ex) }, extras: ex };
 }
 
@@ -74,6 +87,8 @@ export function ExportDialog() {
   const [state, setState] = useState(() => fit({ ...DEFAULT_EXPORT_SETTINGS, colorSpace: 'srgb' }, DEFAULT_EXTRAS));
   const { settings, extras } = state;
   const [tiff, setTiff] = useState(false);
+  const engineStatus = useSyncExternalStore(onStatusChange, currentStatus);
+  const hdrUnavailable = hdrUnavailableReason(engineStatus.isEightBit);
   const [destination, setDestination] = useState<'library' | 'download'>('library');
   const [name, setName] = useState(defaultName);
   const running = progress !== null && !progress.finished;
@@ -98,7 +113,9 @@ export function ExportDialog() {
   const problem = exportSettingsProblem(withExtras(settings, extras));
   const keepsLocation = locationKept(settings);
   const tiffBlocked = format === 'tiff' && !tiff;
-  const isBlocked = running || versionIds.length === 0 || problem !== null || tiffBlocked;
+  const hdrBlocked = isHdrFormat(format) && hdrUnavailable !== null;
+  const fixedColors = fixedColorWords(format);
+  const isBlocked = running || versionIds.length === 0 || problem !== null || tiffBlocked || hdrBlocked;
   const finished = progress?.finished ?? false;
 
   // Export goes from the footer when it finishes, with focus on it; Done takes its place.
@@ -155,6 +172,21 @@ export function ExportDialog() {
     );
   };
 
+  const qualitySlider = (
+    <label className={styles.range}>
+      <span>Quality</span>
+      <input
+        type="range"
+        min={40}
+        max={100}
+        aria-label="Quality"
+        value={Math.round(settings.quality * 100)}
+        onChange={(e) => change({ quality: Number(e.target.value) / 100 })}
+      />
+      <span className={styles.value}>{Math.round(settings.quality * 100)}</span>
+    </label>
+  );
+
   return (
     <Modal
       title={`Export ${plural(versionIds.length, 'photo')}`}
@@ -171,7 +203,9 @@ export function ExportDialog() {
             <Button
               variant="primary"
               aria-disabled={isBlocked || undefined}
-              aria-describedby={[tiffBlocked ? `${id}-tiff` : '', problem ? `${id}-problem` : ''].filter(Boolean).join(' ') || undefined}
+              aria-describedby={
+                [tiffBlocked ? `${id}-tiff` : '', hdrBlocked ? `${id}-hdr` : '', problem ? `${id}-problem` : ''].filter(Boolean).join(' ') || undefined
+              }
               onClick={start}
             >
               Export
@@ -215,20 +249,7 @@ export function ExportDialog() {
             <input type="radio" name="format" checked={format === 'jpeg'} onChange={() => change({ format: 'jpeg' as ExportFormat })} />
             JPEG <span className={styles.muted}>— small files, for sharing</span>
           </label>
-          {format === 'jpeg' && (
-            <label className={styles.range}>
-              <span>Quality</span>
-              <input
-                type="range"
-                min={40}
-                max={100}
-                aria-label="Quality"
-                value={Math.round(settings.quality * 100)}
-                onChange={(e) => change({ quality: Number(e.target.value) / 100 })}
-              />
-              <span className={styles.value}>{Math.round(settings.quality * 100)}</span>
-            </label>
-          )}
+          {format === 'jpeg' && qualitySlider}
           <label className={styles.option}>
             <input type="radio" name="format" checked={format === 'png'} onChange={() => change({ format: 'png' })} />
             PNG <span className={styles.muted}>— no compression loss, larger files</span>
@@ -251,6 +272,33 @@ export function ExportDialog() {
               TIFF, 16-bit <span className={styles.muted}>— for printing and further editing</span>
             </label>
           )}
+          <p className={styles.subhead} id={`${id}-hdr-head`}>
+            HDR, highlights brighter than white
+          </p>
+          {hdrUnavailable !== null ? (
+            <p className={styles.muted} id={`${id}-hdr`}>
+              {hdrUnavailable}
+            </p>
+          ) : (
+            HDR_FORMATS.map((hdrFormat) => (
+              <div key={hdrFormat} className={styles.hdrOption}>
+                <label className={styles.option}>
+                  <input
+                    type="radio"
+                    name="format"
+                    checked={format === hdrFormat}
+                    aria-describedby={`${id}-${hdrFormat}-help`}
+                    onChange={() => change({ format: hdrFormat })}
+                  />
+                  {HDR_FORMAT_WORDS[hdrFormat].label}
+                </label>
+                <p className={`${styles.muted} ${styles.indent}`} id={`${id}-${hdrFormat}-help`}>
+                  {HDR_FORMAT_WORDS[hdrFormat].help}
+                </p>
+                {format === hdrFormat && usesQuality(hdrFormat) && qualitySlider}
+              </div>
+            ))
+          )}
           {tiffBlocked && (
             <p className={styles.warn} id={`${id}-tiff`} role="alert">
               This build cannot write TIFF yet. Choose JPEG or PNG.
@@ -263,6 +311,12 @@ export function ExportDialog() {
           )}
         </fieldset>
 
+        {fixedColors !== null ? (
+          <div className={styles.field}>
+            <span className={styles.legend}>Colours</span>
+            <span>{fixedColors}</span>
+          </div>
+        ) : (
         <label className={styles.field}>
           <span className={styles.legend}>Colours</span>
           <select
@@ -279,6 +333,7 @@ export function ExportDialog() {
             ))}
           </select>
         </label>
+        )}
 
         <div className={styles.field}>
           <label className={styles.legend} htmlFor={`${id}-size`}>
@@ -288,7 +343,7 @@ export function ExportDialog() {
             <select
               id={`${id}-size`}
               className={styles.select}
-              disabled={running || format === 'tiff'}
+              disabled={running || isAlwaysFullSize(format)}
               value={extras.size.mode}
               onChange={(e) => {
                 const mode = e.target.value as SizeSpec['mode'];
@@ -325,13 +380,14 @@ export function ExportDialog() {
               </>
             )}
           </div>
-          {format !== 'tiff' && extras.size.mode !== 'original' && (
+          {!isAlwaysFullSize(format) && extras.size.mode !== 'original' && (
             <label className={styles.option}>
               <input type="checkbox" checked={!extras.allowEnlarge} disabled={running} onChange={(e) => change({}, { allowEnlarge: !e.target.checked })} />
               Don’t enlarge <span className={styles.muted}>— smaller photos stay as they are</span>
             </label>
           )}
           {format === 'tiff' && <span className={styles.muted}>TIFF is always the full size. It keeps no camera details (EXIF).</span>}
+          {isHdrFormat(format) && <span className={styles.muted}>HDR files are always the full size.</span>}
         </div>
 
           </div>

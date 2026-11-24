@@ -98,7 +98,7 @@ export function usePhotoEngine(
       };
     };
 
-    createDevelopEngine(canvas)
+    createDevelopEngine(canvas, { isScreen: true })
       .then((e) => {
         if (isCancelled) {
           e.dispose();

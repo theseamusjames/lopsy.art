@@ -5,9 +5,10 @@
  * a row is decoded once) and released after a short idle.
  */
 
-import { colorSpacesFor, type ExportRenderer, type ExportSettings } from '@lopsy/photos-core/export/types';
+import { colorSpacesFor, isAlwaysFullSize, isHdrFormat, type ExportRenderer, type ExportSettings } from '@lopsy/photos-core/export/types';
 import type { Asset, Version } from '@lopsy/photos-core/library/types';
 import type { DevelopEngine } from './develop-engine';
+import { buildExportExif } from '@lopsy/photos-core/export/exif-writer';
 import { extrasOf, outputSize } from '../library/export-size';
 import { developSource } from '../library/develop-source';
 import { grainSeed } from './finish-controls';
@@ -138,12 +139,22 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
     // Sizes by short edge or megapixels, and enlarging, are worked out from the full image.
     const extras = extrasOf(settings);
     const byLongEdge = (extras.size.mode === 'original' || extras.size.mode === 'long') && !extras.allowEnlarge;
-    const isSmall = byLongEdge && settings.format !== 'tiff' && settings.maxLongEdge !== null && settings.maxLongEdge <= 2048;
+    const fullSize = isAlwaysFullSize(settings.format);
+    const isSmall = byLongEdge && !fullSize && settings.maxLongEdge !== null && settings.maxLongEdge <= 2048;
     const e = await loaded(asset, signal, isSmall ? 'working' : 'full');
     e.setRecipe(version.recipe);
+    if (isHdrFormat(settings.format)) {
+      // The HDR picture is read at the photo's full size, so the size settings do not apply (the dialog says so).
+      if (!e.canExportHdr()) throw new Error('HDR files need a GPU that renders in floating point, and this one does not. Choose JPEG or PNG.');
+      // The gain-map JPEG's EXIF goes into its base picture before assembly (photos-core metadataWrittenByRenderer).
+      const exif = settings.format === 'hdr-jpeg' ? buildExportExif(asset, settings) : null;
+      const blob = await e.exportImage({ format: settings.format, quality: settings.quality, exif });
+      checkSignal(signal);
+      return blob;
+    }
     const space = settings.colorSpace ?? 'srgb';
     const image = e.imageSize();
-    const size = image && settings.format !== 'tiff' ? outputSize(image, extras) : null;
+    const size = image && !fullSize ? outputSize(image, extras) : null;
     // Before the engine draws: an 8-bit file in Rec. 2020 bands (photos-core colorSpacesFor).
     if (!colorSpacesFor(settings.format, extras.pngDepth).includes(space)) throw new Error('Rec. 2020 needs a 16-bit file (TIFF, or a 16-bit PNG).');
     const blob = await e.exportImage({

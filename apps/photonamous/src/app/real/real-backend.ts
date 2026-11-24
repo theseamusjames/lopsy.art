@@ -6,7 +6,7 @@
 import type { Asset, AssetId, LibrarySession, PreviewRef, VersionId } from '@lopsy/photos-core/library/types';
 import type { ImportJob, ImportOptions } from '@lopsy/photos-core/import/types';
 import type { FileId, StorageAdapter, StorageQuota } from '@lopsy/photos-core/storage/types';
-import type { ExportProgress as CoreProgress, ExportResult } from '@lopsy/photos-core/export/types';
+import { isHdrFormat, type ExportProgress as CoreProgress, type ExportResult } from '@lopsy/photos-core/export/types';
 import { openLibrary } from '@lopsy/photos-core/library/session';
 import { IndexedDbLocalStore } from '@lopsy/photos-core/library/local-store';
 import { openBrowserStorage, openPickedFolder } from '@lopsy/photos-core/storage/local-folder-adapter';
@@ -565,6 +565,9 @@ export class RealBackend implements PhotosBackend {
         refresh();
         const result = await job.finished;
         unsubscribe();
+        // An HDR file of a large photo can run out of memory; say so where it is seen, not only in the dialog.
+        const hdrFailure = isHdrFormat(request.format) ? result.items.find((item) => item.state === 'failed' && item.error !== 'Cancelled') : undefined;
+        if (hdrFailure?.error) showErrorToast(hdrFailure.error);
         lastCore = null;
         core = { getProgress: () => result, cancel: () => {} };
         refresh();

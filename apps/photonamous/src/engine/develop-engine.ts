@@ -76,6 +76,12 @@ import initWasm, {
   setBackgroundColor,
   setDevelopWorkingSpace,
   setScreenOutput,
+  setDevelopHdr,
+  screenIsHdr,
+  encodePqPng,
+  computeGainMap,
+  assembleGainMapJpeg,
+  hdrHistogramWhiteBin,
   buildIccProfile,
   rafWhiteBalanceKelvin,
   rafWhiteBalancePresets,
@@ -102,19 +108,23 @@ import initWasm, {
   type Engine,
 } from '@lopsy/engine-pkg/lopsy_wasm';
 import {
+  compositeForExport,
   createEngine,
   exportPng16,
   exportTiff16,
   readDevelopHistogram,
+  readHdrHistogram,
+  readHdrOutputF32,
   readSceneStatistics,
   rendererName,
   sampleColor,
   sampleNeutralWhiteBalance,
 } from './wasm';
 import { fallBackToWebgl, markWgpuFailed, type Renderer } from './renderer-choice';
-import { currentStatus, noteEngineStarted, onStatusChange } from './engine-status';
+import { currentStatus, noteEngineStarted, noteScreenHdr, onStatusChange } from './engine-status';
 import type { DisplayInfo } from '@lopsy/engine-wasm/display';
 import { withJpegIccProfile, withPngColorTag } from '@lopsy/image-metadata';
+import { insertJpegExif } from '@lopsy/photos-core/export/exif-writer';
 import { wasmUrlFor } from './engine-files';
 import { keepForOffline } from '../sw/register';
 import { webGpuTextureLimit } from '@lopsy/engine-wasm/renderer-choice';
@@ -167,8 +177,13 @@ export interface LoadOptions {
 }
 
 export interface ExportOptions {
-  /** 'tiff' is the engine's 16-bit TIFF, always full size. */
-  readonly format: 'jpeg' | 'png' | 'tiff';
+  /**
+   * 'tiff' is the engine's 16-bit TIFF, always full size. 'hdr-png' (BT.2100
+   * PQ, Rec. 2020) and 'hdr-jpeg' (sRGB with a gain map) are HDR files,
+   * also always full size: the engine reads the HDR picture at the
+   * document's own size. Both need the working space.
+   */
+  readonly format: 'jpeg' | 'png' | 'tiff' | 'hdr-png' | 'hdr-jpeg';
   /** JPEG quality, 0..1. */
   readonly quality?: number;
   /** Limit on the long edge, in pixels. Full size when omitted. Ignored for TIFF. */
@@ -185,6 +200,12 @@ export interface ExportOptions {
   readonly size?: Size;
   /** PNG only: 16 bits (the engine's PNG, full size only) by default, or 8. */
   readonly pngDepth?: 8 | 16;
+  /**
+   * 'hdr-jpeg' only: the EXIF block (photos-core `buildExportExif`) for the
+   * base picture, put in before the gain map is joined so the file's MPF
+   * index counts it. Null or absent: none.
+   */
+  readonly exif?: Uint8Array | null;
 }
 
 /** What the loaded photo offers the Edit view. */
@@ -213,6 +234,15 @@ export interface DevelopEngine {
   photoInfo(): PhotoInfo;
   /** 4 × 256 bins (R, G, B, luminance) of the displayed render; null when the engine cannot read one now. */
   readHistogram(): Promise<Uint32Array | null>;
+  /**
+   * 4 × 256 bins of the HDR rendering at `HDR_PEAK` (bin 255 at the peak),
+   * for the histogram while the HDR view is on; null without the working
+   * space or when the engine cannot read one now. Auto tone and every other
+   * statistic keep `readHistogram`.
+   */
+  readHdrHistogram(): Promise<Uint32Array | null>;
+  /** Where SDR white sits on `readHdrHistogram`'s axis, in bins (about 139.7 at a peak of 4). */
+  hdrWhiteBin(): number;
   /** The rendered colour at a document pixel, 0..255, with the screen-only views off; null outside the image or when the engine cannot read it. */
   sampleAt(x: number, y: number): Promise<readonly [number, number, number] | null>;
   /** Auto tone for `recipe`: renders it, reads its histogram and returns the tone values the engine suggests. */
@@ -263,6 +293,8 @@ export interface DevelopEngine {
   /** JPEGs at each long edge in `maxSizes`, drawn in one go (one render each, one to put the view back). */
   renderPreviews(maxSizes: readonly number[], quality?: number, recipe?: Recipe): Promise<Blob[]>;
   exportImage(options: ExportOptions): Promise<Blob>;
+  /** Whether this engine can write HDR files: it edits in the working space (not the 8-bit fallback). */
+  canExportHdr(): boolean;
   /** Paints clipped pixels on the live frame only (any channel at or past white red, at or below black blue); exports are unaffected. */
   setClippingWarning(shadows: boolean, highlights: boolean): void;
   /** The photo's grain seed (finish-controls.ts grainSeed), so grain is the same on every render and export. */
@@ -340,7 +372,37 @@ async function tagColor(blob: Blob, code: number): Promise<Blob> {
   const tagged = blob.type === PNG_MIME ? withPngColorTag(data, code === SRGB ? undefined : icc) : withJpegIccProfile(data, icc);
   return tagged === data ? blob : new Blob([tagged as BlobPart], { type: blob.type });
 }
+/**
+ * The gain map's grey PNG (from the engine) as a JPEG, encoded by the
+ * browser: decoded, drawn on a canvas of its own size and encoded at
+ * `quality`, the same quality as the base picture.
+ */
+async function encodeGreyJpeg(png: Uint8Array, size: Size, quality: number): Promise<Uint8Array> {
+  // The map's values are gains, not colours: nothing may convert them.
+  const bitmap = await createImageBitmap(new Blob([png as BlobPart], { type: PNG_MIME }), { colorSpaceConversion: 'none' });
+  try {
+    const out = new OffscreenCanvas(size.width, size.height);
+    const ctx = out.getContext('2d');
+    if (!ctx) throw new Error('the browser could not make a canvas to encode the gain map with');
+    ctx.drawImage(bitmap, 0, 0);
+    const blob = await out.convertToBlob({ type: JPEG_MIME, quality });
+    return new Uint8Array(await blob.arrayBuffer());
+  } finally {
+    bitmap.close();
+  }
+}
+
 const TIFF_MIME = 'image/tiff';
+/**
+ * The HDR peak, a linear multiple of SDR white: two stops (plan decision 8).
+ * The live HDR view, its histogram and HDR files all use it, so what the
+ * screen shows above white is what the file holds.
+ */
+export const HDR_PEAK = 4;
+/** The luminance SDR white is given in a PQ file, in cd/m² (ITU-R BT.2408). */
+const PQ_SDR_WHITE_NITS = 203;
+/** The gain map is half the picture's width and height (plan decision 14). */
+const GAIN_MAP_SCALE = 2;
 /** WebGPU's guaranteed largest texture side, when the adapter's is not known. */
 const WEBGPU_DEFAULT_TEXTURE_LIMIT = 8192;
 
@@ -476,12 +538,22 @@ function hasFloatTargets(canvas: HTMLCanvasElement): boolean {
   return gl !== null && gl.getExtension('EXT_color_buffer_float') !== null;
 }
 
+export interface DevelopEngineOptions {
+  /**
+   * The engine draws the Edit view's canvas, which may be HDR: on the wgpu
+   * build, while the display reports high dynamic range, it asks for an
+   * HDR canvas and follows the status bar's HDR switch. The export
+   * renderer's and preview engines leave it off and never ask.
+   */
+  readonly isScreen?: boolean;
+}
+
 /**
  * A develop engine on `canvas`. Rejects with `RendererChangedError` when
  * WebGPU failed and the page changed to WebGL: the caller starts again on
  * a new canvas.
  */
-export async function createDevelopEngine(canvas: HTMLCanvasElement): Promise<DevelopEngine> {
+export async function createDevelopEngine(canvas: HTMLCanvasElement, options: DevelopEngineOptions = {}): Promise<DevelopEngine> {
   const engine = await startEngine(canvas);
   setBackgroundColor(engine, 0, 0, 0, 1);
   const hasFloat = hasFloatTargets(canvas);
@@ -492,7 +564,7 @@ export async function createDevelopEngine(canvas: HTMLCanvasElement): Promise<De
   // so there the working space stays off (plan section 5, decision 9).
   setDevelopWorkingSpace(engine, hasFloat, SRGB);
   noteEngineStarted(hasFloat);
-  return new PhotoEngine(engine, canvas, hasFloat);
+  return new PhotoEngine(engine, canvas, hasFloat, options.isScreen === true);
 }
 
 class PhotoEngine implements DevelopEngine {
@@ -568,6 +640,12 @@ class PhotoEngine implements DevelopEngine {
   /** The space the canvas shows the screen in, and the one it holds now (a copied draw changes it for a moment). */
   private screenSpace: CanvasSpace = 'srgb';
   private canvasSpace: CanvasSpace = 'srgb';
+  /** Whether the canvas is HDR now (`screenIsHdr`); only ever true on the Edit view's engine. */
+  private isHdrCanvas = false;
+  /** The Edit view's engine: it may ask for an HDR canvas and follows the HDR switch. */
+  private readonly isScreen: boolean;
+  /** The HDR switch as last sent to the engine (`setDevelopHdr`). */
+  private hdrViewSent: boolean | null = null;
   private readonly stopDisplay: () => void;
 
   private hasLostGpu = false;
@@ -581,14 +659,20 @@ class PhotoEngine implements DevelopEngine {
     this.lostListeners.clear();
   };
 
-  constructor(engine: Engine, canvas: HTMLCanvasElement, hasFloat: boolean) {
+  constructor(engine: Engine, canvas: HTMLCanvasElement, hasFloat: boolean, isScreen: boolean) {
     this.engine = engine;
     this.canvas = canvas;
     this.hasFloat = hasFloat;
+    this.isScreen = isScreen;
     this.path = developPathFor(hasFloat);
     // Told at start-up whatever the display, then whenever it changes.
-    this.screenSpace = this.setCanvasSpace(this.screenSpaceFor(currentStatus().display));
-    this.stopDisplay = onStatusChange(() => this.followDisplay(currentStatus().display));
+    this.screenSpace = this.setCanvasSpace(this.screenSpaceFor(currentStatus().display), this.wantsHdr(currentStatus().display));
+    this.noteScreen();
+    this.followHdrView();
+    this.stopDisplay = onStatusChange(() => {
+      this.followDisplay(currentStatus().display);
+      this.followHdrView();
+    });
     if (rendererName() === 'wgpu') window.addEventListener(GPU_LOST_EVENT, this.handleGpuLost);
     else canvas.addEventListener('webglcontextlost', this.handleGpuLost);
     if (import.meta.env.DEV) window.__photonamousEngine = { rendererName, loseDevice: () => this.loseDevice() };
@@ -879,12 +963,38 @@ class PhotoEngine implements DevelopEngine {
     return display.isDisplayP3 && this.hasFloat ? 'display-p3' : 'srgb';
   }
 
-  /** Moves the canvas to the space of the display the window is on now. */
+  /**
+   * Whether to ask for an HDR canvas: only the Edit view's engine, on the
+   * wgpu build (WebGL's canvas is 8 bits), with the working space, while
+   * the display reports high dynamic range.
+   */
+  private wantsHdr(display: DisplayInfo): boolean {
+    return this.isScreen && this.hasFloat && display.isHdr && rendererName() === 'wgpu';
+  }
+
+  /** Moves the canvas to the space (and dynamic range) of the display the window is on now. */
   private followDisplay(display: DisplayInfo): void {
     if (this.isDisposed) return;
     const wanted = this.screenSpaceFor(display);
-    if (wanted === this.screenSpace && wanted === this.canvasSpace) return;
-    this.screenSpace = this.setCanvasSpace(wanted);
+    const hdr = this.wantsHdr(display);
+    if (wanted === this.screenSpace && wanted === this.canvasSpace && hdr === this.isHdrCanvas) return;
+    this.screenSpace = this.setCanvasSpace(wanted, hdr);
+    this.noteScreen();
+    this.invalidate();
+  }
+
+  /** The Edit view's engine tells the status bar whether its canvas is HDR. */
+  private noteScreen(): void {
+    if (this.isScreen && !this.isDisposed) noteScreenHdr(this.isHdrCanvas);
+  }
+
+  /** The status bar's HDR switch, sent to the engine when it changes (Edit view only; it shows only on an HDR canvas). */
+  private followHdrView(): void {
+    if (!this.isScreen || this.isDisposed) return;
+    const on = currentStatus().isHdrView;
+    if (on === this.hdrViewSent) return;
+    this.hdrViewSent = on;
+    setDevelopHdr(this.engine, on, HDR_PEAK);
     this.invalidate();
   }
 
@@ -892,9 +1002,12 @@ class PhotoEngine implements DevelopEngine {
    * Tags the canvas as `space` and has the engine's output step render for
    * it. On WebGL the page tags the drawing buffer, and a browser without
    * `drawingBufferColorSpace` keeps sRGB; on WebGPU the engine configures
-   * the canvas. Returns the space the canvas holds afterwards.
+   * the canvas. With `hdr` it asks for an HDR canvas (wgpu only) and learns
+   * from `screenIsHdr` whether it got one; a browser that refuses, or a
+   * request that throws, leaves the SDR canvas as before. Returns the space
+   * the canvas holds afterwards.
    */
-  private setCanvasSpace(space: CanvasSpace): CanvasSpace {
+  private setCanvasSpace(space: CanvasSpace, hdr = false): CanvasSpace {
     let taken: CanvasSpace = space;
     if (rendererName() === 'webgl') {
       const gl = this.canvas.getContext('webgl2');
@@ -905,7 +1018,20 @@ class PhotoEngine implements DevelopEngine {
       }
       taken = gl?.drawingBufferColorSpace === 'display-p3' ? 'display-p3' : 'srgb';
     }
-    setScreenOutput(this.engine, taken === 'display-p3', false);
+    const isP3 = taken === 'display-p3';
+    let isHdr = false;
+    if (hdr) {
+      try {
+        setScreenOutput(this.engine, isP3, true);
+        isHdr = screenIsHdr(this.engine);
+      } catch {
+        isHdr = false;
+      }
+      if (!isHdr) setScreenOutput(this.engine, isP3, false);
+    } else {
+      setScreenOutput(this.engine, isP3, false);
+    }
+    this.isHdrCanvas = isHdr;
     this.canvasSpace = taken;
     return taken;
   }
@@ -1367,6 +1493,19 @@ class PhotoEngine implements DevelopEngine {
     if (temperature === undefined || tint === undefined || !Number.isFinite(temperature) || !Number.isFinite(tint)) return null;
     return { temperature, tint };
   }
+  async readHdrHistogram(): Promise<Uint32Array | null> {
+    if (!this.sourceSize || this.isDisposed || !this.hasFloat) return null;
+    return this.withScreenViewsOff(async () => {
+      this.renderFrameNow();
+      const bins: unknown = await readHdrHistogram(this.engine, HDR_PEAK);
+      return bins instanceof Uint32Array && bins.length === 1024 ? bins : null;
+    });
+  }
+
+  hdrWhiteBin(): number {
+    return hdrHistogramWhiteBin(HDR_PEAK);
+  }
+
   async readHistogram(): Promise<Uint32Array | null> {
     if (!this.sourceSize || this.isDisposed) return null;
     // The histogram counts the photo, not the clipping colours or the sharpening mask.
@@ -1608,6 +1747,9 @@ class PhotoEngine implements DevelopEngine {
     if (!image || this.isDisposed) throw new Error('No photo is loaded');
     const space = spaceCode(options.colorSpace);
     if (options.format === 'tiff') return this.encodeTiff16(space);
+    if (options.format === 'hdr-png' || options.format === 'hdr-jpeg') {
+      return this.encodeHdr(options.format, image, options.quality ?? 0.9, options.exif ?? null);
+    }
     const out = options.size ?? limitSize(image, options.maxSize);
     const mime = options.format === 'png' ? PNG_MIME : JPEG_MIME;
     const isFullSize = out.width === image.width && out.height === image.height;
@@ -1617,6 +1759,63 @@ class PhotoEngine implements DevelopEngine {
     const drawn = this.drawAtSizes([out], space === DISPLAY_P3 ? 'display-p3' : 'srgb')[0] ?? null;
     const blob = drawn ? await drawn.convertToBlob({ type: mime, quality: options.quality }) : await this.encodeFromPng16(out, mime, options.quality, space);
     return tagColor(blob, space);
+  }
+
+  canExportHdr(): boolean {
+    return this.hasFloat;
+  }
+
+  /**
+   * An HDR file of the whole document at its own size (the full size, which
+   * `atSizeWith` loads, as for TIFF). The HDR picture is read once
+   * (`readHdrOutputF32`, linear Rec. 2020 up to `HDR_PEAK`). The PQ PNG is
+   * that picture encoded by the engine. The gain-map JPEG's base is the
+   * ordinary sRGB JPEG export at the same size, and its gain map is
+   * computed from the HDR picture and the engine's sRGB composite of the
+   * same document (`compositeForExport`), then encoded by the browser from
+   * the engine's grey PNG, so no pixel passes through TypeScript.
+   */
+  private async encodeHdr(format: 'hdr-png' | 'hdr-jpeg', image: Size, quality: number, exif: Uint8Array | null): Promise<Blob> {
+    if (!this.hasFloat) throw new Error('HDR files need a GPU that renders in floating point, and this one does not. Choose JPEG or PNG.');
+    const { width, height } = image;
+    try {
+      let hdr: Float32Array | null = await readHdrOutputF32(this.engine, HDR_PEAK);
+      // The read drew the composite at the document's size; the screen's frame is drawn again.
+      this.isFrameCurrent = false;
+      this.invalidate();
+      if (hdr.length !== width * height * 4) throw new Error(`the HDR picture is ${hdr.length / 4} pixels, not ${width} × ${height}`);
+      if (format === 'hdr-png') {
+        const bytes = encodePqPng(hdr, width, height, PQ_SDR_WHITE_NITS);
+        hdr = null;
+        return new Blob([bytes as BlobPart], { type: PNG_MIME });
+      }
+      const sdr: Uint8Array = await compositeForExport(this.engine);
+      this.isFrameCurrent = false;
+      if (sdr.length !== width * height * 4) throw new Error(`the SDR picture is ${sdr.length / 4} pixels, not ${width} × ${height}`);
+      const map = computeGainMap(hdr, sdr, width, height, SRGB, GAIN_MAP_SCALE);
+      hdr = null;
+      let mapPng: Uint8Array;
+      let metadata: Float64Array;
+      let mapSize: Size;
+      try {
+        mapPng = map.toPng();
+        metadata = Float64Array.from(map.metadata);
+        mapSize = { width: map.width, height: map.height };
+      } finally {
+        map.free();
+      }
+      const base = await this.encode({ format: 'jpeg', quality, colorSpace: 'srgb', size: image });
+      const mapJpeg = await encodeGreyJpeg(mapPng, mapSize, quality);
+      const baseBytes = insertJpegExif(new Uint8Array(await base.arrayBuffer()), exif);
+      const file = assembleGainMapJpeg(baseBytes, mapJpeg, metadata, SRGB);
+      return new Blob([file as BlobPart], { type: JPEG_MIME });
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `The HDR file could not be made (${reason}). HDR files are made at the full size and need about 16 bytes a pixel of memory; ` +
+          'on a large photo the browser may not have that much. A smaller crop, or an ordinary JPEG or PNG, may work.',
+      );
+    }
   }
 
   private async encodeTiff16(space: number): Promise<Blob> {
@@ -1639,11 +1838,15 @@ class PhotoEngine implements DevelopEngine {
     if (space !== 'srgb' && !this.hasFloat) return sizes.map(() => null);
     const { width: savedW, height: savedH } = this.canvas;
     try {
-      // The canvas holds the file's space while it is drawn and copied, so the copy is exact.
-      if (this.canvasSpace !== space && this.setCanvasSpace(space) !== space) return sizes.map(() => null);
+      // The canvas holds the file's space, in SDR, while it is drawn and copied, so the copy is exact.
+      if ((this.canvasSpace !== space || this.isHdrCanvas) && this.setCanvasSpace(space) !== space) return sizes.map(() => null);
       return sizes.map((size) => this.drawOne(image, size, space));
     } finally {
-      if (this.canvasSpace !== this.screenSpace) this.setCanvasSpace(this.screenSpace);
+      const hdr = this.wantsHdr(currentStatus().display);
+      if (this.canvasSpace !== this.screenSpace || this.isHdrCanvas !== hdr) {
+        this.setCanvasSpace(this.screenSpace, hdr);
+        this.noteScreen();
+      }
       this.canvas.width = savedW;
       this.canvas.height = savedH;
       this.pushViewport();
@@ -1731,6 +1934,7 @@ class PhotoEngine implements DevelopEngine {
 
   dispose(): void {
     if (this.isDisposed) return;
+    if (this.isScreen) noteScreenHdr(false);
     this.isDisposed = true;
     this.stopDisplay();
     window.removeEventListener(GPU_LOST_EVENT, this.handleGpuLost);

@@ -133,3 +133,23 @@
   height: 4px;
   overflow: visible;
 }
+
+/* SDR white on the HDR histogram: a thin rule, with its name above the chart's bottom edge. */
+.white {
+  stroke: var(--color-text-primary);
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.whiteLabel {
+  position: absolute;
+  bottom: 2px;
+  left: var(--x);
+  padding: 0 var(--space-1);
+  font-size: var(--font-size-xs);
+  line-height: 1.2;
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  pointer-events: none;
+}

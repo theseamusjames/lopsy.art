@@ -20,7 +20,8 @@ const query = (q: string) => ({
   removeEventListener: (_type: string, listener: () => void) => displayListeners.delete(listener),
 });
 
-const { currentStatus, displayLabel, noteEngineStarted, onStatusChange, rendererLabel, resetEngineStatus } = await import('./engine-status');
+const { currentStatus, displayLabel, hdrLabel, noteEngineStarted, noteScreenHdr, onStatusChange, rendererLabel, resetEngineStatus, setHdrView, showsHdr } =
+  await import('./engine-status');
 
 describe('engine status', () => {
   beforeEach(() => {
@@ -68,5 +69,24 @@ describe('engine status', () => {
     const a = currentStatus();
     noteEngineStarted(true);
     expect(currentStatus()).toBe(a);
+  });
+
+  it('says HDR only while the canvas really is HDR, and the switch decides what shows', () => {
+    expect(hdrLabel(currentStatus())).toBeNull();
+    expect(currentStatus().isHdrView).toBe(true);
+    expect(showsHdr(currentStatus())).toBe(false);
+    noteScreenHdr(true);
+    expect(hdrLabel(currentStatus())).toBe('HDR');
+    expect(showsHdr(currentStatus())).toBe(true);
+    const listener = vi.fn();
+    onStatusChange(listener);
+    setHdrView(false);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(showsHdr(currentStatus())).toBe(false);
+    expect(hdrLabel(currentStatus())).toBe('HDR');
+    noteScreenHdr(false);
+    expect(hdrLabel(currentStatus())).toBeNull();
+    // The switch is remembered for the page while the canvas comes and goes.
+    expect(currentStatus().isHdrView).toBe(false);
   });
 });

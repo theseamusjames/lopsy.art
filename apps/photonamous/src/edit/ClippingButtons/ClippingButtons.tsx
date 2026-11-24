@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Moon, Sun } from 'lucide-react';
-import { clipping, clippingTitle, isClipped, parseHistogram } from '../histogram';
+import { clipping, clippingTitle, hdrHighlightTitle, isClipped, parseHistogram } from '../histogram';
 import { useClippingWarning } from '../clipping-warning';
 import styles from './ClippingButtons.module.css';
 
@@ -8,6 +8,8 @@ export interface ClippingButtonsProps {
   /** The engine's 4 × 256 bins; null before the first read. */
   readonly bins: Uint32Array | null;
   readonly isDisabled?: boolean;
+  /** The bins are the HDR rendering's, whose top bin is the HDR peak, not white. */
+  readonly isHdr?: boolean;
 }
 
 /**
@@ -17,7 +19,7 @@ export interface ClippingButtonsProps {
  * is filled when that end of the photo clips, and blue, as Crop is beside
  * them, while its warning is painted on the photo.
  */
-export function ClippingButtons({ bins, isDisabled = false }: ClippingButtonsProps) {
+export function ClippingButtons({ bins, isDisabled = false, isHdr = false }: ClippingButtonsProps) {
   const clip = useMemo(() => {
     const h = bins ? parseHistogram(bins) : null;
     return h ? clipping(h) : { shadows: 0, highlights: 0 };
@@ -50,7 +52,7 @@ export function ClippingButtons({ bins, isDisabled = false }: ClippingButtonsPro
         aria-pressed={warning.highlights}
         aria-label="Show highlight clipping"
         aria-keyshortcuts="J"
-        title={clippingTitle('highlights', clip.highlights)}
+        title={isHdr ? hdrHighlightTitle(clip.highlights) : clippingTitle('highlights', clip.highlights)}
         onClick={() => warning.toggle('highlights')}
         disabled={isDisabled}
       >

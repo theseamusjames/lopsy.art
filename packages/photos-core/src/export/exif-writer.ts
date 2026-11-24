@@ -6,7 +6,7 @@
 
 import type { Asset } from '../library/types';
 import { crc32 } from './crc32';
-import { mimeTypeFor, type ExportSettings } from './types';
+import { containerOf, mimeTypeFor, type ExportSettings } from './types';
 
 const ASCII = 2;
 const SHORT = 3;
@@ -257,13 +257,26 @@ export function insertPngExif(png: Uint8Array, tiff: Uint8Array | null): Uint8Ar
   return concat(parts);
 }
 
+/**
+ * Whether the renderer writes (or leaves out) a format's metadata itself,
+ * so `applyExportMetadata` passes the file through. The engine's TIFF
+ * carries no EXIF. A gain-map JPEG's MPF index records the primary
+ * picture's length, so a segment added after it is assembled would make
+ * the index wrong: the renderer puts `buildExportExif` into the base
+ * picture before the gain map is joined to it.
+ */
+export function metadataWrittenByRenderer(format: ExportSettings['format']): boolean {
+  return format === 'tiff' || format === 'hdr-jpeg';
+}
+
 /** The rendered blob with the metadata the settings ask for. */
 export async function applyExportMetadata(blob: Blob, asset: Asset, settings: ExportSettings): Promise<Blob> {
   // A TIFF's tags are written by the engine as it encodes it; splicing EXIF into it is not this module's job.
-  if (settings.format === 'tiff') return blob;
+  if (metadataWrittenByRenderer(settings.format)) return blob;
+  const container = containerOf(settings.format);
   const bytes = new Uint8Array(await blob.arrayBuffer());
   const tiff = buildExportExif(asset, settings);
-  const out = settings.format === 'png' ? insertPngExif(bytes, tiff) : insertJpegExif(bytes, tiff);
+  const out = container === 'png' ? insertPngExif(bytes, tiff) : insertJpegExif(bytes, tiff);
   if (out === bytes) return blob;
   return new Blob([out.slice()], { type: mimeTypeFor(settings.format) });
 }
