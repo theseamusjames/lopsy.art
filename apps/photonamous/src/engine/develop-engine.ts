@@ -23,8 +23,16 @@ import initWasm, {
   setImageFinish,
   clearImageFinish,
   autoTone as engineAutoTone,
+  clearImageAreaLayer,
   clearImageAreas,
+  setImageAreaColorGrading,
+  setImageAreaColorMixer,
+  setImageAreaCurvesLut,
+  setImageAreaDetail,
+  setImageAreaFinish,
+  setImageAreaLocalContrast,
   setImageAreaOverlay,
+  setImageAreaTone,
   setImageAreas,
   clearImageDetail,
   clearImageLocalContrast,
@@ -79,7 +87,7 @@ import initWasm, {
   type Engine,
 } from '@lopsy/engine-pkg/lopsy_wasm';
 import type { ImageFormat } from '@lopsy/photos-core/library/types';
-import { DEFAULT_RECIPE, type Recipe } from '@lopsy/photos-core/library/recipe';
+import { DEFAULT_RECIPE, liveAreas, type Recipe } from '@lopsy/photos-core/library/recipe';
 import { parseKelvinScale, parsePresets, type KelvinScale, type WhiteBalancePresetValues } from './white-balance';
 import {
   framedSize,
@@ -95,7 +103,7 @@ import { cropPixels, inverseRotation, isFullCrop, rotatedBounds, straightenedCro
 import { detailKey, detailValues, localContrastValues } from './detail-controls';
 import { finishKey, finishValues } from './finish-controls';
 import { renderCounts, type RenderKind } from './render-counts';
-import { areaValues, type AreaFrame } from './areas';
+import { areaLayerKey, areaLayerValues, areaValues, type AreaFrame } from './areas';
 import { colorControlsKey, colorGradeValues, colorMixerValues, curvesLut } from './color-controls';
 import { NO_INSETS, clampZoom, fitView, limitSize, panBy, zoomAround, type Insets, type Size, type View } from './viewport';
 import { decodeRafInWorkers, DecodeAbortedError } from './raf/raf-decode';
@@ -373,6 +381,8 @@ class PhotoEngine implements DevelopEngine {
   /** The crop's corner in framed pixels: where the document starts. */
   private cropOrigin = { x: 0, y: 0 };
   private areasKey: string | null = null;
+  /** What each area's layer was last sent as, by the area's place (areaLayerKey). */
+  private areaLayerKeys: readonly string[] = [];
   /** The area the Edit view asks to show in red; it shows while no read holds the screen-only views off. */
   private overlayAreaId: string | null = null;
   /** Reads under way with the screen-only views off (withScreenViewsOff). */
@@ -740,6 +750,8 @@ class PhotoEngine implements DevelopEngine {
   private forgetSizedState(): void {
     this.layoutKey = null;
     this.areasKey = null;
+    // No key an area's layer can have: each place is cleared and sent again.
+    this.areaLayerKeys = this.areaLayerKeys.map(() => 'resend');
     this.detailKeyApplied = null;
     this.finishKeyApplied = null;
   }
@@ -878,11 +890,33 @@ class PhotoEngine implements DevelopEngine {
     const out = areaValues(this.recipe, frame);
     // A read under way keeps the overlay off; the last one to end shows what was asked for meanwhile.
     const overlay = this.screenReads > 0 ? null : this.overlayAreaId;
-    const key = out ? `${Array.from(out.values).join(',')}|${overlay ?? ''}` : 'none';
+    // Each area's own layer (its further effects), by its place among the areas.
+    const layerOptions = { pixelScale: this.pixelScale, grainSeed: this.grainSeedValue, isInteractive: this.isInteractive };
+    const layers = out ? liveAreas(this.recipe).map((area) => areaLayerValues(area, layerOptions)) : [];
+    const layerKeys = layers.map(areaLayerKey);
+    const key = out ? `${Array.from(out.values).join(',')}|${overlay ?? ''}|${layerKeys.join(';')}` : 'none';
     if (key === this.areasKey) return;
     this.areasKey = key;
     if (out) setImageAreas(this.engine, out.values);
     else clearImageAreas(this.engine);
+    // The engine keeps a layer by its area's place. Only a place whose layer changed is sent again: a place
+    // that lost its area, or whose area is another one now, is cleared first.
+    const sent = out ? this.areaLayerKeys : [];
+    for (let index = 0; index < Math.max(sent.length, layers.length); index++) {
+      const layerKey = layerKeys[index] ?? '';
+      if (layerKey === (sent[index] ?? '')) continue;
+      clearImageAreaLayer(this.engine, index);
+      const layer = layers[index];
+      if (!layer) continue;
+      if (layer.tone) setImageAreaTone(this.engine, index, ...layer.tone);
+      if (layer.curves) setImageAreaCurvesLut(this.engine, index, layer.curves);
+      if (layer.mixer) setImageAreaColorMixer(this.engine, index, layer.mixer);
+      if (layer.grade) setImageAreaColorGrading(this.engine, index, layer.grade);
+      if (layer.detail) setImageAreaDetail(this.engine, index, layer.detail);
+      if (layer.localContrast) setImageAreaLocalContrast(this.engine, index, layer.localContrast);
+      if (layer.finish) setImageAreaFinish(this.engine, index, layer.finish);
+    }
+    this.areaLayerKeys = layerKeys;
     const index = out && overlay ? out.ids.indexOf(overlay) : -1;
     setImageAreaOverlay(this.engine, index);
     this.invalidate();
@@ -991,6 +1025,8 @@ class PhotoEngine implements DevelopEngine {
 
   /** Vignette shape and grain in one engine pass (it replaces setImageVignette); grain scales with the working size. */
   private applyFinish(): void {
+    // An area's grain shares the seed.
+    this.applyAreas();
     const key = finishKey(this.recipe.finish, this.grainSeedValue, this.pixelScale);
     if (key === this.finishKeyApplied) return;
     this.finishKeyApplied = key;
@@ -1014,6 +1050,8 @@ class PhotoEngine implements DevelopEngine {
   }
 
   private applyDetail(): void {
+    // An area's sharpening, noise reduction and local contrast wait out a drag too.
+    this.applyAreas();
     const key = this.isInteractive ? 'interactive' : detailKey(this.recipe, this.pixelScale);
     if (key === this.detailKeyApplied) return;
     this.detailKeyApplied = key;

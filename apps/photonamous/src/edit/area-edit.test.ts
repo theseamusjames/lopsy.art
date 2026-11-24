@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_RECIPE, addArea, liveAreas } from '@lopsy/photos-core/library/recipe';
 import { applyChanges } from './edit-controls';
-import { MIN_RADIUS, areaLabel, dragLinear, dragRadial, ellipseAxes } from './area-edit';
+import { MIN_RADIUS, areaLabel, dragLinear, dragRadial, ellipseAxes, hasAreaEffects, isAreaInUse } from './area-edit';
 
 describe('dragLinear', () => {
   const start = { p0: { x: 10, y: 10 }, p1: { x: 10, y: 50 } };
@@ -46,5 +46,23 @@ describe('areaLabel', () => {
     if (!area) throw new Error('no area');
     expect(areaLabel(area, 1)).toBe('Mask 2');
     expect(areaLabel({ ...area, name: 'Sky' }, 0)).toBe('Sky');
+  });
+});
+
+describe('isAreaInUse', () => {
+  const added = addArea(DEFAULT_RECIPE, 'radial', 'r1');
+  const recipe = applyChanges(DEFAULT_RECIPE, { ...(added?.values ?? {}), 'areas.r1.adjustments.temperature': 40 });
+  const [area] = liveAreas(recipe);
+  if (!area) throw new Error('no area');
+
+  it('calls a mask in use once an adjustment is off zero', () => {
+    expect(isAreaInUse(area)).toBe(true);
+    const still = { ...area, adjustments: { ...area.adjustments, temperature: 0 } };
+    expect(isAreaInUse(still)).toBe(false);
+    // Or once an effect of its own does something: its colour grading, here.
+    expect(hasAreaEffects(still)).toBe(false);
+    const graded = { ...still, effects: { ...still.effects, colorGrading: { ...still.effects.colorGrading, global: { hue: 30, saturation: 20, luminance: 0 } } } };
+    expect(hasAreaEffects(graded)).toBe(true);
+    expect(isAreaInUse(graded)).toBe(true);
   });
 });

@@ -7,6 +7,9 @@
  */
 
 import { liveAreas, type Area, type LinearGeometry, type RadialGeometry, type Recipe } from '@lopsy/photos-core/library/recipe';
+import { colorGradeValues, colorMixerValues, curvesLut } from './color-controls';
+import { detailValues, localContrastValues } from './detail-controls';
+import { finishValues } from './finish-controls';
 import type { Framing } from './recipe-to-adjustments';
 
 /** Where the document sits relative to the source image. */
@@ -139,6 +142,55 @@ function areaFloats(area: Area, frame: AreaFrame): number[] {
   }
   const e = radialToDoc(area.geometry, frame);
   return [...head, e.cx, e.cy, e.rx, e.ry, (e.angle * Math.PI) / 180, area.geometry.feather / 100, ...tail];
+}
+
+/**
+ * What an area's layer is given (`setImageArea…`): the area's own effects,
+ * each compiled as the photo's own are, and null where it has none.
+ */
+export interface AreaLayerValues {
+  /** Whites, blacks and vibrance. */
+  readonly tone: readonly [number, number, number] | null;
+  readonly curves: Uint8Array | null;
+  readonly mixer: Float32Array | null;
+  readonly grade: Float32Array | null;
+  readonly detail: Float32Array | null;
+  readonly localContrast: Float32Array | null;
+  readonly finish: Float32Array | null;
+}
+
+export interface AreaLayerOptions {
+  /** Working width over full width, for the effects measured in pixels. */
+  readonly pixelScale: number;
+  /** The photo's grain seed. */
+  readonly grainSeed: number;
+  /** While a slider is dragged the blurred passes are left out, as the photo's own are. */
+  readonly isInteractive: boolean;
+}
+
+/** An area's layer, or null when its effects change nothing and it draws none. */
+export function areaLayerValues(area: Area, options: AreaLayerOptions): AreaLayerValues | null {
+  const fx = area.effects;
+  const { whites, blacks } = fx.tone;
+  const { vibrance } = fx.color;
+  const values: AreaLayerValues = {
+    tone: whites === 0 && blacks === 0 && vibrance === 0 ? null : [whites, blacks, vibrance],
+    curves: curvesLut(fx),
+    mixer: colorMixerValues(fx),
+    grade: colorGradeValues(fx),
+    detail: options.isInteractive ? null : detailValues(fx, options.pixelScale),
+    localContrast: options.isInteractive ? null : localContrastValues(fx, options.pixelScale),
+    finish: finishValues(fx.finish, options.grainSeed, options.pixelScale),
+  };
+  return Object.values(values).every((v) => v === null) ? null : values;
+}
+
+/** Changes whenever the layer must be set again; '' for no layer. */
+export function areaLayerKey(values: AreaLayerValues | null): string {
+  if (!values) return '';
+  return Object.values(values)
+    .map((v: ArrayLike<number> | null) => (v ? Array.from(v).join(',') : ''))
+    .join('|');
 }
 
 /**

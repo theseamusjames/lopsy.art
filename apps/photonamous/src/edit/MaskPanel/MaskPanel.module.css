@@ -1,0 +1,309 @@
+/* The panel fills what the histogram leaves of the column: the masks scroll in their own room, and the foot stays under them. */
+.panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.masks {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* No mask yet: one button, Add a mask, in the middle of the room the panel has. */
+.masks[data-empty] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+}
+
+.addMask {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 28px;
+  padding: 0 var(--space-3) 0 var(--space-2);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.addMask:hover:not(:disabled),
+.addMask[aria-expanded='true'] {
+  background: var(--color-bg-hover);
+}
+
+.addMask:disabled {
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+/* What kind of mask it is, and Invert at the other end. */
+.kindRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.kind {
+  color: var(--ph-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  padding: 0 var(--space-2);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+/* A toggle that is on (Invert): blue, as the toolbar's are; its words in the accent that reads at this size. */
+.button[aria-pressed='true']:not(:disabled) {
+  background: var(--color-accent-subtle);
+  border-color: transparent;
+  color: var(--ph-accent-text);
+}
+
+.button:disabled {
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+.icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.icon:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.icon:disabled {
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+.rename {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 var(--space-2);
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* A further adjustment of the mask's own (Color grading): its name and the button that takes it off, then its controls. */
+.extra {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.extraHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.extraTitle {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+/* Position: a heading whose button opens the mask's shape sliders below it. */
+.position {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.subheading {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+/* Its chevron lines up with the sliders' names; the hover fill reaches a little past them. */
+.disclosure {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: calc(100% + 2 * var(--space-1));
+  min-height: 24px;
+  margin: 0 calc(-1 * var(--space-1));
+  padding: var(--space-1);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.disclosure:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.shape {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.shape[hidden] {
+  display: none;
+}
+
+.addRow {
+  display: flex;
+}
+
+/* Add adjustment: text with a plus, as in Lopsy's adjustments. */
+.addAdjustment {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 24px;
+  margin-left: calc(-1 * var(--space-1));
+  padding: 0 var(--space-2) 0 var(--space-1);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.addAdjustment:hover:not(:disabled),
+.addAdjustment[aria-expanded='true'] {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.addAdjustment:disabled {
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+/* A menu's button and the menu, which is placed in the window (menu-place.ts sets where). */
+.menuWrap {
+  display: inline-flex;
+}
+
+.popup {
+  position: fixed;
+  top: var(--menu-top, auto);
+  bottom: var(--menu-bottom, auto);
+  left: var(--menu-left, 0);
+  z-index: var(--z-popover);
+  min-width: 180px;
+  max-height: var(--menu-max-height, none);
+  overflow-y: auto;
+}
+
+/* The foot: at the bottom of the column, under the masks' own scrolling room. */
+.foot {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-secondary);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.footButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.footButton:hover:not(:disabled),
+.footButton[aria-expanded='true'] {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.footButton:disabled {
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+.button:focus-visible,
+.addMask:focus-visible,
+.icon:focus-visible,
+.input:focus-visible,
+.footButton:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+}
+
+.disclosure:focus-visible,
+.addAdjustment:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: -2px;
+}

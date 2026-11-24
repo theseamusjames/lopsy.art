@@ -4,7 +4,7 @@
  * recipe's source-normalized geometry (engine/areas.ts).
  */
 
-import type { Area } from '@lopsy/photos-core/library/recipe';
+import { DEFAULT_RECIPE, areaEffectPaths, recipeToPaths, type Area } from '@lopsy/photos-core/library/recipe';
 import type { DocEllipse, Point } from '../engine/areas';
 
 export type LinearHandle = 'move' | 'start' | 'end';
@@ -76,3 +76,18 @@ export const AREA_SLIDERS = [
   { key: 'tint', label: 'Tint' },
   { key: 'saturation', label: 'Saturation' },
 ] as const;
+
+/**
+ * Whether the mask's own effects (its layer: whites, curves, colour grading
+ * and the rest, `Area.effects`) change anything.
+ */
+export function hasAreaEffects(area: Area): boolean {
+  const own = recipeToPaths(area.effects);
+  const defaults = recipeToPaths(DEFAULT_RECIPE);
+  return areaEffectPaths().some((path) => JSON.stringify(own[path]) !== JSON.stringify(defaults[path]));
+}
+
+/** Whether the mask changes the photo: a slider off zero, or an effect of its own doing something. */
+export function isAreaInUse(area: Area): boolean {
+  return AREA_SLIDERS.some((s) => area.adjustments[s.key] !== 0) || hasAreaEffects(area);
+}
