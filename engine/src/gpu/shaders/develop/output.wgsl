@@ -17,7 +17,8 @@ struct Params {
     // Fraction of the way to the boundary where compression starts; 1
     // compresses nothing and moves what is outside onto the boundary.
     u_gamutThreshold: f32,
-    // 0 = the sRGB curve, 1 = v^(1 / u_gamma), 2 = the BT.709 / BT.2020 OETF.
+    // 0 = the sRGB curve (extended past 1 for an HDR canvas), 1 =
+    // v^(1 / u_gamma), 2 = the BT.709 / BT.2020 OETF, 3 = none (linear).
     u_transfer: i32,
     u_gamma: f32,
     // Dither from end to end in encoded units; 0 for none.
@@ -71,6 +72,9 @@ const BT709_ALPHA: f32 = 1.0992968;
 const BT709_BETA: f32 = 0.01805397;
 
 fn encode(v: f32) -> f32 {
+    if (params.u_transfer == 3) {
+        return v;
+    }
     if (params.u_transfer == 1) {
         return pow(v, 1.0 / params.u_gamma);
     }

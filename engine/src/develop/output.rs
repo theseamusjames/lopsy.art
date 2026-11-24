@@ -18,6 +18,7 @@ pub fn params(s: &OutputSettings) -> OutputParams {
         Transfer::Srgb => (0, 1.0),
         Transfer::Gamma(g) => (1, g),
         Transfer::Bt709 => (2, 1.0),
+        Transfer::Linear => (3, 1.0),
     };
     OutputParams {
         to_target: mat3(conversion(Gamut::Rec2020, s.target.gamut())),
@@ -70,6 +71,12 @@ pub fn source_gamut(engine: &EngineInner, _with_adjustments: bool) -> Gamut {
 /// values, and passed through unedited it should come back out as them.
 pub fn settings_for(engine: &EngineInner, target: OutputTarget, is_8bit: bool, with_adjustments: bool) -> OutputSettings {
     OutputSettings::sdr(target, source_gamut(engine, with_adjustments), is_8bit && engine.raw_develop.is_some())
+}
+
+/// The HDR output of the document to `target` (an HDR one) with
+/// highlights up to `peak` in units of SDR white. Never dithered.
+pub fn hdr_settings_for(engine: &EngineInner, target: OutputTarget, peak: f32) -> OutputSettings {
+    OutputSettings::hdr(target, source_gamut(engine, true), peak)
 }
 
 /// The canvas's space: Display P3 when the host said the screen is.

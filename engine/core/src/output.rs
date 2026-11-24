@@ -10,8 +10,19 @@
 //!    the slope at 1 where it starts and never reaches `peak`. An SDR target
 //!    has `knee = peak = 1`: luminance above white becomes white and nothing
 //!    below it moves, because the tone step's curve already shoulders into
-//!    white. An HDR target (a later phase) sets `peak` to its headroom and
-//!    `knee` below it.
+//!    white. An HDR target ([`OutputSettings::hdr`]) sets `peak` to its
+//!    headroom (in units of SDR white, [`DEFAULT_HDR_PEAK`] to start) and
+//!    `knee` at white ([`HDR_KNEE`]), so luminance up to white is left as
+//!    the SDR rendering has it and only what is above white differs: SDR
+//!    makes it white, HDR rolls it off from white toward the peak. Of the
+//!    same rendered pixel, the two renderings are then equal wherever its
+//!    luminance is at most 1 and, after step 2's first part (which does not
+//!    depend on the peak), its largest channel is under `Y + s · (1 − Y)`,
+//!    `s` the gamut threshold (at most 1): there the SDR rendering's second
+//!    part of step 2 does not act, and the HDR one, whose ceiling is higher,
+//!    does not either. A colour whose luminance is under white but whose
+//!    largest channel is near or over 1 (a bright saturated orange) is paled
+//!    toward white by SDR and kept by HDR; a grey is equal up to white.
 //! 2. **Gamut mapping**, in the target's linear RGB, toward the neutral
 //!    axis, in two parts.
 //!    - *Below 0* (a colour more saturated than the target's primaries):
@@ -51,7 +62,13 @@
 //!    as it went in. A colour with no positive channel is black.
 //! 3. **The transfer curve**: the sRGB curve for sRGB and Display P3; for
 //!    Rec. 2020, [`REC2020_TRANSFER`] (the BT.709 / BT.2020 OETF its ICC
-//!    profile declares).
+//!    profile declares). The HDR canvas targets ([`OutputTarget::ExtendedSrgb`],
+//!    [`OutputTarget::ExtendedDisplayP3`]) use the sRGB curve continued past
+//!    1 (and mirrored below 0), which is what a WebGPU canvas configured
+//!    `rgba16float` with extended tone mapping holds: encoded 1.0 is the
+//!    display's SDR white and the peak is `srgb_encode(peak)` (1.67 for
+//!    4). The HDR file target ([`OutputTarget::LinearRec2020`]) is linear,
+//!    1.0 = SDR white, what `hdr_png` and `gain_map` take.
 //! 4. **Dither**, for 8-bit targets only: one value per pixel from a hash
 //!    of its position (`finish::hash`), uniform in ±`dither` / 2 of an
 //!    encoded step, the same on every channel so a grey stays grey. It does
@@ -69,6 +86,8 @@ pub enum Transfer {
     /// The BT.709 / BT.2020 OETF: `4.5·v` below β, `α·v^0.45 − (α − 1)`
     /// above ([`bt709_oetf`]).
     Bt709,
+    /// None: linear light.
+    Linear,
 }
 
 /// The transfer curve of a Rec. 2020 output: the curve its ICC profile
@@ -104,12 +123,43 @@ pub const DITHER_8BIT: f32 = 1.0 / 255.0;
 /// The seed of the dither's hash.
 pub const DITHER_SEED: u32 = 0x5d17;
 
+/// The HDR peak to start with, in units of SDR white: two stops, which most
+/// HDR laptops and phones reach (`docs/photonamous-linear-plan.md`,
+/// decision 8). A page cannot learn the display's own headroom; the browser
+/// limits what the display cannot show.
+pub const DEFAULT_HDR_PEAK: f32 = 4.0;
+
+/// The largest HDR peak accepted: PQ's 10,000 cd/m² over a 203 cd/m² white
+/// is about 49, so a peak above 64 holds nothing any HDR format carries.
+pub const MAX_HDR_PEAK: f32 = 64.0;
+
+/// Where an HDR target's roll-off starts: SDR white, so nothing up to white
+/// moves between the SDR and HDR renderings (step 1).
+pub const HDR_KNEE: f32 = 1.0;
+
+/// `peak` as an HDR target takes it: between 1 (SDR) and [`MAX_HDR_PEAK`],
+/// [`DEFAULT_HDR_PEAK`] for a value that is not a number.
+pub fn hdr_peak(peak: f32) -> f32 {
+    if peak.is_nan() {
+        DEFAULT_HDR_PEAK
+    } else {
+        peak.clamp(1.0, MAX_HDR_PEAK)
+    }
+}
+
 /// A space the output step renders for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OutputTarget {
     Srgb,
     DisplayP3,
     Rec2020,
+    /// An HDR canvas configured with the "srgb" colour space: sRGB primaries,
+    /// the sRGB curve extended past 1.
+    ExtendedSrgb,
+    /// An HDR canvas configured with the "display-p3" colour space.
+    ExtendedDisplayP3,
+    /// An HDR file's picture: linear Rec. 2020, 1.0 = SDR white.
+    LinearRec2020,
 }
 
 impl OutputTarget {
@@ -125,16 +175,31 @@ impl OutputTarget {
 
     pub const fn gamut(self) -> Gamut {
         match self {
-            Self::Srgb => Gamut::Srgb,
-            Self::DisplayP3 => Gamut::DisplayP3,
-            Self::Rec2020 => Gamut::Rec2020,
+            Self::Srgb | Self::ExtendedSrgb => Gamut::Srgb,
+            Self::DisplayP3 | Self::ExtendedDisplayP3 => Gamut::DisplayP3,
+            Self::Rec2020 | Self::LinearRec2020 => Gamut::Rec2020,
         }
     }
 
     pub const fn transfer(self) -> Transfer {
         match self {
-            Self::Srgb | Self::DisplayP3 => Transfer::Srgb,
+            Self::Srgb | Self::DisplayP3 | Self::ExtendedSrgb | Self::ExtendedDisplayP3 => Transfer::Srgb,
             Self::Rec2020 => REC2020_TRANSFER,
+            Self::LinearRec2020 => Transfer::Linear,
+        }
+    }
+
+    /// Whether the target holds values above white.
+    pub const fn is_hdr(self) -> bool {
+        matches!(self, Self::ExtendedSrgb | Self::ExtendedDisplayP3 | Self::LinearRec2020)
+    }
+
+    /// The HDR canvas target for a screen that is Display P3 or not.
+    pub const fn hdr_screen(is_display_p3: bool) -> Self {
+        if is_display_p3 {
+            Self::ExtendedDisplayP3
+        } else {
+            Self::ExtendedSrgb
         }
     }
 }
@@ -166,6 +231,15 @@ impl OutputSettings {
             gamut_threshold: if source.is_inside(target.gamut()) { 1.0 } else { GAMUT_THRESHOLD },
             dither: if dither { DITHER_8BIT } else { 0.0 },
         }
+    }
+
+    /// An HDR output to `target` with highlights up to `peak` (in units of
+    /// SDR white, through [`hdr_peak`]), rolled off from [`HDR_KNEE`]. The
+    /// gamut compression is the SDR output's for the same `source`, and
+    /// nothing is dithered: every HDR target is float.
+    pub fn hdr(target: OutputTarget, source: Gamut, peak: f32) -> Self {
+        let peak = hdr_peak(peak);
+        OutputSettings { peak, knee: HDR_KNEE.min(peak), ..Self::sdr(target, source, false) }
     }
 }
 
@@ -247,6 +321,7 @@ pub fn encode(v: f32, transfer: Transfer) -> f32 {
         Transfer::Srgb => srgb_encode(v),
         Transfer::Gamma(g) => v.powf(1.0 / g),
         Transfer::Bt709 => bt709_oetf(v),
+        Transfer::Linear => v,
     }
 }
 
@@ -262,6 +337,7 @@ pub fn decode(e: f32, transfer: Transfer) -> f32 {
                 ((e + BT709_ALPHA - 1.0) / BT709_ALPHA).powf(1.0 / 0.45)
             }
         }
+        Transfer::Linear => e,
     }
 }
 
@@ -374,5 +450,117 @@ mod tests {
         assert_eq!(img[1], img[2]);
         assert!((img[0] - out[0]).abs() > 0.0 || (img[4] - out[0]).abs() > 0.0);
         assert!(img.iter().zip(output_reference(&[0.3, 0.3, 0.3, 1.0, 0.3, 0.3, 0.3, 1.0], 2, &s)).all(|(a, b)| (a - b).abs() <= DITHER_8BIT / 2.0 + 1e-6));
+    }
+
+    const HDR_TARGETS: [OutputTarget; 3] = [OutputTarget::ExtendedSrgb, OutputTarget::ExtendedDisplayP3, OutputTarget::LinearRec2020];
+
+    /// The SDR target an HDR one shares its primaries with.
+    fn sdr_twin(target: OutputTarget) -> OutputTarget {
+        match target {
+            OutputTarget::ExtendedSrgb => OutputTarget::Srgb,
+            OutputTarget::ExtendedDisplayP3 => OutputTarget::DisplayP3,
+            _ => OutputTarget::Rec2020,
+        }
+    }
+
+    /// Linear light in the target's primaries.
+    fn linear(e: [f32; 3], target: OutputTarget) -> [f32; 3] {
+        e.map(|v| decode(v, target.transfer()))
+    }
+
+    #[test]
+    fn hdr_settings_roll_off_from_white_to_the_peak() {
+        let s = OutputSettings::hdr(OutputTarget::ExtendedDisplayP3, Gamut::Rec2020, DEFAULT_HDR_PEAK);
+        assert_eq!((s.peak, s.knee, s.dither), (4.0, 1.0, 0.0));
+        assert_eq!(s.gamut_threshold, GAMUT_THRESHOLD);
+        assert_eq!(OutputSettings::hdr(OutputTarget::LinearRec2020, Gamut::Rec2020, 0.5).peak, 1.0);
+        assert_eq!(OutputSettings::hdr(OutputTarget::LinearRec2020, Gamut::Rec2020, f32::NAN).peak, DEFAULT_HDR_PEAK);
+        assert_eq!(OutputSettings::hdr(OutputTarget::LinearRec2020, Gamut::Rec2020, 1e9).peak, MAX_HDR_PEAK);
+        assert!(HDR_TARGETS.iter().all(|t| t.is_hdr()));
+        assert!(![OutputTarget::Srgb, OutputTarget::DisplayP3, OutputTarget::Rec2020].iter().any(|t| t.is_hdr()));
+        // The HDR canvas holds the sRGB curve continued past 1.
+        let top = output_rgb([16.0, 16.0, 16.0], &OutputSettings::hdr(OutputTarget::ExtendedSrgb, Gamut::Rec2020, 4.0));
+        assert!(top[0] > 1.5 && top[0] < srgb_encode(4.0), "{top:?}");
+    }
+
+    #[test]
+    fn a_grey_is_the_same_in_hdr_up_to_white_and_rises_to_the_peak_above_it() {
+        for target in HDR_TARGETS {
+            let hdr = OutputSettings::hdr(target, Gamut::Rec2020, 4.0);
+            let sdr = OutputSettings::sdr(sdr_twin(target), Gamut::Rec2020, false);
+            let mut last = -1.0f32;
+            for i in 0..=4000 {
+                let l = i as f32 / 4000.0 * 16.0;
+                let h = output_rgb([l, l, l], &hdr);
+                // Grey to within the conversion matrix's rounding.
+                let spread = h[0].max(h[1]).max(h[2]) - h[0].min(h[1]).min(h[2]);
+                assert!(spread <= 1e-5 * h[0].max(1.0), "{target:?}: grey {l} came out {h:?}");
+                let y = linear(h, target)[0];
+                if l <= 1.0 {
+                    // Equal in linear light (the file target is linear, its
+                    // SDR twin encoded); bit for bit on the canvas targets,
+                    // which share the SDR ones' curve.
+                    let d = output_rgb([l, l, l], &sdr);
+                    if target.transfer() == sdr.target.transfer() {
+                        assert_eq!(h, d, "{target:?}: grey {l}");
+                    }
+                    let (hl, dl) = (linear(h, target), linear(d, sdr.target));
+                    assert!(hl.iter().zip(dl).all(|(a, b)| (a - b).abs() <= 1e-5 * b.max(1e-3)), "{target:?}: grey {l}: HDR {hl:?}, SDR {dl:?}");
+                } else {
+                    assert!(y > 1.0, "{target:?}: grey {l} is {y}, not above white");
+                }
+                assert!(y <= 4.0, "{target:?}: grey {l} is {y}, above the peak");
+                assert!(y >= last, "{target:?}: grey falls at {l}: {last} -> {y}");
+                // No jump: the curve's slope is at most 1.
+                assert!(last < 0.0 || y - last <= 16.0 / 4000.0 + 1e-4, "{target:?}: grey jumps at {l}: {last} -> {y}");
+                last = y;
+            }
+        }
+    }
+
+    #[test]
+    fn a_saturated_highlight_keeps_its_hue_up_to_the_peak() {
+        // Hue as the direction of a colour's offset from its own grey, c − Y,
+        // in the target's linear RGB: the roll-off scales c, and the move
+        // toward the anchor scales c − Y, so the direction stays. A P3 orange
+        // and a Rec. 2020 one, both inside their target.
+        for (target, colour) in [(OutputTarget::ExtendedDisplayP3, [1.0f32, 0.45, 0.1]), (OutputTarget::LinearRec2020, [0.9, 0.3, 0.05])] {
+            let s = OutputSettings::hdr(target, Gamut::Rec2020, 4.0);
+            let to_2020 = conversion(target.gamut(), Gamut::Rec2020);
+            let w = luma(target.gamut());
+            let offset = |c: [f32; 3]| {
+                let y = w[0] * c[0] + w[1] * c[1] + w[2] * c[2];
+                let d = c.map(|v| v - y);
+                let n = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+                d.map(|v| v / n)
+            };
+            let base = offset(colour);
+            for i in 1..=400 {
+                let k = i as f32 / 400.0 * 8.0;
+                let out = linear(output_rgb(apply(&to_2020, colour.map(|v| v * k)), &s), target);
+                assert!(out.iter().all(|&v| v <= 4.0 + 1e-4), "{target:?} at {k}: {out:?}");
+                let o = offset(out);
+                let cos = base[0] * o[0] + base[1] * o[1] + base[2] * o[2];
+                assert!(cos > 0.9999, "{target:?} at {k}: hue turned by {:.3} degrees ({out:?})", cos.min(1.0).acos().to_degrees());
+            }
+        }
+    }
+
+    #[test]
+    fn hdr_and_sdr_agree_where_the_sdr_ceiling_does_not_act() {
+        // Colours under white whose largest channel stays under the SDR
+        // gamut mapping's start are the same in both; a bright saturated one
+        // under white is paled by SDR and kept by HDR.
+        let hdr = OutputSettings::hdr(OutputTarget::ExtendedDisplayP3, Gamut::Rec2020, 4.0);
+        let sdr = OutputSettings::sdr(OutputTarget::DisplayP3, Gamut::Rec2020, false);
+        let to_2020 = conversion(Gamut::DisplayP3, Gamut::Rec2020);
+        for c in [[0.4f32, 0.3, 0.25], [0.8, 0.2, 0.1], [0.1, 0.5, 0.9], [0.05, 0.05, 0.05]] {
+            let (h, d) = (output_rgb(apply(&to_2020, c), &hdr), output_rgb(apply(&to_2020, c), &sdr));
+            assert!(h.iter().zip(d).all(|(a, b)| (a - b).abs() <= 1e-6), "{c:?}: HDR {h:?}, SDR {d:?}");
+        }
+        let orange = apply(&to_2020, [1.3f32, 0.5, 0.1]);
+        let h = linear(output_rgb(orange, &hdr), OutputTarget::ExtendedDisplayP3);
+        let d = linear(output_rgb(orange, &sdr), OutputTarget::DisplayP3);
+        assert!(h[0] > 1.25 && d[0] <= 1.0, "HDR {h:?}, SDR {d:?}");
     }
 }
