@@ -741,7 +741,10 @@ impl EngineInner {
 
     /// Release all layer textures, masks, stroke textures, selection,
     /// clipboard, float, brush tip, and shape preview. Resets the engine
-    /// to a clean state without destroying the WebGL context.
+    /// to a clean state without destroying the WebGL context. The develop
+    /// state goes with it, the working space included: an engine that
+    /// wants the working space after a clear sets it again
+    /// (`commands::develop::set_develop_working_space`).
     pub fn clear_all_layers(&mut self) {
         // Layer textures
         for (_, tex) in self.layer_textures.drain() {

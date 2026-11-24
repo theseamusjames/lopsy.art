@@ -629,9 +629,17 @@ pub fn read_scene_statistics(engine: &mut EngineInner) -> Read<Vec<f32>> {
         Err(e) => return Read::failed(e),
     };
     engine.scene_capture = Some(texture);
-    engine.needs_recomposite = true;
-    compositor::render(engine);
+    // The frame is composited here rather than through `render`, which only
+    // logs a failure: a composite that fails before the develop chain never
+    // draws the capture, and its blank texture would read as statistics.
+    let result = compositor::composite(engine);
+    engine.gpu().finish_frame();
     engine.scene_capture = None;
+    if let Err(e) = result {
+        engine.needs_recomposite = true;
+        engine.texture_pool.release(texture);
+        return Read::failed(e);
+    }
     let shift = if engine.raw_develop.is_some() { 0.0 } else { engine.develop_tone.map_or(0.0, |t| t.exposure) };
     let read = engine.gpu().read_rgba_f32(texture, 0, 0, tw, th).map(move |pixels| {
         let mut stats = scene_statistics(&pixels);

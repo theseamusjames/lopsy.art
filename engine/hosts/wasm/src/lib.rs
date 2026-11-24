@@ -132,6 +132,9 @@ pub fn set_document_color_mode(engine: &mut Engine, mode: u32) {
     engine.inner.set_document_color_mode(mode);
 }
 
+/// Remove every layer and reset the document's state, the develop state
+/// included: the working space is off afterwards, so an engine that wants
+/// it calls `setDevelopWorkingSpace` again after this.
 #[wasm_bindgen(js_name = "clearAllLayers")]
 pub fn clear_all_layers(engine: &mut Engine) {
     engine.inner.clear_all_layers();

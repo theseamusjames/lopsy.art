@@ -427,3 +427,16 @@ fn the_hdr_histogram_counts_the_hdr_rendering_from_black_to_the_peak() {
     assert!(moved <= w * h / 4, "{moved} counts differ from the SDR histogram");
     assert_no_gpu_errors();
 }
+
+/// A frame that fails to composite is an error from the statistics read,
+/// not the statistics of the blank capture texture. A document wider than
+/// the GPU's largest texture makes the composite fail before the develop
+/// chain, where its scratch textures are sized.
+#[test]
+fn a_failed_frame_is_an_error_from_the_scene_statistics() {
+    let Some(mut engine) = hdr_document(32, 8) else { return };
+    assert!(block_on(commands::develop::read_scene_statistics(&mut engine)).is_ok());
+    engine.doc_width = engine.texture_pool.max_size() + 1;
+    let read = block_on(commands::develop::read_scene_statistics(&mut engine));
+    assert!(read.is_err(), "statistics of a frame that failed: {read:?}");
+}
