@@ -87,8 +87,14 @@ pub fn clear_raw_develop(engine: &mut EngineInner) {
 /// the live frame, the exports and the statistics go through the output
 /// step. `source` says how the composite is encoded when there is no RAW
 /// develop state: 0 sRGB, 1 Display P3. Off, everything is as it was.
+/// Turning it on fails, leaving it off, when the texture pool is 8-bit
+/// (WebGL without `EXT_color_buffer_float`): the linear chain would clip
+/// to 0..1 at 8 bits there. Turning it off always succeeds.
 pub fn set_develop_working_space(engine: &mut EngineInner, on: bool, source: u8) -> Result<(), String> {
     let rendered = engine.working_space.and_then(|ws| ws.rendered);
+    if on {
+        crate::gpu::require_float_pool(engine.texture_pool.use_float(), "The develop working space")?;
+    }
     if !on {
         if let Some(texture) = rendered {
             engine.texture_pool.release(texture);

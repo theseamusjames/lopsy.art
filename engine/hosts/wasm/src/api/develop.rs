@@ -26,8 +26,10 @@ pub fn clear_raw_develop(engine: &mut Engine) {
 /// (the space `setScreenOutput` last said) and for each export's colour
 /// space. `sourceSpace` is how a photo that is not RAW is encoded: 0 sRGB,
 /// 1 Display P3; it is ignored while a RAW develop state is set. Off, every
-/// stage renders as it did before: Lopsy never turns it on. Fails, changing
-/// nothing, for another `sourceSpace`.
+/// stage renders as it did before: Lopsy never turns it on. Fails (throws),
+/// changing nothing, for another `sourceSpace`, and when turning it on on a
+/// GPU without float render targets (WebGL without
+/// `EXT_color_buffer_float`); turning it off never fails.
 #[wasm_bindgen(js_name = "setDevelopWorkingSpace")]
 pub fn set_develop_working_space(engine: &mut Engine, on: bool, source_space: u8) -> Result<(), JsError> {
     lopsy_engine::commands::develop::set_develop_working_space(&mut engine.inner, on, source_space)
