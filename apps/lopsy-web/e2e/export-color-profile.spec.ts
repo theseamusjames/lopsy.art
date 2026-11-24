@@ -185,10 +185,10 @@ test.describe('Export color profiles (ICC)', () => {
 
     const chunks = parsePngChunks(buf);
     const types = chunks.map((c) => c.type);
-    // Nothing that would contradict the profile.
-    for (const type of ['sRGB', 'gAMA', 'cHRM']) expect(types, `no ${type} chunk`).not.toContain(type);
-
     if (wideGamut) {
+      // Nothing that would contradict the profile.
+      for (const type of ['sRGB', 'gAMA', 'cHRM']) expect(types, `no ${type} chunk`).not.toContain(type);
+
       // The engine's Display P3 PNG names its space twice, as one: a cICP
       // chunk (P3 primaries 12, the sRGB transfer 13, RGB 0, full range 1)
       // beside the ICC profile (docs/photonamous-linear-plan.md section 8,

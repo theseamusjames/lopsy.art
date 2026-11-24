@@ -692,6 +692,12 @@ was.
   in HDR with a headroom (`setDevelopHdr`, `screenIsHdr`), float reads
   for HDR files (`readHdrOutputF32`) and a histogram of the HDR
   rendering.
+- **Phase 7, app**: the Edit view asks for an HDR canvas on WebGPU when
+  the display reports high dynamic range; the status bar says HDR and
+  has a switch to the ordinary-screen view; the histogram draws the HDR
+  rendering with white marked; the export dialog offers "HDR JPEG (gain
+  map)" and "HDR PNG (16-bit, PQ)". Files to try on an HDR display:
+  `samples/linear-pipeline-review/hdr-files/`.
 
 - **Phase 6, the part that needs no camera data (engine only)**: the
   DNG specification's colour method with two illuminants
@@ -851,3 +857,37 @@ was.
     hue/saturation maps, the profile's tone curve, DefaultCrop,
     highlight reconstruction. Files the new path cannot take fall back
     to today's decode with a reason.
+44. **HDR exports are always full size**, as TIFF is: the engine's
+    HDR and SDR reads are at the document's own size, and a resized
+    export is a canvas copy. Resized HDR files need engine reads at an
+    output size.
+45. **The HDR switch is on by default and kept only for the session**
+    (nothing stored). No keyboard shortcut.
+46. **An HDR export is allowed for any photo**, including one with
+    nothing above white: the file simply has no headroom.
+47. **The gain-map JPEG's base is the ordinary sRGB JPEG export**, and
+    one quality setting covers the base and the map.
+48. **Auto tone moves Exposure by at most 2 EV a press.** A very dark
+    photo therefore needs two presses; the cap is `AUTO_MAX_EV` in
+    `engine/core/src/scene_stats.rs`.
+49. **Checked on this Mac's own GPU and display** (not only the tests'
+    software renderer): a RAF renders the same on WebGPU and WebGL with
+    a Display P3 canvas, and on WebGPU the Edit view's canvas is
+    `rgba16float` with extended tone mapping. Whether highlights look
+    brighter than white is for a person to judge.
+
+### Not done
+
+- **RAF camera colour** (Phase 6, items 1 to 3 for Fujifilm): waits on
+  where the per-camera data comes from (decision 4 of section 5).
+- **DNGs in the app**: the engine can develop a DNG as a RAW photo,
+  but the app still edits one as before (decisions 42 and 43).
+- **AVIF, 10-bit PQ** (Phase 7): needs an encoder the browser lacks.
+- **Resized HDR exports, and a Display P3 base for the gain-map JPEG.**
+- **The golden renders in CI**: they need the sample RAF files and a
+  software GPU there; the tolerance is unmeasured on one.
+- **A Bayer RAF's pattern from the file** (decision 39), and the white
+  level from a file tag (decision 26).
+- **Speed** has not been measured against the old chain.
+- **Saving the pipeline version** with edits and previews: before
+  launch, as section 4 says.
