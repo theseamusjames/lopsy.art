@@ -78,6 +78,47 @@ readback_export! {
 }
 
 readback_export! {
+    /// `readHdrOutputF32` at an output size, with the working space: the
+    /// whole export chain at the document's size, the rendered linear image
+    /// box-reduced on the GPU to `width × height` (each at most the
+    /// document's, neither 0; each axis scaled on its own), then the output
+    /// step for linear Rec. 2020 up to `peak`. A `Float32Array` of
+    /// `width × height × 4` floats, RGBA, straight alpha, rows from the top,
+    /// 1.0 = SDR white. With `compositeForExportSized` at the same size it
+    /// is the same picture: `encodePqPng(hdr, width, height, 203)` makes
+    /// the PQ PNG, and `computeGainMap(hdr, sdr, width, height, 0, scale)`
+    /// (0: the SDR picture is sRGB) the gain map. Sharpening, grain and the blurs are rendered at the document's
+    /// size and reduced with the rest, as a full-size export scaled down
+    /// is. Fails without the working space and for an empty or larger size.
+    /// Re-composites and replaces the live composite, so the next frame
+    /// rebuilds it: not safe as an any-time read; do not wrap with
+    /// `'any-time'`.
+    #[wasm_bindgen(js_name = "readHdrOutputF32Sized")]
+    pub fn read_hdr_output_f32_sized(engine, peak: f32, width: u32, height: u32) -> Result<Vec<f32>> {
+        read(lopsy_engine::commands::develop::read_hdr_output_f32_sized(engine, peak, width, height))
+    }
+}
+
+readback_export! {
+    /// `compositeForExport` at an output size: the whole export chain at
+    /// the document's size, the rendered image box-reduced on the GPU to
+    /// `width × height` (each at most the document's, neither 0; each axis
+    /// scaled on its own), then, with the working space, the output step
+    /// for sRGB, dithered for a RAW photo as `compositeForExport` is.
+    /// Without the working space the sRGB result is reduced as it is. A
+    /// `Uint8Array` of `width × height × 4` bytes, RGBA8 sRGB, straight
+    /// alpha, rows from the top: the SDR picture `readHdrOutputF32Sized`
+    /// makes at the same size, for `computeGainMap`. Fails for an empty or
+    /// larger size. Re-composites and replaces the live composite, so the
+    /// next frame rebuilds it: not safe as an any-time read; do not wrap
+    /// with `'any-time'`.
+    #[wasm_bindgen(js_name = "compositeForExportSized")]
+    pub fn composite_for_export_sized(engine, width: u32, height: u32) -> Result<Vec<u8>> {
+        read(lopsy_engine::commands::develop::composite_for_export_sized(engine, width, height))
+    }
+}
+
+readback_export! {
     /// 1024 bins of the displayed result: red 0..=255, green, blue, then
     /// Rec. 709 luminance of the encoded values. With the working space,
     /// of the image rendered for sRGB whatever the screen is, without the

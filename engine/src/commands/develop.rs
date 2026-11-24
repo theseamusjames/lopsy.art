@@ -502,6 +502,29 @@ pub fn read_hdr_output_f32(engine: &mut EngineInner, peak: f32) -> Read<Vec<f32>
     compositor::composite_for_export_hdr_f32(engine, peak)
 }
 
+/// [`read_hdr_output_f32`] at `width × height`
+/// (`compositor::composite_for_export_hdr_f32_sized`): the whole export
+/// chain at the document's size, the rendered image box-reduced on the GPU
+/// to `width × height`, then the output step for linear Rec. 2020 up to
+/// `peak`. `width × height` straight-alpha RGBA f32 texels, rows from the
+/// top; 1.0 is SDR white. With [`composite_for_export_sized`] at the same
+/// size it is the same picture, for a gain map. Fails without the working
+/// space, for an empty size, and for one larger than the document on either
+/// axis. The next frame rebuilds the live composite.
+pub fn read_hdr_output_f32_sized(engine: &mut EngineInner, peak: f32, width: u32, height: u32) -> Read<Vec<f32>> {
+    compositor::composite_for_export_hdr_f32_sized(engine, peak, width, height)
+}
+
+/// The 8-bit sRGB export at `width × height`
+/// (`compositor::composite_for_export_sized`): `width × height × 4` bytes,
+/// RGBA, straight alpha, rows from the top, the SDR twin of
+/// [`read_hdr_output_f32_sized`] at the same size. Fails for an empty size
+/// and for one larger than the document on either axis. The next frame
+/// rebuilds the live composite.
+pub fn composite_for_export_sized(engine: &mut EngineInner, width: u32, height: u32) -> Read<Vec<u8>> {
+    compositor::composite_for_export_sized(engine, width, height)
+}
+
 // ---------------------------------------------------------------------------
 // Tone, colour and curves on linear data (with the working space)
 // ---------------------------------------------------------------------------

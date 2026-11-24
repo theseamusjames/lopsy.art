@@ -267,14 +267,19 @@ fn a_grey_ramp_stays_grey_in_hdr() {
 /// right past what the tone step renders as white, and whose colour
 /// changes top to bottom, so a flip or a shift between two reads shows.
 fn hdr_document(w: u32, h: u32) -> Option<EngineInner> {
+    hdr_document_of(w, h, |x, y| {
+        let l = 0.002 + 6.0 * x * x;
+        [l * (0.6 + 0.6 * y), l * 0.8, l * (1.2 - 0.6 * y), 1.0]
+    })
+}
+
+/// A RAW document in the working space whose linear camera RGB at
+/// (x, y) (each 0..=1 across the document) is `pixel(x, y)`.
+fn hdr_document_of(w: u32, h: u32, pixel: impl Fn(f32, f32) -> [f32; 4]) -> Option<EngineInner> {
     let mut engine = engine(w, h)?;
     commands::layer::add_layer(&mut engine, &layer_json("raw", w, h)).expect("layer");
     let linear: Vec<f32> = (0..w * h)
-        .flat_map(|i| {
-            let (x, y) = ((i % w) as f32 / (w - 1) as f32, (i / w) as f32 / (h - 1) as f32);
-            let l = 0.002 + 6.0 * x * x;
-            [l * (0.6 + 0.6 * y), l * 0.8, l * (1.2 - 0.6 * y), 1.0]
-        })
+        .flat_map(|i| pixel((i % w) as f32 / (w - 1) as f32, (i / w) as f32 / (h - 1) as f32))
         .collect();
     commands::layer::upload_layer_pixels_f32_rect(&mut engine, "raw", w, h, 0, 0, w, h, &linear).expect("pixels");
     commands::develop::set_raw_develop_json(&mut engine, &serde_json::to_string(&develop_settings()).unwrap()).expect("develop");
@@ -485,5 +490,259 @@ fn only_an_engine_that_reads_statistics_keeps_the_rendered_image() {
 
     commands::develop::set_develop_working_space(&mut engine, false, 0).expect("off");
     assert_eq!(textures_in_use(&engine), in_use, "off gives the rendered image back");
+    assert_no_gpu_errors();
+}
+
+// ---------------------------------------------------------------------------
+// The sized export reads: the export chain, the rendered image box-reduced,
+// then the output step
+// ---------------------------------------------------------------------------
+
+/// The 2×2 box average of straight-alpha RGBA `src` (`w × h`, both even),
+/// averaged premultiplied and returned straight as the GPU reduction does.
+fn box_2x2(src: &[f32], w: u32, h: u32) -> Vec<f32> {
+    let mut out = Vec::with_capacity(src.len() / 4);
+    for y in 0..h / 2 {
+        for x in 0..w / 2 {
+            let mut acc = [0.0f32; 4];
+            for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                let i = (((2 * y + dy) * w + 2 * x + dx) * 4) as usize;
+                let a = src[i + 3];
+                for c in 0..3 {
+                    acc[c] += src[i + c] * a;
+                }
+                acc[3] += a;
+            }
+            let a = acc[3];
+            if a > 0.0 {
+                out.extend_from_slice(&[acc[0] / a, acc[1] / a, acc[2] / a, a / 4.0]);
+            } else {
+                out.extend_from_slice(&[0.0; 4]);
+            }
+        }
+    }
+    out
+}
+
+/// One half-float unit in the last place at `v`, with the floor
+/// `assert_within_halves` uses near 0.
+fn half_ulp(v: f32) -> f32 {
+    v.abs().max(1.0 / 64.0) / 1024.0
+}
+
+/// A grey ramp of linear camera RGB, rising left to right past white. The
+/// camera matrix's rows sum to 1, so grey stays grey, and the output step
+/// is then monotonic in the value.
+fn grey_ramp(x: f32, _y: f32) -> [f32; 4] {
+    let l = 0.002 + 6.0 * x * x;
+    [l, l, l, 1.0]
+}
+
+#[test]
+fn the_sized_reads_at_the_documents_own_size_are_the_full_size_reads() {
+    let (w, h) = (32u32, 8u32);
+    let Some(mut engine) = hdr_document(w, h) else { return };
+    let full = now(commands::develop::read_hdr_output_f32(&mut engine, 4.0));
+    let sized = now(commands::develop::read_hdr_output_f32_sized(&mut engine, 4.0, w, h));
+    assert_within_halves("readHdrOutputF32Sized at the document's size", &sized, &full, 1.0);
+    let full8 = now(compositor::composite_for_export(&mut engine));
+    let sized8 = now(commands::develop::composite_for_export_sized(&mut engine, w, h));
+    assert_eq!(sized8, full8, "compositeForExportSized at the document's size, dither included");
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn the_sized_hdr_read_at_half_size_is_the_output_step_on_the_rendered_image_averaged() {
+    let (w, h) = (64u32, 16u32);
+    let Some(mut engine) = hdr_document(w, h) else { return };
+    let full = now(commands::develop::read_hdr_output_f32(&mut engine, 4.0));
+    let rendered = now(commands::develop::read_rendered_f32(&mut engine));
+    let half = now(commands::develop::read_hdr_output_f32_sized(&mut engine, 4.0, w / 2, h / 2));
+    assert_eq!(half.len(), (w / 2 * h / 2 * 4) as usize);
+    // The method: the rendered image is averaged, then the output step runs
+    // on the average. Within the half-float rounding of the stores.
+    let s = lopsy_engine::develop::output::hdr_settings_for(&engine, OutputTarget::LinearRec2020, 4.0);
+    let expected = lopsy_core::output::output_reference(&box_2x2(&rendered, w, h), w / 2, &s);
+    assert_within_halves("the half-size read against the output of the averaged rendered image", &half, &expected, 4.0);
+    // Against the full-size read averaged: the output step is not linear
+    // (the roll-off above white, the gamut mapping), so averaging before it
+    // and after it differ by its curvature across a 2×2 block, which on this
+    // smooth gradient is within 1% of the value plus one half-float step.
+    let averaged = box_2x2(&full, w, h);
+    let mut worst = 0.0f32;
+    for (i, (&got, &want)) in half.iter().zip(&averaged).enumerate() {
+        let off = (got - want).abs();
+        worst = worst.max(off / want.abs().max(1.0 / 64.0));
+        assert!(off <= 0.01 * want.abs() + half_ulp(want), "value {i} (pixel {}, channel {}): {got}, the 2×2 average {want}", i / 4, i % 4);
+    }
+    eprintln!("half-size read against the full-size read averaged: worst {:.3}%", worst * 100.0);
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn a_sized_hdr_read_at_a_fractional_ratio_is_monotonic_along_a_ramp_and_stays_in_its_range() {
+    let (w, h) = (64u32, 16u32);
+    // A reduction that neither rings nor aliases keeps every pixel inside
+    // what the full-size read holds over its footprint.
+    let Some(mut engine) = hdr_document_of(w, h, grey_ramp) else { return };
+    let full = now(commands::develop::read_hdr_output_f32(&mut engine, 4.0));
+    // 2.37 times smaller across, 2.29 down: not the document's aspect.
+    let (sw, sh) = (27u32, 7u32);
+    let sized = now(commands::develop::read_hdr_output_f32_sized(&mut engine, 4.0, sw, sh));
+    assert_eq!(sized.len(), (sw * sh * 4) as usize);
+    let at = |v: &[f32], width: u32, x: u32, y: u32, c: u32| v[((y * width + x) * 4 + c) as usize];
+    let (fx, fy) = (w as f32 / sw as f32, h as f32 / sh as f32);
+    for y in 0..sh {
+        for c in 0..3 {
+            for x in 1..sw {
+                let (a, b) = (at(&sized, sw, x - 1, y, c), at(&sized, sw, x, y, c));
+                assert!(b >= a - half_ulp(a), "row {y}, channel {c}: falls from {a} to {b} at {x}");
+            }
+        }
+        for x in 0..sw {
+            // The footprint, and the texel beside it that a bilinear tap at
+            // its edge can reach.
+            let x0 = ((x as f32 * fx).floor() as u32).saturating_sub(1);
+            let x1 = (((x + 1) as f32 * fx).ceil() as u32 + 1).min(w);
+            let y0 = ((y as f32 * fy).floor() as u32).saturating_sub(1);
+            let y1 = (((y + 1) as f32 * fy).ceil() as u32 + 1).min(h);
+            for c in 0..4 {
+                let (mut lo, mut hi) = (f32::MAX, f32::MIN);
+                for sy in y0..y1 {
+                    for sx in x0..x1 {
+                        let v = at(&full, w, sx, sy, c);
+                        lo = lo.min(v);
+                        hi = hi.max(v);
+                    }
+                }
+                let v = at(&sized, sw, x, y, c);
+                assert!(v >= lo - half_ulp(lo) && v <= hi + half_ulp(hi), "pixel ({x}, {y}) channel {c}: {v} outside {lo}..{hi}");
+            }
+        }
+    }
+    let top = sized.chunks(4).map(|p| p[0]).fold(0.0f32, f32::max);
+    assert!(top > 1.5, "the ramp reaches above white: {top}");
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn the_sized_reads_are_one_picture_and_make_a_gain_map_that_rebuilds_the_hdr_luminance() {
+    use lopsy_core::color::ColorSpace;
+    use lopsy_core::gain_map::{compute_gain_map, GainMapScale, DEFAULT_OFFSET};
+    let (w, h) = (64u32, 16u32);
+    let Some(mut engine) = hdr_document(w, h) else { return };
+    let (sw, sh) = (40u32, 10u32);
+    let hdr = now(commands::develop::read_hdr_output_f32_sized(&mut engine, 4.0, sw, sh));
+    let sdr = now(commands::develop::composite_for_export_sized(&mut engine, sw, sh));
+    assert_eq!(hdr.len(), (sw * sh * 4) as usize);
+    assert_eq!(sdr.len(), hdr.len(), "the same size");
+    let wy = luma(Gamut::Rec2020);
+    let ws = luma(Gamut::Srgb);
+    let decode8 = |v: u8| lopsy_core::working_space::srgb_decode(f32::from(v) / 255.0);
+    // As for the full-size reads: below white the SDR picture has the HDR
+    // one's luminance, but for the 8-bit step and the dither.
+    let mut compared = 0;
+    for (i, (hp, sp)) in hdr.chunks(4).zip(sdr.chunks(4)).enumerate() {
+        assert_eq!((hp[3], sp[3]), (1.0, 255), "pixel {i}: straight, opaque alpha in both");
+        let yh = wy[0] * hp[0] + wy[1] * hp[1] + wy[2] * hp[2];
+        let ys = (0..3).map(|c| ws[c] * decode8(sp[c])).sum::<f32>();
+        if yh < 0.8 && hp[..3].iter().all(|&v| v < 0.8) {
+            compared += 1;
+            assert!((ys - yh).abs() <= 0.02 * yh + 2.0 / 255.0, "pixel {i} ({}, {}): SDR luminance {ys}, HDR {yh}", i as u32 % sw, i as u32 / sw);
+        }
+    }
+    assert!(compared > 60, "too few pixels under white to compare ({compared})");
+
+    let map = compute_gain_map(&hdr, &sdr, sw, sh, ColorSpace::Srgb, GainMapScale::Full).expect("gain map");
+    let m = map.metadata;
+    assert!(m.gain_map_max > 0.5, "the map holds highlights: {m:?}");
+    // The bound `gain_map.rs` documents: half a code of the map's 8-bit
+    // step, `(Y + k) · (2^(span / 510) − 1)`.
+    let step = ((m.gain_map_max - m.gain_map_min) / 510.0).exp2() - 1.0;
+    let k = DEFAULT_OFFSET;
+    for (i, (hp, sp)) in hdr.chunks(4).zip(sdr.chunks(4)).enumerate() {
+        let code = f64::from(map.rgba[i * 4]);
+        let g = m.gain_map_min + (m.gain_map_max - m.gain_map_min) * code / 255.0;
+        let rebuilt: Vec<f64> = (0..3).map(|c| (f64::from(decode8(sp[c])) + m.offset_sdr) * g.exp2() - m.offset_hdr).collect();
+        let yg = (0..3).map(|c| f64::from(ws[c]) * rebuilt[c]).sum::<f64>();
+        let yw = f64::from(wy[0] * hp[0] + wy[1] * hp[1] + wy[2] * hp[2]);
+        assert!((yg - yw).abs() <= (yw + k) * step + 1e-5, "pixel {i}: rebuilt luminance {yg}, HDR {yw}");
+    }
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn a_sized_read_that_would_enlarge_or_is_empty_is_an_error_and_every_path_gives_its_textures_back() {
+    let Some(mut plain) = engine(8, 8) else { return };
+    assert!(block_on(commands::develop::read_hdr_output_f32_sized(&mut plain, 4.0, 4, 4)).is_err(), "no working space, no HDR read");
+
+    let (w, h) = (32u32, 8u32);
+    let Some(mut engine) = hdr_document(w, h) else { return };
+    compositor::render(&mut engine);
+    let baseline = textures_in_use(&engine);
+    for (sw, sh) in [(w + 1, h), (w, h + 1), (2 * w, 2 * h), (0, 4), (4, 0)] {
+        let hdr = block_on(commands::develop::read_hdr_output_f32_sized(&mut engine, 4.0, sw, sh));
+        assert!(hdr.is_err(), "{sw}x{sh} of a {w}x{h} document: {hdr:?}");
+        let sdr = block_on(commands::develop::composite_for_export_sized(&mut engine, sw, sh));
+        assert!(sdr.is_err(), "{sw}x{sh} of a {w}x{h} document");
+        assert_eq!(textures_in_use(&engine), baseline, "after the {sw}x{sh} error");
+    }
+    for (sw, sh) in [(w, h), (16, 4), (5, 3)] {
+        assert_eq!(now(commands::develop::read_hdr_output_f32_sized(&mut engine, 4.0, sw, sh)).len(), (sw * sh * 4) as usize);
+        assert_eq!(now(commands::develop::composite_for_export_sized(&mut engine, sw, sh)).len(), (sw * sh * 4) as usize);
+        assert_eq!(textures_in_use(&engine), baseline, "after the {sw}x{sh} reads");
+        compositor::render(&mut engine);
+        assert_eq!(textures_in_use(&engine), baseline, "after the frame that follows the {sw}x{sh} reads");
+    }
+
+    // A reduction by more than one box pass averages (256 across) goes
+    // through a smaller image first (8 by 1, then 2 by 1: even footprints,
+    // where the box is exact), and gives it back.
+    let (w, h) = (512u32, 8u32);
+    let Some(mut engine) = hdr_document_of(w, h, grey_ramp) else { return };
+    compositor::render(&mut engine);
+    let baseline = textures_in_use(&engine);
+    let full = now(commands::develop::read_hdr_output_f32(&mut engine, 4.0));
+    let tiny = now(commands::develop::read_hdr_output_f32_sized(&mut engine, 4.0, 2, 1));
+    assert_eq!(textures_in_use(&engine), baseline, "after a reduction in two steps");
+    let (lo, hi) = full.chunks(4).fold((f32::MAX, f32::MIN), |(lo, hi), p| (lo.min(p[0]), hi.max(p[0])));
+    assert!(tiny[0] < tiny[4], "the left half is darker: {tiny:?}");
+    assert!(tiny.chunks(4).all(|p| p[0] >= lo && p[0] <= hi && p[0] == p[1] && p[1] == p[2] && p[3] == 1.0), "{tiny:?} inside {lo}..{hi}");
+    // Each half is the average of its rendered half, through the output
+    // step, within the half-float rounding of the two steps.
+    let rendered = now(commands::develop::read_rendered_f32(&mut engine));
+    let s = lopsy_engine::develop::output::hdr_settings_for(&engine, OutputTarget::LinearRec2020, 4.0);
+    let halves: Vec<f32> = (0..2)
+        .flat_map(|half| {
+            let mut sum = 0.0f64;
+            for y in 0..h {
+                for x in half * w / 2..(half + 1) * w / 2 {
+                    sum += f64::from(rendered[((y * w + x) * 4) as usize]);
+                }
+            }
+            let v = (sum / f64::from(w * h / 2)) as f32;
+            [v, v, v, 1.0]
+        })
+        .collect();
+    let expected = lopsy_core::output::output_reference(&halves, 2, &s);
+    assert_within_halves("a reduction in two steps against the output of the averages", &tiny, &expected, 4.0);
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn without_the_working_space_the_sized_8bit_read_is_the_export_averaged() {
+    let (w, h) = (16u32, 8u32);
+    let Some(mut engine) = engine(w, h) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("paint", w, h)).expect("layer");
+    let pixels: Vec<u8> = (0..w * h).flat_map(|i| [(i % w * 16) as u8, (i / w * 32) as u8, 200, 255]).collect();
+    commands::layer::upload_layer_pixels(&mut engine, "paint", &pixels, w, h, 0, 0).expect("pixels");
+    let full = now(compositor::composite_for_export(&mut engine));
+    assert_eq!(now(commands::develop::composite_for_export_sized(&mut engine, w, h)), full, "at the document's size");
+    let half = now(commands::develop::composite_for_export_sized(&mut engine, w / 2, h / 2));
+    let as_floats: Vec<f32> = full.iter().map(|&v| f32::from(v) / 255.0).collect();
+    let expected = box_2x2(&as_floats, w, h);
+    for (i, (&got, &want)) in half.iter().zip(&expected).enumerate() {
+        assert!((f32::from(got) - want * 255.0).abs() <= 1.0, "value {i}: {got}, the 2×2 average {}", want * 255.0);
+    }
     assert_no_gpu_errors();
 }

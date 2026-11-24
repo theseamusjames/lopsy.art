@@ -89,6 +89,16 @@
 //! document's size and then stage 11 for linear Rec. 2020 up to a peak, and
 //! reads it as f32: the HDR picture `encodePqPng` and `computeGainMap`
 //! take, with `compositeForExport` as the gain map's SDR picture.
+//! `readHdrOutputF32Sized` and `compositeForExportSized` are the pair at a
+//! smaller output size (`compositor::render_export_sized`): the same chain
+//! at the document's size, stopped before stage 11; the rendered linear
+//! image box-reduced on the GPU (`thumbnail_box.wgsl`, which averages each
+//! output pixel's whole footprint in premultiplied colour, through smaller
+//! images first past 128 texels a pixel); then stage 11 on the reduced
+//! image. Both pictures of one size come from the same reduced image, so
+//! the gain map between them holds. Sharpening, grain and the blurs are
+//! rendered at full size and reduced with the rest, as the resized 8-bit
+//! export (a full-size export scaled down by the canvas) has them.
 //!
 //! **Statistics.** With the working space, the live frame keeps its
 //! rendered image (after D′, before 11) in the working space's own texture,
@@ -134,6 +144,7 @@
 //! - `screenIsHdr(engine)` (`lib.rs`): whether the canvas really is HDR now; false on WebGL.
 //! - `setDevelopHdr(engine, on, peak)`: the HDR view of the live frame, on by default; `peak` in units of SDR white (4.0 to start, 1..=64).
 //! - `readHdrOutputF32(engine, peak)` (readback): the HDR picture for a file, linear Rec. 2020 RGBA f32 at the document's size, 1.0 = SDR white, up to `peak`.
+//! - `readHdrOutputF32Sized(engine, peak, width, height)` (readback): the same at `width × height` (each at most the document's, neither 0), `width × height × 4` floats; `compositeForExportSized(engine, width, height)` (readback): `compositeForExport` at that size, `width × height × 4` bytes of 8-bit sRGB, its SDR twin for a gain map. Both re-composite the document (the next frame rebuilds the live composite), so neither is an any-time read.
 //!
 //! White balance and statistics:
 //! - `rafAutoWhiteBalance(linearRgba)`: near-neutral-pixel white balance, as `wbRatio`.
@@ -201,7 +212,7 @@
 //! Export: `exportPng16(engine, colorSpace)` and `exportTiff16(engine,
 //! colorSpace)` (readbacks, `lib.rs`; `lopsy_core::tiff` for the TIFF),
 //! `colorSpace` 0 sRGB, 1 Display P3, 2 Rec. 2020; `compositeForExport`
-//! (sRGB, 8-bit).
+//! (sRGB, 8-bit), and `compositeForExportSized` at an output size.
 //!
 //! Each export's layout and units are in its doc comment and in the
 //! command in `commands/develop.rs` (or `commands/adjustment.rs`).

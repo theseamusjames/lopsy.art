@@ -1487,6 +1487,10 @@ enum ExportFinish {
     /// adjustments only `with_adjustments`, and with the working space the
     /// output step for `output`.
     Full { with_adjustments: bool, output: ExportOutput },
+    /// As `Full`, but stopping before the output step: with the working
+    /// space the composite is left rendered linear Rec. 2020, for a sized
+    /// export to resample before its own output step.
+    Rendered { with_adjustments: bool },
     /// The blended layers only: no RAW develop or any later stage.
     LayersOnly,
 }
@@ -1645,20 +1649,28 @@ fn composite_layers_for_export_with(engine: &mut EngineInner, finish: ExportFini
         }
     }
 
-    let ExportFinish::Full { with_adjustments, output } = finish else {
-        return Ok(());
+    let (with_adjustments, output) = match finish {
+        ExportFinish::LayersOnly => return Ok(()),
+        ExportFinish::Full { with_adjustments, output } => (with_adjustments, Some(output)),
+        ExportFinish::Rendered { with_adjustments } => (with_adjustments, None),
     };
     // Exports develop a RAW composite as the live frame does.
     run_develop_chain(engine, ChainRun::Export { with_adjustments });
-    if engine.working_space.is_some() {
-        let settings = if output.target.is_hdr() {
-            crate::develop::output::hdr_settings_for(engine, output.target, output.peak)
-        } else {
-            crate::develop::output::settings_for(engine, output.target, output.is_8bit, with_adjustments)
-        };
+    if let Some(output) = output.filter(|_| engine.working_space.is_some()) {
+        let settings = export_output_settings(engine, output, with_adjustments);
         apply_output(engine, &settings);
     }
     Ok(())
+}
+
+/// The output step's settings for an export's `output`, after a chain that
+/// applied the image adjustments when `with_adjustments`.
+fn export_output_settings(engine: &EngineInner, output: ExportOutput, with_adjustments: bool) -> lopsy_core::output::OutputSettings {
+    if output.target.is_hdr() {
+        crate::develop::output::hdr_settings_for(engine, output.target, output.peak)
+    } else {
+        crate::develop::output::settings_for(engine, output.target, output.is_8bit, with_adjustments)
+    }
 }
 
 /// Composite for export — render to FBO, readPixels
@@ -1825,6 +1837,182 @@ pub fn composite_for_export_hdr_f32(engine: &mut EngineInner, peak: f32) -> Read
     }
     engine.needs_recomposite = true;
     engine.gpu().read_rgba_f32(engine.composite_texture, 0, 0, doc_w, doc_h)
+}
+
+/// The widest footprint, in source texels on an axis, of which one
+/// `thumbnail_box.wgsl` pass averages every texel (its 64 taps per axis,
+/// two texels apart). Past it the shader subsamples, which can alias.
+const BOX_STEP_MAX: u32 = 128;
+
+/// How much each step but the last of a longer reduction shrinks an axis.
+const BOX_STEP: u32 = 64;
+
+/// The sizes a box reduction from `from` to `to` passes through, `to`
+/// last. One step when no axis shrinks by more than `BOX_STEP_MAX`;
+/// otherwise images `BOX_STEP` times smaller (never below `to`) first, so
+/// every step averages every texel it covers. Each intermediate image is at
+/// most a 64th of `from` on each axis.
+pub(crate) fn reduction_steps(from: (u32, u32), to: (u32, u32)) -> Vec<(u32, u32)> {
+    let mut steps = Vec::new();
+    let mut at = from;
+    while at.0 > to.0.saturating_mul(BOX_STEP_MAX) || at.1 > to.1.saturating_mul(BOX_STEP_MAX) {
+        at = (at.0.div_ceil(BOX_STEP).max(to.0), at.1.div_ceil(BOX_STEP).max(to.1));
+        steps.push(at);
+    }
+    steps.push(to);
+    steps
+}
+
+/// A sized export's `width × height`: not empty, and no larger than the
+/// document on either axis, since a sized export only reduces. The aspect
+/// ratio is the caller's: each axis is scaled on its own.
+fn sized_export_size(engine: &EngineInner, width: u32, height: u32) -> Result<(u32, u32), String> {
+    let (doc_w, doc_h) = (engine.doc_width, engine.doc_height);
+    if width == 0 || height == 0 {
+        return Err(format!("An export of {width}x{height} pixels is empty"));
+    }
+    if width > doc_w || height > doc_h {
+        return Err(format!("An export of {width}x{height} is larger than the {doc_w}x{doc_h} document: a sized export only reduces"));
+    }
+    Ok((width, height))
+}
+
+/// The composite (document-sized, straight alpha) box-reduced to `size`
+/// into scratch A's texels (0, 0) to `size`. `thumbnail_box.wgsl` averages
+/// each output pixel's whole footprint in premultiplied colour and returns
+/// straight alpha: exactly for a footprint of one texel (a copy) or an even
+/// number of them, and for any other through 2×2 bilinear taps spread evenly
+/// over it, a box softened by about a texel, so a large reduction does not
+/// alias. A reduction past `BOX_STEP_MAX` goes through smaller pooled images
+/// (`reduction_steps`), each given back on every path.
+fn reduce_composite_into_scratch_a(engine: &mut EngineInner, size: (u32, u32)) -> Result<(), String> {
+    let steps = reduction_steps((engine.doc_width, engine.doc_height), size);
+    let mut source = engine.composite_texture;
+    let mut held: Option<TextureHandle> = None;
+    let mut result = Ok(());
+    for (i, &(w, h)) in steps.iter().enumerate() {
+        let target = if i + 1 == steps.len() {
+            None
+        } else {
+            match engine.texture_pool.acquire(w, h) {
+                Ok(texture) => Some(texture),
+                Err(e) => {
+                    result = Err(e);
+                    break;
+                }
+            }
+        };
+        let params = crate::gpu::params::core::ThumbnailBoxParams {
+            dst_size: [w as f32, h as f32],
+            channel: crate::document::thumbnail_gpu::COLOUR,
+        };
+        let pass = engine
+            .pass(&engine.shaders.thumbnail_box, params)
+            .texture("u_tex", source)
+            .blend(Blend::Off)
+            .viewport(0, 0, w as i32, h as i32);
+        let is_drawn = match target {
+            Some(texture) => pass.draw(Target::Texture(texture)),
+            None => pass.draw(Target::Framebuffer(engine.scratch_fbo_a)),
+        };
+        engine.gpu().unbind_textures(1);
+        // The previous step's image has been read by this pass.
+        if let Some(old) = held.take() {
+            engine.texture_pool.release(old);
+        }
+        held = target;
+        if !is_drawn {
+            result = Err("The export's reduction did not draw".to_string());
+            break;
+        }
+        if let Some(texture) = target {
+            source = texture;
+        }
+    }
+    if let Some(texture) = held {
+        engine.texture_pool.release(texture);
+    }
+    result
+}
+
+/// The export chain for `output` at `size`: every stage at the document's
+/// size up to the output step, the rendered image box-reduced to `size`
+/// (`reduce_composite_into_scratch_a`), then, with the working space, the
+/// output step on the reduced image. Reducing before the output step makes
+/// the HDR and SDR pictures of one size from one resampled image, so a gain
+/// map between them is consistent. Sharpening, grain and every blur run at
+/// the document's size, with the document's `pixelScale`, and are reduced
+/// with the rest: what an export made at full size and then scaled down
+/// shows, as the resized 8-bit export does through the canvas copy.
+///
+/// Returns the texture whose texels (0, 0) to `size` hold the result:
+/// the composite after the output step, or scratch A without the working
+/// space (sRGB-encoded values, reduced as they are). No document-sized
+/// texture is acquired beyond the composite and scratch A that the
+/// full-size export uses.
+fn render_export_sized(engine: &mut EngineInner, output: ExportOutput, size: (u32, u32)) -> Result<TextureHandle, String> {
+    // The export render replaces the live composite whatever happens next.
+    engine.needs_recomposite = true;
+    let with_adjustments = false;
+    composite_layers_for_export_with(engine, ExportFinish::Rendered { with_adjustments })?;
+    reduce_composite_into_scratch_a(engine, size)?;
+    if engine.working_space.is_none() {
+        return Ok(engine.scratch_texture_a);
+    }
+    let settings = export_output_settings(engine, output, with_adjustments);
+    let program = engine.shaders.output()?;
+    // The output step reads each texel at its own position and dithers by
+    // it, so drawing the reduced image's rectangle is the step at `size`.
+    let is_drawn = crate::develop::output::pass(engine, &program, engine.scratch_texture_a, &settings)
+        .blend(Blend::Off)
+        .viewport(0, 0, size.0 as i32, size.1 as i32)
+        .draw(Target::Framebuffer(engine.composite_fbo));
+    engine.gpu().unbind_textures(1);
+    if is_drawn {
+        Ok(engine.composite_texture)
+    } else {
+        Err("The export's output step did not draw".to_string())
+    }
+}
+
+/// `composite_for_export` at `width × height` (each at most the document's,
+/// neither 0): RGBA8 sRGB, straight alpha, `width × height × 4` bytes, rows
+/// from the top. The same chain, then the rendered image box-reduced on the
+/// GPU (`render_export_sized`), then the output step for sRGB, dithered for
+/// a RAW photo as the full-size read is. Without the working space the
+/// chain's sRGB-encoded result is reduced. The picture
+/// `composite_for_export_hdr_f32_sized` makes at the same size, as an SDR
+/// rendering: the two make a gain map. Fails for an empty size or one
+/// larger than the document. The next frame rebuilds the live composite.
+pub fn composite_for_export_sized(engine: &mut EngineInner, width: u32, height: u32) -> Read<Vec<u8>> {
+    let output = ExportOutput::sdr(lopsy_core::output::OutputTarget::Srgb, true);
+    let texture = match sized_export_size(engine, width, height).and_then(|size| render_export_sized(engine, output, size)) {
+        Ok(texture) => texture,
+        Err(e) => return Read::failed(e),
+    };
+    let doc_color_mode = engine.doc_color_mode;
+    engine.gpu().read_rgba(texture, 0, 0, width, height).map(move |mut pixels| {
+        decode_native_color_mode(doc_color_mode, &mut pixels);
+        pixels
+    })
+}
+
+/// `composite_for_export_hdr_f32` at `width × height` (each at most the
+/// document's, neither 0): linear Rec. 2020 RGBA f32, straight alpha,
+/// 1.0 = SDR white, up to `peak`, `width × height × 4` floats, rows from
+/// the top. The same chain, then the rendered image box-reduced on the GPU
+/// (`render_export_sized`), then the output step for the HDR file. Fails
+/// without the working space, and for an empty size or one larger than
+/// the document. The next frame rebuilds the live composite.
+pub fn composite_for_export_hdr_f32_sized(engine: &mut EngineInner, peak: f32, width: u32, height: u32) -> Read<Vec<f32>> {
+    if engine.working_space.is_none() {
+        return Read::failed("The document has no working space".to_string());
+    }
+    let output = ExportOutput { target: lopsy_core::output::OutputTarget::LinearRec2020, is_8bit: false, peak };
+    match sized_export_size(engine, width, height).and_then(|size| render_export_sized(engine, output, size)) {
+        Ok(texture) => engine.gpu().read_rgba_f32(texture, 0, 0, width, height),
+        Err(e) => Read::failed(e),
+    }
 }
 
 /// Replace a layer's pixels with the layer and its effects, rendered onto a
@@ -2694,4 +2882,28 @@ fn apply_adjustments_to_texture(engine: &EngineInner, target: DocTarget, adj: &I
         engine.scratch_texture_a
     };
     copy_doc(engine, result, target.fbo, Scissor::Off);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::reduction_steps;
+
+    #[test]
+    fn a_reduction_within_one_box_footprint_is_one_step() {
+        assert_eq!(reduction_steps((7728, 5152), (2048, 1365)), vec![(2048, 1365)]);
+        assert_eq!(reduction_steps((7728, 5152), (7728, 5152)), vec![(7728, 5152)]);
+        assert_eq!(reduction_steps((1280, 640), (10, 5)), vec![(10, 5)]);
+    }
+
+    #[test]
+    fn a_longer_reduction_steps_down_so_no_step_skips_a_texel() {
+        assert_eq!(reduction_steps((7728, 5152), (16, 11)), vec![(121, 81), (16, 11)]);
+        let steps = reduction_steps((100_000, 8), (1, 1));
+        assert_eq!(steps.last(), Some(&(1, 1)));
+        let mut at = (100_000u32, 8u32);
+        for &step in &steps {
+            assert!(at.0 <= step.0 * 128 && at.1 <= step.1 * 128, "{at:?} -> {step:?}");
+            at = step;
+        }
+    }
 }
