@@ -70,6 +70,41 @@ pub struct GainMapMetadata {
     pub base_rendition_is_hdr: bool,
 }
 
+impl GainMapMetadata {
+    /// The metadata as seven numbers, the form a host passes across to
+    /// JavaScript and back: gain map min, gain map max, gamma, offset SDR,
+    /// offset HDR, HDR capacity min, HDR capacity max. The base is the SDR
+    /// rendition, so `base_rendition_is_hdr` is not among them.
+    pub fn to_values(&self) -> [f64; 7] {
+        [
+            self.gain_map_min,
+            self.gain_map_max,
+            self.gamma,
+            self.offset_sdr,
+            self.offset_hdr,
+            self.hdr_capacity_min,
+            self.hdr_capacity_max,
+        ]
+    }
+
+    /// The inverse of `to_values`.
+    pub fn from_values(v: &[f64]) -> Result<Self, String> {
+        let &[gain_map_min, gain_map_max, gamma, offset_sdr, offset_hdr, hdr_capacity_min, hdr_capacity_max] = v else {
+            return Err(format!("gain map metadata is seven numbers, got {}", v.len()));
+        };
+        Ok(Self {
+            gain_map_min,
+            gain_map_max,
+            gamma,
+            offset_sdr,
+            offset_hdr,
+            hdr_capacity_min,
+            hdr_capacity_max,
+            base_rendition_is_hdr: false,
+        })
+    }
+}
+
 /// The gain map's size relative to the picture.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GainMapScale {
@@ -369,6 +404,14 @@ mod tests {
         assert!(m.gain_map_min <= 0.0 && m.gain_map_max > m.gain_map_min);
         assert!(m.hdr_capacity_max > m.hdr_capacity_min);
         assert!(m.gain_map_min.abs() < 1e-5);
+    }
+
+    #[test]
+    fn metadata_values_round_trip() {
+        let s = scene();
+        let m = compute_gain_map(&s.hdr_2020, &s.sdr, s.w as u32, s.h as u32, ColorSpace::Srgb, GainMapScale::Full).unwrap().metadata;
+        assert_eq!(GainMapMetadata::from_values(&m.to_values()), Ok(m));
+        assert!(GainMapMetadata::from_values(&[0.0; 6]).is_err());
     }
 
     #[test]
