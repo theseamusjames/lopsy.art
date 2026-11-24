@@ -485,4 +485,75 @@ mod tests {
         assert_eq!(back.chroma.iter().map(|v| v.to_bits()).collect::<Vec<_>>(), g.chroma.iter().map(|v| v.to_bits()).collect::<Vec<_>>());
         assert_eq!(back, g);
     }
+
+    /// A plain array standing for a white-balanced mosaic: an orange light
+    /// whose brightness rises toward the middle, so green (the strongest
+    /// channel here) clips in a disc while red and blue do not.
+    fn orange_light(w: usize, h: usize, cfa: &[u8], p: usize, clip: [f32; 3]) -> Vec<f32> {
+        let colour = [0.55f32, 1.0, 0.3];
+        (0..h)
+            .flat_map(|y| (0..w).map(move |x| (x, y)))
+            .map(|(x, y)| {
+                let (dx, dy) = (x as f32 - w as f32 / 2.0, y as f32 - h as f32 / 2.0);
+                let bright = 1.6 * (-(dx * dx + dy * dy) / (2.0 * 14.0 * 14.0)).exp() + 0.2;
+                let c = cfa[(y % p) * p + x % p] as usize % 3;
+                (colour[c] * bright).min(clip[c])
+            })
+            .collect()
+    }
+
+    fn check_pattern(cfa: &[u8], p: usize) {
+        let clip = [1.0f32, 1.0, 1.0];
+        let (w, h) = (96usize, 96usize);
+        let mosaic = orange_light(w, h, cfa, p, clip);
+        let grid = ChromaGrid::measure(&mosaic, w, h, cfa, p, clip).expect("green clips");
+        let whole = grid.reconstruct(&mosaic, w, h, 0, cfa, p).expect("something is reconstructed");
+        // Rows [36, 60) rendered from their own rows plus the reach, as a
+        // band would be, match the whole frame's.
+        let (y0, y1, reach) = (36usize, 60usize, REACH_ROWS as usize + 4);
+        let band = grid
+            .reconstruct(&mosaic[(y0 - reach) * w..(y1 + reach) * w], w, y1 - y0 + 2 * reach, y0 - reach, cfa, p)
+            .unwrap();
+        for y in y0..y1 {
+            for x in 0..w {
+                assert_eq!(band[(y - y0 + reach) * w + x].to_bits(), whole[y * w + x].to_bits(), "({x}, {y})");
+            }
+        }
+        // In the clipped disc, green rises above its clip level and keeps
+        // close to the light's ratio to red: 1 / 0.55.
+        let (cx, cy) = (w / 2, h / 2);
+        let mut ratios = Vec::new();
+        for y in cy - 3..cy + 3 {
+            for x in cx - 3..cx + 3 {
+                if cfa[(y % p) * p + x % p] == 1 {
+                    assert!(whole[y * w + x] > 1.0, "green at ({x}, {y}) stayed at {}", whole[y * w + x]);
+                    let red: Vec<f32> = (y - 2..=y + 2)
+                        .flat_map(|yy| (x - 2..=x + 2).map(move |xx| (xx, yy)))
+                        .filter(|&(xx, yy)| cfa[(yy % p) * p + xx % p] == 0)
+                        .map(|(xx, yy)| mosaic[yy * w + xx])
+                        .collect();
+                    let red = red.iter().sum::<f32>() / red.len() as f32;
+                    ratios.push(whole[y * w + x] / red);
+                }
+            }
+        }
+        let mean = ratios.iter().sum::<f32>() / ratios.len() as f32;
+        assert!((mean - 1.0 / 0.55).abs() < 0.1 * (1.0 / 0.55), "green / red {mean}");
+        // Nothing went down, and samples far below the clip did not move.
+        for (i, (&a, &b)) in whole.iter().zip(&mosaic).enumerate() {
+            assert!(a >= b, "sample {i} went down");
+            if b < 0.85 {
+                assert_eq!(a, b, "sample {i} moved");
+            }
+        }
+    }
+
+    #[test]
+    fn a_clipped_light_keeps_its_colour_and_bands_exactly_on_bayer_and_x_trans() {
+        check_pattern(&[0, 1, 1, 2], 2);
+        let xtrans: [u8; 36] = [
+            1, 0, 2, 1, 2, 0, 2, 1, 1, 0, 1, 1, 0, 1, 1, 2, 1, 1, 1, 2, 0, 1, 0, 2, 0, 1, 1, 2, 1, 1, 2, 1, 1, 0, 1, 1,
+        ];
+        check_pattern(&xtrans, 6);
+    }
 }
