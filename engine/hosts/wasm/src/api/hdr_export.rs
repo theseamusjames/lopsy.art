@@ -15,7 +15,8 @@
 //!    with `convertToBlob({ type: 'image/jpeg' })`: the base JPEG.
 //! 3. Draw `GainMapResult.rgba` (`width`×`height`, grey) on a canvas and
 //!    encode it the same way: the gain map JPEG.
-//! 4. `assembleGainMapJpeg(base, gainMap, result.metadata)` gives the file.
+//! 4. `assembleGainMapJpeg(base, gainMap, result.metadata, sdrSpace)`
+//!    gives the file.
 
 use wasm_bindgen::prelude::*;
 
@@ -104,11 +105,14 @@ pub fn compute_gain_map(
 ///   profile, JFIF and Exif segments are kept.
 /// - `gain_map`: the gain map (`GainMapResult.takeRgba`) as a JPEG file.
 /// - `metadata`: `GainMapResult.metadata`, the seven numbers unchanged.
+/// - `sdr_space`: the SDR picture's colour space (0 sRGB, 1 Display P3),
+///   whose profile is added when `base` has none.
 ///
 /// Returns the file's bytes, or an error if either JPEG is malformed or
 /// the metadata is out of range.
 #[wasm_bindgen(js_name = "assembleGainMapJpeg")]
-pub fn assemble_gain_map_jpeg(base: &[u8], gain_map: &[u8], metadata: &[f64]) -> Result<Vec<u8>, JsError> {
+pub fn assemble_gain_map_jpeg(base: &[u8], gain_map: &[u8], metadata: &[f64], sdr_space: u8) -> Result<Vec<u8>, JsError> {
     let metadata = GainMapMetadata::from_values(metadata).map_err(|e| JsError::new(&e))?;
-    lopsy_core::gain_map_jpeg::assemble_gain_map_jpeg(base, gain_map, &metadata).map_err(|e| JsError::new(&e))
+    let icc = lopsy_core::export::build_icc_profile(color_space_from_code(sdr_space).map_err(|e| JsError::new(&e))?);
+    lopsy_core::gain_map_jpeg::assemble_gain_map_jpeg(base, gain_map, &metadata, Some(&icc)).map_err(|e| JsError::new(&e))
 }

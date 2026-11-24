@@ -335,6 +335,23 @@ fn mpf_body(primary_len: u32, gain_map_len: u32, gain_map_offset: u32) -> Vec<u8
     b
 }
 
+/// An ICC profile as APP2 segments: "ICC_PROFILE\0", the 1-based chunk
+/// number and the chunk count, then up to 65519 bytes of the profile, as
+/// the ICC specification's annex on JPEG embedding lays them out.
+fn icc_segments(icc: &[u8]) -> Result<Vec<u8>, String> {
+    const CHUNK: usize = 65535 - 2 - 12 - 2;
+    if icc.is_empty() {
+        return Err("empty ICC profile".into());
+    }
+    let count = icc.len().div_ceil(CHUNK);
+    let count8 = u8::try_from(count).map_err(|_| "ICC profile too large for a JPEG")?;
+    let mut out = Vec::with_capacity(icc.len() + count * 18);
+    for (i, chunk) in icc.chunks(CHUNK).enumerate() {
+        out.extend(segment(APP2, &[ICC_ID, &[i as u8 + 1, count8], chunk])?);
+    }
+    Ok(out)
+}
+
 fn check_metadata(m: &GainMapMetadata) -> Result<(), String> {
     let all = [m.gain_map_min, m.gain_map_max, m.gamma, m.offset_sdr, m.offset_hdr, m.hdr_capacity_min, m.hdr_capacity_max];
     if all.iter().any(|v| !v.is_finite()) {
@@ -365,7 +382,16 @@ fn check_metadata(m: &GainMapMetadata) -> Result<(), String> {
 /// any XMP, MPF or ISO 21496-1 segments it had are replaced. `gain_map`
 /// keeps its JFIF segment and loses Exif and ICC, which readers do not
 /// use in a gain map. Bytes after either image's EOI are dropped.
-pub fn assemble_gain_map_jpeg(base: &[u8], gain_map: &[u8], metadata: &GainMapMetadata) -> Result<Vec<u8>, String> {
+///
+/// `icc_if_missing` is the profile of the SDR picture's colour space, put
+/// in when `base` has none: Ultra HDR requires the primary image to carry
+/// one, and a browser may leave it out of an sRGB JPEG.
+pub fn assemble_gain_map_jpeg(
+    base: &[u8],
+    gain_map: &[u8],
+    metadata: &GainMapMetadata,
+    icc_if_missing: Option<&[u8]>,
+) -> Result<Vec<u8>, String> {
     check_metadata(metadata)?;
     let b = parse_jpeg(base).map_err(|e| format!("base image: {e}"))?;
     let g = parse_jpeg(gain_map).map_err(|e| format!("gain map: {e}"))?;
@@ -410,8 +436,13 @@ pub fn assemble_gain_map_jpeg(base: &[u8], gain_map: &[u8], metadata: &GainMapMe
     }
     out.extend(segment(APP1, &[XMP_ID, primary_xmp(gm.len()).as_bytes()])?);
     out.extend(segment(APP2, &[ISO_21496_ID, &ISO_21496_VERSION_ONLY])?);
+    let mut has_icc = false;
     for s in b.header.iter().filter(|s| s.is(base, APP2, ICC_ID)) {
         out.extend(raw(base, s));
+        has_icc = true;
+    }
+    if let (false, Some(icc)) = (has_icc, icc_if_missing) {
+        out.extend(icc_segments(icc)?);
     }
     let mpf_at = out.len();
     out.extend(segment(APP2, &[MPF_ID, &[0u8; MPF_BODY_LEN]])?);
@@ -575,7 +606,7 @@ mod tests {
     }
 
     fn assemble() -> Vec<u8> {
-        assemble_gain_map_jpeg(BASE_JPEG, GAIN_MAP_JPEG, &metadata()).unwrap()
+        assemble_gain_map_jpeg(BASE_JPEG, GAIN_MAP_JPEG, &metadata(), None).unwrap()
     }
 
     #[test]
@@ -714,7 +745,7 @@ mod tests {
         gm.extend_from_slice(&icc_seg);
         gm.extend_from_slice(&GAIN_MAP_JPEG[20..]);
 
-        let file = assemble_gain_map_jpeg(&base, &gm, &metadata()).unwrap();
+        let file = assemble_gain_map_jpeg(&base, &gm, &metadata(), None).unwrap();
         assert_eq!(kinds(&file)[..6], ["E0 JFIF", "E1 Exif", "E1 http://ns.ad", "E2 urn:iso:std:", "E2 ICC_PROFILE", "E2 MPF"]);
         let segs = header_segments(&file);
         assert_eq!(segs.iter().filter(|(m, p)| *m == APP1 && p.starts_with(XMP_ID)).count(), 1);
@@ -730,6 +761,43 @@ mod tests {
         assert_eq!(end + e[1].1 as usize, file.len(), "the base's trailing bytes are gone");
     }
 
+    /// A base without a profile gets the one given; one with a profile
+    /// keeps its own.
+    #[test]
+    fn a_missing_profile_is_filled_in() {
+        let icc = crate::export::build_icc_profile(crate::color::ColorSpace::Srgb);
+        let file = assemble_gain_map_jpeg(BASE_JPEG, GAIN_MAP_JPEG, &metadata(), Some(&icc)).unwrap();
+        let segs = header_segments(&file);
+        let p = find(&segs, APP2, ICC_ID);
+        assert_eq!(&p[..2], &[1, 1]);
+        assert_eq!(&p[2..], &icc[..]);
+        assert_eq!(kinds(&file)[..5], ["E0 JFIF", "E1 http://ns.ad", "E2 urn:iso:std:", "E2 ICC_PROFILE", "E2 MPF"]);
+        let end = parse_jpeg(&file).unwrap().end;
+        let mpf = parse_jpeg(&file).unwrap().header.into_iter().find(|s| s.is(&file, APP2, MPF_ID)).unwrap();
+        assert_eq!(mpf.start + 8 + read_mpf(&file[mpf.start + 8..mpf.end])[1].2 as usize, end);
+
+        let p3 = crate::export::build_icc_profile(crate::color::ColorSpace::DisplayP3);
+        let with = segment(APP2, &[ICC_ID, &[1, 1], &p3]).unwrap();
+        let mut base = BASE_JPEG[..20].to_vec();
+        base.extend_from_slice(&with);
+        base.extend_from_slice(&BASE_JPEG[20..]);
+        let file = assemble_gain_map_jpeg(&base, GAIN_MAP_JPEG, &metadata(), Some(&icc)).unwrap();
+        let segs = header_segments(&file);
+        assert_eq!(segs.iter().filter(|(m, p)| *m == APP2 && p.starts_with(ICC_ID)).count(), 1);
+        assert_eq!(&find(&segs, APP2, ICC_ID)[2..], &p3[..]);
+
+        // A profile larger than one segment is split.
+        let big = vec![7u8; 70_000];
+        let split = icc_segments(&big).unwrap();
+        let mut probe = vec![0xFF, SOI];
+        probe.extend_from_slice(&split);
+        probe.extend_from_slice(&BASE_JPEG[2..]);
+        let parts: Vec<_> = header_segments(&probe).into_iter().filter(|(m, p)| *m == APP2 && p.starts_with(ICC_ID)).collect();
+        assert_eq!(parts.len(), 2);
+        assert_eq!((parts[0].1[12], parts[0].1[13], parts[1].1[12], parts[1].1[13]), (1, 2, 2, 2));
+        assert_eq!(parts[0].1.len() - 14 + parts[1].1.len() - 14, 70_000);
+    }
+
     /// Progressive JPEGs (several scans, tables between them) and restart
     /// markers parse too.
     #[test]
@@ -742,7 +810,7 @@ mod tests {
             e.set_progressive(progressive);
             e.set_restart_interval(2);
             e.encode(&rgb, 32, 24, ColorType::Rgb).unwrap();
-            let file = assemble_gain_map_jpeg(&bytes, GAIN_MAP_JPEG, &metadata()).unwrap();
+            let file = assemble_gain_map_jpeg(&bytes, GAIN_MAP_JPEG, &metadata(), None).unwrap();
             let end = parse_jpeg(&file).unwrap().end;
             let mut d = jpeg_decoder::Decoder::new(&file[..end]);
             let mut o = jpeg_decoder::Decoder::new(&bytes[..]);
@@ -756,21 +824,21 @@ mod tests {
     fn malformed_input_is_an_error_not_a_panic() {
         let m = metadata();
         for cut in 0..BASE_JPEG.len() {
-            assert!(assemble_gain_map_jpeg(&BASE_JPEG[..cut], GAIN_MAP_JPEG, &m).is_err(), "base cut at {cut}");
+            assert!(assemble_gain_map_jpeg(&BASE_JPEG[..cut], GAIN_MAP_JPEG, &m, None).is_err(), "base cut at {cut}");
         }
         for cut in 0..GAIN_MAP_JPEG.len() {
-            assert!(assemble_gain_map_jpeg(BASE_JPEG, &GAIN_MAP_JPEG[..cut], &m).is_err(), "map cut at {cut}");
+            assert!(assemble_gain_map_jpeg(BASE_JPEG, &GAIN_MAP_JPEG[..cut], &m, None).is_err(), "map cut at {cut}");
         }
         for i in 0..BASE_JPEG.len() {
             for v in [0x00, 0xFF, 0xD8, 0xD9, 0xDA, 0x7F] {
                 let mut b = BASE_JPEG.to_vec();
                 b[i] = v;
-                let _ = assemble_gain_map_jpeg(&b, GAIN_MAP_JPEG, &m);
-                let _ = assemble_gain_map_jpeg(GAIN_MAP_JPEG, &b, &m);
+                let _ = assemble_gain_map_jpeg(&b, GAIN_MAP_JPEG, &m, None);
+                let _ = assemble_gain_map_jpeg(GAIN_MAP_JPEG, &b, &m, None);
             }
         }
-        assert!(assemble_gain_map_jpeg(b"", b"", &m).is_err());
-        assert!(assemble_gain_map_jpeg(&[0xFF, 0xD8, 0xFF, 0xD9], GAIN_MAP_JPEG, &m).is_err());
+        assert!(assemble_gain_map_jpeg(b"", b"", &m, None).is_err());
+        assert!(assemble_gain_map_jpeg(&[0xFF, 0xD8, 0xFF, 0xD9], GAIN_MAP_JPEG, &m, None).is_err());
         // A segment longer than its file.
         assert!(parse_jpeg(&[0xFF, 0xD8, 0xFF, 0xE0, 0xFF, 0xFF, 0, 0]).is_err());
         // A length below 2.
@@ -788,7 +856,7 @@ mod tests {
             GainMapMetadata { hdr_capacity_max: 0.0, ..m },
             GainMapMetadata { base_rendition_is_hdr: true, ..m },
         ] {
-            assert!(assemble_gain_map_jpeg(BASE_JPEG, GAIN_MAP_JPEG, &bad).is_err(), "{bad:?}");
+            assert!(assemble_gain_map_jpeg(BASE_JPEG, GAIN_MAP_JPEG, &bad, None).is_err(), "{bad:?}");
         }
     }
 }
