@@ -421,10 +421,21 @@ without a picture to edit here, and offers **Open in Lopsy** and **Back**.
   release is one history step ("White balance: Daylight", "White
   balance: picked", "Temperature 6500 K" on RAW).
 - **Tone**: Exposure, Contrast, Highlights, Shadows, Whites, Blacks, with
-  **Auto**, which the engine sets conservatively from the histogram.
-- **Color**: Vibrance, Saturation.
+  **Auto**, which the engine sets conservatively, as one history step;
+  pressing it again changes little. The tone sliders work on the photo's
+  light before it is made into a picture, in stops: Exposure is in EV,
+  and Shadows and Highlights lift or lower a range of stops rather than
+  a range of screen values. Highlights pulled down brings back detail
+  in highlights the default rendering shows as white, a RAW file's
+  clipped highlights included (the decoder rebuilds those from the
+  channels that did not clip). Auto measures the photo's light the same
+  way.
+- **Color**: Vibrance, Saturation. Colour (these, Color by hue and Color
+  Grading) is adjusted in a perceptual colour space (OkLab), so a change
+  of saturation or hue keeps a colour's brightness.
 - **Curves**: a luminance curve and red, green and blue curves, edited by
-  dragging points.
+  dragging points. They apply to the rendered picture, as they look on
+  screen.
 - **Color by hue**: Hue, Saturation and Luminance for eight bands (red,
   orange, yellow, green, aqua, blue, purple, magenta).
 - **Color Grading**: a tab each for shadows, midtones, highlights and
@@ -445,7 +456,10 @@ without a picture to edit here, and offers **Open in Lopsy** and **Back**.
   picks included), a turn of the wheel, a scroll or Escape puts it back.
   An exported XMP sidecar has these values as whole numbers, as
   Lightroom keeps them.
-- **Local contrast**: Large details, Small details, Haze.
+- **Local contrast**: Large details, Small details, Haze. Large and small
+  details work on brightness in linear light, without the bright or dark
+  rims a strong setting used to leave along edges; Haze works on the
+  photo's light before the tone sliders.
 - **Sharpness & noise**: Sharpen, Radius, Edges only, Noise, Color noise,
   Keep detail. While a slider drags these passes are left out, and they
   come back when it settles.
@@ -485,7 +499,9 @@ without a picture to edit here, and offers **Open in Lopsy** and **Back**.
   open one is the selected one, whose handles are on the photo. Inside:
   its kind and **Invert** (a toggle: the adjustments go to the rest of
   the photo), **Amount** and its own Exposure, Contrast, Highlights,
-  Shadows, Temperature, Tint and Saturation, then **Position**, closed
+  Shadows, Temperature, Tint and Saturation (worked out as the photo's
+  own sliders are, so a mask's Temperature or Exposure moves as far as the
+  photo's does), then **Position**, closed
   at first, which opens to the mask's shape sliders, and at the bottom
   **Add adjustment**, as Lopsy's adjustments have. It gives the mask a
   further adjustment of its own, any of the Edit panel's other
@@ -637,7 +653,9 @@ never talks to Google. Lopsy's side is in `apps/lopsy-web/FEATURES.md`
   sRGB on every display. On a graphics processor that cannot render to
   floating-point targets, photos are developed with the RAW decoder's
   finished look in 8 bits and shown as sRGB, and the status bar says
-  "8-bit".
+  "8-bit"; there the tone and colour sliders, curves and Auto work on the
+  screen values after the RAW look, as they did before the linear working
+  space, so the same edit looks somewhat different there.
 - **Status bar** along the bottom of the window, in the library and the
   Edit view (not on the start screen or in Full screen): at the left, the
   number of photos shown and, when any are, how many are selected; in the

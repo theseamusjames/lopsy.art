@@ -171,6 +171,32 @@ export function buildCurveLUT(points: readonly CurvePoint[]): Uint8Array {
   return lut;
 }
 
+/** Entries in each of `setDevelopCurves`' tables. */
+export const CURVE_TABLE_ENTRIES = 4096;
+
+/**
+ * The curve sampled at i / 4095 for i in 0..4095, as floats: one of
+ * `setDevelopCurves`' tables. The identity is exactly i / 4095, which the
+ * engine recognises and skips.
+ */
+export function buildCurveTable(points: readonly CurvePoint[]): Float32Array {
+  const table = new Float32Array(CURVE_TABLE_ENTRIES);
+  const last = CURVE_TABLE_ENTRIES - 1;
+  const pts = normalizePoints(points);
+  if (isIdentityCurve(pts)) {
+    for (let i = 0; i <= last; i++) table[i] = i / last;
+    return table;
+  }
+  const t = computeTangents(pts);
+  let seg = 0;
+  for (let i = 0; i <= last; i++) {
+    const x = i / last;
+    while (seg < pts.length - 2 && at(pts, seg + 1).x < x) seg++;
+    table[i] = clamp01(hermite(at(pts, seg), at(pts, seg + 1), at(t, seg), at(t, seg + 1), x));
+  }
+  return table;
+}
+
 /**
  * Pack the four per-channel LUTs into the 256×1 RGBA texture the GPU
  * shader samples. Layout: R=red curve, G=green curve, B=blue curve,

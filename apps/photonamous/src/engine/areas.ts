@@ -8,6 +8,8 @@
 
 import { liveAreas, type Area, type LinearGeometry, type RadialGeometry, type Recipe } from '@lopsy/photos-core/library/recipe';
 import { colorGradeValues, colorMixerValues, curvesLut } from './color-controls';
+import { isIdentityCurves } from './curves';
+import { curvesKey, developAreaLookValues, developCurvesValues } from './develop-stages';
 import { detailValues, localContrastValues } from './detail-controls';
 import { finishValues } from './finish-controls';
 import type { Framing } from './recipe-to-adjustments';
@@ -191,6 +193,50 @@ export function areaLayerKey(values: AreaLayerValues | null): string {
   return Object.values(values)
     .map((v: ArrayLike<number> | null) => (v ? Array.from(v).join(',') : ''))
     .join('|');
+}
+
+/**
+ * An area's layer on the linear path (develop-stages.ts): its look and
+ * curves for `setDevelopAreaLook` and `setDevelopAreaCurves`, and the same
+ * detail, local contrast and finish as the legacy path. The curves are keyed
+ * by their points and built only when the layer is sent.
+ */
+export interface LinearAreaLayerValues {
+  readonly look: Float32Array | null;
+  /** '' when every curve is the identity. */
+  readonly curvesKey: string;
+  readonly curves: () => Float32Array | null;
+  readonly detail: Float32Array | null;
+  readonly localContrast: Float32Array | null;
+  readonly finish: Float32Array | null;
+}
+
+/** An area's linear layer, or null when its effects change nothing and it draws none. */
+export function linearAreaLayerValues(area: Area, options: AreaLayerOptions): LinearAreaLayerValues | null {
+  const fx = area.effects;
+  const hasCurves = developCurvesNeeded(fx);
+  const values: LinearAreaLayerValues = {
+    look: developAreaLookValues(fx),
+    curvesKey: hasCurves ? curvesKey(fx) : '',
+    curves: () => (hasCurves ? developCurvesValues(fx) : null),
+    detail: options.isInteractive ? null : detailValues(fx, options.pixelScale),
+    localContrast: options.isInteractive ? null : localContrastValues(fx, options.pixelScale),
+    finish: finishValues(fx.finish, options.grainSeed, options.pixelScale),
+  };
+  const isEmpty = !values.look && !hasCurves && !values.detail && !values.localContrast && !values.finish;
+  return isEmpty ? null : values;
+}
+
+/** `areaLayerKey` for the linear path; '' for no layer. */
+export function linearAreaLayerKey(values: LinearAreaLayerValues | null): string {
+  if (!values) return '';
+  const list = (v: Float32Array | null) => (v ? Array.from(v).join(',') : '');
+  return [list(values.look), values.curvesKey, list(values.detail), list(values.localContrast), list(values.finish)].join('|');
+}
+
+function developCurvesNeeded(fx: Recipe): boolean {
+  const c = fx.curves;
+  return !isIdentityCurves({ rgb: c.luminance, r: c.red, g: c.green, b: c.blue });
 }
 
 /**

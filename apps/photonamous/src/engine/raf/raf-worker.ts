@@ -18,7 +18,7 @@ import type { RafBandPixels, RafWorkerRequest, RafWorkerResponse } from './raf-w
 /** What this worker calls: the same on both builds, unlike the glue's engine exports. */
 type Glue = Pick<
   typeof import('@lopsy/engine-pkg/lopsy_wasm.js'),
-  'rafAutoWhiteBalance' | 'rafDevelopDefaults' | 'rafDevelopProfiles' | 'rafPrepare' | 'rafRenderBand' | 'rafRenderLinearBand'
+  'rafAutoWhiteBalanceClipped' | 'rafDevelopDefaults' | 'rafDevelopProfiles' | 'rafPrepare' | 'rafRenderBand' | 'rafRenderLinearBand'
 > & { initSync(module: { module: WebAssembly.Module }): unknown };
 
 let glue: Promise<Glue> | null = null;
@@ -43,9 +43,22 @@ function takeBand(band: RafRenderedBand): RafBandPixels {
   }
 }
 
-function autoWbRatio(wasm: Glue, binned: RafBandPixels | null): [number, number, number] | null {
+/** `metaJson`'s `clipLevels`, or none (then every pixel is measured). */
+function clipLevelsOf(metaJson: string): Float32Array {
+  const meta: unknown = JSON.parse(metaJson);
+  const clip = typeof meta === 'object' && meta !== null ? (meta as Record<string, unknown>).clipLevels : undefined;
+  const isLevels = Array.isArray(clip) && clip.length === 3 && clip.every((v) => typeof v === 'number' && Number.isFinite(v));
+  return isLevels ? Float32Array.from(clip as number[]) : new Float32Array(0);
+}
+
+/**
+ * Auto white balance of the binned frame without its clipped pixels: the
+ * decode reconstructs clipped highlights, and those are not measurements
+ * of a neutral.
+ */
+function autoWbRatio(wasm: Glue, binned: RafBandPixels | null, metaJson: string): [number, number, number] | null {
   if (!binned) return null;
-  const [r = 1, g = 1, b = 1] = wasm.rafAutoWhiteBalance(binned.pixels);
+  const [r = 1, g = 1, b = 1] = wasm.rafAutoWhiteBalanceClipped(binned.pixels, clipLevelsOf(metaJson));
   return [r, g, b];
 }
 
@@ -60,15 +73,16 @@ function handle(wasm: Glue, req: Exclude<RafWorkerRequest, { kind: 'init' }>): v
       const mosaic = prepared.takeMosaic();
       const transfer: Transferable[] = [mosaic.buffer];
       if (binned) transfer.push(binned.pixels.buffer);
+      const metaJson = prepared.metaJson;
       reply(
         {
           kind: 'prepared',
-          metaJson: prepared.metaJson,
+          metaJson,
           paramsJson,
           developDefaultsJson: wasm.rafDevelopDefaults(paramsJson),
           mosaic,
           binned,
-          autoWbRatio: autoWbRatio(wasm, binned),
+          autoWbRatio: autoWbRatio(wasm, binned, metaJson),
           profilesJson: wasm.rafDevelopProfiles(paramsJson),
         },
         transfer,

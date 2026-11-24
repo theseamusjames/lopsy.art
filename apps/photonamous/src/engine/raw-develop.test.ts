@@ -67,6 +67,16 @@ describe('parseRawDevelopSettings', () => {
     expect(() => parseRawDevelopSettings('{"wbRatio":[1,1]}')).toThrow();
     expect(() => parseRawDevelopSettings('null')).toThrow();
   });
+
+  it('keeps clipLevels through to setRawDevelop, and leaves them out when absent', () => {
+    const withClip = { ...(JSON.parse(DEFAULTS_JSON) as Record<string, unknown>), clipLevels: [1.7, 1, 1.8] };
+    const s = parseRawDevelopSettings(JSON.stringify(withClip));
+    expect(s.clipLevels).toEqual([1.7, 1, 1.8]);
+    const sent = JSON.parse(rawSettingsJson(rawSettingsFor(s, recipe({})))) as Record<string, unknown>;
+    expect(sent.clipLevels).toEqual([1.7, 1, 1.8]);
+    const without = JSON.parse(rawSettingsJson(rawSettingsFor(parseRawDevelopSettings(DEFAULTS_JSON), recipe({})))) as Record<string, unknown>;
+    expect('clipLevels' in without).toBe(false);
+  });
 });
 
 describe('rawSettingsFor', () => {

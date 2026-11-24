@@ -54,6 +54,24 @@ it. Browser-encoded PNG and JPEG files are tagged with Lopsy's inserters
 (`@lopsy/image-metadata`). The status bar's engine and display state is
 `src/engine/engine-status.ts`.
 
+**Recipe to engine.** `src/engine/develop-stages.ts` is the one place
+that maps the recipe's tone, colour and curves onto the engine, and it
+has two paths, chosen once per engine with the working space
+(`developPathFor`). With it ('linear'): `setDevelopTone`,
+`setDevelopLook` and `setDevelopCurves` (4096-entry float tables sampled
+from the app's curve splines, `buildCurveTable`), per mask
+`setDevelopAreaLook` and `setDevelopAreaCurves`, and Auto tone from
+`readSceneStatistics` + `autoToneScene`. Without it ('legacy', the 8-bit
+fallback): Lopsy's image adjustments (`recipe-to-adjustments.ts`), the
+256-entry curves LUT, `setImageColorMixer`, `setImageColorGrading`, the
+`setImageArea…` look setters and the histogram's `autoTone`; with the
+working space on these change nothing. Keep the two apart
+(`applyLinearStages` and `applyLegacyStages` in `develop-engine.ts`) so
+the fallback can be deleted in one cut. Detail, local contrast, haze, the
+finish, the masks' built-in sliders and the RAW develop stage take the
+same calls on both. A RAW photo's exposure and white balance stay in
+`setRawDevelop`; `setDevelopTone` carries them only for other photos.
+
 The UI this app shares with Lopsy is `packages/ui` (`@lopsy/ui`, see its
 `README.md`): the design tokens, reset and fonts (`src/styles/index.css`
 imports them), the Slider, the Menu, the StatusBar, and the keyboard and focus helpers

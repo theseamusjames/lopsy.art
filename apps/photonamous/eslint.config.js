@@ -15,6 +15,7 @@ const TWO_TYPED = [
   'exportPng16',
   'exportTiff16',
   'readDevelopHistogram',
+  'readSceneStatistics',
   'rendererName',
   'resumeTask',
   'sampleColor',

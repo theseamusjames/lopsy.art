@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_RECIPE, addArea, type QuarterTurns, type Recipe } from '@lopsy/photos-core/library/recipe';
+import { DEFAULT_RECIPE, addArea, liveAreas, type Area, type QuarterTurns, type Recipe } from '@lopsy/photos-core/library/recipe';
 import { applyChanges as applyRecipeChanges } from '../edit/edit-controls';
 import {
   AREA_FLOATS,
   areaValues,
   docAngle,
   docToSource,
+  linearAreaLayerKey,
+  linearAreaLayerValues,
   linearFromDoc,
   linearToDoc,
   radialFromDoc,
@@ -100,5 +102,36 @@ describe('areaValues', () => {
     expect(v[9]).toBe(-1);
     expect(v.slice(16, 23)).toEqual([1, 1, 1, 300, 200, 150, 100]);
     expect(v[24]).toBeCloseTo(0.5);
+  });
+});
+
+describe('linearAreaLayerValues', () => {
+  const OPTIONS = { pixelScale: 1, grainSeed: 0, isInteractive: false };
+
+  function areaWith(changes: Record<string, number>): Area {
+    const added = addArea(DEFAULT_RECIPE, 'radial', 'a1');
+    if (!added) throw new Error('no area');
+    const r = applyRecipeChanges(DEFAULT_RECIPE, { ...added.values, ...changes });
+    const [area] = liveAreas(r);
+    if (!area) throw new Error('no live area');
+    return area;
+  }
+
+  it('draws no layer for an area with no effects of its own', () => {
+    expect(linearAreaLayerValues(areaWith({}), OPTIONS)).toBeNull();
+    expect(linearAreaLayerKey(null)).toBe('');
+  });
+
+  it('sends whites, blacks, vibrance and the grade as the area look, and curves by their points', () => {
+    const area = areaWith({ 'areas.a1.fx.tone.whites': 25, 'areas.a1.fx.colorGrading.global.saturation': 40 });
+    const values = linearAreaLayerValues(area, OPTIONS);
+    expect(values?.look?.length).toBe(45);
+    expect(values?.look?.[0]).toBe(25);
+    expect(values?.curvesKey).toBe('');
+    expect(values?.curves()).toBeNull();
+    expect(Array.from(values?.look?.slice(27) ?? []).some((v) => v !== 0)).toBe(true);
+    const before = linearAreaLayerKey(values ?? null);
+    const lifted = areaWith({ 'areas.a1.fx.tone.whites': 25, 'areas.a1.fx.colorGrading.global.saturation': 40 });
+    expect(linearAreaLayerKey(linearAreaLayerValues(lifted, OPTIONS))).toBe(before);
   });
 });

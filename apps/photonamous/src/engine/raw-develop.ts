@@ -29,6 +29,12 @@ export interface RawDevelopSettings {
   readonly highlightDesaturation: boolean;
   /** Tone curve on linear luminance over 0..1; null for none. */
   readonly baseCurve: readonly number[] | null;
+  /**
+   * Each channel's clip level `[r, g, b]` in linear camera RGB at the
+   * as-shot balance; absent when the decode did not say. The engine's white
+   * balance picker leaves out pixels at or near it.
+   */
+  readonly clipLevels?: readonly [number, number, number];
 }
 
 /** Stops of red and blue at Temperature ±100. */
@@ -86,6 +92,7 @@ export function parseRawDevelopSettings(json: string): RawDevelopSettings {
     throw new Error('RAW develop settings have no exposure or saturation');
   }
   const curve = v.baseCurve;
+  const clip = v.clipLevels;
   return {
     wbRatio: [v.wbRatio[0] ?? 1, v.wbRatio[1] ?? 1, v.wbRatio[2] ?? 1],
     camToRgb: v.camToRgb,
@@ -93,6 +100,7 @@ export function parseRawDevelopSettings(json: string): RawDevelopSettings {
     saturation: v.saturation,
     highlightDesaturation: v.highlightDesaturation === true,
     baseCurve: isNumberArray(curve) && curve.length >= 2 ? curve : null,
+    ...(isNumberArray(clip, 3) ? { clipLevels: [clip[0] ?? 0, clip[1] ?? 0, clip[2] ?? 0] as const } : {}),
   };
 }
 

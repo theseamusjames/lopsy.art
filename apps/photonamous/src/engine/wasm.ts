@@ -14,6 +14,7 @@ import {
   exportPng16 as rawExportPng16,
   exportTiff16 as rawExportTiff16,
   readDevelopHistogram as rawReadDevelopHistogram,
+  readSceneStatistics as rawReadSceneStatistics,
   rendererName as rawRendererName,
   resumeTask,
   sampleColor as rawSampleColor,
@@ -49,6 +50,12 @@ export const sampleColor = readbacks.asyncReadback(rawSampleColor, 'any-time');
 /** The histogram (4 × 256 bins) of the composite as last rendered. */
 export const readDevelopHistogram = readbacks.asyncReadback(rawReadDevelopHistogram);
 export const sampleNeutralWhiteBalance = readbacks.asyncReadback(rawSampleNeutralWhiteBalance);
+/**
+ * Auto tone's scene statistics (8 floats). It renders a live frame of the
+ * engine's current state and changes nothing in the document, so it need
+ * not wait its turn.
+ */
+export const readSceneStatistics = readbacks.asyncReadback(rawReadSceneStatistics, 'any-time');
 export const exportPng16 = readbacks.asyncReadback(rawExportPng16);
 export const exportTiff16 = readbacks.asyncReadback(rawExportTiff16);
 

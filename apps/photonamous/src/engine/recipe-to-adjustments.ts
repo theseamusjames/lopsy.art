@@ -1,8 +1,9 @@
 /**
  * Maps a recipe onto the engine's per-document image adjustments, the
- * shader Lopsy's own Adjustments panel drives (adjustments.wgsl). Until the
- * develop pipeline of spec 6.10 exists in the engine, this is how Photonamous
- * renders an edit.
+ * shader Lopsy's own Adjustments panel drives (adjustments.wgsl). This is
+ * the legacy path of develop-stages.ts: only an engine without the linear
+ * working space (the 8-bit fallback) renders an edit this way. The framing
+ * helpers below serve both paths.
  *
  * The engine takes the recipe's numbers as they are: exposure in EV, and
  * contrast, highlights, shadows, whites, blacks, saturation, vibrance and

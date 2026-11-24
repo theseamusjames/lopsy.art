@@ -687,7 +687,7 @@ was.
   scene statistics, `clipLevels` kept through to `setRawDevelop` and the
   RAF worker's white balance; the 8-bit fallback keeps the old calls on a
   path of its own. New browser tests in `e2e/linear-tone.spec.ts`
-  (Highlights −100 on `DSCF8005.RAF` brings its sky below white).
+  (Highlights −100 on `DSCF8005.RAF` brings its bright window below white).
 - **Phase 7, engine**: HDR targets for the output step, the live frame
   in HDR with a headroom (`setDevelopHdr`, `screenIsHdr`), float reads
   for HDR files (`readHdrOutputF32`) and a histogram of the HDR

@@ -1,8 +1,8 @@
 /**
  * The engine bridge for one photo: the Edit view's canvas, one image
  * layer, and the recipe mapped onto the engine (the RAW develop stage,
- * the document adjustments, curves, colour, detail, areas, and the
- * framing as layer operations and document size). It calls the wasm
+ * tone, colour and curves through develop-stages.ts, detail, areas, and
+ * the framing as layer operations and document size). It calls the wasm
  * exports directly, without Lopsy's stores or engine-sync.
  *
  * The Edit view edits a working image sized to the view (spec 6.10) and
@@ -34,6 +34,13 @@ import initWasm, {
   setImageFinish,
   clearImageFinish,
   autoTone as engineAutoTone,
+  autoToneScene,
+  clearDevelopCurves,
+  setDevelopAreaCurves,
+  setDevelopAreaLook,
+  setDevelopCurves,
+  setDevelopLook,
+  setDevelopTone,
   clearImageAreaLayer,
   clearImageAreas,
   setImageAreaColorGrading,
@@ -99,6 +106,7 @@ import {
   exportPng16,
   exportTiff16,
   readDevelopHistogram,
+  readSceneStatistics,
   rendererName,
   sampleColor,
   sampleNeutralWhiteBalance,
@@ -118,7 +126,6 @@ import {
   effectiveFraming,
   framingAngle,
   framingOps,
-  recipeToAdjustments,
   sameAdjustments,
   type EngineAdjustments,
   type Framing,
@@ -127,8 +134,8 @@ import { cropPixels, inverseRotation, isFullCrop, rotatedBounds, straightenedCro
 import { detailKey, detailValues, localContrastValues } from './detail-controls';
 import { finishKey, finishValues } from './finish-controls';
 import { renderCounts, type RenderKind } from './render-counts';
-import { areaLayerKey, areaLayerValues, areaValues, type AreaFrame } from './areas';
-import { colorControlsKey, colorGradeValues, colorMixerValues, curvesLut } from './color-controls';
+import { areaLayerKey, areaLayerValues, areaValues, linearAreaLayerKey, linearAreaLayerValues, type AreaFrame } from './areas';
+import { developPathFor, developStages, type DevelopPath, type LegacyStages, type LinearStages } from './develop-stages';
 import { NO_INSETS, clampZoom, fitView, limitSize, panBy, zoomAround, type Insets, type Size, type View } from './viewport';
 import { decodeRafInWorkers, DecodeAbortedError } from './raf/raf-decode';
 import { parseRawDevelopSettings, rawSettingsFor, rawSettingsJson, temperatureTintFor, type RawDevelopSettings } from './raw-develop';
@@ -509,8 +516,12 @@ class PhotoEngine implements DevelopEngine {
   private pristineId: string | null = null;
   /** Where the turned layer sits in the framed image's pixels; null when it is not turned. */
   private turnedRect: { x: number; y: number; width: number; height: number } | null = null;
-  /** What Curves, Color by hue and Color Grading last sent. */
+  /** Legacy path: what Curves, Color by hue and Color Grading last sent. */
   private colorKey: string | null = null;
+  /** Linear path: what `setDevelopTone`, `setDevelopLook` and `setDevelopCurves` last sent. */
+  private toneKey: string | null = null;
+  private lookKey: string | null = null;
+  private curvesKeyApplied: string | null = null;
   private detailKeyApplied: string | null = null;
   private isInteractive = false;
   /** The crop's corner in framed pixels: where the document starts. */
@@ -552,6 +563,8 @@ class PhotoEngine implements DevelopEngine {
 
   /** Whether the engine renders to float targets and so edits in the working space. */
   private readonly hasFloat: boolean;
+  /** Which develop stages the recipe is sent to, for the engine's life (develop-stages.ts). */
+  private readonly path: DevelopPath;
   /** The space the canvas shows the screen in, and the one it holds now (a copied draw changes it for a moment). */
   private screenSpace: CanvasSpace = 'srgb';
   private canvasSpace: CanvasSpace = 'srgb';
@@ -572,6 +585,7 @@ class PhotoEngine implements DevelopEngine {
     this.engine = engine;
     this.canvas = canvas;
     this.hasFloat = hasFloat;
+    this.path = developPathFor(hasFloat);
     // Told at start-up whatever the display, then whenever it changes.
     this.screenSpace = this.setCanvasSpace(this.screenSpaceFor(currentStatus().display));
     this.stopDisplay = onStatusChange(() => this.followDisplay(currentStatus().display));
@@ -903,6 +917,8 @@ class PhotoEngine implements DevelopEngine {
     this.displaySize = null;
     this.framing = { rotate: 0, flipH: false };
     this.applied = null;
+    this.toneKey = null;
+    this.lookKey = null;
     this.appliedRawJson = null;
     this.applyRecipe();
     this.fit();
@@ -1032,13 +1048,9 @@ class PhotoEngine implements DevelopEngine {
   }
 
   private applyRecipe(): void {
-    const adj = recipeToAdjustments(this.recipe, { isRaw: this.rawDefaults !== null });
-    if (!this.applied || !sameAdjustments(adj, this.applied)) {
-      pushAdjustments(this.engine, adj);
-      this.applied = adj;
-      this.invalidate();
-    }
-    this.applyColorControls();
+    const stages = developStages(this.recipe, { isRaw: this.rawDefaults !== null, path: this.path });
+    if (stages.path === 'linear') this.applyLinearStages(stages);
+    else this.applyLegacyStages(stages);
     this.applyDetail();
     this.applyFinish();
     if (this.rawDefaults) {
@@ -1082,8 +1094,10 @@ class PhotoEngine implements DevelopEngine {
     const overlay = this.screenReads > 0 ? null : this.overlayAreaId;
     // Each area's own layer (its further effects), by its place among the areas.
     const layerOptions = { pixelScale: this.pixelScale, grainSeed: this.grainSeedValue, isInteractive: this.isInteractive };
-    const layers = out ? liveAreas(this.recipe).map((area) => areaLayerValues(area, layerOptions)) : [];
-    const layerKeys = layers.map(areaLayerKey);
+    const areas = out ? liveAreas(this.recipe) : [];
+    const linearLayers = this.path === 'linear' ? areas.map((area) => linearAreaLayerValues(area, layerOptions)) : [];
+    const legacyLayers = this.path === 'legacy' ? areas.map((area) => areaLayerValues(area, layerOptions)) : [];
+    const layerKeys = this.path === 'linear' ? linearLayers.map(linearAreaLayerKey) : legacyLayers.map(areaLayerKey);
     const key = out ? `${Array.from(out.values).join(',')}|${overlay ?? ''}|${layerKeys.join(';')}` : 'none';
     if (key === this.areasKey) return;
     this.areasKey = key;
@@ -1092,19 +1106,29 @@ class PhotoEngine implements DevelopEngine {
     // The engine keeps a layer by its area's place. Only a place whose layer changed is sent again: a place
     // that lost its area, or whose area is another one now, is cleared first.
     const sent = out ? this.areaLayerKeys : [];
-    for (let index = 0; index < Math.max(sent.length, layers.length); index++) {
+    for (let index = 0; index < Math.max(sent.length, layerKeys.length); index++) {
       const layerKey = layerKeys[index] ?? '';
       if (layerKey === (sent[index] ?? '')) continue;
       clearImageAreaLayer(this.engine, index);
-      const layer = layers[index];
-      if (!layer) continue;
-      if (layer.tone) setImageAreaTone(this.engine, index, ...layer.tone);
-      if (layer.curves) setImageAreaCurvesLut(this.engine, index, layer.curves);
-      if (layer.mixer) setImageAreaColorMixer(this.engine, index, layer.mixer);
-      if (layer.grade) setImageAreaColorGrading(this.engine, index, layer.grade);
-      if (layer.detail) setImageAreaDetail(this.engine, index, layer.detail);
-      if (layer.localContrast) setImageAreaLocalContrast(this.engine, index, layer.localContrast);
-      if (layer.finish) setImageAreaFinish(this.engine, index, layer.finish);
+      const linear = linearLayers[index];
+      if (linear) {
+        if (linear.look) setDevelopAreaLook(this.engine, index, linear.look);
+        const tables = linear.curves();
+        if (tables) setDevelopAreaCurves(this.engine, index, tables);
+        if (linear.detail) setImageAreaDetail(this.engine, index, linear.detail);
+        if (linear.localContrast) setImageAreaLocalContrast(this.engine, index, linear.localContrast);
+        if (linear.finish) setImageAreaFinish(this.engine, index, linear.finish);
+      }
+      const layer = legacyLayers[index];
+      if (layer) {
+        if (layer.tone) setImageAreaTone(this.engine, index, ...layer.tone);
+        if (layer.curves) setImageAreaCurvesLut(this.engine, index, layer.curves);
+        if (layer.mixer) setImageAreaColorMixer(this.engine, index, layer.mixer);
+        if (layer.grade) setImageAreaColorGrading(this.engine, index, layer.grade);
+        if (layer.detail) setImageAreaDetail(this.engine, index, layer.detail);
+        if (layer.localContrast) setImageAreaLocalContrast(this.engine, index, layer.localContrast);
+        if (layer.finish) setImageAreaFinish(this.engine, index, layer.finish);
+      }
     }
     this.areaLayerKeys = layerKeys;
     const index = out && overlay ? out.ids.indexOf(overlay) : -1;
@@ -1254,17 +1278,46 @@ class PhotoEngine implements DevelopEngine {
     this.invalidate();
   }
 
-  private applyColorControls(): void {
-    const key = colorControlsKey(this.recipe);
-    if (key === this.colorKey) return;
-    this.colorKey = key;
-    const lut = curvesLut(this.recipe);
+  /** The working space's tone, look and curves, each sent only when it changed. */
+  private applyLinearStages(stages: LinearStages): void {
+    const toneKey = stages.tone.join(',');
+    if (toneKey !== this.toneKey) {
+      this.toneKey = toneKey;
+      setDevelopTone(this.engine, stages.tone);
+      this.invalidate();
+    }
+    const lookKey = stages.look.join(',');
+    if (lookKey !== this.lookKey) {
+      this.lookKey = lookKey;
+      setDevelopLook(this.engine, stages.look);
+      this.invalidate();
+    }
+    if (stages.curvesKey !== this.curvesKeyApplied) {
+      this.curvesKeyApplied = stages.curvesKey;
+      const tables = stages.curves();
+      if (tables) setDevelopCurves(this.engine, tables);
+      else clearDevelopCurves(this.engine);
+      this.invalidate();
+    }
+  }
+
+  /** The 8-bit fallback's image adjustments, curves LUT, Color by hue and grade. */
+  private applyLegacyStages(stages: LegacyStages): void {
+    const adj = stages.adjustments;
+    if (!this.applied || !sameAdjustments(adj, this.applied)) {
+      pushAdjustments(this.engine, adj);
+      this.applied = adj;
+      this.invalidate();
+    }
+    if (stages.colorKey === this.colorKey) return;
+    this.colorKey = stages.colorKey;
+    const lut = stages.curvesLut();
     if (lut) setImageCurvesLut(this.engine, lut);
     else clearImageCurves(this.engine);
-    const mixer = colorMixerValues(this.recipe);
+    const mixer = stages.mixer();
     if (mixer) setImageColorMixer(this.engine, mixer);
     else clearImageColorMixer(this.engine);
-    const grade = colorGradeValues(this.recipe);
+    const grade = stages.grade();
     if (grade) setImageColorGrading(this.engine, grade);
     else clearImageColorGrading(this.engine);
     this.invalidate();
@@ -1327,9 +1380,9 @@ class PhotoEngine implements DevelopEngine {
 
   async autoTone(recipe: Recipe): Promise<ToneValues> {
     this.setRecipe(recipe);
-    const bins = await this.readHistogram();
-    if (!bins) return recipe.tone;
-    const answer: unknown = JSON.parse(engineAutoTone(bins, JSON.stringify(recipe.tone)));
+    const answerJson = this.path === 'linear' ? await this.autoToneFromScene(recipe) : await this.autoToneFromHistogram(recipe);
+    if (answerJson === null) return recipe.tone;
+    const answer: unknown = JSON.parse(answerJson);
     if (typeof answer !== 'object' || answer === null) return recipe.tone;
     const v = answer as Record<string, unknown>;
     const num = (key: keyof ToneValues) => (typeof v[key] === 'number' && Number.isFinite(v[key]) ? (v[key] as number) : recipe.tone[key]);
@@ -1341,6 +1394,20 @@ class PhotoEngine implements DevelopEngine {
       whites: num('whites'),
       blacks: num('blacks'),
     };
+  }
+
+  /** The working space's Auto tone: statistics of the scene before the tone pass, with the photo's exposure. */
+  private async autoToneFromScene(recipe: Recipe): Promise<string | null> {
+    if (!this.sourceSize || this.isDisposed) return null;
+    const stats: unknown = await readSceneStatistics(this.engine);
+    if (!(stats instanceof Float32Array) || stats.length !== 8) return null;
+    return autoToneScene(stats, JSON.stringify(recipe.tone));
+  }
+
+  /** The 8-bit fallback's Auto tone, from the displayed histogram. */
+  private async autoToneFromHistogram(recipe: Recipe): Promise<string | null> {
+    const bins = await this.readHistogram();
+    return bins ? engineAutoTone(bins, JSON.stringify(recipe.tone)) : null;
   }
 
   imageSize(): Size | null {
