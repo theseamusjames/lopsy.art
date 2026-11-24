@@ -79,6 +79,58 @@ pub fn hdr_settings_for(engine: &EngineInner, target: OutputTarget, peak: f32) -
     OutputSettings::hdr(target, source_gamut(engine, true), peak)
 }
 
+/// The HDR view of the live frame (`setDevelopHdr`): whether it is wanted
+/// and its peak, in units of SDR white.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct HdrView {
+    pub on: bool,
+    pub peak: f32,
+}
+
+impl Default for HdrView {
+    /// On, at the starting peak: an HDR screen shows HDR until the app
+    /// turns the view off.
+    fn default() -> Self {
+        HdrView { on: true, peak: lopsy_core::output::DEFAULT_HDR_PEAK }
+    }
+}
+
+/// Whether the live frame is rendered for HDR: the view is on and the
+/// screen really is HDR (`EngineInner::screen_is_hdr`).
+pub fn live_is_hdr(engine: &EngineInner) -> bool {
+    engine.develop_hdr.on && engine.screen_is_hdr()
+}
+
+/// The peak the live frame is rendered to: the view's while
+/// [`live_is_hdr`], 1 (white) otherwise.
+pub fn live_peak(engine: &EngineInner) -> f32 {
+    if live_is_hdr(engine) {
+        lopsy_core::output::hdr_peak(engine.develop_hdr.peak)
+    } else {
+        1.0
+    }
+}
+
+/// The output step of the working space's live frame: for the HDR canvas
+/// with the view's peak when [`live_is_hdr`], otherwise the SDR output for
+/// the screen's space. Neither is dithered here: the final blit dithers an
+/// 8-bit screen, and an HDR one is float. With the view off, an HDR screen
+/// is given exactly the SDR rendering, whose 1.0 the canvas shows as its
+/// SDR white.
+pub fn live_settings(engine: &EngineInner) -> OutputSettings {
+    live_settings_on(engine, engine.screen_is_hdr())
+}
+
+/// [`live_settings`] for a surface that is HDR (`surface_is_hdr`) or not,
+/// so the choice can be tested on an engine with no canvas.
+pub fn live_settings_on(engine: &EngineInner, surface_is_hdr: bool) -> OutputSettings {
+    if engine.develop_hdr.on && surface_is_hdr {
+        hdr_settings_for(engine, OutputTarget::hdr_screen(engine.screen_is_display_p3), engine.develop_hdr.peak)
+    } else {
+        settings_for(engine, screen_target(engine), false, true)
+    }
+}
+
 /// The canvas's space: Display P3 when the host said the screen is.
 pub fn screen_target(engine: &EngineInner) -> OutputTarget {
     if engine.screen_is_display_p3 {

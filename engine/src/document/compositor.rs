@@ -472,8 +472,10 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         if let Err(e) = keep_rendered(engine) {
             crate::host::log(crate::host::LogLevel::Error, &format!("Rendered image: {e}"));
         }
-        // No dither here: the final blit dithers an 8-bit screen.
-        let screen = crate::develop::output::settings_for(engine, crate::develop::output::screen_target(engine), false, true);
+        // For the HDR canvas when the screen is HDR and the HDR view is on,
+        // otherwise for the screen's SDR space. No dither here: the final
+        // blit dithers an 8-bit screen.
+        let screen = crate::develop::output::live_settings(engine);
         apply_output(engine, &screen);
     }
     // The selected area's mask, on screen only: exports composite again.
@@ -2299,7 +2301,8 @@ fn apply_finish(engine: &EngineInner) {
 }
 
 /// The clipping warning over the live composite (never in exports): blue
-/// where any channel is at or below 0, red where any is at or above 1.
+/// where any channel is at or below 0, red where any is at or above 1, or
+/// at the peak in the HDR view.
 fn apply_clipping_warning(engine: &EngineInner) {
     let (shadows, highlights) = engine.clipping_warning;
     if !shadows && !highlights {
@@ -2313,10 +2316,18 @@ fn apply_clipping_warning(engine: &EngineInner) {
         }
     };
     // With the working space the frame has been through the output step,
-    // which brings every channel inside 0..1: what clips on screen is what
-    // shows as 0 or 255.
+    // which brings every channel inside 0..1 (SDR) or 0..the peak (the HDR
+    // view): what clips on screen is what shows as 0 or as the top, within
+    // half an 8-bit step. The HDR canvas holds the peak encoded with the
+    // sRGB curve, so the top is that.
     let margin = if engine.working_space.is_some() { 0.5 / 255.0 } else { 0.0 };
-    let params = crate::gpu::params::develop::ClipWarningParams { shadows: i32::from(shadows), highlights: i32::from(highlights), margin };
+    // Exactly 1 otherwise: the sRGB curve at 1 rounds a hair under it.
+    let white = if engine.working_space.is_some() && crate::develop::output::live_is_hdr(engine) {
+        lopsy_core::working_space::srgb_encode(crate::develop::output::live_peak(engine))
+    } else {
+        1.0
+    };
+    let params = crate::gpu::params::develop::ClipWarningParams { shadows: i32::from(shadows), highlights: i32::from(highlights), margin, white };
     let pass = engine.pass(&program, params).texture("u_tex", engine.composite_texture);
     let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
     engine.gpu().unbind_textures(1);

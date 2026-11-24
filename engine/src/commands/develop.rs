@@ -329,7 +329,8 @@ pub fn set_image_detail_mask_view(engine: &mut EngineInner, on: bool) {
 /// blue where any channel is at or below 0, highlights in red where any is
 /// at or above 1, after the whole develop chain. With the working space it
 /// runs on the screen's output, where every channel is inside 0..1, and
-/// marks what shows as 0 or 255.
+/// marks what shows as 0 or 255; in the HDR view (`set_develop_hdr`) the
+/// top is the peak, not white, so it marks what clips at the peak.
 pub fn set_clipping_warning(engine: &mut EngineInner, shadows: bool, highlights: bool) {
     engine.clipping_warning = (shadows, highlights);
     engine.needs_recomposite = true;
@@ -420,6 +421,22 @@ pub fn read_rendered_f32(engine: &mut EngineInner) -> Read<Vec<f32>> {
     };
     let (w, h) = (engine.doc_width, engine.doc_height);
     engine.gpu().read_rgba_f32(rendered, 0, 0, w, h)
+}
+
+/// The HDR view of the live frame: `on` renders the working space's live
+/// frame for the HDR canvas with highlights up to `peak` (units of SDR
+/// white: 4.0 is two stops above it; clamped to 1..=64, a value that is
+/// not a number is the default 4.0) while the screen is HDR
+/// (`EngineInner::screen_is_hdr`); off shows the SDR rendering, as an
+/// ordinary screen will, without reconfiguring the canvas. On a screen that
+/// is not HDR it changes nothing on screen. Lopsy, without the working
+/// space, is never affected.
+pub fn set_develop_hdr(engine: &mut EngineInner, on: bool, peak: f32) {
+    let view = crate::develop::output::HdrView { on, peak: lopsy_core::output::hdr_peak(peak) };
+    if engine.develop_hdr != view {
+        engine.develop_hdr = view;
+        engine.needs_recomposite = true;
+    }
 }
 
 // ---------------------------------------------------------------------------

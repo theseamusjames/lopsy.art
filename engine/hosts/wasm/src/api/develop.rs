@@ -47,6 +47,18 @@ readback_export! {
     }
 }
 
+/// The HDR view of the working space's live frame. `on`: while the screen
+/// is HDR (`setScreenOutput` asked for it and `screenIsHdr` says it got
+/// it), highlights run above white up to `peak`, in units of SDR white
+/// (4.0, two stops, to start; clamped to 1..=64). Off: the screen shows the
+/// SDR rendering, as an ordinary screen will, with no change to the
+/// canvas. On by default, at 4.0. On WebGL and on an SDR screen it changes
+/// nothing on screen; a document without the working space never uses it.
+#[wasm_bindgen(js_name = "setDevelopHdr")]
+pub fn set_develop_hdr(engine: &mut Engine, on: bool, peak: f32) {
+    lopsy_engine::commands::develop::set_develop_hdr(&mut engine.inner, on, peak)
+}
+
 readback_export! {
     /// 1024 bins of the displayed result: red 0..=255, green, blue, then
     /// Rec. 709 luminance of the encoded values. With the working space,
@@ -235,7 +247,8 @@ pub fn set_image_area_overlay(engine: &mut Engine, index: i32) {
 
 /// Mark clipped pixels on screen only: shadows (any channel ≤ 0) in blue,
 /// highlights (any channel ≥ 1) in red, after the whole develop chain.
-/// With the working space, of the screen's output: what shows as 0 or 255.
+/// With the working space, of the screen's output: what shows as 0 or 255,
+/// or in the HDR view (`setDevelopHdr` on an HDR screen) as 0 or the peak.
 #[wasm_bindgen(js_name = "setClippingWarning")]
 pub fn set_clipping_warning(engine: &mut Engine, shadows: bool, highlights: bool) {
     lopsy_engine::commands::develop::set_clipping_warning(&mut engine.inner, shadows, highlights)

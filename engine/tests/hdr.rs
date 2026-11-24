@@ -19,7 +19,7 @@ use lopsy_engine::gpu::pass::Target;
 use lopsy_engine::gpu::read::Read;
 use lopsy_engine::gpu::shader::ShaderPrograms;
 use lopsy_engine::gpu::texture_pool::TextureHandle;
-use lopsy_engine::{commands, host};
+use lopsy_engine::{commands, document::compositor, host};
 
 thread_local! {
     /// Everything the engine logged as an error on this thread (see
@@ -67,6 +67,14 @@ fn now<T: 'static>(read: Read<T>) -> T {
 fn assert_no_gpu_errors() {
     let errors = ERRORS.with_borrow(Vec::clone);
     assert!(errors.is_empty(), "the engine logged errors: {errors:#?}");
+}
+
+fn layer_json(id: &str, width: u32, height: u32) -> String {
+    format!(
+        r#"{{"id":"{id}","name":"{id}","layer_type":"Raster","visible":true,"locked":false,
+            "opacity":1,"blend_mode":"Normal","x":0,"y":0,"width":{width},"height":{height},
+            "clip_to_below":false,"mask":null}}"#
+    )
 }
 
 /// The develop settings `tests/render.rs` uses: a base curve with its
@@ -254,3 +262,57 @@ fn a_grey_ramp_stays_grey_in_hdr() {
     assert_no_gpu_errors();
 }
 
+/// A RAW-like document: linear camera RGB whose brightness rises left to
+/// right past what the tone step renders as white, and whose colour
+/// changes top to bottom, so a flip or a shift between two reads shows.
+fn hdr_document(w: u32, h: u32) -> Option<EngineInner> {
+    let mut engine = engine(w, h)?;
+    commands::layer::add_layer(&mut engine, &layer_json("raw", w, h)).expect("layer");
+    let linear: Vec<f32> = (0..w * h)
+        .flat_map(|i| {
+            let (x, y) = ((i % w) as f32 / (w - 1) as f32, (i / w) as f32 / (h - 1) as f32);
+            let l = 0.002 + 6.0 * x * x;
+            [l * (0.6 + 0.6 * y), l * 0.8, l * (1.2 - 0.6 * y), 1.0]
+        })
+        .collect();
+    commands::layer::upload_layer_pixels_f32_rect(&mut engine, "raw", w, h, 0, 0, w, h, &linear).expect("pixels");
+    commands::develop::set_raw_develop_json(&mut engine, &serde_json::to_string(&develop_settings()).unwrap()).expect("develop");
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    Some(engine)
+}
+
+#[test]
+fn with_the_hdr_view_off_an_hdr_screen_is_given_the_sdr_rendering() {
+    use lopsy_engine::develop::output::{live_settings, live_settings_on, settings_for, screen_target};
+    let (w, h) = (32u32, 8u32);
+    let Some(mut engine) = hdr_document(w, h) else { return };
+    // No canvas: the engine never claims an HDR screen, whatever was asked.
+    assert!(!engine.set_screen_output(true, true));
+    assert!(!engine.screen_is_hdr());
+    let sdr = settings_for(&engine, screen_target(&engine), false, true);
+    assert_eq!(live_settings(&engine), sdr, "an SDR surface shows the SDR rendering");
+    // The HDR view on: an HDR surface would be given the HDR canvas output.
+    assert!(engine.develop_hdr.on, "on by default");
+    let on = live_settings_on(&engine, true);
+    assert_eq!((on.target, on.peak, on.knee, on.dither), (OutputTarget::ExtendedDisplayP3, 4.0, 1.0, 0.0));
+    commands::develop::set_develop_hdr(&mut engine, true, 2.0);
+    assert_eq!(live_settings_on(&engine, true).peak, 2.0);
+    // Off: the same surface is given exactly the SDR rendering.
+    commands::develop::set_develop_hdr(&mut engine, false, 2.0);
+    assert!(engine.needs_recomposite);
+    assert_eq!(live_settings_on(&engine, true), sdr);
+
+    // And the frame: the composite after a live frame (what the final blit
+    // reads) is the rendered image through the SDR output, bit for bit
+    // the GPU's.
+    compositor::render(&mut engine);
+    let frame = now(engine.gpu().read_rgba_f32(engine.composite_texture, 0, 0, w, h));
+    let rendered = engine.working_space.and_then(|ws| ws.rendered).expect("rendered");
+    let program = engine.shaders.output().expect("compiles");
+    let dst = engine.texture_pool.acquire(w, h).expect("texture");
+    let settings = live_settings_on(&engine, true);
+    assert!(lopsy_engine::develop::output::pass(&engine, &program, rendered, &settings).draw(Target::Texture(dst)));
+    assert_eq!(floats(&engine, dst), frame);
+    assert!(frame.iter().all(|&v| v <= 1.0), "nothing above white with the view off");
+    assert_no_gpu_errors();
+}

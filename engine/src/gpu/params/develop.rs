@@ -81,6 +81,7 @@ uniforms! {
         pub shadows: i32,
         pub highlights: i32,
         pub margin: f32,
+        pub white: f32,
     }
 }
 

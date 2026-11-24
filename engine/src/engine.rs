@@ -261,6 +261,11 @@ pub struct EngineInner {
     /// through `set_screen_output`. Only the working space's output step
     /// reads it.
     pub screen_is_display_p3: bool,
+    /// The HDR view of the working space's live frame: whether it is on and
+    /// its peak. It acts only while the screen is HDR
+    /// (`develop::output::live_settings`). A way of viewing, so a new
+    /// document keeps it.
+    pub develop_hdr: crate::develop::output::HdrView,
     /// Color by hue (`develop/color_mixer.wgsl`): 24 values, applied after
     /// `adjustments`. `None` (the default) leaves the composite untouched.
     pub color_mixer: Option<[f32; lopsy_core::color_mixer::VALUES_LEN]>,
@@ -417,6 +422,7 @@ impl EngineInner {
             raw_develop: None,
             working_space: None,
             screen_is_display_p3: false,
+            develop_hdr: crate::develop::output::HdrView::default(),
             color_mixer: None,
             detail: None,
             local_contrast: None,
@@ -579,6 +585,13 @@ impl EngineInner {
         self.needs_recomposite = true;
         self.screen_is_display_p3 = is_display_p3;
         self.gpu_ctx.set_screen_output(is_display_p3, wants_hdr)
+    }
+
+    /// Whether the screen really is HDR: the surface the engine configured
+    /// keeps values above 1.0. False on WebGL, with no canvas, and on a wgpu
+    /// canvas that could not be made float, whatever the host asked for.
+    pub fn screen_is_hdr(&self) -> bool {
+        self.gpu_ctx.is_screen_hdr()
     }
 
     pub fn set_background_color(&mut self, r: f32, g: f32, b: f32, a: f32) {

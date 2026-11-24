@@ -111,6 +111,15 @@ pub fn set_screen_output(engine: &mut Engine, is_display_p3: bool, wants_hdr: bo
     engine.inner.set_screen_output(is_display_p3, wants_hdr)
 }
 
+/// Whether the screen really is HDR now: the engine's canvas is float
+/// with extended tone mapping (wgpu, after `setScreenOutput` asked for HDR
+/// and the browser could make it). Always false on WebGL. The status bar
+/// should say HDR only when this is true.
+#[wasm_bindgen(js_name = "screenIsHdr")]
+pub fn screen_is_hdr(engine: &Engine) -> bool {
+    engine.inner.screen_is_hdr()
+}
+
 #[wasm_bindgen(js_name = "setBackgroundColor")]
 pub fn set_background_color(engine: &mut Engine, r: f32, g: f32, b: f32, a: f32) {
     engine.inner.set_background_color(r, g, b, a);
