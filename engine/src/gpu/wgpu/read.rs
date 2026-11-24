@@ -154,6 +154,23 @@ pub(in crate::gpu) fn read_texels(
     read_texels_in_bands(ctx, texture, x, y, w, h, bytes_per_texel, band_bytes)
 }
 
+/// The `w` by `h` half-float RGBA texels of `texture` at `(x, y)` as 32-bit
+/// floats, unclamped, as [`read_texels`] lays them out. Each band is
+/// converted as it is mapped, so the result is the only full-size buffer
+/// on the CPU: no copy of the half floats is held beside it.
+pub(in crate::gpu) fn read_halves_as_f32(
+    ctx: &GpuContext,
+    texture: &wgpu::Texture,
+    x: i32,
+    y: i32,
+    w: u32,
+    h: u32,
+) -> impl Future<Output = Result<Vec<f32>, String>> + 'static {
+    let band_bytes = BAND_BYTES.min(ctx.device.limits().max_buffer_size);
+    // Eight bytes a texel in, four floats out.
+    read_converted_in_bands(ctx, texture, x, y, w, h, 8, 4, band_bytes, halves_into_f32)
+}
+
 /// [`read_texels`] with no buffer larger than `band_bytes`, or than one
 /// row where a row is more.
 #[allow(clippy::too_many_arguments)]
@@ -167,7 +184,28 @@ fn read_texels_in_bands(
     bytes_per_texel: u32,
     band_bytes: u64,
 ) -> impl Future<Output = Result<Vec<u8>, String>> + 'static {
-    let len = w as usize * h as usize * bytes_per_texel as usize;
+    let copy_bytes: fn(&[u8], &mut [u8]) = |src, dst| dst.copy_from_slice(src);
+    read_converted_in_bands(ctx, texture, x, y, w, h, bytes_per_texel, bytes_per_texel as usize, band_bytes, copy_bytes)
+}
+
+/// The banded read under [`read_texels`] and [`read_halves_as_f32`]: each
+/// texel of `bytes_per_texel` bytes becomes `values_per_texel` values of
+/// `T`, a row at a time through `convert` (a row of bytes into its row of
+/// values), straight from the mapped band into the result.
+#[allow(clippy::too_many_arguments)]
+fn read_converted_in_bands<T: Copy + Default + 'static>(
+    ctx: &GpuContext,
+    texture: &wgpu::Texture,
+    x: i32,
+    y: i32,
+    w: u32,
+    h: u32,
+    bytes_per_texel: u32,
+    values_per_texel: usize,
+    band_bytes: u64,
+    convert: fn(&[u8], &mut [T]),
+) -> impl Future<Output = Result<Vec<T>, String>> + 'static {
+    let len = w as usize * h as usize * values_per_texel;
     let copy = inside(x, y, w, h, texture.width(), texture.height()).map(|area| {
         let padded_row = (area.w * bytes_per_texel).next_multiple_of(ROW_ALIGNMENT);
         let mut encoder = ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
@@ -211,20 +249,20 @@ fn read_texels_in_bands(
     });
 
     async move {
-        let mut texels = vec![0u8; len];
+        let mut texels = vec![T::default(); len];
         let Some((area, padded_row, read_bands)) = copy else {
             return Ok(texels);
         };
-        let texel = bytes_per_texel as usize;
-        let row_len = area.w as usize * texel;
+        let row_bytes = area.w as usize * bytes_per_texel as usize;
+        let row_values = area.w as usize * values_per_texel;
         for (first_row, rows, buffer, mapped) in read_bands {
             mapped.await?;
             {
                 let view = buffer.get_mapped_range(..).map_err(|e| format!("Readback failed: {e}"))?;
                 for row in 0..rows as usize {
                     let from = row * padded_row;
-                    let to = ((area.dy as usize + first_row as usize + row) * w as usize + area.dx as usize) * texel;
-                    texels[to..to + row_len].copy_from_slice(&view[from..from + row_len]);
+                    let to = ((area.dy as usize + first_row as usize + row) * w as usize + area.dx as usize) * values_per_texel;
+                    convert(&view[from..from + row_bytes], &mut texels[to..to + row_values]);
                 }
             }
             buffer.unmap();
@@ -254,8 +292,10 @@ pub(in crate::gpu) fn halves_to_u16(bytes: &[u8]) -> Vec<u16> {
 }
 
 /// Half-float texel bytes as 32-bit floats, unclamped.
-pub(in crate::gpu) fn halves_to_f32(bytes: &[u8]) -> Vec<f32> {
-    bytes.chunks_exact(2).map(|b| f16_to_f32(u16::from_le_bytes([b[0], b[1]]))).collect()
+fn halves_into_f32(bytes: &[u8], values: &mut [f32]) {
+    for (v, b) in values.iter_mut().zip(bytes.chunks_exact(2)) {
+        *v = f16_to_f32(u16::from_le_bytes([b[0], b[1]]));
+    }
 }
 
 #[cfg(test)]
@@ -350,6 +390,34 @@ mod tests {
         let around = block_on(read_texels_in_bands(&ctx, &texture, -1, 5, 3, 4, 4, 1)).expect("readback");
         let row = |y: u8| [[0, 0, 0, 0], [0, y, 200, 255], [1, y, 200, 255]].concat();
         assert_eq!(around, [row(5), row(6), vec![0; 12], vec![0; 12]].concat());
+
+        // Half floats read as f32 a band at a time, with a rect that leaves
+        // the texture: the bytes read whole and converted afterwards.
+        let halves = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let values: Vec<f32> = (0..width * height * 4).map(|i| i as f32 * 0.37 - 20.0).collect();
+        let bytes: Vec<u8> = values.iter().flat_map(|&v| lopsy_core::half::f32_to_f16(v).to_le_bytes()).collect();
+        ctx.queue.write_texture(
+            halves.as_image_copy(),
+            &bytes,
+            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(width * 8), rows_per_image: None },
+            wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+        );
+        let whole = block_on(read_texels_in_bands(&ctx, &halves, -1, 2, 4, 6, 8, BAND_BYTES)).expect("readback");
+        let mut expected = vec![0f32; whole.len() / 2];
+        halves_into_f32(&whole, &mut expected);
+        let banded = block_on(read_converted_in_bands(&ctx, &halves, -1, 2, 4, 6, 8, 4, 1, halves_into_f32)).expect("readback");
+        assert_eq!(banded, expected);
+        assert_eq!(block_on(read_halves_as_f32(&ctx, &halves, -1, 2, 4, 6)).expect("readback"), expected);
+        assert!(expected[4..8].iter().zip(&values[2 * 20..2 * 20 + 4]).all(|(a, b)| (a - b).abs() <= b.abs() / 1024.0 + 1e-3));
     }
 
     #[test]

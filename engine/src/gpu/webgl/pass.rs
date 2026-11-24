@@ -100,9 +100,6 @@ impl<'a> GpuRef<'a> {
     /// values are clipped to 0..1 at 8 bits: a caller wants these reads for
     /// what lies outside that.
     pub fn read_rgba_f32(self, texture: TextureHandle, x: i32, y: i32, w: u32, h: u32) -> Read<Vec<f32>> {
-        if let Err(e) = crate::gpu::require_float_pool(self.textures.use_float(), "A float read") {
-            return Read::failed(e);
-        }
         let Some(tex) = self.textures.get(texture) else {
             return Read::failed("Texture not found");
         };

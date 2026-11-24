@@ -18,7 +18,7 @@ use lopsy_core::geometry::Rect;
 use super::context::{quad_bytes, GpuContext};
 use super::framebuffer::{FramebufferHandle, FramebufferPool};
 use super::program::{BindingKind, LinkedProgram, ParamSink};
-use super::read::{halves_to_u16, halves_to_f32, halves_to_u8, read_texels};
+use super::read::{halves_to_u16, halves_to_u8, read_halves_as_f32, read_texels};
 use super::texture_pool::{TextureHandle, TexturePool};
 use crate::gpu::pass::{Blend, ReadFormat, Scissor, Target};
 use crate::gpu::read::Read;
@@ -299,8 +299,7 @@ impl<'a> GpuRef<'a> {
         let Some(texture) = self.textures.get(texture) else {
             return Read::failed("Texture not found");
         };
-        let texels = read_texels(self.ctx, texture, x, y, w, h, HALF_RGBA_BYTES);
-        Read::later(async move { Ok(halves_to_f32(&texels.await?)) })
+        Read::later(read_halves_as_f32(self.ctx, texture, x, y, w, h))
     }
 }
 
