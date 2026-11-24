@@ -1783,6 +1783,42 @@ fn with_the_working_space_lopsys_adjustments_do_nothing_and_the_new_stages_do() 
 }
 
 #[test]
+fn an_areas_layer_look_shows_through_its_mask_only_with_the_working_space() {
+    let Some(mut engine) = engine(32, 8) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, 32, 8, 1.0)).expect("layer");
+    let texels: Vec<[u8; 4]> = (0..32 * 8).map(|i| [(i % 32 * 7) as u8, 110, 90, 255]).collect();
+    commands::layer::upload_layer_pixels(&mut engine, "art", texels.as_flattened(), 32, 8, 0, 0).expect("pixels");
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    // A hard-edged radial area over x < 10 (centre 4, radius 6).
+    let mut area = radial_area(4.0, 4.0, 6.0, 20.0, [0.0; 7]);
+    area[8] = 0.0;
+    commands::develop::set_image_areas(&mut engine, &area).expect("areas");
+    let before = now(compositor::composite_for_export_u16(&mut engine));
+    let mut layer = [0.0f32; commands::develop::AREA_LOOK_LEN];
+    // Color by hue on every band, and a warm global grade.
+    for k in 0..8 {
+        layer[3 + k * 3 + 1] = 60.0;
+    }
+    layer[27 + 12] = 0.1;
+    layer[27 + 16] = 1.0;
+    layer[27 + 17] = 0.2;
+    commands::develop::set_develop_area_look(&mut engine, 0, &layer).expect("area look");
+    let after = now(compositor::composite_for_export_u16(&mut engine));
+    let px = |v: &[u16], x: usize, y: usize| v[(y * 32 + x) * 4..(y * 32 + x) * 4 + 4].to_vec();
+    for y in 0..8 {
+        assert_ne!(px(&after, 3, y), px(&before, 3, y), "inside the area at row {y}");
+        for x in 11..32 {
+            assert_eq!(px(&after, x, y), px(&before, x, y), "outside the area at ({x}, {y})");
+        }
+    }
+    // The old area-layer calls change nothing with the working space.
+    commands::develop::clear_image_area_layer(&mut engine, 0);
+    commands::develop::set_image_area_tone(&mut engine, 0, 50.0, -50.0, 50.0).expect("old area tone");
+    assert_eq!(now(compositor::composite_for_export_u16(&mut engine)), before);
+    assert_no_gpu_errors();
+}
+
+#[test]
 fn scene_statistics_are_read_before_tone_with_the_exposure_applied() {
     let Some(mut engine) = engine(64, 32) else { return };
     commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, 64, 32, 1.0)).expect("layer");

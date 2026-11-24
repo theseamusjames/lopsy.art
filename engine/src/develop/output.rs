@@ -49,9 +49,11 @@ pub fn pass<'a>(
 /// can take a colour out of the gamut it came in), and otherwise the gamut
 /// the photo was encoded in. With the working space no stage clamps to
 /// sRGB: the image adjustments and the old colour by hue, which did, do not
-/// run. Without it this is sRGB (`with_adjustments` is then unused).
-pub fn source_gamut(engine: &EngineInner, with_adjustments: bool) -> Gamut {
-    let _ = with_adjustments;
+/// run. A document that is neither RAW nor in the working space is sRGB.
+/// Whether the run applies Lopsy's image
+/// adjustments no longer matters, since they never run with the working
+/// space; the argument stays for the callers that pass it.
+pub fn source_gamut(engine: &EngineInner, _with_adjustments: bool) -> Gamut {
     match (&engine.raw_develop, &engine.working_space) {
         (Some(_), _) => Gamut::Rec2020,
         (None, Some(_)) if crate::develop::tone::scene_is_active(engine) || crate::document::compositor::look_draws(engine) => {
