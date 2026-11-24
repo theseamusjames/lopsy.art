@@ -13,6 +13,14 @@ export type SuiteRenderer = 'wgpu' | 'webgl';
 
 export const suiteRenderer: SuiteRenderer = process.env.PHOTONAMOUS_RENDERER === 'webgl' ? 'webgl' : 'wgpu';
 
+/**
+ * `PHOTONAMOUS_GPU=hardware` runs on the machine's GPU instead of
+ * SwiftShader (`hardwareGpuArgs`, and the full Chromium binary, which has
+ * one: the headless shell does not), for the specs that measure it
+ * (`edit-speed.spec.ts`). Those specs skip themselves without it.
+ */
+export const isHardwareGpu = process.env.PHOTONAMOUS_GPU === 'hardware';
+
 /** The environment a dev server or build for this suite is started with. */
 export const rendererEnv = { PHOTONAMOUS_RENDERER: suiteRenderer };
 

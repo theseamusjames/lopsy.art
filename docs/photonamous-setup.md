@@ -366,6 +366,28 @@ browser without WebGPU runs WebGL either way. A tab where WebGPU failed to
 start keeps to WebGL until it is closed (the `photonamous:renderer-failed`
 flag in sessionStorage); open a new tab to try WebGPU again.
 
+**Measuring on the real GPU.** `e2e/edit-speed.spec.ts` times a RAF's
+load, one edit frame for four recipes at the working size and at 100 %,
+and full-size exports, on the new linear chain and on the old one. It
+runs only with `PHOTONAMOUS_GPU=hardware`, which starts the full Chromium
+binary on the machine's GPU (`hardwareGpuArgs` in `e2e/gpu-args.ts`;
+the spec fails on a software adapter), and with `LOPSY_RAF_SAMPLES`
+holding `DSCF8005.RAF` and `DSCF7795.RAF`. One renderer per run;
+`SPEED_OUT=<file>` appends each series as JSON, and the spec's header
+lists the variables that narrow a run.
+
+```bash
+cd apps/photonamous && PHOTONAMOUS_GPU=hardware LOPSY_RAF_SAMPLES=<dir> npx playwright test e2e/edit-speed.spec.ts
+cd apps/photonamous && PHOTONAMOUS_GPU=hardware PHOTONAMOUS_RENDERER=webgl LOPSY_RAF_SAMPLES=<dir> npx playwright test e2e/edit-speed.spec.ts
+```
+
+The old chain is `?develop=legacy` on a page of a development build
+(`apps/photonamous/src/engine/develop-override.ts`; production builds
+ignore it): every engine keeps the working space off and the app sends
+the legacy calls, as on a GPU without float render targets, while the
+texture pool and the RAW decode stay float as the GPU has them. HDR files
+are not offered then, and the status bar reads 8-bit.
+
 **Colour.** Headless Chromium's display is sRGB. `e2e/display-p3.spec.ts`
 starts its browser with `--force-color-profile=display-p3-d65`, which gives
 it a Display P3 display (`(color-gamut: p3)` matches), and checks that the

@@ -152,6 +152,7 @@ import { LOPSY_LAYER_MIME } from './lopsy-layer';
 export { LOPSY_LAYER_MIME };
 import { areaLayerKey, areaLayerValues, areaValues, linearAreaLayerKey, linearAreaLayerValues, type AreaFrame } from './areas';
 import { developPathFor, developStages, type DevelopPath, type LegacyStages, type LinearStages } from './develop-stages';
+import { usesWorkingSpace } from './develop-override';
 import { NO_INSETS, clampZoom, fitView, limitSize, panBy, zoomAround, type Insets, type Size, type View } from './viewport';
 import { decodeRafInWorkers, DecodeAbortedError } from './raf/raf-decode';
 import { parseRawDevelopSettings, rawSettingsFor, rawSettingsJson, temperatureTintFor, type RawDevelopSettings } from './raw-develop';
@@ -165,7 +166,7 @@ declare global {
      * Development builds: the build the last engine started on, a way to lose its GPU, and whether it is
      * the Edit view's (not an export or preview engine's), for e2e tests.
      */
-    __photonamousEngine?: { rendererName: () => Renderer; loseDevice: () => boolean; isScreen: boolean };
+    __photonamousEngine?: { rendererName: () => Renderer; loseDevice: () => boolean; isScreen: boolean; isWorkingSpace: boolean };
   }
 }
 
@@ -593,9 +594,12 @@ export async function createDevelopEngine(canvas: HTMLCanvasElement, options: De
     // canvas converts them, and the engine's PNG and DNG decoders and a Lopsy
     // layer give sRGB-encoded values. On an 8-bit pool linear data would band,
     // so there the working space stays off (plan section 5, decision 9).
-    setDevelopWorkingSpace(engine, hasFloat, SRGB);
-    noteEngineStarted(hasFloat);
-    return new PhotoEngine(engine, canvas, hasFloat, options.isScreen === true);
+    // `?develop=legacy` (develop-override.ts) keeps it off on a float GPU too, for measuring the old chain.
+    const isWorkingSpace = usesWorkingSpace(hasFloat);
+    setDevelopWorkingSpace(engine, isWorkingSpace, SRGB);
+    // The status says what the edit can do: without the working space there are no HDR files, as on an 8-bit GPU.
+    noteEngineStarted(isWorkingSpace);
+    return new PhotoEngine(engine, canvas, hasFloat, isWorkingSpace, options.isScreen === true);
   } catch (err) {
     // Nothing else holds the engine yet: freed here, or its GPU device would stay with the page.
     freeQuietly(engine);
@@ -687,8 +691,10 @@ class PhotoEngine implements DevelopEngine {
   /** The full image's oriented size, before framing. */
   private fullSize: Size | null = null;
 
-  /** Whether the engine renders to float targets and so edits in the working space. */
+  /** Whether the engine renders to float targets, which the RAW decode's linear camera RGB needs. */
   private readonly hasFloat: boolean;
+  /** Whether the engine edits in the working space: on float targets, unless `?develop=legacy` keeps it off. */
+  private readonly isWorkingSpace: boolean;
   /** Which develop stages the recipe is sent to, for the engine's life (develop-stages.ts). */
   private readonly path: DevelopPath;
   /** The space the canvas shows the screen in, and the one it holds now (a copied draw changes it for a moment). */
@@ -718,13 +724,14 @@ class PhotoEngine implements DevelopEngine {
     this.lostListeners.clear();
   };
 
-  constructor(engine: Engine, canvas: HTMLCanvasElement, hasFloat: boolean, isScreen: boolean) {
+  constructor(engine: Engine, canvas: HTMLCanvasElement, hasFloat: boolean, isWorkingSpace: boolean, isScreen: boolean) {
     this.engine = engine;
     this.id = engineId(engine);
     this.canvas = canvas;
     this.hasFloat = hasFloat;
+    this.isWorkingSpace = isWorkingSpace;
     this.isScreen = isScreen;
-    this.path = developPathFor(hasFloat);
+    this.path = developPathFor(isWorkingSpace);
     // Told at start-up whatever the display, then whenever it changes.
     this.screenSpace = this.setCanvasSpace(this.screenSpaceFor(currentStatus().display), this.wantsHdr(currentStatus().display));
     this.noteScreen();
@@ -735,7 +742,7 @@ class PhotoEngine implements DevelopEngine {
     });
     if (rendererName() === 'wgpu') window.addEventListener(GPU_LOST_EVENT, this.handleGpuLost);
     else canvas.addEventListener('webglcontextlost', this.handleGpuLost);
-    if (import.meta.env.DEV) window.__photonamousEngine = { rendererName, loseDevice: () => this.loseDevice(), isScreen };
+    if (import.meta.env.DEV) window.__photonamousEngine = { rendererName, loseDevice: () => this.loseDevice(), isScreen, isWorkingSpace };
     this.resizeObserver = new ResizeObserver((entries) => this.handleResize(entries));
     try {
       this.resizeObserver.observe(canvas, { box: 'device-pixel-content-box' });
@@ -1016,7 +1023,7 @@ class PhotoEngine implements DevelopEngine {
 
   /** Display P3 where the display has it and the working space renders for it; sRGB otherwise. */
   private screenSpaceFor(display: DisplayInfo): CanvasSpace {
-    return display.isDisplayP3 && this.hasFloat ? 'display-p3' : 'srgb';
+    return display.isDisplayP3 && this.isWorkingSpace ? 'display-p3' : 'srgb';
   }
 
   /**
@@ -1025,7 +1032,7 @@ class PhotoEngine implements DevelopEngine {
    * the display reports high dynamic range.
    */
   private wantsHdr(display: DisplayInfo): boolean {
-    return this.isScreen && this.hasFloat && display.isHdr && rendererName() === 'wgpu';
+    return this.isScreen && this.isWorkingSpace && display.isHdr && rendererName() === 'wgpu';
   }
 
   /** Moves the canvas to the space (and dynamic range) of the display the window is on now. */
@@ -1531,7 +1538,7 @@ class PhotoEngine implements DevelopEngine {
     return { temperature, tint };
   }
   async readHdrHistogram(): Promise<Uint32Array | null> {
-    if (!this.sourceSize || this.isDisposed || !this.hasFloat) return null;
+    if (!this.sourceSize || this.isDisposed || !this.isWorkingSpace) return null;
     return this.withStatisticsViewsOff(async () => {
       this.renderFrameNow();
       const bins: unknown = await readHdrHistogram(this.engine, HDR_PEAK);
@@ -1799,7 +1806,7 @@ class PhotoEngine implements DevelopEngine {
   }
 
   canExportHdr(): boolean {
-    return this.hasFloat;
+    return this.isWorkingSpace;
   }
 
   /**
@@ -1813,7 +1820,7 @@ class PhotoEngine implements DevelopEngine {
    * the engine's grey PNG, so no pixel passes through TypeScript.
    */
   private async encodeHdr(format: 'hdr-png' | 'hdr-jpeg', image: Size, quality: number, exif: Uint8Array | null): Promise<Blob> {
-    if (!this.hasFloat) throw new Error('HDR files need a GPU that renders in floating point, and this one does not. Choose JPEG or PNG.');
+    if (!this.isWorkingSpace) throw new Error('HDR files need a GPU that renders in floating point, and this one does not. Choose JPEG or PNG.');
     const { width, height } = image;
     try {
       let hdr: Float32Array | null = await readHdrOutputF32(this.engine, HDR_PEAK);
@@ -1872,7 +1879,7 @@ class PhotoEngine implements DevelopEngine {
     const image = this.imageSize();
     if (!image) return sizes.map(() => null);
     // Without the working space no output step renders for P3: the engine's P3 PNG converts instead (encodeFromPng16).
-    if (space !== 'srgb' && !this.hasFloat) return sizes.map(() => null);
+    if (space !== 'srgb' && !this.isWorkingSpace) return sizes.map(() => null);
     const { width: savedW, height: savedH } = this.canvas;
     try {
       // The canvas holds the file's space, in SDR, while it is drawn and copied, so the copy is exact.

@@ -1,7 +1,7 @@
 import { chromium, defineConfig, devices } from '@playwright/test';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { gpuArgs, rendererEnv } from './e2e/gpu-args';
+import { gpuArgs, hardwareGpuArgs, isHardwareGpu, rendererEnv } from './e2e/gpu-args';
 
 /**
  * The Chromium to run. Playwright's own build when it is installed; else
@@ -34,6 +34,9 @@ export function chromiumExecutable(): string | undefined {
  *
  * The RAF test reads real camera files from LOPSY_RAF_SAMPLES and is
  * skipped when it is unset.
+ *
+ * PHOTONAMOUS_GPU=hardware runs the browser on the machine's GPU, in the
+ * full Chromium binary, for the specs that measure speed (gpu-args.ts).
  */
 const port = Number(process.env.VITE_PORT ?? 5174);
 /**
@@ -86,7 +89,9 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 800 },
-        launchOptions: { args: gpuArgs, executablePath: chromiumExecutable() },
+        ...(isHardwareGpu
+          ? { channel: 'chromium', launchOptions: { args: hardwareGpuArgs } }
+          : { launchOptions: { args: gpuArgs, executablePath: chromiumExecutable() } }),
       },
     },
     {
