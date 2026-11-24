@@ -1,6 +1,7 @@
 pub mod black_level;
 pub mod color;
 pub mod colorimetry;
+pub mod cct;
 pub mod space_convert;
 pub mod orientation;
 pub mod blend;
