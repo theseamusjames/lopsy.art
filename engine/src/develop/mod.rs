@@ -91,7 +91,9 @@
 //! The histogram (`readDevelopHistogram`, and so Auto tone) and the pixel
 //! readout (`sampleColor`) read that image through stage 11 for sRGB with no
 //! dither (`compositor::statistics_image`), whatever the screen is and
-//! without stage 10. `readRenderedF32` reads it as it is. The white balance
+//! without stage 10. The HDR histogram (`readHdrHistogram`) reads it through
+//! stage 11 for the HDR canvas in sRGB primaries with the peak it is given
+//! (`compositor::hdr_statistics_image`), the same way. `readRenderedF32` reads it as it is. The white balance
 //! picker (`sampleNeutralWhiteBalance`) reads stage 1, as before.
 //!
 //! **Lazily compiled.** Every shader under `gpu/shaders/develop/` (raw
@@ -125,6 +127,7 @@
 //! - `rafWhiteBalancePresets(rafBytes)`, `rafWhiteBalanceKelvin(rafBytes)`: the body's presets in recipe units, and the Kelvin scale.
 //! - `sampleNeutralWhiteBalance(engine, x, y, radius)` (readback): the picker; leaves out clipped and reconstructed pixels when `setRawDevelop`'s JSON has `clipLevels`.
 //! - `readDevelopHistogram(engine)` (readback): 4 × 256 bins of the displayed result; with the working space, of the sRGB output.
+//! - `readHdrHistogram(engine, peak)` (readback, working space only): 4 × 256 bins of the HDR rendering for the HDR canvas in sRGB primaries, encoded values from black (bin 0) to the peak (bin 255); `hdrHistogramWhiteBin(peak)` is where white falls (139.7 for 4).
 //! - `sampleColor(engine, x, y, size)` (readback, `drawing.rs`): the pixel readout; with the working space, of the sRGB output.
 //! - `autoTone(histogram, currentJson)`: Auto tone from the displayed
 //!   histogram (`develop_stats::auto_tone`), kept until the app has moved.

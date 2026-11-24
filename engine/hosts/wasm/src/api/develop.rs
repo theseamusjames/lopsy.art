@@ -86,6 +86,30 @@ readback_export! {
     }
 }
 
+readback_export! {
+    /// 1024 bins of the HDR rendering, for drawing the region right of
+    /// white, with the working space: the image rendered for the HDR canvas
+    /// (sRGB primaries, the sRGB curve continued past 1) with highlights up
+    /// to `peak` (units of SDR white, as `setDevelopHdr` and
+    /// `readHdrOutputF32` take it), whatever the screen is, without the
+    /// screen-only views. Red 0..=255, green, blue, then Rec. 709
+    /// luminance of the encoded values; bin 0 is black, bin 255 the peak,
+    /// and white is at `hdrHistogramWhiteBin(peak)` (139.7 for 4). Fails
+    /// without the working space. `readDevelopHistogram` and Auto tone are
+    /// unchanged. Wrap with `'any-time'`.
+    #[wasm_bindgen(js_name = "readHdrHistogram")]
+    pub fn read_hdr_histogram(engine, peak: f32) -> Result<Vec<u32>> {
+        read(lopsy_engine::commands::develop::read_hdr_histogram(engine, peak))
+    }
+}
+
+/// Where SDR white falls on `readHdrHistogram`'s axis for `peak`, in bins
+/// from the left (0..=255; 255 / the peak's encoded value, 139.7 for 4).
+#[wasm_bindgen(js_name = "hdrHistogramWhiteBin")]
+pub fn hdr_histogram_white_bin(peak: f32) -> f32 {
+    lopsy_core::output::hdr_histogram_white_bin(peak)
+}
+
 /// Auto tone: the histogram (as `readDevelopHistogram` returns it) of the
 /// render with `currentJson` applied, and the current
 /// `{exposure, contrast, highlights, shadows, whites, blacks}`; returns the

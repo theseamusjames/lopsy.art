@@ -66,7 +66,7 @@
 //!    [`OutputTarget::ExtendedDisplayP3`]) use the sRGB curve continued past
 //!    1 (and mirrored below 0), which is what a WebGPU canvas configured
 //!    `rgba16float` with extended tone mapping holds: encoded 1.0 is the
-//!    display's SDR white and the peak is `srgb_encode(peak)` (1.67 for
+//!    display's SDR white and the peak is `srgb_encode(peak)` (1.82 for
 //!    4). The HDR file target ([`OutputTarget::LinearRec2020`]) is linear,
 //!    1.0 = SDR white, what `hdr_png` and `gain_map` take.
 //! 4. **Dither**, for 8-bit targets only: one value per pixel from a hash
@@ -359,9 +359,73 @@ pub fn output_reference(rgba: &[f32], width: u32, s: &OutputSettings) -> Vec<f32
     out
 }
 
+/// Bins a channel of the HDR histogram has, as the SDR one
+/// (`develop_stats::BINS`), so the two can be drawn the same way.
+pub const HDR_HISTOGRAM_BINS: usize = 256;
+
+/// The encoded value at the HDR histogram's right end: the peak on the HDR
+/// canvas's scale (the sRGB curve continued past 1). Never under 1: the
+/// curve at 1 rounds a hair below it in f32.
+pub fn hdr_histogram_top(peak: f32) -> f32 {
+    srgb_encode(hdr_peak(peak)).max(1.0)
+}
+
+/// Where SDR white falls on the HDR histogram's axis, in bins from the
+/// left: `255 / srgb_encode(peak)`, 139.7 for a peak of 4. Everything to
+/// its right is above white.
+pub fn hdr_histogram_white_bin(peak: f32) -> f32 {
+    (HDR_HISTOGRAM_BINS - 1) as f32 / hdr_histogram_top(peak)
+}
+
+/// The HDR histogram of straight-alpha RGBA f32 pixels rendered for
+/// [`OutputTarget::ExtendedSrgb`] with `peak`: 4 × [`HDR_HISTOGRAM_BINS`]
+/// counts, red, green, blue, then Rec. 709 luminance of the encoded values,
+/// as `develop_stats::histogram_from_rgba8` lays them out. A value `e` goes
+/// to bin `round(e / top · 255)`, `top` the peak encoded
+/// ([`hdr_histogram_top`]), so the axis runs from black to the peak and
+/// white is at [`hdr_histogram_white_bin`]; with a peak of 1 the bins are
+/// the SDR histogram's. Values outside are counted at the ends; pixels with
+/// no alpha (under half an 8-bit step) are skipped.
+pub fn hdr_histogram(pixels: &[f32], peak: f32) -> Vec<u32> {
+    let n = HDR_HISTOGRAM_BINS;
+    let scale = (n - 1) as f32 / hdr_histogram_top(peak);
+    let bin = |e: f32| {
+        let b = (e * scale).round();
+        if b.is_nan() || b <= 0.0 { 0 } else { (b as usize).min(n - 1) }
+    };
+    let mut h = vec![0u32; 4 * n];
+    for px in pixels.chunks_exact(4) {
+        if px[3] < 0.5 / 255.0 {
+            continue;
+        }
+        h[bin(px[0])] += 1;
+        h[n + bin(px[1])] += 1;
+        h[2 * n + bin(px[2])] += 1;
+        h[3 * n + bin(0.2126 * px[0] + 0.7152 * px[1] + 0.0722 * px[2])] += 1;
+    }
+    h
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_hdr_histogram_runs_from_black_to_the_peak_with_white_marked() {
+        let white = hdr_histogram_white_bin(4.0);
+        assert!((white - 139.74).abs() < 0.05, "{white}");
+        assert_eq!(hdr_histogram_white_bin(1.0), 255.0);
+        let top = hdr_histogram_top(4.0);
+        let px = [0.0f32, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, top, top, top, 1.0, 9.0, -1.0, 0.5, 0.0];
+        let h = hdr_histogram(&px, 4.0);
+        assert_eq!(h.len(), 4 * HDR_HISTOGRAM_BINS);
+        assert_eq!((h[0], h[white.round() as usize], h[255]), (1, 1, 1), "red: black, white and the peak");
+        assert_eq!(h[3 * 256..].iter().sum::<u32>(), 3, "the transparent pixel is skipped");
+        // A peak of 1 bins as the SDR histogram does.
+        let sdr = [0.2f32, 0.5, 0.9, 1.0];
+        let bytes = sdr.map(|v| (v * 255.0).round() as u8);
+        assert_eq!(hdr_histogram(&sdr, 1.0), crate::develop_stats::histogram_from_rgba8(&bytes));
+    }
     use crate::working_space::{srgb_decode, SourceEncoding};
 
     fn sdr(target: OutputTarget) -> OutputSettings {

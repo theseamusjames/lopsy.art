@@ -400,3 +400,29 @@ fn with_the_hdr_view_off_an_hdr_screen_is_given_the_sdr_rendering() {
     assert!(frame.iter().all(|&v| v <= 1.0), "nothing above white with the view off");
     assert_no_gpu_errors();
 }
+
+#[test]
+fn the_hdr_histogram_counts_the_hdr_rendering_from_black_to_the_peak() {
+    let Some(mut plain) = engine(4, 4) else { return };
+    assert!(block_on(commands::develop::read_hdr_histogram(&mut plain, 4.0)).is_err(), "no working space, no HDR histogram");
+    let (w, h) = (32u32, 8u32);
+    let Some(mut engine) = hdr_document(w, h) else { return };
+    let sdr = now(commands::develop::read_develop_histogram(&mut engine));
+    let hdr = now(commands::develop::read_hdr_histogram(&mut engine, 4.0));
+    assert_eq!(hdr.len(), sdr.len());
+    let n = lopsy_core::output::HDR_HISTOGRAM_BINS;
+    let white = lopsy_core::output::hdr_histogram_white_bin(4.0);
+    assert_eq!(hdr[3 * n..].iter().sum::<u32>(), w * h, "every pixel counted once");
+    let above: u32 = hdr[3 * n..].iter().enumerate().filter(|&(b, _)| b as f32 > white + 0.5).map(|(_, &c)| c).sum();
+    assert!(above > 0, "the highlights reach right of white");
+    // The SDR histogram has the brightest pixels at white; the HDR one
+    // has nothing at the peak, which the roll-off never reaches.
+    assert!(sdr[3 * n + 255] > 0 && hdr[3 * n + 255] == 0, "{} at white in SDR, {} at the peak in HDR", sdr[3 * n + 255], hdr[3 * n + 255]);
+    // At a peak of 1 the HDR histogram is the SDR one, but for values that
+    // round to one bin as an 8-bit read and to the next as a float.
+    let one = now(commands::develop::read_hdr_histogram(&mut engine, 1.0));
+    let moved: u32 = one.iter().zip(&sdr).map(|(a, b)| a.abs_diff(*b)).sum();
+    eprintln!("HDR histogram at a peak of 1: {moved} of {} counts differ from the SDR one", 4 * w * h);
+    assert!(moved <= w * h / 4, "{moved} counts differ from the SDR histogram");
+    assert_no_gpu_errors();
+}

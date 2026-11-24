@@ -2289,6 +2289,22 @@ fn keep_rendered(engine: &mut EngineInner) -> Result<(), String> {
 /// `None`): what the statistics read, whatever the screen is. `None` when
 /// the document has no working space or no frame has been drawn with it.
 pub fn statistics_image(engine: &EngineInner, rect: Option<Rect>) -> Option<TextureHandle> {
+    let settings = crate::develop::output::settings_for(engine, lopsy_core::output::OutputTarget::Srgb, false, true);
+    rendered_through(engine, rect, &settings)
+}
+
+/// The last live frame's rendered image through the HDR output for the
+/// HDR canvas in sRGB primaries with `peak`, in scratch A: what the HDR
+/// histogram reads, whatever the screen is. `None` as for
+/// `statistics_image`.
+pub fn hdr_statistics_image(engine: &EngineInner, peak: f32) -> Option<TextureHandle> {
+    let settings = crate::develop::output::hdr_settings_for(engine, lopsy_core::output::OutputTarget::ExtendedSrgb, peak);
+    rendered_through(engine, None, &settings)
+}
+
+/// The last live frame's rendered image through the output step for
+/// `settings`, in scratch A, inside `rect` (the whole document when `None`).
+fn rendered_through(engine: &EngineInner, rect: Option<Rect>, settings: &lopsy_core::output::OutputSettings) -> Option<TextureHandle> {
     let rendered = engine.working_space?.rendered.filter(|&t| engine.texture_pool.get(t).is_some())?;
     let program = match engine.shaders.output() {
         Ok(program) => program,
@@ -2297,8 +2313,7 @@ pub fn statistics_image(engine: &EngineInner, rect: Option<Rect>) -> Option<Text
             return None;
         }
     };
-    let settings = crate::develop::output::settings_for(engine, lopsy_core::output::OutputTarget::Srgb, false, true);
-    let pass = crate::develop::output::pass(engine, &program, rendered, &settings);
+    let pass = crate::develop::output::pass(engine, &program, rendered, settings);
     let scissor = rect.map_or(Scissor::Off, Scissor::Rect);
     let is_drawn = over_document(engine, pass).scissor(scissor).draw(Target::Framebuffer(engine.scratch_fbo_a));
     engine.gpu().unbind_textures(1);

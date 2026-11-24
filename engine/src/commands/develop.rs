@@ -397,6 +397,45 @@ pub fn read_develop_histogram(engine: &mut EngineInner) -> Read<Vec<u32>> {
         .map(|thumb| develop_stats::histogram_from_rgba8(thumb.get(8..).unwrap_or(&[])))
 }
 
+/// The histogram of the HDR rendering, for the region right of white: the
+/// last live frame's rendered image through the HDR output for the HDR
+/// canvas in sRGB primaries with highlights up to `peak` (units of SDR
+/// white), whatever the screen is and without the screen-only views,
+/// box-downscaled on the GPU to at most `HISTOGRAM_MAX_EDGE` on its long
+/// edge, read as floats and binned on the CPU
+/// (`lopsy_core::output::hdr_histogram`): 4 × 256 bins, red, green, blue,
+/// then Rec. 709 luminance of the encoded values, over the encoded range
+/// from black (bin 0) to the peak (bin 255), with white at
+/// `lopsy_core::output::hdr_histogram_white_bin(peak)`. Draws the frame
+/// first if it is stale. Fails without the working space. Changes nothing
+/// in the document; `read_develop_histogram` and Auto tone are untouched.
+pub fn read_hdr_histogram(engine: &mut EngineInner, peak: f32) -> Read<Vec<u32>> {
+    if engine.working_space.is_none() {
+        return Read::failed("The document has no working space".to_string());
+    }
+    if engine.needs_recomposite {
+        compositor::render(engine);
+    }
+    let peak = lopsy_core::output::hdr_peak(peak);
+    let Some(image) = compositor::hdr_statistics_image(engine, peak) else {
+        return Read::failed("No frame has been rendered in the working space".to_string());
+    };
+    let (tw, th) = thumbnail_gpu::thumbnail_size(engine.doc_width, engine.doc_height, HISTOGRAM_MAX_EDGE);
+    let thumb = match engine.texture_pool.acquire(tw, th) {
+        Ok(t) => t,
+        Err(e) => return Read::failed(e),
+    };
+    let params = crate::gpu::params::core::ThumbnailBoxParams { dst_size: [tw as f32, th as f32], channel: thumbnail_gpu::COLOUR };
+    engine
+        .pass(&engine.shaders.thumbnail_box, params)
+        .texture("u_tex", image)
+        .draw(crate::gpu::pass::Target::Texture(thumb));
+    engine.gpu().unbind_textures(1);
+    let read = engine.gpu().read_rgba_f32(thumb, 0, 0, tw, th).map(move |pixels| lopsy_core::output::hdr_histogram(&pixels, peak));
+    engine.texture_pool.release(thumb);
+    read
+}
+
 /// `set_raw_develop` with the settings as the JSON `setRawDevelop` takes.
 pub fn set_raw_develop_json(engine: &mut EngineInner, json: &str) -> Result<(), String> {
     let settings: RawDevelopSettings =
