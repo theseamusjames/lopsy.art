@@ -36,9 +36,11 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
         let pivot = veil.x + params.u_middleGrey;
         let gain = pivot / removeVeil(pivot, v);
         let rgb = vec3<f32>(removeVeil(src.r, v), removeVeil(src.g, v), removeVeil(src.b, v));
-        return vec4<f32>(rgb * gain, src.a);
+        // Never brighter than it was: no glow where the veil is low.
+        return vec4<f32>(min(src.rgb, rgb * gain), src.a);
     }
     let v = params.u_add * -h * veil.y;
     let gain = 1.0 / (1.0 + v / (veil.y + params.u_middleGrey));
-    return vec4<f32>((src.rgb + vec3<f32>(v)) * gain, src.a);
+    // Never darker than it was.
+    return vec4<f32>(max(src.rgb, (src.rgb + vec3<f32>(v)) * gain), src.a);
 }

@@ -56,16 +56,22 @@
 //!   each channel through `f(c) = c − v · (1 − e^(−c / v))` (`c` itself at
 //!   or below 0, or where `v` is 0), which is `c − v` well above the veil,
 //!   falls smoothly to 0 instead of going below it (to `0.37 v` at `c = v`),
-//!   and is continuous and increasing. All three channels are then
-//!   multiplied by `P / f(P)` with `P = V + MIDDLE_GREY`, the exposure
-//!   compensation: a pixel at the veil plus middle grey keeps its value, so
-//!   mid-tones above the veil keep their brightness, those darker get
-//!   darker and those brighter get brighter. Taking the same amount from
-//!   every channel raises saturation, as the haze's grey goes.
+//!   and is continuous and increasing. That is multiplied by `P / f(P)`
+//!   with `P = V + MIDDLE_GREY`, the exposure compensation: a channel at
+//!   the veil plus middle grey keeps its value, so mid-tones above the veil
+//!   keep their brightness and darker ones get darker. A channel is never
+//!   made brighter than it was: the result is `min(c, f(c) · P / f(P))`, so
+//!   a bright sky beside a dark object, where the blurred veil is lower,
+//!   does not glow. Taking more from the weaker channels raises saturation,
+//!   as the haze's grey goes.
 //! - **Adding haze** (`h < 0`): `v = HAZE_ADD · |h| · B` is added to each
 //!   channel and the sum multiplied by `1 / (1 + v / (B + MIDDLE_GREY))`,
-//!   with the same pivot: shadows lift, highlights come down, saturation
-//!   falls. A non-negative channel stays non-negative.
+//!   with the same pivot, and a channel is never made darker than it was
+//!   (`max`): shadows lift, saturation falls. A non-negative channel stays
+//!   non-negative.
+//!
+//! Both are continuous and increasing in each channel, with a change of
+//! slope where a channel crosses the pivot.
 //!
 //! Zero is the identity, and the pass is skipped.
 
@@ -203,14 +209,14 @@ pub fn haze_reference(img: &[f32], veil: &[f32], haze: f32) -> Vec<f32> {
             let pivot = v_dark + MIDDLE_GREY;
             let gain = pivot / remove_veil(pivot, v);
             for c in &mut p[..3] {
-                *c = remove_veil(*c, v) * gain;
+                *c = c.min(remove_veil(*c, v) * gain);
             }
         } else {
             let b = veil[i * 4 + 1];
             let v = HAZE_ADD * -h * b;
             let gain = 1.0 / (1.0 + v / (b + MIDDLE_GREY));
             for c in &mut p[..3] {
-                *c = (*c + v) * gain;
+                *c = c.max((*c + v) * gain);
             }
         }
     }

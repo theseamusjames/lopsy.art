@@ -213,9 +213,10 @@
 //!   `a · 2ε / S` stops for a step of `S` stops) rather than absent.
 //! - Haze's veil is the darkest channel blurred (a mean, not the dark
 //!   channel prior's minimum filter), and there is no airlight estimate:
-//!   removal pivots on the veil plus middle grey. Its blur is not
-//!   edge-aware, so a dark object against a hazy sky gets a little of the
-//!   sky's correction near its edge.
+//!   removal pivots on the veil plus middle grey and never brightens a
+//!   channel. Its blur is not edge-aware, so a dark object against a hazy
+//!   sky is darkened a little more near its edge, and the sky beside it a
+//!   little less.
 //! - Highlights and Shadows are a per-pixel curve on luminance, not the
 //!   spec's edge-aware version, so they cannot make halos but do not
 //!   separate local from global contrast.
