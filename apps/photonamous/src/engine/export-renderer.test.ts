@@ -114,13 +114,21 @@ describe('createEngineExportRenderer', () => {
     expect(fakes[0]?.exports.at(-1)?.size).toEqual({ width: 8000, height: 6000 });
   });
 
-  it('exports TIFF full size in the chosen colour space, and refuses Rec. 2020', async () => {
+  it('exports TIFF full size in the chosen colour space, Rec. 2020 included', async () => {
     const r = renderer();
     const signal = new AbortController().signal;
     const version = harnessVersion(assetA, warm);
     await r.render(assetA, version, { ...DEFAULT_EXPORT_SETTINGS, format: 'tiff', colorSpace: 'display-p3', maxLongEdge: 2048 }, signal);
     expect(fakes[0]?.exports.at(-1)).toEqual({ format: 'tiff', quality: 0.9, maxSize: undefined, colorSpace: 'display-p3' });
-    await expect(r.render(assetA, version, { ...DEFAULT_EXPORT_SETTINGS, format: 'tiff', colorSpace: 'rec2020' }, signal)).rejects.toThrow(/Rec\. 2020/);
+    await r.render(assetA, version, { ...DEFAULT_EXPORT_SETTINGS, format: 'tiff', colorSpace: 'rec2020' }, signal);
+    expect(fakes[0]?.exports.at(-1)).toMatchObject({ format: 'tiff', colorSpace: 'rec2020' });
+  });
+
+  it('refuses Rec. 2020 for an 8-bit file', async () => {
+    const r = renderer();
+    const signal = new AbortController().signal;
+    const settings = { ...DEFAULT_EXPORT_SETTINGS, format: 'jpeg' as const, colorSpace: 'rec2020' as const };
+    await expect(r.render(assetA, harnessVersion(assetA), settings, signal)).rejects.toThrow(/Rec\. 2020/);
   });
 
   it('replaces an engine whose GPU was lost, and loads the photo into the new one', async () => {

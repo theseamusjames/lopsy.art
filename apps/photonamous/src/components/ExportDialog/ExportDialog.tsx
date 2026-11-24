@@ -46,7 +46,7 @@ function defaultName(): string {
 /** Settings and extras made consistent: a colour space the format can carry, TIFF at full size. */
 function fit(settings: ExportSettings, extras: ExportExtras): { settings: ExportSettings; extras: ExportExtras } {
   const space = settings.colorSpace ?? 'srgb';
-  const fitted = offeredColorSpaces(settings.format).includes(space) ? settings : { ...settings, colorSpace: 'srgb' as const };
+  const fitted = offeredColorSpaces(settings.format, extras.pngDepth).includes(space) ? settings : { ...settings, colorSpace: 'srgb' as const };
   const ex = settings.format === 'tiff' ? { ...extras, size: { mode: 'original' as const } } : extras;
   return { settings: { ...fitted, maxLongEdge: maxLongEdgeOf(ex) }, extras: ex };
 }
@@ -94,7 +94,8 @@ export function ExportDialog() {
     setPresetId(preset.id);
   };
 
-  const problem = exportSettingsProblem(settings);
+  // With the size and depth, which decide whether Rec. 2020 can be written.
+  const problem = exportSettingsProblem(withExtras(settings, extras));
   const keepsLocation = locationKept(settings);
   const tiffBlocked = format === 'tiff' && !tiff;
   const isBlocked = running || versionIds.length === 0 || problem !== null || tiffBlocked;
@@ -271,7 +272,7 @@ export function ExportDialog() {
             value={settings.colorSpace ?? 'srgb'}
             onChange={(e) => change({ colorSpace: e.target.value as ExportColorSpace })}
           >
-            {offeredColorSpaces(format).map((space) => (
+            {offeredColorSpaces(format, extras.pngDepth).map((space) => (
               <option key={space} value={space}>
                 {COLOR_SPACE_WORDS[space]}
               </option>

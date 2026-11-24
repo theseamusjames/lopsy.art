@@ -1,7 +1,15 @@
 .app {
-  position: relative;
+  display: flex;
+  flex-direction: column;
   height: 100%;
   overflow: hidden;
+}
+
+/* The library, and the Edit view over it; the status bar sits below both. */
+.views {
+  position: relative;
+  flex: 1;
+  min-height: 0;
 }
 
 /*

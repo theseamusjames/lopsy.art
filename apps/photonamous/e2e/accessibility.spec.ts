@@ -75,11 +75,14 @@ test('every view, as a user reaches it', async ({ page }) => {
     await page.getByRole('button', { name: /^All photos/ }).click();
     await expect(tiles(page)).toHaveCount(3);
     await expect(tiles(page).first().locator('img')).toBeVisible({ timeout: 30_000 });
+    // The status bar is scanned with the view it sits under: the count, the renderer and the display.
+    await expect(page.getByTestId('status-renderer')).toBeVisible({ timeout: 30_000 });
   });
 
   await step(page, 'photo selected', async () => {
     await tiles(page).first().click();
     await page.keyboard.press('3');
+    await expect(page.getByTestId('status-selected')).toBeVisible();
   });
 
   await step(page, 'Filters menu, one filter on', async () => {
@@ -163,6 +166,7 @@ test('every view, as a user reaches it', async ({ page }) => {
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('edit-view')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole('slider', { name: 'Exposure' })).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId('status-photo-size')).toBeVisible({ timeout: 60_000 });
   });
 
   const edit = page.getByTestId('edit-view');

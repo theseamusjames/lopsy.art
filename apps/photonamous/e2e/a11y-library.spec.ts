@@ -24,7 +24,8 @@ async function openLibraryWithPhotos(page: Page): Promise<void> {
   await importFiles(page, files);
   await page.getByRole('navigation', { name: 'Library' }).getByRole('button', { name: /^All photos/ }).click();
   await page.getByRole('combobox', { name: 'Order by' }).selectOption('name');
-  await expect(page.getByText(new RegExp(`^${NAMES.length} photos$`))).toBeVisible();
+  // The count under the grid's title; the status bar says it too.
+  await expect(page.getByRole('main').getByText(new RegExp(`^${NAMES.length} photos$`))).toBeVisible();
   await expect(cell(page, 'a.jpg')).toBeVisible();
 }
 

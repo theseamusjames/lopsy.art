@@ -4,6 +4,8 @@ import {
   addJpegComment,
   pngHasColorChunk,
   jpegHasIccProfile,
+  withJpegIccProfile,
+  withPngColorTag,
 } from './image-metadata';
 
 /**
@@ -317,5 +319,42 @@ describe('addJpegComment', () => {
       (_, i) => out[i] === 9 && out[i + 1] === 9 && out[i + 2] === 9 && out[i + 3] === 9,
     );
     expect(idx).toBeGreaterThan(0);
+  });
+});
+
+describe('withPngColorTag', () => {
+  it('puts the sRGB chunk right after IHDR of an untagged file', () => {
+    const tagged = withPngColorTag(buildPng());
+    expect(parsePngChunks(tagged).map((c) => c.type)).toEqual(['IHDR', 'sRGB', 'IDAT', 'IEND']);
+  });
+
+  it('embeds a given profile as iCCP', () => {
+    const profile = new Uint8Array([9, 8, 7, 6]);
+    const chunks = parsePngChunks(withPngColorTag(buildPng(), { name: 'Display P3', data: profile }));
+    const iccp = chunks.find((c) => c.type === 'iCCP');
+    expect(iccp).toBeDefined();
+    const nul = iccp!.payload.indexOf(0);
+    expect(new TextDecoder().decode(iccp!.payload.subarray(0, nul))).toBe('Display P3');
+    expect(Array.from(inflateStored(iccp!.payload.subarray(nul + 2)))).toEqual([9, 8, 7, 6]);
+  });
+
+  it('leaves a file the encoder tagged as it is', () => {
+    const png = buildPng([pngChunk('sRGB', new Uint8Array([0]))]);
+    expect(withPngColorTag(png, { name: 'Display P3', data: new Uint8Array([1]) })).toBe(png);
+  });
+});
+
+describe('withJpegIccProfile', () => {
+  it('inserts the profile right after SOI of an untagged file', () => {
+    const profile = new Uint8Array([1, 2, 3]);
+    const tagged = withJpegIccProfile(buildJpeg(), { name: 'sRGB', data: profile });
+    expect(jpegHasIccProfile(tagged)).toBe(true);
+    expect([tagged[2], tagged[3]]).toEqual([0xff, 0xe2]);
+    expect(Array.from(tagged.subarray(2 + 4 + 14, 2 + 4 + 17))).toEqual([1, 2, 3]);
+  });
+
+  it('leaves a file the encoder tagged as it is', () => {
+    const jpeg = buildJpeg([jpegIccSegment(new Uint8Array([5]))]);
+    expect(withJpegIccProfile(jpeg, { name: 'sRGB', data: new Uint8Array([1]) })).toBe(jpeg);
   });
 });

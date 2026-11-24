@@ -9,6 +9,7 @@ import { isReceivePage, startReceiving } from './app/lopsy-handoff';
 import { StartScreen } from './components/StartScreen/StartScreen';
 import { LibraryScreen } from './components/LibraryScreen/LibraryScreen';
 import { EditSlot } from './app/EditSlot/EditSlot';
+import { AppStatusBar } from './components/AppStatusBar/AppStatusBar';
 import styles from './App.module.css';
 
 /** The browser's own storage reopens by itself once per page load; after "Close" it waits for a click. */
@@ -20,6 +21,8 @@ export function App() {
   const connectError = useUi((s) => s.connectError);
   const editing = useUi((s) => s.editing);
   const setEditing = useUi((s) => s.setEditing);
+  // Full screen (cull) is the photo alone.
+  const isFullScreen = useUi((s) => s.mode === 'cull' && s.editing === null);
   // A dialog opened from the header while editing covers the Edit view as it covers the library.
   const editFrame = useRef<HTMLDivElement>(null);
   useInert(editFrame, useUi((s) => dialogCovers(s.dialog)));
@@ -99,12 +102,15 @@ export function App() {
 
   return (
     <div className={styles.app}>
-      <LibraryScreen />
-      {editing && (
-        <div ref={editFrame} className={styles.edit}>
-          <EditSlot assetId={editing.assetId} versionId={editing.versionId} onClose={() => setEditing(null)} />
-        </div>
-      )}
+      <div className={styles.views}>
+        <LibraryScreen />
+        {editing && (
+          <div ref={editFrame} className={styles.edit}>
+            <EditSlot assetId={editing.assetId} versionId={editing.versionId} onClose={() => setEditing(null)} />
+          </div>
+        )}
+      </div>
+      {!isFullScreen && <AppStatusBar />}
       <Toasts />
     </div>
   );

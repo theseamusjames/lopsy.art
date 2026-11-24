@@ -366,6 +366,14 @@ browser without WebGPU runs WebGL either way. A tab where WebGPU failed to
 start keeps to WebGL until it is closed (the `photonamous:renderer-failed`
 flag in sessionStorage); open a new tab to try WebGPU again.
 
+**Colour.** Headless Chromium's display is sRGB. `e2e/display-p3.spec.ts`
+starts its browser with `--force-color-profile=display-p3-d65`, which gives
+it a Display P3 display (`(color-gamut: p3)` matches), and checks that the
+canvas becomes Display P3 on either build and that previews and sRGB
+exports stay sRGB. It cannot show what a person sees on a real wide-gamut
+screen: look at one by eye after a change to colour. `e2e/export-color.spec.ts`
+checks each export's tag and that a Rec. 2020 file holds Rec. 2020 numbers.
+
 `test:e2e:site` builds Photonamous without the settings in `.env.local`,
 runs `site.spec.ts` and `offline.spec.ts` against the build
 (`apps/photonamous/playwright.site.config.ts`), then deletes it. To run one

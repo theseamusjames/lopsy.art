@@ -61,6 +61,8 @@ export default defineConfig({
       '@lopsy/engine-pkg': resolve(engineWasm, 'pkg'),
       // The parts of Lopsy's engine bridge both apps use: choosing a build, reading back in order.
       '@lopsy/engine-wasm': engineWasm,
+      // Lopsy's colour tagging of browser-encoded PNG and JPEG files, which this app's exports use too.
+      '@lopsy/image-metadata': resolve(repoRoot, 'apps/lopsy-web/src/utils/image-metadata.ts'),
     },
   },
   server: {

@@ -1,0 +1,82 @@
+/**
+ * What the status bar says about the engine and the screen, kept outside
+ * React so the engine code can set it: the build this page runs (set by
+ * the generated selector when the wasm starts, renderer-choice.ts), whether
+ * the engines run on the 8-bit fallback of a GPU with no float render
+ * targets, and the display the window is on (`@lopsy/engine-wasm/display`,
+ * watched for changes).
+ */
+
+import { readDisplay, watchDisplay, type DisplayInfo } from '@lopsy/engine-wasm/display';
+import { onRunningRendererChange, runningRenderer, type Renderer } from './renderer-choice';
+
+export interface EngineStatus {
+  /** The build that runs; null until the engine's wasm has started in this page. */
+  readonly renderer: Renderer | null;
+  /** The last engine made has no float render targets, so photos are developed with the baked look in 8 bits. */
+  readonly isEightBit: boolean;
+  readonly display: DisplayInfo;
+}
+
+const listeners = new Set<() => void>();
+let status: EngineStatus | null = null;
+let stopDisplay: (() => void) | null = null;
+let stopRenderer: (() => void) | null = null;
+
+function update(patch: Partial<EngineStatus>): void {
+  const now = currentStatus();
+  const next = { ...now, ...patch };
+  if (next.renderer === now.renderer && next.isEightBit === now.isEightBit && next.display === now.display) return;
+  status = next;
+  for (const listener of [...listeners]) listener();
+}
+
+function start(): EngineStatus {
+  const initial: EngineStatus = { renderer: runningRenderer(), isEightBit: false, display: readDisplay() };
+  stopDisplay = watchDisplay((display) => update({ display }));
+  stopRenderer = onRunningRendererChange(() => update({ renderer: runningRenderer() }));
+  return initial;
+}
+
+/** The status now. The same object until something changes (for useSyncExternalStore). */
+export function currentStatus(): EngineStatus {
+  status ??= start();
+  return status;
+}
+
+export function onStatusChange(listener: () => void): () => void {
+  currentStatus();
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/** An engine started: whether it has float render targets (develop-engine.ts). */
+export function noteEngineStarted(hasFloatTargets: boolean): void {
+  update({ renderer: runningRenderer(), isEightBit: !hasFloatTargets });
+}
+
+/** Tests: forget the status and stop watching, so the next read starts again. */
+export function resetEngineStatus(): void {
+  stopDisplay?.();
+  stopRenderer?.();
+  stopDisplay = null;
+  stopRenderer = null;
+  status = null;
+  listeners.clear();
+}
+
+const RENDERER_LABELS: Record<Renderer, string> = { webgl: 'WebGL', wgpu: 'WebGPU' };
+
+/** "WebGPU", "WebGL", or "WebGL 8-bit" on the no-float fallback; null while unknown. */
+export function rendererLabel(s: EngineStatus): string | null {
+  if (!s.renderer) return null;
+  const name = RENDERER_LABELS[s.renderer];
+  return s.isEightBit ? `${name} 8-bit` : name;
+}
+
+/** The display's gamut, as the canvas is set up for it. HDR is not used yet, so it is not shown. */
+export function displayLabel(s: EngineStatus): string {
+  return s.display.isDisplayP3 ? 'Display P3' : 'sRGB';
+}

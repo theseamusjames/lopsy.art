@@ -3,8 +3,10 @@ import { DEFAULT_EXPORT_SETTINGS } from '@lopsy/photos-core/export/types';
 import { locationKept, offeredColorSpaces } from './export-form';
 
 describe('export form', () => {
-  it('offers what the engine encodes: no Rec. 2020 yet, even for TIFF', () => {
-    expect(offeredColorSpaces('tiff')).toEqual(['srgb', 'display-p3']);
+  it('offers Rec. 2020 for the 16-bit files only', () => {
+    expect(offeredColorSpaces('tiff')).toEqual(['srgb', 'display-p3', 'rec2020']);
+    expect(offeredColorSpaces('png', 16)).toEqual(['srgb', 'display-p3', 'rec2020']);
+    expect(offeredColorSpaces('png', 8)).toEqual(['srgb', 'display-p3']);
     expect(offeredColorSpaces('jpeg')).toEqual(['srgb', 'display-p3']);
   });
 

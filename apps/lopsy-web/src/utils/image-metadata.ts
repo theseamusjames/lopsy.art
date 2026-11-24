@@ -205,6 +205,22 @@ export async function addPngMetadata(
   return new Blob([result], { type: 'image/png' });
 }
 
+/**
+ * `data` (an encoded PNG) with a colour chunk after IHDR when it has none:
+ * iCCP holding `icc`, or the sRGB chunk without one. Unchanged when the
+ * encoder already tagged it. Photonamous tags its browser-encoded files with it.
+ */
+export function withPngColorTag(data: Uint8Array, icc?: EmbeddedIccProfile): Uint8Array {
+  if (pngHasColorChunk(data)) return data;
+  const chunk = icc ? createPngIccpChunk(icc.name, icc.data) : createPngSrgbChunk();
+  const ihdrEnd = findIhdrEnd();
+  const result = new Uint8Array(data.length + chunk.length);
+  result.set(data.subarray(0, ihdrEnd), 0);
+  result.set(chunk, ihdrEnd);
+  result.set(data.subarray(ihdrEnd), ihdrEnd + chunk.length);
+  return result;
+}
+
 const JPEG_ICC_IDENTIFIER = 'ICC_PROFILE\0';
 
 /**
@@ -250,6 +266,21 @@ function createJpegIccMarker(iccProfile: Uint8Array): Uint8Array {
   marker[4 + 13] = 1; // total chunks
   marker.set(iccProfile, 4 + 14);
   return marker;
+}
+
+/**
+ * `data` (an encoded JPEG) with an APP2 ICC profile segment holding `icc`
+ * right after SOI, when it has none. Unchanged when the encoder already
+ * tagged it. Photonamous tags its browser-encoded files with it.
+ */
+export function withJpegIccProfile(data: Uint8Array, icc: EmbeddedIccProfile): Uint8Array {
+  if (jpegHasIccProfile(data)) return data;
+  const marker = createJpegIccMarker(icc.data);
+  const result = new Uint8Array(data.length + marker.length);
+  result.set(data.subarray(0, 2), 0);
+  result.set(marker, 2);
+  result.set(data.subarray(2), 2 + marker.length);
+  return result;
 }
 
 /**

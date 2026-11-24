@@ -13,7 +13,7 @@ export type ExportColorSpace = 'srgb' | 'display-p3' | 'rec2020';
 
 export interface ExportSettings {
   readonly format: ExportFormat;
-  /** Absent means sRGB. Rec. 2020 only with a 16-bit format (`colorSpacesFor`). */
+  /** Absent means sRGB. Rec. 2020 only in a 16-bit file: TIFF, or PNG at 16 bits and full size (`colorSpacesFor`). */
   readonly colorSpace?: ExportColorSpace;
   /** JPEG quality, 0 to 1. */
   readonly quality: number;
@@ -58,9 +58,13 @@ export function isSixteenBit(format: ExportFormat): boolean {
   return format === 'tiff';
 }
 
-/** The colour spaces offered for a format: Rec. 2020 bands badly in 8 bits, so it needs a 16-bit format. */
-export function colorSpacesFor(format: ExportFormat): readonly ExportColorSpace[] {
-  return isSixteenBit(format) ? ['srgb', 'display-p3', 'rec2020'] : ['srgb', 'display-p3'];
+/**
+ * The colour spaces offered for a format: Rec. 2020 bands badly in 8 bits,
+ * so it needs 16: TIFF, or PNG at its default 16 bits.
+ */
+export function colorSpacesFor(format: ExportFormat, pngDepth: 8 | 16 = 16): readonly ExportColorSpace[] {
+  const isWide = isSixteenBit(format) || (format === 'png' && pngDepth === 16);
+  return isWide ? ['srgb', 'display-p3', 'rec2020'] : ['srgb', 'display-p3'];
 }
 
 /**
@@ -75,7 +79,11 @@ export function exportKeepsLocation(settings: Pick<ExportSettings, 'metadata' | 
 /** Why the settings cannot be used, or null when they can. */
 export function exportSettingsProblem(settings: ExportSettings): string | null {
   const space = settings.colorSpace ?? 'srgb';
-  if (!colorSpacesFor(settings.format).includes(space)) return 'Rec. 2020 needs a 16-bit format (TIFF).';
+  if (!colorSpacesFor(settings.format, settings.pngDepth ?? 16).includes(space)) return 'Rec. 2020 needs a 16-bit file (TIFF, or a 16-bit PNG).';
+  // The engine writes 16-bit PNG at the photo's own size; a resized PNG is encoded by the browser in 8 bits.
+  if (space === 'rec2020' && settings.format === 'png' && (settings.maxLongEdge !== null || (settings.size !== undefined && settings.size.mode !== 'original') || settings.allowEnlarge === true)) {
+    return 'A Rec. 2020 PNG is made at the original size. Choose Original size, or TIFF.';
+  }
   if (!(settings.quality >= 0 && settings.quality <= 1)) return 'Quality must be between 0 and 1.';
   if (settings.maxLongEdge !== null && !(Number.isInteger(settings.maxLongEdge) && settings.maxLongEdge > 0)) {
     return 'The long edge must be a whole number of pixels.';
@@ -104,7 +112,7 @@ export function exportSettingsFromJson(value: unknown): ExportSettings {
   const maxLongEdge = typeof edge === 'number' && Number.isInteger(edge) && edge > 0 && edge <= 100_000 ? edge : null;
   return {
     format,
-    colorSpace: colorSpacesFor(format).includes(space) ? space : 'srgb',
+    colorSpace: colorSpacesFor(format, v.pngDepth === 8 ? 8 : 16).includes(space) ? space : 'srgb',
     quality,
     maxLongEdge,
     // Settings saved before these fields: the size is what the long edge said.

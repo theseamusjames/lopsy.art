@@ -5,7 +5,7 @@
  * a row is decoded once) and released after a short idle.
  */
 
-import type { ExportRenderer, ExportSettings } from '@lopsy/photos-core/export/types';
+import { colorSpacesFor, type ExportRenderer, type ExportSettings } from '@lopsy/photos-core/export/types';
 import type { Asset, Version } from '@lopsy/photos-core/library/types';
 import type { DevelopEngine } from './develop-engine';
 import { extrasOf, outputSize } from '../library/export-size';
@@ -144,7 +144,8 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
     const space = settings.colorSpace ?? 'srgb';
     const image = e.imageSize();
     const size = image && settings.format !== 'tiff' ? outputSize(image, extras) : null;
-    if (space === 'rec2020') throw new Error('Rec. 2020 export needs an engine that encodes it; choose sRGB or Display P3.');
+    // Before the engine draws: an 8-bit file in Rec. 2020 bands (photos-core colorSpacesFor).
+    if (!colorSpacesFor(settings.format, extras.pngDepth).includes(space)) throw new Error('Rec. 2020 needs a 16-bit file (TIFF, or a 16-bit PNG).');
     const blob = await e.exportImage({
       format: settings.format,
       quality: settings.quality,

@@ -57,9 +57,20 @@ export function canUseWebGpu(): Promise<boolean> {
   return probeWebGpu();
 }
 
+const runningListeners = new Set<() => void>();
+
 /** Called by the generated selector once it has initialized a build. */
 export function noteRunningRenderer(renderer: Renderer): void {
   noteRunning(renderer);
+  for (const listener of [...runningListeners]) listener();
+}
+
+/** Calls `listener` whenever the build this page runs is set or changes (the status bar). Returns the unsubscribe. */
+export function onRunningRendererChange(listener: () => void): () => void {
+  runningListeners.add(listener);
+  return () => {
+    runningListeners.delete(listener);
+  };
 }
 
 /** The build this page load runs, once the engine's wasm is initialized; null before. */

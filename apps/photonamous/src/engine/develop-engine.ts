@@ -14,6 +14,17 @@
  * into). Previews and exports are drawn by the engine into its own canvas at
  * the output size and handed to `OffscreenCanvas.convertToBlob`; full-size
  * PNG uses the engine's 16-bit encoder.
+ *
+ * Colour: where the GPU renders to float targets every photo is edited in
+ * the engine's linear Rec. 2020 working space (`setDevelopWorkingSpace`),
+ * and the engine's output step renders it for its target: the canvas's
+ * space for the screen (Display P3 where the display has it, else sRGB),
+ * and each file's own space for an export. A draw that is copied out of the
+ * canvas (previews, 8-bit exports) first sets the canvas to the space of
+ * the file it makes, so a copy is never converted by the browser and a
+ * stored preview is sRGB whatever the display. Without float targets the
+ * working space stays off and the canvas stays sRGB: the engine's baked
+ * RAW look in 8 bits, which the status bar calls "8-bit".
  */
 
 import initWasm, {
@@ -56,6 +67,9 @@ import initWasm, {
   render,
   rotateLayer90,
   setBackgroundColor,
+  setDevelopWorkingSpace,
+  setScreenOutput,
+  buildIccProfile,
   rafWhiteBalanceKelvin,
   rafWhiteBalancePresets,
   setDocumentSize,
@@ -90,6 +104,9 @@ import {
   sampleNeutralWhiteBalance,
 } from './wasm';
 import { fallBackToWebgl, markWgpuFailed, type Renderer } from './renderer-choice';
+import { currentStatus, noteEngineStarted, onStatusChange } from './engine-status';
+import type { DisplayInfo } from '@lopsy/engine-wasm/display';
+import { withJpegIccProfile, withPngColorTag } from '@lopsy/image-metadata';
 import { wasmUrlFor } from './engine-files';
 import { keepForOffline } from '../sw/register';
 import { webGpuTextureLimit } from '@lopsy/engine-wasm/renderer-choice';
@@ -149,8 +166,8 @@ export interface ExportOptions {
   readonly quality?: number;
   /** Limit on the long edge, in pixels. Full size when omitted. Ignored for TIFF. */
   readonly maxSize?: number;
-  /** sRGB when omitted. The engine knows sRGB and Display P3 only. */
-  readonly colorSpace?: 'srgb' | 'display-p3';
+  /** sRGB when omitted. Rec. 2020 for the 16-bit files only (TIFF, 16-bit PNG). */
+  readonly colorSpace?: ExportColorSpace;
   /**
    * The edit to render, when it is not the one on screen. It is applied
    * once the full size has loaded, right before the draw, and the screen's
@@ -179,6 +196,12 @@ export interface PhotoInfo {
 
 export type ToneValues = Recipe['tone'];
 
+/** The spaces a file can be in. The engine renders each straight from the working space and tags the file. */
+export type ExportColorSpace = 'srgb' | 'display-p3' | 'rec2020';
+
+/** What a canvas can hold. */
+type CanvasSpace = 'srgb' | 'display-p3';
+
 export interface DevelopEngine {
   photoInfo(): PhotoInfo;
   /** 4 × 256 bins (R, G, B, luminance) of the displayed render; null when the engine cannot read one now. */
@@ -201,6 +224,8 @@ export interface DevelopEngine {
   imageSize(): Size | null;
   /** The framed image before the crop. */
   fullImageSize(): Size | null;
+  /** `imageSize()` at full resolution: what a full-size export makes, whatever the working size. Null before a load. */
+  fullResolutionSize(): Size | null;
   /**
    * While the crop is being edited the whole framed image shows (the Edit
    * view draws the crop over it); otherwise the document is the crop.
@@ -284,8 +309,30 @@ const MAX_WORKING_EDGE = 4096;
 const FULL_RESOLUTION_ZOOM = 0.5;
 const JPEG_MIME = 'image/jpeg';
 const PNG_MIME = 'image/png';
+/** The engine's colour space codes (exportPng16, buildIccProfile, setDevelopWorkingSpace's source). */
 const SRGB = 0;
 const DISPLAY_P3 = 1;
+const REC2020 = 2;
+
+function spaceCode(space: ExportColorSpace | undefined): number {
+  if (space === 'display-p3') return DISPLAY_P3;
+  if (space === 'rec2020') return REC2020;
+  return SRGB;
+}
+
+/**
+ * A browser-encoded PNG or JPEG with the profile of the space its pixels
+ * are in, when the encoder left it untagged (Chromium tags a Display P3
+ * canvas's files itself, not an sRGB one's). An sRGB PNG gets the sRGB
+ * chunk alone, as the engine's own sRGB PNG does.
+ */
+async function tagColor(blob: Blob, code: number): Promise<Blob> {
+  if (blob.type !== PNG_MIME && blob.type !== JPEG_MIME) return blob;
+  const data = new Uint8Array(await blob.arrayBuffer());
+  const icc = { name: code === DISPLAY_P3 ? 'Display P3' : 'sRGB', data: buildIccProfile(code) };
+  const tagged = blob.type === PNG_MIME ? withPngColorTag(data, code === SRGB ? undefined : icc) : withJpegIccProfile(data, icc);
+  return tagged === data ? blob : new Blob([tagged as BlobPart], { type: blob.type });
+}
 const TIFF_MIME = 'image/tiff';
 /** WebGPU's guaranteed largest texture side, when the adapter's is not known. */
 const WEBGPU_DEFAULT_TEXTURE_LIMIT = 8192;
@@ -414,6 +461,14 @@ async function startEngine(canvas: HTMLCanvasElement): Promise<Engine> {
   }
 }
 
+/** Whether the engine on `canvas` renders to float targets, which the working space and the RAW develop stage need (engine/src/develop). */
+function hasFloatTargets(canvas: HTMLCanvasElement): boolean {
+  // The wgpu build's targets are always float.
+  if (rendererName() === 'wgpu') return true;
+  const gl = canvas.getContext('webgl2');
+  return gl !== null && gl.getExtension('EXT_color_buffer_float') !== null;
+}
+
 /**
  * A develop engine on `canvas`. Rejects with `RendererChangedError` when
  * WebGPU failed and the page changed to WebGL: the caller starts again on
@@ -422,7 +477,15 @@ async function startEngine(canvas: HTMLCanvasElement): Promise<Engine> {
 export async function createDevelopEngine(canvas: HTMLCanvasElement): Promise<DevelopEngine> {
   const engine = await startEngine(canvas);
   setBackgroundColor(engine, 0, 0, 0, 1);
-  return new PhotoEngine(engine, canvas);
+  const hasFloat = hasFloatTargets(canvas);
+  // Set once for the engine's life, before the first render. Photos that are
+  // not RAW reach the engine as sRGB: the browser's decode into an sRGB 2D
+  // canvas converts them, and the engine's PNG and DNG decoders and a Lopsy
+  // layer give sRGB-encoded values. On an 8-bit pool linear data would band,
+  // so there the working space stays off (plan section 5, decision 9).
+  setDevelopWorkingSpace(engine, hasFloat, SRGB);
+  noteEngineStarted(hasFloat);
+  return new PhotoEngine(engine, canvas, hasFloat);
 }
 
 class PhotoEngine implements DevelopEngine {
@@ -487,6 +550,13 @@ class PhotoEngine implements DevelopEngine {
   /** The full image's oriented size, before framing. */
   private fullSize: Size | null = null;
 
+  /** Whether the engine renders to float targets and so edits in the working space. */
+  private readonly hasFloat: boolean;
+  /** The space the canvas shows the screen in, and the one it holds now (a copied draw changes it for a moment). */
+  private screenSpace: CanvasSpace = 'srgb';
+  private canvasSpace: CanvasSpace = 'srgb';
+  private readonly stopDisplay: () => void;
+
   private hasLostGpu = false;
   private readonly lostListeners = new Set<() => void>();
   private readonly handleGpuLost = (event: Event) => {
@@ -498,9 +568,13 @@ class PhotoEngine implements DevelopEngine {
     this.lostListeners.clear();
   };
 
-  constructor(engine: Engine, canvas: HTMLCanvasElement) {
+  constructor(engine: Engine, canvas: HTMLCanvasElement, hasFloat: boolean) {
     this.engine = engine;
     this.canvas = canvas;
+    this.hasFloat = hasFloat;
+    // Told at start-up whatever the display, then whenever it changes.
+    this.screenSpace = this.setCanvasSpace(this.screenSpaceFor(currentStatus().display));
+    this.stopDisplay = onStatusChange(() => this.followDisplay(currentStatus().display));
     if (rendererName() === 'wgpu') window.addEventListener(GPU_LOST_EVENT, this.handleGpuLost);
     else canvas.addEventListener('webglcontextlost', this.handleGpuLost);
     if (import.meta.env.DEV) window.__photonamousEngine = { rendererName, loseDevice: () => this.loseDevice() };
@@ -641,7 +715,7 @@ class PhotoEngine implements DevelopEngine {
     report('decoding', null);
     this.wbPresets = parsePresets(rafWhiteBalancePresets(data));
     this.kelvinScale = parseKelvinScale(rafWhiteBalanceKelvin(data));
-    const isLinear = this.hasFloatTargets();
+    const isLinear = this.hasFloat;
     const isUpgrade = mode === 'upgrade';
     const isWorkingOnly = mode === 'working' && isLinear;
     let quick: Size | null = isUpgrade ? this.sourceSize : null;
@@ -784,12 +858,42 @@ class PhotoEngine implements DevelopEngine {
     if (signal.aborted || this.isDisposed) throw new DecodeAbortedError();
   }
 
-  /** Whether the composite is float, which the RAW develop stage needs (engine/src/develop). */
-  private hasFloatTargets(): boolean {
-    // The wgpu build's targets are always float.
-    if (rendererName() === 'wgpu') return true;
-    const gl = this.canvas.getContext('webgl2');
-    return gl !== null && gl.getExtension('EXT_color_buffer_float') !== null;
+  // ---- the canvas's colour space -----------------------------------------
+
+  /** Display P3 where the display has it and the working space renders for it; sRGB otherwise. */
+  private screenSpaceFor(display: DisplayInfo): CanvasSpace {
+    return display.isDisplayP3 && this.hasFloat ? 'display-p3' : 'srgb';
+  }
+
+  /** Moves the canvas to the space of the display the window is on now. */
+  private followDisplay(display: DisplayInfo): void {
+    if (this.isDisposed) return;
+    const wanted = this.screenSpaceFor(display);
+    if (wanted === this.screenSpace && wanted === this.canvasSpace) return;
+    this.screenSpace = this.setCanvasSpace(wanted);
+    this.invalidate();
+  }
+
+  /**
+   * Tags the canvas as `space` and has the engine's output step render for
+   * it. On WebGL the page tags the drawing buffer, and a browser without
+   * `drawingBufferColorSpace` keeps sRGB; on WebGPU the engine configures
+   * the canvas. Returns the space the canvas holds afterwards.
+   */
+  private setCanvasSpace(space: CanvasSpace): CanvasSpace {
+    let taken: CanvasSpace = space;
+    if (rendererName() === 'webgl') {
+      const gl = this.canvas.getContext('webgl2');
+      try {
+        if (gl) gl.drawingBufferColorSpace = space;
+      } catch {
+        // Not settable here: the buffer stays as it was.
+      }
+      taken = gl?.drawingBufferColorSpace === 'display-p3' ? 'display-p3' : 'srgb';
+    }
+    setScreenOutput(this.engine, taken === 'display-p3', false);
+    this.canvasSpace = taken;
+    return taken;
   }
 
   /** Shows a freshly loaded image, unframed, fitted, with the recipe applied. */
@@ -1249,6 +1353,16 @@ class PhotoEngine implements DevelopEngine {
     return framedSize(this.sourceSize.width, this.sourceSize.height, this.framing.rotate);
   }
 
+  fullResolutionSize(): Size | null {
+    const shown = this.imageSize();
+    if (!shown || this.isFullResolution() || !this.fullSize) return shown;
+    const full = framedSize(this.fullSize.width, this.fullSize.height, this.framing.rotate);
+    const framed = this.fullImageSize();
+    // Uncropped, the full size is known exactly; a crop is scaled up from the working image.
+    if (framed && framed.width === shown.width && framed.height === shown.height) return full;
+    return { width: Math.round(shown.width / this.pixelScale), height: Math.round(shown.height / this.pixelScale) };
+  }
+
   // ---- the view ------------------------------------------------------
 
   getView(): View {
@@ -1425,16 +1539,17 @@ class PhotoEngine implements DevelopEngine {
   private async encode(options: ExportOptions): Promise<Blob> {
     const image = this.imageSize();
     if (!image || this.isDisposed) throw new Error('No photo is loaded');
-    const space = options.colorSpace === 'display-p3' ? DISPLAY_P3 : SRGB;
+    const space = spaceCode(options.colorSpace);
     if (options.format === 'tiff') return this.encodeTiff16(space);
     const out = options.size ?? limitSize(image, options.maxSize);
     const mime = options.format === 'png' ? PNG_MIME : JPEG_MIME;
     const isFullSize = out.width === image.width && out.height === image.height;
     if (options.format === 'png' && isFullSize && options.pngDepth !== 8) return this.encodePng16(space);
-    // The drawing buffer is sRGB; Display P3 goes through the engine's P3 PNG instead.
-    const drawn = space === SRGB ? (this.drawAtSizes([out])[0] ?? null) : null;
-    if (drawn) return drawn.convertToBlob({ type: mime, quality: options.quality });
-    return this.encodeFromPng16(out, mime, options.quality, space);
+    // An 8-bit file in Rec. 2020 would band; the export dialog offers it for 16-bit files only.
+    if (space === REC2020) throw new Error('Rec. 2020 is for 16-bit files (TIFF, 16-bit PNG)');
+    const drawn = this.drawAtSizes([out], space === DISPLAY_P3 ? 'display-p3' : 'srgb')[0] ?? null;
+    const blob = drawn ? await drawn.convertToBlob({ type: mime, quality: options.quality }) : await this.encodeFromPng16(out, mime, options.quality, space);
+    return tagColor(blob, space);
   }
 
   private async encodeTiff16(space: number): Promise<Blob> {
@@ -1450,13 +1565,18 @@ class PhotoEngine implements DevelopEngine {
    * rendered back once at the end. Null for a size the GPU cannot make a
    * drawing buffer that large for.
    */
-  private drawAtSizes(sizes: readonly Size[]): (OffscreenCanvas | null)[] {
+  private drawAtSizes(sizes: readonly Size[], space: CanvasSpace = 'srgb'): (OffscreenCanvas | null)[] {
     const image = this.imageSize();
     if (!image) return sizes.map(() => null);
+    // Without the working space no output step renders for P3: the engine's P3 PNG converts instead (encodeFromPng16).
+    if (space !== 'srgb' && !this.hasFloat) return sizes.map(() => null);
     const { width: savedW, height: savedH } = this.canvas;
     try {
-      return sizes.map((size) => this.drawOne(image, size));
+      // The canvas holds the file's space while it is drawn and copied, so the copy is exact.
+      if (this.canvasSpace !== space && this.setCanvasSpace(space) !== space) return sizes.map(() => null);
+      return sizes.map((size) => this.drawOne(image, size, space));
     } finally {
+      if (this.canvasSpace !== this.screenSpace) this.setCanvasSpace(this.screenSpace);
       this.canvas.width = savedW;
       this.canvas.height = savedH;
       this.pushViewport();
@@ -1464,7 +1584,7 @@ class PhotoEngine implements DevelopEngine {
     }
   }
 
-  private drawOne(image: Size, size: Size): OffscreenCanvas | null {
+  private drawOne(image: Size, size: Size, space: CanvasSpace): OffscreenCanvas | null {
     if (!this.canDrawAt(size)) return null;
     this.canvas.width = size.width;
     this.canvas.height = size.height;
@@ -1476,7 +1596,8 @@ class PhotoEngine implements DevelopEngine {
     setViewport(this.engine, size.width / image.width, 0, 0, size.width, size.height);
     this.renderFor('offscreen');
     const out = new OffscreenCanvas(size.width, size.height);
-    const ctx = out.getContext('2d');
+    // The same space as the canvas, so drawImage copies the numbers and converts nothing.
+    const ctx = out.getContext('2d', { colorSpace: space });
     if (!ctx) return null;
     ctx.drawImage(this.canvas, 0, 0);
     return out;
@@ -1544,6 +1665,7 @@ class PhotoEngine implements DevelopEngine {
   dispose(): void {
     if (this.isDisposed) return;
     this.isDisposed = true;
+    this.stopDisplay();
     window.removeEventListener(GPU_LOST_EVENT, this.handleGpuLost);
     this.canvas.removeEventListener('webglcontextlost', this.handleGpuLost);
     this.lostListeners.clear();

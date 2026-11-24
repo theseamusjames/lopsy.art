@@ -44,6 +44,8 @@ export interface UiState {
   readonly infoOpen: boolean;
   readonly dialog: DialogName;
   readonly editing: EditTarget | null;
+  /** What the Edit view's status bar shows: the photo's size and the size it is edited at; null while nothing is loaded. */
+  readonly editSizes: EditSizes | null;
   /** Columns the grid is showing, for up/down arrows. */
   readonly gridColumns: number;
 
@@ -71,12 +73,21 @@ export interface UiState {
   toggleInfo(): void;
   openDialog(dialog: DialogName): void;
   setEditing(target: EditTarget | null): void;
+  setEditSizes(sizes: EditSizes | null): void;
   setGridColumns(columns: number): void;
   setPendingImport(files: readonly File[] | null): void;
   setImportJob(job: ImportJob | null): void;
   setExportJob(job: ExportJob | null): void;
   askDelete(ids: readonly AssetId[]): void;
   setCopiedEdits(copied: CopiedEdits | null): void;
+}
+
+/** Pixel sizes, width by height. */
+export interface EditSizes {
+  /** The photo as a full-size export makes it: framed and cropped, at full resolution. */
+  readonly photo: { readonly width: number; readonly height: number };
+  /** The working image the Edit view edits, the same frame at the working size. */
+  readonly working: { readonly width: number; readonly height: number };
 }
 
 export const THUMB_SIZE = { min: 96, max: 360, initial: 180 } as const;
@@ -98,6 +109,7 @@ export const useUi = create<UiState>()((set) => ({
   infoOpen: true,
   dialog: null,
   editing: null,
+  editSizes: null,
   gridColumns: 1,
   pendingImport: null,
   importJob: null,
@@ -116,6 +128,7 @@ export const useUi = create<UiState>()((set) => ({
       mode: 'grid',
       dialog: null,
       editing: null,
+      editSizes: null,
       importJob: null,
       exportJob: null,
       pendingImport: null,
@@ -138,7 +151,8 @@ export const useUi = create<UiState>()((set) => ({
   setCompareSize: (compareSize) => set({ compareSize }),
   toggleInfo: () => set((s) => ({ infoOpen: !s.infoOpen })),
   openDialog: (dialog) => set({ dialog }),
-  setEditing: (editing) => set({ editing }),
+  setEditSizes: (editSizes) => set({ editSizes }),
+  setEditing: (editing) => set(editing ? { editing } : { editing, editSizes: null }),
   setGridColumns: (gridColumns) => set({ gridColumns }),
   setPendingImport: (pendingImport) => set({ pendingImport, dialog: pendingImport ? 'import' : null }),
   setImportJob: (importJob) => set({ importJob }),

@@ -527,8 +527,12 @@ without a picture to edit here, and offers **Open in Lopsy** and **Back**.
   the Edit view the one being edited, rendered by the engine at full
   quality.
 - **File type**: JPEG with **Quality**, PNG 16-bit or 8-bit, or TIFF
-  16-bit (full size, no EXIF). **Colours**: sRGB or Display P3 (Rec. 2020
-  waits for the engine).
+  16-bit (full size, no EXIF). **Colours**: sRGB or Display P3 for every
+  file, and Rec. 2020 for a 16-bit one (TIFF, or a 16-bit PNG at its
+  original size). Each file's pixels are rendered straight into the space
+  chosen, and every file says which space it is in: an ICC profile (and
+  for a wide-gamut PNG a `cICP` chunk), or the `sRGB` chunk for an sRGB
+  PNG.
 - **Size**: original, or by long edge, short edge or megapixels, with
   **Don't enlarge** on by default.
 - **Details in the file**: all (with **Remove location**, on by default;
@@ -626,6 +630,22 @@ never talks to Google. Lopsy's side is in `apps/lopsy-web/FEATURES.md`
   once the editor or an import has started it online; changes wait in the
   device's queue and are saved when storage is reachable again. Photonamous
   whose originals are kept on the device can be edited offline.
+- **Colour.** Photos are edited in linear light with a wide gamut
+  (Rec. 2020) and shown for the screen: on a display with the Display P3
+  gamut the editor's canvas is Display P3, on both WebGPU and WebGL, and
+  follows the window to another display. Previews in the library are
+  sRGB on every display. On a graphics processor that cannot render to
+  floating-point targets, photos are developed with the RAW decoder's
+  finished look in 8 bits and shown as sRGB, and the status bar says
+  "8-bit".
+- **Status bar** along the bottom of the window, in the library and the
+  Edit view (not on the start screen or in Full screen): at the left, the
+  number of photos shown and, when any are, how many are selected; in the
+  Edit view, the photo's size and the size it is being edited at ("full
+  size" once the full resolution is loaded). At the right, the engine
+  that draws (WebGPU or WebGL, once it has started) and the display's
+  colour (sRGB or Display P3). Each item says what it is to a screen
+  reader ("Renderer: WebGPU").
 - **Graphics.** The editor draws with WebGPU where the browser offers
   it, and with WebGL otherwise, in the same visit and with nothing for
   the user to do. When WebGPU is offered but fails to start, the editor

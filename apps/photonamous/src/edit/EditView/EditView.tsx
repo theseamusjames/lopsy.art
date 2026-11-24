@@ -79,6 +79,7 @@ import { useClippingWarningOnEngine } from '../clipping-warning';
 import { useGrainSeed } from '../grain-seed';
 import { useAltDragViews } from '../alt-drag-views';
 import { editPageTitle, useDocumentTitle, useFocusKept, useFocusOnOpen, useFocusReturn } from '../edit-page';
+import { useEditSizes } from './use-edit-sizes';
 import styles from './EditView.module.css';
 import { NO_INSETS } from '../../engine/viewport';
 
@@ -215,6 +216,7 @@ export function EditView({
   const { engine, status, view, canvasKey } = usePhotoEngine(canvasRef, asset, loadOriginal);
   useClippingWarningOnEngine(engine);
   useGrainSeed(engine, asset.id);
+  useEditSizes(engine, view, status.kind === 'ready');
   const [draft, setDraft] = useState<Readonly<Record<string, Json>> | null>(null);
   const [committed, setCommitted] = useState<Committed | null>(null);
   const [isBeforeToggled, setIsBeforeToggled] = useState(false);

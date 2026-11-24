@@ -20,7 +20,7 @@ you change what users see).
 | `packages/photos-core/src/library/types.ts` | The data model and `LibrarySession`, the only way the UI changes the library |
 | `packages/photos-core/src/library/recipe.ts` | The edit recipe |
 | `packages/photos-core/src/import/types.ts` | Import contracts |
-| `packages/ui/` | `@lopsy/ui`, shared with Lopsy: tokens, reset and fonts, the Slider, the Menu, and the keyboard and focus helpers (`a11y/`) |
+| `packages/ui/` | `@lopsy/ui`, shared with Lopsy: tokens, reset and fonts, the Slider, the Menu, the status bar, and the keyboard and focus helpers (`a11y/`) |
 
 The engine is the wasm package `npm run wasm:build` (or `wasm:build:dev`)
 writes into `apps/lopsy-web/src/engine-wasm/pkg/` (WebGL) and
@@ -43,9 +43,20 @@ ESLint refuses them from the glue. A new readback the app uses goes in
 `wasm.ts` and in that ESLint list. The RAF workers load the glue by its
 `.js` name, past the selector, for the build the page runs.
 
+**Colour.** Every engine is made by `createDevelopEngine`
+(`src/engine/develop-engine.ts`), which turns on the engine's linear
+Rec. 2020 working space where the GPU renders to float targets (not on the
+8-bit fallback) and tells it what the canvas is (`setScreenOutput`): Display
+P3 where the display has it (`@lopsy/engine-wasm/display`, watched), else
+sRGB. Anything copied out of the canvas (previews, 8-bit exports) sets the
+canvas to its file's space first; nothing relies on the browser converting
+it. Browser-encoded PNG and JPEG files are tagged with Lopsy's inserters
+(`@lopsy/image-metadata`). The status bar's engine and display state is
+`src/engine/engine-status.ts`.
+
 The UI this app shares with Lopsy is `packages/ui` (`@lopsy/ui`, see its
 `README.md`): the design tokens, reset and fonts (`src/styles/index.css`
-imports them), the Slider, the Menu, and the keyboard and focus helpers
+imports them), the Slider, the Menu, the StatusBar, and the keyboard and focus helpers
 (`@lopsy/ui/a11y/…`). It is Lopsy's as much as this app's: don't restyle
 it here, and don't change it for this app's sake alone. A component Lopsy
 could use too goes there; one only this app uses stays here.
