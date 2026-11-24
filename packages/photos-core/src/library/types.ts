@@ -34,7 +34,7 @@ export interface Preset {
   readonly values: Readonly<Record<string, Json>>;
   readonly createdAt: string;
   readonly deleted: boolean;
-  /** One of `BUILT_IN_PRESETS`, which live in code and are never stored. */
+  /** One of the presets every library starts with (`BUILT_IN_PRESETS`): its values come from code. */
   readonly builtIn?: boolean;
 }
 
@@ -231,7 +231,11 @@ export interface LibraryView {
   readonly albums: ReadonlyMap<AlbumId, Album>;
   /** Synced settings, by key. */
   readonly settings: ReadonlyMap<string, Json>;
-  /** The user's edit presets, deleted ones included (filter on `deleted`); built-ins are in presets.ts. */
+  /**
+   * The edit presets the library has records for, deleted ones included:
+   * the user's own, and the starters they renamed or deleted. The whole
+   * list, starters included, is `allPresets` in presets.ts.
+   */
   readonly presets: ReadonlyMap<PresetId, Preset>;
   readonly exportPresets: ReadonlyMap<ExportPresetId, ExportPreset>;
 }

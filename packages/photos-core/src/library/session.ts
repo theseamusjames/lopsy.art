@@ -22,7 +22,7 @@ import { isStorageError } from '../storage/errors';
 import { EMPTY_BOOKKEEPING, type LocalStore, type SyncBookkeeping } from './local-store';
 import { MergeStore, type RecipeWrite } from './merge-store';
 import { exportSettingsFromJson, exportSettingsProblem, type ExportSettings } from '../export/types';
-import { BUILT_IN_PREFIX } from './presets';
+import { BUILT_IN_PREFIX, isStarterExportPreset, isStarterPreset } from './presets';
 import {
   isRecipeGroupId,
   pickGroups,
@@ -843,12 +843,14 @@ class Session implements PhotosLibrarySession {
   }
 
   renamePreset(presetId: PresetId, name: string): void {
-    if (presetId.startsWith(BUILT_IN_PREFIX)) return;
+    // A starter is renamed and deleted like any preset; a `builtin:` ID that is no starter is nothing.
+    if (presetId.startsWith(BUILT_IN_PREFIX) && !isStarterPreset(presetId)) return;
     this.emit([{ t: 'set', kind: 'preset', id: presetId, fields: { name } }]);
   }
 
   deletePreset(presetId: PresetId): void {
-    if (presetId.startsWith(BUILT_IN_PREFIX)) return;
+    // A starter is renamed and deleted like any preset; a `builtin:` ID that is no starter is nothing.
+    if (presetId.startsWith(BUILT_IN_PREFIX) && !isStarterPreset(presetId)) return;
     this.emit([{ t: 'set', kind: 'preset', id: presetId, fields: { deleted: true } }]);
   }
 
@@ -869,12 +871,14 @@ class Session implements PhotosLibrarySession {
   }
 
   renameExportPreset(presetId: ExportPresetId, name: string): void {
-    if (presetId.startsWith(BUILT_IN_PREFIX)) return;
+    // A starter is renamed and deleted like any preset; a `builtin:` ID that is no starter is nothing.
+    if (presetId.startsWith(BUILT_IN_PREFIX) && !isStarterExportPreset(presetId)) return;
     this.emit([{ t: 'set', kind: 'exportPreset', id: presetId, fields: { name } }]);
   }
 
   deleteExportPreset(presetId: ExportPresetId): void {
-    if (presetId.startsWith(BUILT_IN_PREFIX)) return;
+    // A starter is renamed and deleted like any preset; a `builtin:` ID that is no starter is nothing.
+    if (presetId.startsWith(BUILT_IN_PREFIX) && !isStarterExportPreset(presetId)) return;
     this.emit([{ t: 'set', kind: 'exportPreset', id: presetId, fields: { deleted: true } }]);
   }
 

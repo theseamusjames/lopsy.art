@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_EXPORT_SETTINGS, exportKeepsLocation, exportSettingsFromJson } from '../export/types';
 import type { EntityRecord } from './merge-store';
 import { MemoryLocalStore } from './local-store';
-import { BUILT_IN_EXPORT_PRESETS, BUILT_IN_PRESETS, findPreset } from './presets';
+import { allExportPresets, allPresets, BUILT_IN_EXPORT_PRESETS, BUILT_IN_PRESETS, findPreset } from './presets';
 import { DEFAULT_RECIPE, recipeFromPaths, recipeHash } from './recipe';
 import { openLibrary, type PhotosLibrarySession } from './session';
 import { canonicalView } from './test-support/canonical';
@@ -96,7 +96,7 @@ describe('presets', () => {
     }
   });
 
-  it('ships built-ins that are valid, never stored and not renameable', async () => {
+  it('ships starters that are valid, and the user renames and deletes them like their own', async () => {
     expect(BUILT_IN_PRESETS.length).toBeGreaterThanOrEqual(4);
     for (const p of BUILT_IN_PRESETS) {
       expect(p.id.startsWith('builtin:')).toBe(true);
@@ -110,9 +110,37 @@ describe('presets', () => {
       '16-bit TIFF, Display P3',
     ]);
     const s = await openLibrary({ adapter: new TestAdapter(), store: new MemoryLocalStore(), autoSync: false });
-    s.renamePreset('builtin:warm', 'Mine');
-    expect(s.getSyncStatus().pendingOps).toBe(0);
-    expect(findPreset(s.getView().presets, 'builtin:warm')?.name).toBe('Warm');
+    const names = () => allPresets(s.getView().presets).map((p) => p.name);
+    expect(names()).toEqual(BUILT_IN_PRESETS.map((p) => p.name));
+
+    // Renamed: its name is the user's, what it does is still the starter's.
+    s.renamePreset('builtin:warm', 'Golden hour');
+    const renamed = findPreset(s.getView().presets, 'builtin:warm');
+    expect(renamed?.name).toBe('Golden hour');
+    expect(renamed?.values).toEqual(BUILT_IN_PRESETS.find((p) => p.id === 'builtin:warm')?.values);
+    expect(names()).toContain('Golden hour');
+    expect(names()).not.toContain('Warm');
+
+    // Deleted: gone from the list, and from being found.
+    s.deletePreset('builtin:punchy');
+    expect(findPreset(s.getView().presets, 'builtin:punchy')).toBeNull();
+    expect(names()).not.toContain('Punchy');
+    expect(names().length).toBe(BUILT_IN_PRESETS.length - 1);
+
+    // The user's own sit in the same list.
+    s.savePreset('Mine', DEFAULT_RECIPE, ['tone']);
+    expect(names()).toContain('Mine');
+
+    // Export presets, the same.
+    s.deleteExportPreset('builtin:web-2048');
+    s.renameExportPreset('builtin:full-jpeg', 'Everything');
+    expect(allExportPresets(s.getView().exportPresets).map((p) => p.name)).toEqual(['Everything', '16-bit TIFF, Display P3']);
+
+    // An ID that only looks like a starter's is nothing.
+    const before = s.getSyncStatus().pendingOps;
+    s.renamePreset('builtin:no-such', 'Evil');
+    s.deletePreset('builtin:no-such');
+    expect(s.getSyncStatus().pendingOps).toBe(before);
   });
 });
 
@@ -157,9 +185,14 @@ describe('stored records claiming a built-in ID', () => {
   const record = (fields: Record<string, Json>) =>
     ({ fields: new Map(Object.entries(fields).map(([k, value]) => [k, { value }])), sets: new Map() }) as unknown as EntityRecord;
 
-  it('are ignored, so built-ins are listed once and cannot be replaced', () => {
-    expect(presetFromRecord('builtin:punchy', record({ name: 'Evil', values: { 'tone.exposure': 5 } }))).toBeNull();
-    expect(exportPresetFromRecord('builtin:web-2048', record({ name: 'Leak', settings: {} }))).toBeNull();
+  it('can rename or delete the starter, and nothing else: what it does cannot be replaced', () => {
+    const punchy = BUILT_IN_PRESETS.find((p) => p.id === 'builtin:punchy')!;
+    const claimed = presetFromRecord('builtin:punchy', record({ name: 'Evil', values: { 'tone.exposure': 5 }, groups: ['color'] }));
+    expect(claimed).toEqual({ ...punchy, name: 'Evil' });
+    expect(presetFromRecord('builtin:punchy', record({ deleted: true }))).toEqual({ ...punchy, deleted: true });
+    const web = BUILT_IN_EXPORT_PRESETS.find((p) => p.id === 'builtin:web-2048')!;
+    expect(exportPresetFromRecord('builtin:web-2048', record({ name: 'Leak', settings: {} }))).toEqual({ ...web, name: 'Leak' });
+    expect(presetFromRecord('builtin:no-such', record({ name: 'Evil' }))).toBeNull();
     expect(presetFromRecord('p-1', record({ name: 'Mine' }))?.name).toBe('Mine');
     expect(findPreset(new Map(), 'builtin:punchy')?.name).toBe('Punchy');
     const evil = { ...BUILT_IN_PRESETS[0]!, id: 'builtin:x', name: 'Evil' };

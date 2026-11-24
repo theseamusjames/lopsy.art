@@ -8,7 +8,7 @@
 import { RECIPE_PREFIX, type EntityRecord, type MergeStore, type ChangedEntity } from './merge-store';
 import { OverlayMap } from './overlay-map';
 import { exportSettingsFromJson } from '../export/types';
-import { BUILT_IN_PREFIX } from './presets';
+import { BUILT_IN_EXPORT_PRESETS, BUILT_IN_PREFIX, BUILT_IN_PRESETS } from './presets';
 import { isRecipeGroupId, recipeFromPaths, sanitizeRecipeValues } from './recipe';
 import type {
   Album,
@@ -213,9 +213,25 @@ function emptyView(): MapsView {
   };
 }
 
+/**
+ * A record under a starter's ID says what the user did with it: renamed
+ * it, or deleted it. Nothing else in the record is read, so what the
+ * starter does stays what the code says. A record under a `builtin:` ID
+ * that is no starter is ignored.
+ */
+function starterFromRecord<T extends { readonly id: string; readonly name: string; readonly deleted: boolean }>(
+  starters: readonly T[],
+  id: string,
+  record: EntityRecord,
+): T | null {
+  const starter = starters.find((p) => p.id === id);
+  if (!starter) return null;
+  const name = field(record, 'name');
+  return { ...starter, name: typeof name === 'string' && name.trim() !== '' ? name : starter.name, deleted: field(record, 'deleted') === true };
+}
+
 export function presetFromRecord(id: string, record: EntityRecord): Preset | null {
-  // Built-in IDs belong to the presets in code: a stored record claiming one is ignored.
-  if (id.startsWith(BUILT_IN_PREFIX)) return null;
+  if (id.startsWith(BUILT_IN_PREFIX)) return starterFromRecord(BUILT_IN_PRESETS, id, record);
   const name = field(record, 'name');
   if (typeof name !== 'string') return null;
   const groups = field(record, 'groups');
@@ -232,7 +248,7 @@ export function presetFromRecord(id: string, record: EntityRecord): Preset | nul
 }
 
 export function exportPresetFromRecord(id: string, record: EntityRecord): ExportPreset | null {
-  if (id.startsWith(BUILT_IN_PREFIX)) return null;
+  if (id.startsWith(BUILT_IN_PREFIX)) return starterFromRecord(BUILT_IN_EXPORT_PRESETS, id, record);
   const name = field(record, 'name');
   if (typeof name !== 'string') return null;
   return {

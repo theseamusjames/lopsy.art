@@ -7,6 +7,7 @@
  * so photos-core has no runtime dependency on it.
  *
  *   const drive = await routeFakeDrive(page);
+ *   await routeDrivePicker(context, () => ({ fileIds: [id] })); // Add from Google Drive
  *   await page.addInitScript(gisStubInitScript());
  *   await page.goto(appUrl);
  *   // ...drive the UI, then inspect drive.requests or drive.contentOf(id)
@@ -64,6 +65,97 @@ async function serve(route: Route, drive: FakeDrive): Promise<void> {
     headers: responseHeaders,
     body: toNodeBuffer(new Uint8Array(await response.arrayBuffer())),
   });
+}
+
+/**
+ * A script for page.addInitScript that stands in for Google's Picker in
+ * the page (picker.ts): `google.picker`, so the real script is never
+ * loaded. Showing it adds `#fake-google-picker` to the page and nothing
+ * more, which is also what a Picker stuck on Google's sign-in page looks
+ * like from outside. A test answers for the user through
+ * `window.__lopsyPickerStub`: `pick(ids)` or `cancel()`; `shown` and
+ * `disposed` count.
+ */
+export function pickerStubInitScript(): string {
+  return `(() => {
+  const stub = {
+    shown: 0,
+    disposed: 0,
+    callback: null,
+    pick(ids) { if (stub.callback) stub.callback({ action: 'picked', docs: ids.map((id) => ({ id })) }); },
+    cancel() { if (stub.callback) stub.callback({ action: 'cancel' }); },
+  };
+  window.__lopsyPickerStub = stub;
+  class DocsView {
+    setMimeTypes() { return this; }
+    setIncludeFolders() { return this; }
+    setSelectFolderEnabled() { return this; }
+  }
+  class PickerBuilder {
+    addView() { return this; }
+    enableFeature() { return this; }
+    setAppId() { return this; }
+    setOAuthToken() { return this; }
+    setDeveloperKey() { return this; }
+    setTitle() { return this; }
+    setCallback(callback) { stub.callback = callback; return this; }
+    build() {
+      return {
+        setVisible(visible) {
+          if (!visible) return;
+          stub.shown++;
+          const frame = document.createElement('div');
+          frame.id = 'fake-google-picker';
+          frame.setAttribute('role', 'dialog');
+          frame.setAttribute('aria-label', 'Google Picker');
+          frame.textContent = 'Sign in to your Google Account';
+          document.body.appendChild(frame);
+        },
+        dispose() {
+          stub.disposed++;
+          const frame = document.getElementById('fake-google-picker');
+          if (frame) frame.remove();
+        },
+      };
+    }
+  }
+  const picker = { DocsView, PickerBuilder, ViewId: { DOCS: 'all' }, Feature: { MULTISELECT_ENABLED: 'multiselectEnabled' }, Action: { PICKED: 'picked', CANCEL: 'cancel' } };
+  window.google = Object.assign(window.google || {}, { picker });
+})();`;
+}
+
+/** Google's authorization page. With `trigger_onepick` it is the Picker in a window (picker-window.ts). */
+export const GOOGLE_PICKER_URL = /^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth\?/;
+
+/**
+ * Stands in for Google's Picker page. The pop-up is sent straight back to
+ * the redirect URI the app named, as Google sends it once the user has
+ * picked: with the app's `state`, and the file IDs `answer` returns or its
+ * error (`access_denied` is what a refusal looks like). Route it on the
+ * context, since the pop-up is a page of its own. Returns the URLs the
+ * app opened, as they arrive.
+ */
+export async function routeDrivePicker(
+  target: BrowserContext | Page,
+  answer: () => { readonly fileIds?: readonly string[]; readonly error?: string },
+): Promise<string[]> {
+  const opened: string[] = [];
+  await target.route(GOOGLE_PICKER_URL, async (route) => {
+    const asked = new URL(route.request().url());
+    opened.push(asked.href);
+    const back = new URL(asked.searchParams.get('redirect_uri') ?? '');
+    back.searchParams.set('state', asked.searchParams.get('state') ?? '');
+    const { fileIds, error } = answer();
+    if (error) {
+      back.searchParams.set('error', error);
+    } else {
+      back.searchParams.set('picked_file_ids', (fileIds ?? []).join(','));
+      back.searchParams.set('code', '4/fake-authorization-code');
+      back.searchParams.set('scope', asked.searchParams.get('scope') ?? '');
+    }
+    await route.fulfill({ status: 302, headers: { Location: back.href } });
+  });
+  return opened;
 }
 
 /** Playwright wants a Node Buffer for binary bodies; photos-core has no Node types, so reach it at runtime. */

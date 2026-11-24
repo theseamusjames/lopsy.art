@@ -1,7 +1,15 @@
 /**
- * The Google Picker, for adopting files the app cannot see under the
- * drive.file scope (spec 6.5). Browser only. Resolves with the picked
- * file IDs, or an empty list when the user cancels.
+ * The Google Picker inside the page, for adopting files the app cannot
+ * see under the drive.file scope (spec 6.5). Browser only. Resolves with
+ * the picked file IDs, or an empty list when the user cancels.
+ *
+ * It is a frame on docs.google.com, and it knows the user by Google's
+ * cookies there. A browser that blocks cross-site cookies (Brave, and
+ * others when set so) gives the frame none, and it then shows "Sign in to
+ * your Google Account" instead of the user's files. The page cannot see
+ * into the frame to tell. So the app offers the Picker as a window of its
+ * own beside this one (picker-window.ts) and ends this one with `signal`
+ * when the user takes it.
  */
 
 import { loadScript, readGlobal } from '../../auth/load-script';
@@ -21,6 +29,8 @@ export interface PickDriveFilesOptions {
   readonly mimeTypes?: readonly string[];
   readonly multiselect?: boolean;
   readonly title?: string;
+  /** Aborting closes the Picker and resolves with nothing picked. */
+  readonly signal?: AbortSignal;
 }
 
 interface DocsView {
@@ -115,6 +125,15 @@ export async function pickDriveFiles(options: PickDriveFilesOptions): Promise<st
         }
       })
       .build();
+    const end = (): void => {
+      picker.dispose();
+      resolve([]);
+    };
+    if (options.signal?.aborted) {
+      end();
+      return;
+    }
+    options.signal?.addEventListener('abort', end);
     picker.setVisible(true);
   });
 }
