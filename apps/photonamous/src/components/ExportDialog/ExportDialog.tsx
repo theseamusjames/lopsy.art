@@ -3,7 +3,6 @@ import type { ExportPreset, VersionId } from '@lopsy/photos-core/library/types';
 import {
   DEFAULT_EXPORT_SETTINGS,
   exportSettingsProblem,
-  isAlwaysFullSize,
   isHdrFormat,
   usesQuality,
   type ExportColorSpace,
@@ -18,16 +17,17 @@ import {
   COLOR_SPACE_WORDS,
   HDR_FORMATS,
   HDR_FORMAT_WORDS,
+  fitExportChoices,
   fixedColorWords,
   hdrUnavailableReason,
   locationKept,
   offeredColorSpaces,
+  sizeChoicesFor,
 } from '../../library/export-form';
 import { currentStatus, onStatusChange } from '../../engine/engine-status';
 import {
   DEFAULT_EXTRAS,
   extrasSettingKey,
-  maxLongEdgeOf,
   presetExtras,
   withExtras,
   type ExportExtras,
@@ -55,15 +55,6 @@ function defaultName(): string {
   return `Export ${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** Settings and extras made consistent: a colour space the format can carry, TIFF and HDR files at full size. */
-function fit(settings: ExportSettings, extras: ExportExtras): { settings: ExportSettings; extras: ExportExtras } {
-  const space = settings.colorSpace ?? 'srgb';
-  const offered = offeredColorSpaces(settings.format, extras.pngDepth);
-  const fitted = offered.includes(space) ? settings : { ...settings, colorSpace: offered[0] ?? 'srgb' };
-  const ex = isAlwaysFullSize(settings.format) ? { ...extras, size: { mode: 'original' as const }, allowEnlarge: false } : extras;
-  return { settings: { ...fitted, maxLongEdge: maxLongEdgeOf(ex) }, extras: ex };
-}
-
 function sizeValue(size: SizeSpec): number {
   return size.mode === 'megapixels' ? size.mp : size.mode === 'original' ? 0 : size.px;
 }
@@ -84,7 +75,7 @@ export function ExportDialog() {
   const [versionIds] = useState<VersionId[]>(exportVersions);
   const presets = useExportPresets();
   const [presetId, setPresetId] = useState<string | null>(null);
-  const [state, setState] = useState(() => fit({ ...DEFAULT_EXPORT_SETTINGS, colorSpace: 'srgb' }, DEFAULT_EXTRAS));
+  const [state, setState] = useState(() => fitExportChoices({ ...DEFAULT_EXPORT_SETTINGS, colorSpace: 'srgb' }, DEFAULT_EXTRAS));
   const { settings, extras } = state;
   const [tiff, setTiff] = useState(false);
   const engineStatus = useSyncExternalStore(onStatusChange, currentStatus);
@@ -97,7 +88,7 @@ export function ExportDialog() {
   const doneRef = useRef<HTMLButtonElement>(null);
 
   const change = (patch: Partial<ExportSettings>, extrasPatch: Partial<ExportExtras> = {}) => {
-    setState((s) => fit({ ...s.settings, ...patch }, { ...s.extras, ...extrasPatch }));
+    setState((s) => fitExportChoices({ ...s.settings, ...patch }, { ...s.extras, ...extrasPatch }));
     setPresetId(null);
   };
   const setSize = (size: SizeSpec) => change({}, { size });
@@ -105,7 +96,7 @@ export function ExportDialog() {
   const pickPreset = (preset: ExportPreset) => {
     // A preset saved before the size fields existed kept them in a setting.
     const ex = presetExtras(preset.settings, view.settings.get(extrasSettingKey(preset.id)));
-    setState(fit(preset.settings, ex));
+    setState(fitExportChoices(preset.settings, ex));
     setPresetId(preset.id);
   };
 
@@ -115,6 +106,7 @@ export function ExportDialog() {
   const tiffBlocked = format === 'tiff' && !tiff;
   const hdrBlocked = isHdrFormat(format) && hdrUnavailable !== null;
   const fixedColors = fixedColorWords(format);
+  const sizeChoices = sizeChoicesFor(format, extras.size.mode);
   const isBlocked = running || versionIds.length === 0 || problem !== null || tiffBlocked || hdrBlocked;
   const finished = progress?.finished ?? false;
 
@@ -343,7 +335,7 @@ export function ExportDialog() {
             <select
               id={`${id}-size`}
               className={styles.select}
-              disabled={running || isAlwaysFullSize(format)}
+              disabled={running || !sizeChoices.canChoose}
               value={extras.size.mode}
               onChange={(e) => {
                 const mode = e.target.value as SizeSpec['mode'];
@@ -380,14 +372,13 @@ export function ExportDialog() {
               </>
             )}
           </div>
-          {!isAlwaysFullSize(format) && extras.size.mode !== 'original' && (
+          {sizeChoices.offersEnlarge && (
             <label className={styles.option}>
               <input type="checkbox" checked={!extras.allowEnlarge} disabled={running} onChange={(e) => change({}, { allowEnlarge: !e.target.checked })} />
               Don’t enlarge <span className={styles.muted}>— smaller photos stay as they are</span>
             </label>
           )}
-          {format === 'tiff' && <span className={styles.muted}>TIFF is always the full size. It keeps no camera details (EXIF).</span>}
-          {isHdrFormat(format) && <span className={styles.muted}>HDR files are always the full size.</span>}
+          {sizeChoices.note !== null && <span className={styles.muted}>{sizeChoices.note}</span>}
         </div>
 
           </div>

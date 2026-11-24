@@ -124,3 +124,32 @@ test('hovering the photo never takes the clipping warning off the screen, nor dr
   const [r = 0, g = 0, b = 0] = ((await page.getByTestId('pixel-readout').textContent()) ?? '').match(/\d+/g)?.map(Number) ?? [];
   expect(Math.min(r, g, b)).toBeGreaterThan(245);
 });
+
+test('the histogram counts the photo, not the sharpening mask, while that view is on', async ({ page }) => {
+  await openHarness(page);
+  await openGeneratedImage(page, 640, 480);
+  await waitForReady(page);
+  await expect(page.getByTestId('histogram')).toHaveAttribute('data-ready', 'true');
+  const readout = page.getByLabel('Sharpen value', { exact: true });
+  await readout.fill('120');
+  await readout.press('Enter');
+  await page.waitForTimeout(1000);
+
+  const canvas = page.getByTestId('edit-canvas');
+  const read = () => page.evaluate(() => window.__photonamousScreenEngine?.readHistogram() ?? null);
+  const off = await read();
+  expect(off?.length).toBe(1024);
+  const shownOff = await canvas.screenshot();
+
+  // What holding Alt on a Sharpen slider turns on (src/edit/alt-drag-views.ts).
+  await page.evaluate(() => window.__photonamousScreenEngine?.setDetailMaskView(true));
+  // The view is on the screen: the canvas no longer shows the photo.
+  await expect.poll(async () => (await canvas.screenshot()).equals(shownOff), { timeout: 15_000 }).toBe(false);
+  const on = await read();
+  expect(on).toEqual(off);
+  // The read did not take the view off the screen.
+  expect((await canvas.screenshot()).equals(shownOff)).toBe(false);
+
+  await page.evaluate(() => window.__photonamousScreenEngine?.setDetailMaskView(false));
+  expect(await read()).toEqual(off);
+});

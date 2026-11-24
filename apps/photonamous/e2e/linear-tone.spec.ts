@@ -198,7 +198,7 @@ async function pressAutoTone(page: Page): Promise<number> {
 
 test('Auto tone raises Exposure on a dark photo as one step, and on a second press changes little', async ({ page }) => {
   await openHarness(page);
-  // About two stops under middle grey: within what one press may move (at most 2 EV).
+  // About two stops under middle grey: well within what one press may move (up to 4 EV).
   await openGeneratedImage(page, 640, 480, 'image/jpeg', ['#2a2a2a', '#5a4838', '#404040']);
   await waitForReady(page);
   await expect(page.getByTestId('histogram')).toHaveAttribute('data-ready', 'true');
@@ -209,6 +209,21 @@ test('Auto tone raises Exposure on a dark photo as one step, and on a second pre
   const second = await pressAutoTone(page);
   console.log(`Auto tone: ${first} then ${second}`);
   expect(Math.abs(second - first)).toBeLessThan(0.25);
+});
+
+test('Auto tone brings a photo about three stops dark up in one press, and a second press barely moves it', async ({ page }) => {
+  await openHarness(page);
+  // About three stops under middle grey: beyond the two stops one press used to reach, within the four it reaches now.
+  await openGeneratedImage(page, 640, 480, 'image/jpeg', ['#1e1e1e', '#3a2e24', '#2a2a2a']);
+  await waitForReady(page);
+  await expect(page.getByTestId('histogram')).toHaveAttribute('data-ready', 'true');
+
+  const first = await pressAutoTone(page);
+  expect(await page.evaluate(() => window.__photosHarness?.steps)).toEqual(['Auto tone']);
+  const second = await pressAutoTone(page);
+  console.log(`Auto tone, three stops dark: ${first} then ${second}`);
+  expect(first).toBeGreaterThan(2.2);
+  expect(Math.abs(second - first)).toBeLessThan(0.1);
 });
 
 const samples = process.env.LOPSY_RAF_SAMPLES;

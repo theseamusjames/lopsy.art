@@ -13,7 +13,7 @@ import { generatedJpeg, importFiles, toast } from './library';
  *
  * The RAW tests read real camera files from LOPSY_RAF_SAMPLES
  * (github.com/theseamusjames/sample-raf-images) and are skipped without it.
- * Each exports a 40 MP photo at full size, so they are slow.
+ * The full-size one exports a 40 MP photo, so it is slow.
  */
 
 interface PngChunk {
@@ -195,10 +195,16 @@ async function openLibrary(page: Page): Promise<void> {
   await expect(page.getByText('Your library is empty')).toBeVisible();
 }
 
-/** Opens the Export dialog for the selection, picks `format` and downloads the file. */
-async function exportAs(page: Page, format: RegExp, timeout = 120_000): Promise<{ name: string; bytes: Buffer }> {
+/** Opens the Export dialog for the selection, picks `format` (and a long edge of `longEdge` px) and downloads the file. */
+async function exportAs(page: Page, format: RegExp, timeout = 120_000, longEdge?: number): Promise<{ name: string; bytes: Buffer }> {
   await page.getByRole('button', { name: /^Export \d/ }).click();
   await page.getByRole('radio', { name: format }).check();
+  if (longEdge !== undefined) {
+    await page.getByRole('combobox', { name: 'Size' }).selectOption('long');
+    await page.getByRole('spinbutton', { name: 'Pixels (px)' }).fill(String(longEdge));
+  } else {
+    await page.getByRole('combobox', { name: 'Size' }).selectOption('original');
+  }
   await page.getByRole('radio', { name: 'Download to this computer' }).check();
   const download = page.waitForEvent('download', { timeout });
   await page.getByRole('button', { name: 'Export', exact: true }).click();
@@ -211,7 +217,7 @@ async function exportAs(page: Page, format: RegExp, timeout = 120_000): Promise<
   return { name, bytes };
 }
 
-test('the HDR formats are offered with what each is, and with no colour or size choice', async ({ page }) => {
+test('the HDR formats are offered with what each is, with no colour choice, and sizes that never enlarge', async ({ page }) => {
   await openLibrary(page);
   await importFiles(page, [{ name: 'harbour.jpg', buffer: await generatedJpeg(page, 30, 480, 320) }]);
   await page.getByRole('button', { name: /^All photos/ }).click();
@@ -227,8 +233,14 @@ test('the HDR formats are offered with what each is, and with no colour or size 
   await expect(page.getByRole('combobox', { name: 'Colours' })).toHaveCount(0);
   await expect(page.getByText('Rec. 2020, HDR (PQ)')).toBeVisible();
   await expect(page.getByRole('slider', { name: 'Quality' })).toHaveCount(0);
-  await expect(page.getByRole('combobox', { name: 'Size' })).toBeDisabled();
-  await expect(page.getByText('HDR files are always the full size.')).toBeVisible();
+  const size = page.getByRole('combobox', { name: 'Size' });
+  await expect(size).toBeEnabled();
+  await size.selectOption('long');
+  // Smaller only: no Don't enlarge, and a line saying so.
+  await expect(page.getByRole('checkbox', { name: /Don.t enlarge/ })).toHaveCount(0);
+  await expect(page.getByText('HDR files are never enlarged: a photo smaller than this stays as it is.')).toBeVisible();
+  await size.selectOption('original');
+  await expect(page.getByText(/HDR files are never enlarged/)).toHaveCount(0);
 
   await hdrJpeg.check();
   await expect(page.getByText('sRGB, with the HDR gain map')).toBeVisible();
@@ -237,7 +249,66 @@ test('the HDR formats are offered with what each is, and with no colour or size 
   // Back to an ordinary format, the choices return.
   await page.getByRole('radio', { name: /^PNG/ }).check();
   await expect(page.getByRole('combobox', { name: 'Colours' })).toBeVisible();
-  await expect(page.getByRole('combobox', { name: 'Size' })).toBeEnabled();
+  await size.selectOption('long');
+  await expect(page.getByRole('checkbox', { name: /Don.t enlarge/ })).toBeVisible();
+});
+
+/** The decoded size of a JPEG, as the browser reads it. */
+async function jpegSize(page: Page, bytes: Buffer): Promise<{ width: number; height: number }> {
+  return page.evaluate(async (base64) => {
+    const data = Uint8Array.from(atob(base64), (ch) => ch.charCodeAt(0));
+    const bitmap = await createImageBitmap(new Blob([data], { type: 'image/jpeg' }));
+    return { width: bitmap.width, height: bitmap.height };
+  }, bytes.toString('base64'));
+}
+
+test('a JPEG photo exports as HDR files at a smaller size, the gain-map JPEG the ordinary JPEG at that size', async ({ page }) => {
+  test.setTimeout(240_000);
+  await openLibrary(page);
+  await importFiles(page, [{ name: 'harbour.jpg', buffer: await generatedJpeg(page, 200, 3000, 2000) }]);
+  await page.getByRole('button', { name: /^All photos/ }).click();
+  await page.locator('[role="gridcell"][title="harbour.jpg"]').click();
+
+  const png = await exportAs(page, /^HDR PNG/, 120_000, 2000);
+  expectPqPng(png.bytes, 2000, 1333);
+  expect(maxCode16(png.bytes)).toBeLessThanOrEqual(Math.ceil(0.581 * 65535));
+
+  const gainMap = await exportAs(page, /^HDR JPEG/, 120_000, 2000);
+  expectGainMapJpeg(gainMap.bytes);
+  expect(await jpegSize(page, gainMap.bytes)).toEqual({ width: 2000, height: 1333 });
+
+  const ordinary = await exportAs(page, /^JPEG/, 120_000, 2000);
+  const diff = await compareInBrowser(page, gainMap.bytes, ordinary.bytes);
+  expect({ width: diff.width, height: diff.height }).toEqual({ width: 2000, height: 1333 });
+  expect(diff.mean).toBeLessThan(1);
+  expect(diff.max).toBeLessThanOrEqual(8);
+
+  // Larger than the photo: made at the photo's own size, never enlarged.
+  const larger = await exportAs(page, /^HDR PNG/, 120_000, 4000);
+  expectPqPng(larger.bytes, 3000, 2000);
+});
+
+test('several photos export as HDR files at a smaller size together', async ({ page }) => {
+  test.setTimeout(240_000);
+  await openLibrary(page);
+  await importFiles(page, [
+    { name: 'alpha.jpg', buffer: await generatedJpeg(page, 40, 640, 480) },
+    { name: 'beta.jpg', buffer: await generatedJpeg(page, 220, 480, 640) },
+  ]);
+  await page.getByRole('button', { name: /^All photos/ }).click();
+  await expect(page.getByRole('gridcell')).toHaveCount(2);
+  await page.getByRole('gridcell').first().click();
+  await page.keyboard.press('Control+a');
+  const zip = await exportAs(page, /^HDR PNG/, 120_000, 320);
+  expect(zip.name).toMatch(/\.zip$/);
+  // The zip is stored, not compressed: each PNG's header can be read in place.
+  const sizes: string[] = [];
+  for (let at = zip.bytes.indexOf('IHDR'); at >= 0; at = zip.bytes.indexOf('IHDR', at + 4)) {
+    sizes.push(`${zip.bytes.readUInt32BE(at + 4)}x${zip.bytes.readUInt32BE(at + 8)}`);
+  }
+  expect(sizes.sort()).toEqual(['240x320', '320x240']);
+  const jpegs = await exportAs(page, /^HDR JPEG/, 120_000, 320);
+  expect(jpegs.bytes.toString('latin1').split('hdrgm:GainMapMax').length - 1).toBe(2);
 });
 
 test('a JPEG photo exports as an HDR PNG and as a gain-map JPEG that is the ordinary JPEG', async ({ page }) => {
@@ -323,5 +394,36 @@ test.describe('HDR exports of a RAF', () => {
       return { width: bitmap.width, height: bitmap.height };
     }, gainMap.bytes.toString('base64'));
     expect(size).toEqual({ width, height });
+  });
+
+  test('a bright RAW exports as HDR files at a long edge of 2000 px', async ({ page }) => {
+    if (!sample) return;
+    await openLibrary(page);
+    await page.getByRole('button', { name: /Import photos/ }).first().click();
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('menuitem', { name: /Choose photos/ }).click();
+    await (await chooser).setFiles([sample]);
+    await page.getByRole('button', { name: /^Import 1 photo/ }).click();
+    await expect(toast(page, /^Imported 1 photo/)).toBeVisible({ timeout: 300_000 });
+    await page.getByRole('button', { name: /^All photos/ }).click();
+    await page.getByRole('gridcell').first().click();
+
+    const png = await exportAs(page, /^HDR PNG/, 900_000, 2000);
+    const { width, height } = pngHeader(png.bytes);
+    expect(Math.max(width, height)).toBe(2000);
+    expect(Math.min(width, height)).toBe(1333);
+    expectPqPng(png.bytes, width, height);
+    // The reduction keeps the sky's highlights above SDR white (PQ code 0.58).
+    expect(maxCode16(png.bytes) / 65535).toBeGreaterThan(0.62);
+
+    const gainMap = await exportAs(page, /^HDR JPEG/, 900_000, 2000);
+    expectGainMapJpeg(gainMap.bytes);
+    expect(await jpegSize(page, gainMap.bytes)).toEqual({ width, height });
+    // The base is the ordinary sRGB JPEG export at the same size.
+    const ordinary = await exportAs(page, /^JPEG/, 900_000, 2000);
+    const diff = await compareInBrowser(page, gainMap.bytes, ordinary.bytes);
+    expect({ width: diff.width, height: diff.height }).toEqual({ width, height });
+    expect(diff.mean).toBeLessThan(1);
+    expect(diff.max).toBeLessThanOrEqual(12);
   });
 });

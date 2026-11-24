@@ -561,7 +561,8 @@ without a picture to edit here, and offers **Open in Lopsy** and **Back**.
   this screen is not), under their own heading in File type, each with a
   line saying what it is:
   - **HDR JPEG (gain map)**: an ordinary sRGB JPEG, the same picture as
-    the JPEG export at the same quality, carrying a half-size gain map
+    the JPEG export at the same size and quality (its base is that
+    export), carrying a half-size gain map
     (ISO 21496-1, with the Ultra HDR metadata). It is designed to open
     as an ordinary photo everywhere and with its highlights in HDR in
     Chrome, Edge, Safari 26 and on Android. **Quality** applies to both
@@ -570,7 +571,11 @@ without a picture to edit here, and offers **Open in Lopsy** and **Back**.
     (`cICP`, with mastering and light-level chunks), SDR white at 203
     cd/m², made for HDR viewers such as Safari 26. No quality setting.
   Both hold highlights up to four times SDR white (two stops), the same
-  peak the HDR view shows, and are always made at the full size; neither
+  peak the HDR view shows. They take the Size choices as JPEG does,
+  smaller but never larger than the photo: at a smaller size the engine
+  reduces the HDR picture before its output step, and the gain map is
+  worked out against the engine's own sRGB picture at that size, which is
+  within one 8-bit step of the base on average. Neither
   has a colour choice (the Colours field says what each is). A photo
   with nothing brighter than white still exports; its file simply has no
   headroom. They keep EXIF as the other formats do, and batch exports and
@@ -583,8 +588,9 @@ without a picture to edit here, and offers **Open in Lopsy** and **Back**.
   Lightroom show the PQ PNG in HDR; Apple's ImageIO reads the gain map
   back (plan decision 15).
 - **Size**: original, or by long edge, short edge or megapixels, with
-  **Don't enlarge** on by default. TIFF and the HDR files are always the
-  full size.
+  **Don't enlarge** on by default. TIFF is always the full size. The HDR
+  files are never enlarged: Don't enlarge is not offered for them, and a
+  photo smaller than the size asked for is made at its own size.
 - **Details in the file**: all (with **Remove location**, on by default;
   "Location will be kept" shows when it is off), copyright and contact
   only, or none; Creator and Copyright fields.

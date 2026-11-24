@@ -11,12 +11,14 @@
 
 import {
   compositeForExport as rawCompositeForExport,
+  compositeForExportSized as rawCompositeForExportSized,
   createEngine as rawCreateEngine,
   exportPng16 as rawExportPng16,
   exportTiff16 as rawExportTiff16,
   readDevelopHistogram as rawReadDevelopHistogram,
   readHdrHistogram as rawReadHdrHistogram,
   readHdrOutputF32 as rawReadHdrOutputF32,
+  readHdrOutputF32Sized as rawReadHdrOutputF32Sized,
   readSceneStatistics as rawReadSceneStatistics,
   rendererName as rawRendererName,
   resumeTask,
@@ -72,6 +74,18 @@ export const compositeForExport = readbacks.asyncReadback(rawCompositeForExport)
  * size). It replaces the live composite, so it waits its turn.
  */
 export const readHdrOutputF32 = readbacks.asyncReadback(rawReadHdrOutputF32);
+/**
+ * The HDR picture at an output size no larger than the document's: the
+ * rendered image reduced on the GPU before the output step. It re-composites,
+ * so it waits its turn.
+ */
+export const readHdrOutputF32Sized = readbacks.asyncReadback(rawReadHdrOutputF32Sized);
+/**
+ * The RGBA8 sRGB picture at an output size no larger than the document's:
+ * the same picture `readHdrOutputF32Sized` makes at that size, for the gain
+ * map. It re-composites, so it waits its turn.
+ */
+export const compositeForExportSized = readbacks.asyncReadback(rawCompositeForExportSized);
 /** The HDR histogram (4 × 256 bins up to a peak). It changes nothing in the document. */
 export const readHdrHistogram = readbacks.asyncReadback(rawReadHdrHistogram, 'any-time');
 export const exportTiff16 = readbacks.asyncReadback(rawExportTiff16);

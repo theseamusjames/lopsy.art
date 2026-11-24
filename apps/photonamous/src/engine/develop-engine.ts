@@ -110,12 +110,14 @@ import initWasm, {
 } from '@lopsy/engine-pkg/lopsy_wasm';
 import {
   compositeForExport,
+  compositeForExportSized,
   createEngine,
   exportPng16,
   exportTiff16,
   readDevelopHistogram,
   readHdrHistogram,
   readHdrOutputF32,
+  readHdrOutputF32Sized,
   readSceneStatistics,
   rendererName,
   sampleColor,
@@ -167,6 +169,12 @@ declare global {
      * the Edit view's (not an export or preview engine's), for e2e tests.
      */
     __photonamousEngine?: { rendererName: () => Renderer; loseDevice: () => boolean; isScreen: boolean; isWorkingSpace: boolean };
+    /**
+     * Development builds: the Edit view's engine's sharpening mask view and
+     * histogram read, for e2e tests that compare the histogram with the
+     * view on and off.
+     */
+    __photonamousScreenEngine?: { setDetailMaskView: (on: boolean) => void; readHistogram: () => Promise<number[] | null> };
   }
 }
 
@@ -189,9 +197,9 @@ export interface LoadOptions {
 export interface ExportOptions {
   /**
    * 'tiff' is the engine's 16-bit TIFF, always full size. 'hdr-png' (BT.2100
-   * PQ, Rec. 2020) and 'hdr-jpeg' (sRGB with a gain map) are HDR files,
-   * also always full size: the engine reads the HDR picture at the
-   * document's own size. Both need the working space.
+   * PQ, Rec. 2020) and 'hdr-jpeg' (sRGB with a gain map) are HDR files, at
+   * the full size or smaller, never enlarged: the engine reduces the HDR
+   * picture but cannot enlarge it. Both need the working space.
    */
   readonly format: 'jpeg' | 'png' | 'tiff' | 'hdr-png' | 'hdr-jpeg';
   /** JPEG quality, 0..1. */
@@ -743,6 +751,15 @@ class PhotoEngine implements DevelopEngine {
     if (rendererName() === 'wgpu') window.addEventListener(GPU_LOST_EVENT, this.handleGpuLost);
     else canvas.addEventListener('webglcontextlost', this.handleGpuLost);
     if (import.meta.env.DEV) window.__photonamousEngine = { rendererName, loseDevice: () => this.loseDevice(), isScreen, isWorkingSpace };
+    if (import.meta.env.DEV && isScreen) {
+      window.__photonamousScreenEngine = {
+        setDetailMaskView: (on) => this.setDetailMaskView(on),
+        readHistogram: async () => {
+          const bins = await this.readHistogram();
+          return bins ? [...bins] : null;
+        },
+      };
+    }
     this.resizeObserver = new ResizeObserver((entries) => this.handleResize(entries));
     try {
       this.resizeObserver.observe(canvas, { box: 'device-pixel-content-box' });
@@ -1391,16 +1408,17 @@ class PhotoEngine implements DevelopEngine {
   }
 
   /**
-   * As `withScreenViewsOff`, for the readout and the histograms. With the
-   * working space they read the kept rendered image through an sRGB (or
-   * HDR) output of their own, taken before the area overlay and the
-   * clipping warning are drawn, so those need not be turned off and the
-   * screen's frame is not drawn without them. The sharpening mask view is
-   * drawn into the rendered image itself (the engine's live sharpening
-   * pass), so while it is on the views are held off as on the legacy path.
+   * As `withScreenViewsOff`, for the readout and the histograms, on the
+   * legacy path only. With the working space they read the kept rendered
+   * image through an sRGB (or HDR) output of their own, taken before the
+   * area overlay and the clipping warning are drawn, and the engine reads
+   * the photo under the sharpening mask view too (the doc comments of
+   * `readDevelopHistogram`, `readHdrHistogram` and `sampleColor`), so no
+   * view need be turned off and the screen's frame is never drawn without
+   * them.
    */
   private withStatisticsViewsOff<T>(work: () => Promise<T>): Promise<T> {
-    if (this.path === 'linear' && !this.views.wanted().detailMask) return work();
+    if (this.path === 'linear') return work();
     return this.views.hold(work);
   }
 
@@ -1792,7 +1810,8 @@ class PhotoEngine implements DevelopEngine {
     const space = spaceCode(options.colorSpace);
     if (options.format === 'tiff') return this.encodeTiff16(space);
     if (options.format === 'hdr-png' || options.format === 'hdr-jpeg') {
-      return this.encodeHdr(options.format, image, options.quality ?? 0.9, options.exif ?? null);
+      const hdrOut = options.size ?? limitSize(image, options.maxSize);
+      return this.encodeHdr(options.format, image, hdrOut, options.quality ?? 0.9, options.exif ?? null);
     }
     const out = options.size ?? limitSize(image, options.maxSize);
     const mime = options.format === 'png' ? PNG_MIME : JPEG_MIME;
@@ -1810,20 +1829,32 @@ class PhotoEngine implements DevelopEngine {
   }
 
   /**
-   * An HDR file of the whole document at its own size (the full size, which
-   * `atSizeWith` loads, as for TIFF). The HDR picture is read once
-   * (`readHdrOutputF32`, linear Rec. 2020 up to `HDR_PEAK`). The PQ PNG is
-   * that picture encoded by the engine. The gain-map JPEG's base is the
-   * ordinary sRGB JPEG export at the same size, and its gain map is
-   * computed from the HDR picture and the engine's sRGB composite of the
-   * same document (`compositeForExport`), then encoded by the browser from
-   * the engine's grey PNG, so no pixel passes through TypeScript.
+   * An HDR file of the whole document at `out`, its own size (the full
+   * size, which `atSizeWith` loads, as for TIFF) or smaller. The HDR
+   * picture is read once: at the document's size `readHdrOutputF32`,
+   * smaller `readHdrOutputF32Sized` (linear Rec. 2020 up to `HDR_PEAK`,
+   * reduced on the GPU before the output step). The PQ PNG is that picture
+   * encoded by the engine. The gain-map JPEG's base is the ordinary sRGB
+   * JPEG export at the same size, and its gain map is computed from the HDR
+   * picture and the engine's sRGB composite at that size
+   * (`compositeForExport` or `compositeForExportSized`), then encoded by
+   * the browser from the engine's grey PNG, so no pixel passes through
+   * TypeScript. At a smaller size the base is drawn by the canvas and the
+   * gain map's SDR picture by the engine's reduction: the engine has no
+   * encoder for an RGBA8 picture, so the base cannot be made from that
+   * picture itself. The two differ by under one 8-bit step on average on
+   * real photos (plan decision 44), less than the JPEG's own compression.
    */
-  private async encodeHdr(format: 'hdr-png' | 'hdr-jpeg', image: Size, quality: number, exif: Uint8Array | null): Promise<Blob> {
+  private async encodeHdr(format: 'hdr-png' | 'hdr-jpeg', image: Size, out: Size, quality: number, exif: Uint8Array | null): Promise<Blob> {
     if (!this.isWorkingSpace) throw new Error('HDR files need a GPU that renders in floating point, and this one does not. Choose JPEG or PNG.');
-    const { width, height } = image;
+    const isFullSize = out.width === image.width && out.height === image.height;
+    // The engine reduces the HDR picture but cannot enlarge it.
+    if (out.width > image.width || out.height > image.height) throw new Error('HDR files cannot be made larger than the photo');
+    const { width, height } = out;
     try {
-      let hdr: Float32Array | null = await readHdrOutputF32(this.engine, HDR_PEAK);
+      let hdr: Float32Array | null = isFullSize
+        ? await readHdrOutputF32(this.engine, HDR_PEAK)
+        : await readHdrOutputF32Sized(this.engine, HDR_PEAK, width, height);
       // The read drew the composite at the document's size; the screen's frame is drawn again.
       this.isFrameCurrent = false;
       this.invalidate();
@@ -1833,7 +1864,7 @@ class PhotoEngine implements DevelopEngine {
         hdr = null;
         return new Blob([bytes as BlobPart], { type: PNG_MIME });
       }
-      const sdr: Uint8Array = await compositeForExport(this.engine);
+      const sdr: Uint8Array = isFullSize ? await compositeForExport(this.engine) : await compositeForExportSized(this.engine, width, height);
       this.isFrameCurrent = false;
       if (sdr.length !== width * height * 4) throw new Error(`the SDR picture is ${sdr.length / 4} pixels, not ${width} × ${height}`);
       const map = computeGainMap(hdr, sdr, width, height, SRGB, GAIN_MAP_SCALE);
@@ -1848,7 +1879,7 @@ class PhotoEngine implements DevelopEngine {
       } finally {
         map.free();
       }
-      const base = await this.encode({ format: 'jpeg', quality, colorSpace: 'srgb', size: image });
+      const base = await this.encode({ format: 'jpeg', quality, colorSpace: 'srgb', size: out });
       const mapJpeg = await encodeGreyJpeg(mapPng, mapSize, quality);
       const baseBytes = insertJpegExif(new Uint8Array(await base.arrayBuffer()), exif);
       const file = assembleGainMapJpeg(baseBytes, mapJpeg, metadata, SRGB);
@@ -1856,8 +1887,8 @@ class PhotoEngine implements DevelopEngine {
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       throw new Error(
-        `The HDR file could not be made (${reason}). HDR files are made at the full size and need about 16 bytes a pixel of memory; ` +
-          'on a large photo the browser may not have that much. A smaller crop, or an ordinary JPEG or PNG, may work.',
+        `The HDR file could not be made (${reason}). HDR files need about 16 bytes of memory for each pixel of the file; ` +
+          'on a large photo the browser may not have that much. A smaller size, a smaller crop, or an ordinary JPEG or PNG, may work.',
       );
     }
   }

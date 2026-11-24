@@ -837,5 +837,7 @@ there: the numbers are taken as sRGB and converted (P3 red became 234, 51,
 With the working space, `sampleColor`, `readDevelopHistogram` and
 `readHdrHistogram` read the kept rendered image, taken before the area
 overlay and the clipping warning are drawn, so they need no views-off scope.
-The sharpening mask view is drawn inside the live develop chain, before the
-image is kept, so it does reach those reads.
+The sharpening mask view is drawn inside the live develop chain, but the
+engine now reads the photo under it for those three reads (their doc
+comments say so), so the app's linear path never opens the scope for them,
+whatever view is on. The legacy (8-bit) path still holds every view off.

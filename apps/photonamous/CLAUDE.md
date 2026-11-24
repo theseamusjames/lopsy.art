@@ -66,11 +66,14 @@ the status bar's HDR switch (`setDevelopHdr`; in memory, never stored),
 and the histogram reads `readHdrHistogram` only while both are on. Auto
 tone and every other statistic read the SDR rendering. HDR files
 (`hdr-png`, `hdr-jpeg` in photos-core's `ExportFormat`) are made by
-`encodeHdr` at the document's full size, since the engine reads the HDR
-picture at the document's own size: `readHdrOutputF32` once, then
-`encodePqPng`; or for the gain-map JPEG `compositeForExport` and
-`computeGainMap`, the ordinary sRGB JPEG export as the base, the gain
-map's grey PNG encoded by the browser, then `assembleGainMapJpeg`.
+`encodeHdr` at the document's full size or smaller, never larger: the
+HDR picture is read once, `readHdrOutputF32` at full size or
+`readHdrOutputF32Sized` smaller, then `encodePqPng`; or for the gain-map
+JPEG `compositeForExport` (or `compositeForExportSized` at the same size)
+and `computeGainMap`, the ordinary sRGB JPEG export at that size as the
+base, the gain map's grey PNG encoded by the browser, then
+`assembleGainMapJpeg`. The sized reads re-composite, so they wait their
+turn (`wasm.ts`).
 
 **Recipe to engine.** `src/engine/develop-stages.ts` is the one place
 that maps the recipe's tone, colour and curves onto the engine, and it

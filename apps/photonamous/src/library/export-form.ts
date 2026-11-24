@@ -1,6 +1,16 @@
 /** What the Export dialog offers and says about photos-core's ExportSettings. Pure. */
 
-import { colorSpacesFor, exportKeepsLocation, type ExportColorSpace, type ExportFormat, type ExportSettings } from '@lopsy/photos-core/export/types';
+import {
+  canEnlarge,
+  colorSpacesFor,
+  exportKeepsLocation,
+  isAlwaysFullSize,
+  isHdrFormat,
+  type ExportColorSpace,
+  type ExportFormat,
+  type ExportSettings,
+} from '@lopsy/photos-core/export/types';
+import { maxLongEdgeOf, type ExportExtras, type SizeSpec } from './export-size';
 
 /**
  * The colour spaces the dialog offers for a format: sRGB and Display P3
@@ -60,4 +70,40 @@ export function fixedColorWords(format: ExportFormat): string | null {
  */
 export function hdrUnavailableReason(isEightBit: boolean): string | null {
   return isEightBit ? 'HDR files are not available: this GPU cannot render in floating point.' : null;
+}
+
+/** Settings and extras made consistent: a colour space the format can carry, TIFF at full size, HDR files never enlarged. */
+export function fitExportChoices(settings: ExportSettings, extras: ExportExtras): { settings: ExportSettings; extras: ExportExtras } {
+  const space = settings.colorSpace ?? 'srgb';
+  const offered = offeredColorSpaces(settings.format, extras.pngDepth);
+  const fitted = offered.includes(space) ? settings : { ...settings, colorSpace: offered[0] ?? 'srgb' };
+  const ex = isAlwaysFullSize(settings.format)
+    ? { ...extras, size: { mode: 'original' as const }, allowEnlarge: false }
+    : canEnlarge(settings.format)
+      ? extras
+      : { ...extras, allowEnlarge: false };
+  return { settings: { ...fitted, maxLongEdge: maxLongEdgeOf(ex) }, extras: ex };
+}
+
+/**
+ * What the dialog's Size field offers for a format: whether the size can
+ * be chosen, whether "Don't enlarge" is offered, and the line said under
+ * it. HDR files can be made smaller but never larger than the photo (the
+ * engine reduces the HDR picture but cannot enlarge it).
+ */
+export function sizeChoicesFor(
+  format: ExportFormat,
+  mode: SizeSpec['mode'],
+): { readonly canChoose: boolean; readonly offersEnlarge: boolean; readonly note: string | null } {
+  if (isAlwaysFullSize(format)) {
+    return { canChoose: false, offersEnlarge: false, note: 'TIFF is always the full size. It keeps no camera details (EXIF).' };
+  }
+  if (isHdrFormat(format)) {
+    return {
+      canChoose: true,
+      offersEnlarge: false,
+      note: mode === 'original' ? null : 'HDR files are never enlarged: a photo smaller than this stays as it is.',
+    };
+  }
+  return { canChoose: true, offersEnlarge: mode !== 'original', note: null };
 }

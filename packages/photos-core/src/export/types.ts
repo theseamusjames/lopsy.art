@@ -72,7 +72,16 @@ export function isHdrFormat(format: ExportFormat): format is 'hdr-png' | 'hdr-jp
 
 /** Whether the format is made at the photo's full size whatever the size setting says. */
 export function isAlwaysFullSize(format: ExportFormat): boolean {
-  return format === 'tiff' || isHdrFormat(format);
+  return format === 'tiff';
+}
+
+/**
+ * Whether the format can be made larger than the photo. The engine reduces
+ * the HDR picture on the GPU but cannot enlarge it, so an HDR file is at
+ * most the photo's size.
+ */
+export function canEnlarge(format: ExportFormat): boolean {
+  return !isAlwaysFullSize(format) && !isHdrFormat(format);
 }
 
 /** Whether the format's encoder takes the quality setting. The gain-map JPEG uses it for both of its pictures. */
@@ -116,10 +125,8 @@ export function exportSettingsProblem(settings: ExportSettings): string | null {
     if (settings.colorSpace !== undefined && !colorSpacesFor(settings.format).includes(settings.colorSpace)) {
       return settings.format === 'hdr-png' ? 'An HDR PNG is always Rec. 2020.' : 'An HDR JPEG’s picture is always sRGB.';
     }
-    // The engine reads the HDR picture at the photo's own size; it has no resized HDR read yet.
-    if (settings.maxLongEdge !== null || (settings.size !== undefined && settings.size.mode !== 'original') || settings.allowEnlarge === true) {
-      return 'HDR files are made at the original size.';
-    }
+    // The engine reduces the HDR picture but cannot enlarge it.
+    if (settings.allowEnlarge === true) return 'HDR files are never made larger than the photo.';
   } else if (!colorSpacesFor(settings.format, settings.pngDepth ?? 16).includes(space)) return 'Rec. 2020 needs a 16-bit file (TIFF, or a 16-bit PNG).';
   // The engine writes 16-bit PNG at the photo's own size; a resized PNG is encoded by the browser in 8 bits.
   if (space === 'rec2020' && settings.format === 'png' && (settings.maxLongEdge !== null || (settings.size !== undefined && settings.size.mode !== 'original') || settings.allowEnlarge === true)) {
@@ -157,13 +164,10 @@ export function exportSettingsFromJson(value: unknown): ExportSettings {
     format,
     colorSpace: offered.includes(space) ? space : (offered[0] ?? 'srgb'),
     quality,
-    // An HDR file is always the full size (exportSettingsProblem).
-    maxLongEdge: isHdrFormat(format) ? null : maxLongEdge,
+    maxLongEdge,
     // Settings saved before these fields: the size is what the long edge said.
-    size:
-      isHdrFormat(format)
-        ? { mode: 'original' }
-        : (exportSizeFromJson(v.size) ?? (maxLongEdge !== null ? { mode: 'long', px: maxLongEdge } : { mode: 'original' })),
+    size: exportSizeFromJson(v.size) ?? (maxLongEdge !== null ? { mode: 'long', px: maxLongEdge } : { mode: 'original' }),
+    // An HDR file is never enlarged (exportSettingsProblem).
     allowEnlarge: !isHdrFormat(format) && v.allowEnlarge === true,
     pngDepth: v.pngDepth === 8 ? 8 : 16,
     zip: v.zip !== false,

@@ -143,17 +143,24 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
     const isSmall = byLongEdge && !fullSize && settings.maxLongEdge !== null && settings.maxLongEdge <= 2048;
     const e = await loaded(asset, signal, isSmall ? 'working' : 'full');
     e.setRecipe(version.recipe);
+    const image = e.imageSize();
     if (isHdrFormat(settings.format)) {
-      // The HDR picture is read at the photo's full size, so the size settings do not apply (the dialog says so).
       if (!e.canExportHdr()) throw new Error('HDR files need a GPU that renders in floating point, and this one does not. Choose JPEG or PNG.');
+      // The engine reduces the HDR picture but cannot enlarge it, so an HDR file is never enlarged (photos-core exportSettingsProblem).
+      const hdrSize = image ? outputSize(image, { ...extras, allowEnlarge: false }) : null;
       // The gain-map JPEG's EXIF goes into its base picture before assembly (photos-core metadataWrittenByRenderer).
       const exif = settings.format === 'hdr-jpeg' ? buildExportExif(asset, settings) : null;
-      const blob = await e.exportImage({ format: settings.format, quality: settings.quality, exif });
+      const blob = await e.exportImage({
+        format: settings.format,
+        quality: settings.quality,
+        exif,
+        maxSize: settings.maxLongEdge ?? undefined,
+        ...(hdrSize && image && (hdrSize.width !== image.width || hdrSize.height !== image.height) ? { size: hdrSize } : {}),
+      });
       checkSignal(signal);
       return blob;
     }
     const space = settings.colorSpace ?? 'srgb';
-    const image = e.imageSize();
     const size = image && !fullSize ? outputSize(image, extras) : null;
     // Before the engine draws: an 8-bit file in Rec. 2020 bands (photos-core colorSpacesFor).
     if (!colorSpacesFor(settings.format, extras.pngDepth).includes(space)) throw new Error('Rec. 2020 needs a 16-bit file (TIFF, or a 16-bit PNG).');
