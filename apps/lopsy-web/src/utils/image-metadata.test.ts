@@ -345,12 +345,41 @@ describe('withPngColorTag', () => {
 });
 
 describe('withJpegIccProfile', () => {
-  it('inserts the profile right after SOI of an untagged file', () => {
+  /** The markers of a JPEG's segments before SOS. */
+  function markers(data: Uint8Array): number[] {
+    const out: number[] = [];
+    let off = 2;
+    while (off + 4 <= data.length && data[off] === 0xff && data[off + 1] !== 0xda) {
+      out.push(data[off + 1]!);
+      off += 2 + ((data[off + 2]! << 8) | data[off + 3]!);
+    }
+    return out;
+  }
+
+  it('inserts the profile after the JFIF segment of an untagged file, which stays first', () => {
     const profile = new Uint8Array([1, 2, 3]);
-    const tagged = withJpegIccProfile(buildJpeg(), { name: 'sRGB', data: profile });
+    const jpeg = buildJpeg([jpegSegment(0xdb, new Uint8Array([0]))]);
+    const tagged = withJpegIccProfile(jpeg, { name: 'sRGB', data: profile });
     expect(jpegHasIccProfile(tagged)).toBe(true);
-    expect([tagged[2], tagged[3]]).toEqual([0xff, 0xe2]);
-    expect(Array.from(tagged.subarray(2 + 4 + 14, 2 + 4 + 17))).toEqual([1, 2, 3]);
+    expect(markers(tagged)).toEqual([0xe0, 0xe2, 0xdb]);
+    // SOI, then APP0 JFIF (4 + 5 bytes), then the profile's segment.
+    const at = 2 + 4 + 5;
+    expect([tagged[at], tagged[at + 1]]).toEqual([0xff, 0xe2]);
+    expect(Array.from(tagged.subarray(at + 4 + 14, at + 4 + 17))).toEqual([1, 2, 3]);
+  });
+
+  it('puts the profile after an Exif segment that follows JFIF', () => {
+    const exif = jpegSegment(0xe1, new Uint8Array([...new TextEncoder().encode('Exif\0\0'), 0x4d, 0x4d]));
+    const tagged = withJpegIccProfile(buildJpeg([exif, jpegSegment(0xdb, new Uint8Array([0]))]), { name: 'sRGB', data: new Uint8Array([1]) });
+    expect(markers(tagged)).toEqual([0xe0, 0xe1, 0xe2, 0xdb]);
+  });
+
+  it('inserts the profile right after SOI when there is no JFIF segment', () => {
+    const jpeg = buildJpeg();
+    // Without its APP0: SOI, then SOS.
+    const bare = new Uint8Array([...jpeg.subarray(0, 2), ...jpeg.subarray(2 + 4 + 5)]);
+    const tagged = withJpegIccProfile(bare, { name: 'sRGB', data: new Uint8Array([1]) });
+    expect(markers(tagged)).toEqual([0xe2]);
   });
 
   it('leaves a file the encoder tagged as it is', () => {

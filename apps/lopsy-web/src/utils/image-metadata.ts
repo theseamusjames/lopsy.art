@@ -268,18 +268,35 @@ function createJpegIccMarker(iccProfile: Uint8Array): Uint8Array {
   return marker;
 }
 
+/** Whether the segment at `offset` is APP0 JFIF or APP1 Exif: the ones that come before an ICC profile. */
+function isJfifOrExif(data: Uint8Array, offset: number): boolean {
+  const marker = data[offset + 1];
+  const id = marker === 0xe0 ? 'JFIF\0' : marker === 0xe1 ? 'Exif\0' : null;
+  if (id === null) return false;
+  for (let i = 0; i < id.length; i++) if (data[offset + 4 + i] !== id.charCodeAt(i)) return false;
+  return true;
+}
+
 /**
- * `data` (an encoded JPEG) with an APP2 ICC profile segment holding `icc`
- * right after SOI, when it has none. Unchanged when the encoder already
- * tagged it. Photonamous tags its browser-encoded files with it.
+ * `data` (an encoded JPEG) with an APP2 ICC profile segment holding `icc`,
+ * when it has none, after the APP0 JFIF and APP1 Exif segments at its start
+ * (JFIF must stay the first segment, and Exif follows it). Unchanged when
+ * the encoder already tagged it. Photonamous tags its browser-encoded files
+ * with it.
  */
 export function withJpegIccProfile(data: Uint8Array, icc: EmbeddedIccProfile): Uint8Array {
   if (jpegHasIccProfile(data)) return data;
+  let at = 2;
+  while (at + 4 <= data.length && data[at] === 0xff && isJfifOrExif(data, at)) {
+    const next = at + 2 + ((data[at + 2]! << 8) | data[at + 3]!);
+    if (next > data.length) break;
+    at = next;
+  }
   const marker = createJpegIccMarker(icc.data);
   const result = new Uint8Array(data.length + marker.length);
-  result.set(data.subarray(0, 2), 0);
-  result.set(marker, 2);
-  result.set(data.subarray(2), 2 + marker.length);
+  result.set(data.subarray(0, at), 0);
+  result.set(marker, at);
+  result.set(data.subarray(at), at + marker.length);
   return result;
 }
 
