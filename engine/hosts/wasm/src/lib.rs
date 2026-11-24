@@ -103,7 +103,9 @@ pub fn set_viewport(engine: &mut Engine, zoom: f64, pan_x: f64, pan_y: f64, scre
 /// On wgpu, say whether the canvas is Display P3 and whether it should be
 /// HDR: values above 1.0 shown brighter than white. Returns whether it is
 /// HDR afterwards. WebGL returns false: there the page sets the drawing
-/// buffer's colour space itself, and the buffer is 8 bits a channel.
+/// buffer's colour space itself, and the buffer is 8 bits a channel. On
+/// both, the develop working space renders the live frame for the colour
+/// space said here, so a page with a P3 WebGL canvas calls it too.
 #[wasm_bindgen(js_name = "setScreenOutput")]
 pub fn set_screen_output(engine: &mut Engine, is_display_p3: bool, wants_hdr: bool) -> bool {
     engine.inner.set_screen_output(is_display_p3, wants_hdr)
@@ -271,6 +273,8 @@ pub fn detect_color_space() -> u32 {
 // ============================================================
 
 readback_export! {
+    /// The document as RGBA8 sRGB. With the develop working space, rendered
+    /// for sRGB by the output step, and dithered for a RAW photo.
     #[wasm_bindgen(js_name = "compositeForExport")]
     pub fn composite_for_export(engine) -> Result<Vec<u8>> {
         read(compositor::composite_for_export(engine))
@@ -278,6 +282,9 @@ readback_export! {
 }
 
 readback_export! {
+    /// A 16-bit PNG of the document. `color_space` 0 is sRGB, 1 Display P3,
+    /// 2 Rec. 2020. With the develop working space, the pixels are rendered
+    /// for that space by the output step (not dithered).
     #[wasm_bindgen(js_name = "exportPng16")]
     pub fn export_png_16(engine, color_space: u8) -> Result<Vec<u8>> {
         read(compositor::export_png_16(engine, color_space))
@@ -286,7 +293,7 @@ readback_export! {
 
 readback_export! {
     /// A 16-bit RGBA TIFF (Deflate, predictor 2, embedded ICC) of the same
-    /// composite `exportPng16` encodes. `color_space` 1 is Display P3.
+    /// composite `exportPng16` encodes. `color_space` as `exportPng16`.
     #[wasm_bindgen(js_name = "exportTiff16")]
     pub fn export_tiff_16(engine, color_space: u8) -> Result<Vec<u8>> {
         read(compositor::export_tiff_16(engine, color_space))

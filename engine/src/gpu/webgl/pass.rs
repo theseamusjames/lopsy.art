@@ -95,6 +95,20 @@ impl<'a> GpuRef<'a> {
         Read::ready(result)
     }
 
+    /// Read back `w × h` texels of `texture` starting at `(x, y)` as 32-bit
+    /// float RGBA, unclamped. On a pool without float textures, the 8-bit
+    /// values over 255.
+    pub fn read_rgba_f32(self, texture: TextureHandle, x: i32, y: i32, w: u32, h: u32) -> Read<Vec<f32>> {
+        let Some(tex) = self.textures.get(texture) else {
+            return Read::failed("Texture not found");
+        };
+        self.fbos.attach_texture(self.render_fbo, tex);
+        self.fbos.bind(self.render_fbo);
+        let result = self.textures.read_rgba_f32(x, y, w, h);
+        self.fbos.unbind();
+        Read::ready(result)
+    }
+
     /// Upload `w * h` single-byte values as a temporary R8 texture and run
     /// `program` over it into `dst`, with the bytes bound to `sampler` and
     /// blending off. This is how one-byte-per-texel data reaches a pooled

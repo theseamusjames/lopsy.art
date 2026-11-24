@@ -27,6 +27,9 @@ engine/
       blend.rs        # Blend mode math
       brush.rs        # Brush dab geometry
       color.rs        # Color space conversions
+      working_space.rs # The develop working space: gamuts, matrices from primaries, the input step
+      tone.rs         # The develop tone step (scene to rendered) and its curve's shoulder
+      output.rs       # The develop output step: roll-off, gamut mapping, transfer, dither
       compress.rs     # RLE compression for undo snapshots
       layer.rs        # Layer descriptor types (GlowDesc, ShadowDesc, etc.)
       pixel_buffer.rs # crop_to_content_bounds, pixel utilities
@@ -110,7 +113,10 @@ gpu/shaders/
   gradient/
     gradient_linear.wgsl, gradient_radial.wgsl
   develop/                # Photonamous' develop chain (src/develop/mod.rs lists them)
-    raw_develop.wgsl      # RAW stage: linear camera RGB → sRGB
+    raw_develop.wgsl      # RAW stage: linear camera RGB → sRGB (or scene Rec. 2020)
+    working_space.wgsl    # Input step, and into and out of the display encoding
+    tone.wgsl             # Tone step: scene → rendered, linear Rec. 2020
+    output.wgsl           # Output step: rendered → the screen's or a file's space
     noise_reduce.wgsl, local_contrast.wgsl, detail_sharpen.wgsl, blur_axis.wgsl
     color_mixer.wgsl, areas.wgsl, area_layer.wgsl, finish.wgsl, clip_warning.wgsl
 ```
@@ -124,8 +130,18 @@ JS API, and the deviations from `docs/photonamous-spec.md` 6.10. Rules:
 
 - Every stage is off (`None`) by default, and then the composite is
   byte-identical to Lopsy's. Keep it that way.
+- The working space (`develop::working_space`, `setDevelopWorkingSpace`)
+  is a per-document opt-in that Photonamous turns on and Lopsy never does.
+  With it the image is unclamped linear Rec. 2020 from the RAW (or input)
+  step to the output step, and the stages that still assume sRGB-encoded
+  values run inside one display encoding (`compositor::MIDDLE_STAGES`; move
+  a stage out by changing its `space`). Without it nothing changes: the
+  render tests that predate it hold that. Readbacks that are statistics
+  (histogram, pixel readout) read the output rendered for sRGB, never the
+  screen's space.
 - Every stage has a CPU reference in `lopsy-core` (`raf::develop`,
-  `detail`, `color_mixer`, `areas`, `finish`). Change a shader and its
+  `detail`, `color_mixer`, `areas`, `finish`, `working_space`, `tone`,
+  `output`). Change a shader and its
   reference together; the tests compare them.
 - Develop shaders compile lazily through `ShaderPrograms::<name>()`, never
   in `compile_all`.
@@ -147,7 +163,8 @@ JS API, and the deviations from `docs/photonamous-spec.md` 6.10. Rules:
 `tests/golden.rs` develops real RAF files through the whole chain on a
 native GPU (decoded as Photonamous decodes its working image, binned to a
 512-pixel long edge) with a fixed set of settings, and compares a
-fingerprint of each result, the mean R, G and B of a 12 × 8 grid of
+fingerprint of each result (with the working space on, rendered for
+sRGB, as Photonamous renders it), the mean R, G and B of a 12 × 8 grid of
 cells, with the one stored in `tests/golden/<file>.txt`. A cell channel
 more than 256 of 65535 off fails, and the message names the file, the
 settings and each cell that moved. The RAF files are not in this
@@ -269,6 +286,7 @@ Effect images (glows, shadow, stroke) are cached per layer in the live composito
 
 - `texture_pool.rs` detects `EXT_color_buffer_float` and uses `RGBA16F` textures when available.
 - `engine-state.ts` sets `drawingBufferColorSpace = 'display-p3'` on capable displays.
+- With the develop working space on, the output step renders the live frame for the space `setScreenOutput` last said (sRGB or Display P3, SDR) before the final blit; the final blit's dither is the screen's only dither.
 - `final_blit.wgsl` passes values through without clamping. On the wgpu engine the canvas is HDR (`rgba16float`, extended tone mapping) while the display is (`screen-output.ts`, `setScreenOutput`), and the document's own adjustments then keep what they push above white (`OverWhite::Kept`). Everything else in the pipeline is 0..1: `docs/hdr-support.md` lists what HDR editing would need.
 
 ### Commands

@@ -1,9 +1,14 @@
-// The proof-of-concept RAW develop stage (engine/src/develop/). Turns a
-// composite holding linear camera RGB (from rafRenderLinearBand) into
-// gamma-encoded sRGB, in the order lopsy_core::raf::develop::develop_reference
-// documents: white balance -> camera matrix -> exposure -> saturation ->
-// highlight desaturation -> base curve -> sRGB transfer. Straight alpha;
-// alpha untouched; negatives clamped to 0; values above 1 kept.
+// The RAW develop stage (engine/src/develop/). Turns a composite holding
+// linear camera RGB (from rafRenderLinearBand) into gamma-encoded sRGB, in
+// the order lopsy_core::raf::develop::develop_reference documents: white
+// balance -> camera matrix -> exposure -> saturation -> highlight
+// desaturation -> base curve -> sRGB transfer. Straight alpha; alpha
+// untouched; negatives clamped to 0; values above 1 kept.
+//
+// With the working space on (u_sceneOnly 1) it stops after the exposure, as
+// lopsy_core::raf::develop::scene_reference does: u_camToRgb then goes to
+// linear Rec. 2020, and the result is scene data, unclamped, for the tone
+// step (develop/tone.wgsl).
 struct Params {
     // Camera RGB -> linear sRGB.
     u_camToRgb: mat3x3<f32>,
@@ -18,25 +23,14 @@ struct Params {
     // width: entry i is texel (i % width, i / width).
     u_curveSize: i32,
     u_curveWidth: i32,
+    // 1 = stop at scene data (the working space is on).
+    u_sceneOnly: i32,
 }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var u_tex: texture_2d<f32>;
 @group(0) @binding(2) var u_curveLut: texture_2d<f32>;
 
-fn curveEntry(i: i32, width: i32) -> f32 {
-    return textureLoad(u_curveLut, vec2<i32>(i % width, i / width), 0).r;
-}
-
-// Linear interpolation between entries, as dng::color::apply_lut does it.
-// Hardware filtering would interpolate at the texture's own precision.
-fn curveLookup(v: f32, size: i32, width: i32) -> f32 {
-    let maxIdx = f32(size - 1);
-    let idx = clamp(v * maxIdx, 0.0, maxIdx);
-    let lo = i32(floor(idx));
-    let hi = min(lo + 1, size - 1);
-    let frac = idx - f32(lo);
-    return curveEntry(lo, width) * (1.0 - frac) + curveEntry(hi, width) * frac;
-}
+//#include base_curve
 
 fn linearToSrgb(v: f32) -> f32 {
     let c = max(v, 0.0);
@@ -53,6 +47,9 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
 
     var rgb = params.u_camToRgb * (c.rgb * params.u_wbRatio);
     rgb = rgb * params.u_exposureGain;
+    if (params.u_sceneOnly == 1) {
+        return vec4<f32>(rgb, c.a);
+    }
 
     let sat = params.u_saturation;
     if (abs(sat - 1.0) >= 1e-4) {

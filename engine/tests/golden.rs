@@ -18,8 +18,9 @@
 //! Each file is decoded as Photonamous decodes it for its working image:
 //! `prepare_raf`, then the binned linear camera RGB with a long edge of at
 //! least `LONG_EDGE`, uploaded as the document's one layer. For each of
-//! `SETTINGS` the develop chain runs through
-//! `compositor::composite_for_export_u16`, and the result is reduced to a
+//! `SETTINGS` the develop chain runs with the working space on, as
+//! Photonamous runs it, through `compositor::composite_for_export_u16`
+//! (rendered for sRGB), and the result is reduced to a
 //! fingerprint: the mean R, G and B of each cell of a `GRID_COLUMNS` ×
 //! `GRID_ROWS` grid, in 16-bit steps. One text file per sample holds every
 //! setting's fingerprint; a cell channel more than `TOLERANCE` steps from
@@ -230,6 +231,7 @@ fn render(photo: &Decoded) -> Option<Vec<(&'static str, Fingerprint)>> {
         commands::layer::upload_layer_pixels_f32_rect(&mut engine, "photo", w, h, 0, 0, w, h, &photo.linear).expect("pixels");
         let raw = serde_json::to_string(&(settings.raw)(photo)).expect("settings JSON");
         commands::develop::set_raw_develop_json(&mut engine, &raw).expect("raw develop");
+        commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
         (settings.apply)(&mut engine, photo);
         let pixels = block_on(compositor::composite_for_export_u16(&mut engine)).expect("export");
         let errors = ERRORS.with_borrow(Vec::clone);
@@ -342,6 +344,9 @@ fn compare(photo: &Decoded, rendered: &[(&str, Fingerprint)], stored: &Stored) -
     }
     let mut problems = Vec::new();
     for (settings, cells) in rendered {
+        if let Some((_, expected)) = stored.fingerprints.iter().find(|(name, _)| name == settings) {
+            eprintln!("{}, {settings}: {}", photo.name, movement(cells, expected));
+        }
         let Some((_, expected)) = stored.fingerprints.iter().find(|(name, _)| name == settings) else {
             problems.push(format!("{}, {settings}: no stored fingerprint", photo.name));
             continue;
@@ -377,6 +382,20 @@ fn compare(photo: &Decoded, rendered: &[(&str, Fingerprint)], stored: &Stored) -
         }
     }
     problems
+}
+
+/// How far a fingerprint moved from the stored one: the worst cell channel
+/// and the median of each cell's worst channel, in 16-bit steps.
+fn movement(cells: &Fingerprint, expected: &Fingerprint) -> String {
+    let mut worst: Vec<i32> = cells
+        .iter()
+        .zip(expected)
+        .map(|(got, want)| (0..3).map(|c| (got[c] - want[c]).abs()).max().unwrap_or(0))
+        .collect();
+    worst.sort_unstable();
+    let max = worst.last().copied().unwrap_or(0);
+    let median = worst.get(worst.len() / 2).copied().unwrap_or(0);
+    format!("moved at most {max} steps, median cell {median}")
 }
 
 fn samples() -> Option<Vec<PathBuf>> {

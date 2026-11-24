@@ -1126,3 +1126,378 @@ fn undo_snapshots_of_a_large_layer_restore_bit_for_bit() {
     }
     assert_no_gpu_errors();
 }
+
+// ---------------------------------------------------------------------------
+// The working space: its conversions, the tone and output steps, and what
+// the chain does with them on
+// ---------------------------------------------------------------------------
+//
+// Each step is drawn from one float texture into another and read back as
+// 32-bit floats, so nothing is clamped on the way: the comparison sees the
+// step's own output. Both textures are half float, so the reference is fed
+// the input as the texture holds it and allowed a few units in the last
+// place of the result.
+
+use lopsy_core::output::{OutputSettings, OutputTarget};
+use lopsy_core::working_space::{Gamut, SourceEncoding};
+
+/// `rgba` (straight RGBA f32, `width` wide) as a float texture.
+fn float_texture(engine: &mut EngineInner, width: u32, rgba: &[f32]) -> TextureHandle {
+    let height = (rgba.len() / 4) as u32 / width;
+    let handle = engine.texture_pool.acquire(width, height).expect("texture");
+    engine.texture_pool.upload_rgba_f32(handle, 0, 0, width, height, rgba).expect("upload");
+    handle
+}
+
+/// The whole of a texture as f32 RGBA.
+fn floats(engine: &EngineInner, handle: TextureHandle) -> Vec<f32> {
+    let (w, h) = engine.texture_pool.get_size(handle).expect("size");
+    now(engine.gpu().read_rgba_f32(handle, 0, 0, w, h))
+}
+
+/// Values as a half-float texture holds them.
+fn as_halves(values: &[f32]) -> Vec<f32> {
+    let mut v = values.to_vec();
+    HalfRounding::Nearest.store(&mut v);
+    v
+}
+
+/// Every value of `gpu` within `ulps` half-float units in the last place of
+/// `expected` (relative, with a floor for values near 0), or the message
+/// names the first that is not.
+fn assert_within_halves(what: &str, gpu: &[f32], expected: &[f32], ulps: f32) {
+    assert_eq!(gpu.len(), expected.len(), "{what}");
+    let mut worst = 0.0f32;
+    for (i, (&g, &e)) in gpu.iter().zip(expected).enumerate() {
+        let ulp = e.abs().max(1.0 / 64.0) / 1024.0;
+        let off = (g - e).abs() / ulp;
+        worst = worst.max(off);
+        assert!(off <= ulps, "{what}: value {i} (pixel {}, channel {}) is {g}, the reference {e}: {off:.1} ulps", i / 4, i % 4);
+    }
+    eprintln!("{what}: worst {worst:.2} half-float ulps");
+}
+
+/// Scene or rendered values that test every branch: a grey ramp past white,
+/// saturated colours inside and far outside sRGB, negatives, and alpha.
+fn working_space_picture() -> Vec<f32> {
+    let mut px = Vec::new();
+    for i in 0..32 {
+        let v = i as f32 / 31.0 * 4.0;
+        px.extend_from_slice(&[v, v, v, 1.0]);
+    }
+    let colours: [[f32; 3]; 16] = [
+        [0.4, 0.3, 0.25], [0.8, 0.1, 0.05], [0.05, 0.6, 0.1], [0.1, 0.15, 0.9],
+        [0.0, 0.5, 0.0], [0.6, 0.0, 0.6], [1.6, 0.9, 0.2], [3.0, 2.5, 0.1],
+        [0.02, 0.01, 0.4], [-0.05, 0.3, 0.2], [0.9, -0.1, -0.02], [0.18, 0.18, 0.18],
+        [0.0, 0.0, 0.0], [5.0, 0.2, 0.2], [0.001, 0.002, 0.0005], [0.7, 0.7, 1.4],
+    ];
+    for (k, c) in colours.iter().enumerate() {
+        px.extend_from_slice(&[c[0], c[1], c[2], if k % 3 == 0 { 0.5 } else { 1.0 }]);
+    }
+    px
+}
+
+#[test]
+fn the_working_space_conversions_match_their_cpu_reference() {
+    use lopsy_engine::develop::working_space::{self as ws, Conversion};
+    use lopsy_core::working_space as cpu;
+    let Some(mut engine) = engine(4, 4) else { return };
+    let encoded: Vec<f32> = (0..48).flat_map(|i| {
+        let t = i as f32 / 47.0;
+        [t, (1.0 - t) * 0.8, (t * 7.0).fract(), if i % 5 == 0 { 0.25 } else { 1.0 }]
+    }).collect();
+    let rendered = working_space_picture();
+    let program = engine.shaders.working_space().expect("compiles");
+    let cases: [(&str, Conversion, &[f32], Vec<f32>); 4] = [
+        ("input step, sRGB", Conversion::Input(SourceEncoding::Srgb), &encoded, cpu::input_reference(&as_halves(&encoded), SourceEncoding::Srgb)),
+        ("input step, Display P3", Conversion::Input(SourceEncoding::DisplayP3), &encoded, cpu::input_reference(&as_halves(&encoded), SourceEncoding::DisplayP3)),
+        ("to the display encoding", Conversion::ToDisplay, &rendered, cpu::to_display_reference(&as_halves(&rendered))),
+        ("from the display encoding", Conversion::FromDisplay, &encoded, cpu::from_display_reference(&as_halves(&encoded))),
+    ];
+    for (what, conversion, input, expected) in cases {
+        let src = float_texture(&mut engine, 16, input);
+        let dst = engine.texture_pool.acquire(16, (input.len() / 64) as u32).expect("texture");
+        assert!(ws::pass(&engine, &program, src, conversion).draw(Target::Texture(dst)));
+        assert_within_halves(what, &floats(&engine, dst), &as_halves(&expected), 3.0);
+    }
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn the_tone_step_matches_its_cpu_reference() {
+    let Some(mut engine) = engine(4, 4) else { return };
+    let program = engine.shaders.tone().expect("compiles");
+    // A curve and every control on, then no curve: luminance unclamped.
+    let settings = [
+        develop_settings(),
+        lopsy_core::raf::develop::RawDevelopSettings { base_curve: None, saturation: 0.7, highlight_desaturation: false, ..develop_settings() },
+    ];
+    for (n, s) in settings.iter().enumerate() {
+        commands::develop::set_raw_develop_json(&mut engine, &serde_json::to_string(s).unwrap()).expect("develop");
+        let scene = working_space_picture();
+        let src = float_texture(&mut engine, 16, &scene);
+        let dst = engine.texture_pool.acquire(16, 3).expect("texture");
+        let state = engine.raw_develop.as_ref().expect("state");
+        let (pass, _) = lopsy_engine::develop::tone::pass(&engine, &program, src, state);
+        assert!(pass.draw(Target::Texture(dst)));
+        let expected = lopsy_core::tone::tone_reference(&as_halves(&scene), &lopsy_core::raf::develop::tone_settings(s));
+        assert_within_halves(&format!("tone, settings {n}"), &floats(&engine, dst), &as_halves(&expected), 4.0);
+    }
+    assert_no_gpu_errors();
+}
+
+/// The output step drawn on the GPU over `rendered` (16 wide).
+fn gpu_output(engine: &mut EngineInner, rendered: &[f32], settings: &OutputSettings) -> Vec<f32> {
+    let program = engine.shaders.output().expect("compiles");
+    let src = float_texture(engine, 16, rendered);
+    let dst = engine.texture_pool.acquire(16, (rendered.len() / 64) as u32).expect("texture");
+    assert!(lopsy_engine::develop::output::pass(engine, &program, src, settings).draw(Target::Texture(dst)));
+    floats(engine, dst)
+}
+
+#[test]
+fn the_output_step_matches_its_cpu_reference_for_every_target() {
+    let Some(mut engine) = engine(4, 4) else { return };
+    let rendered = working_space_picture();
+    for target in [OutputTarget::Srgb, OutputTarget::DisplayP3, OutputTarget::Rec2020] {
+        for (source, dither) in [(Gamut::Rec2020, false), (Gamut::Srgb, false), (Gamut::Rec2020, true)] {
+            let s = OutputSettings::sdr(target, source, dither);
+            let got = gpu_output(&mut engine, &rendered, &s);
+            let expected = lopsy_core::output::output_reference(&as_halves(&rendered), 16, &s);
+            assert_within_halves(&format!("output to {target:?} from {source:?}, dither {dither}"), &got, &as_halves(&expected), 4.0);
+        }
+    }
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn a_wide_gamut_colour_keeps_more_saturation_in_p3_than_in_srgb_and_never_clips_hard() {
+    use lopsy_core::working_space::{apply, conversion, srgb_decode};
+    let Some(mut engine) = engine(4, 4) else { return };
+    // From grey to Rec. 2020's green primary at the same luminance (0.25).
+    let w = lopsy_core::working_space::luma(Gamut::Rec2020);
+    let green = [0.0, 0.25 / w[1], 0.0];
+    let steps = 64;
+    let ramp: Vec<f32> = (0..steps)
+        .flat_map(|i| {
+            let t = i as f32 / (steps - 1) as f32;
+            [0.25 + t * (green[0] - 0.25), 0.25 + t * (green[1] - 0.25), 0.25 + t * (green[2] - 0.25), 1.0]
+        })
+        .collect();
+    let mut saturation = Vec::new();
+    for target in [OutputTarget::Srgb, OutputTarget::DisplayP3] {
+        let got = gpu_output(&mut engine, &ramp, &OutputSettings::sdr(target, Gamut::Rec2020, false));
+        let linear: Vec<[f32; 3]> = got.chunks(4).map(|p| [srgb_decode(p[0]), srgb_decode(p[1]), srgb_decode(p[2])]).collect();
+        // No channel is pinned at an end, and each moves one way along the
+        // ramp: red and blue down, green up.
+        for (i, pair) in linear.windows(2).enumerate() {
+            let (a, b) = (pair[0], pair[1]);
+            assert!(b[0] <= a[0] + 1e-4 && b[2] <= a[2] + 1e-4 && b[1] >= a[1] - 1e-4, "{target:?}: step {i} turns back: {a:?} -> {b:?}");
+            assert!(b.iter().all(|&v| v > 0.0 && v < 1.0), "{target:?}: step {i} reaches an end: {b:?}");
+        }
+        // Its slope never collapses from one step to the next, as it does
+        // where a channel is clipped.
+        let chroma: Vec<f32> = linear.iter().map(|c| c[1] - c[0].min(c[2])).collect();
+        let slopes: Vec<f32> = chroma.windows(2).map(|p| p[1] - p[0]).collect();
+        for (i, s) in slopes.windows(2).enumerate() {
+            assert!(s[1] > 0.0 && s[1] > 0.5 * s[0], "{target:?}: chroma slope drops from {} to {} at step {i}", s[0], s[1]);
+        }
+        // The most saturated end, in Rec. 2020: how far from its grey.
+        let last = apply(&conversion(target.gamut(), Gamut::Rec2020), linear[steps - 1]);
+        let y = w[0] * last[0] + w[1] * last[1] + w[2] * last[2];
+        saturation.push((last[1] - y) / y);
+    }
+    eprintln!("Rec. 2020 green: saturation {:.3} in sRGB, {:.3} in Display P3", saturation[0], saturation[1]);
+    assert!(saturation[1] > saturation[0] * 1.2, "{saturation:?}");
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn a_grey_ramp_comes_out_grey_through_every_target() {
+    let Some(mut engine) = engine(32, 4) else { return };
+    let ramp: Vec<f32> = (0..64).flat_map(|i| { let v = i as f32 / 63.0 * 2.0; [v, v, v, 1.0] }).collect();
+    for target in [OutputTarget::Srgb, OutputTarget::DisplayP3, OutputTarget::Rec2020] {
+        let got = gpu_output(&mut engine, &ramp, &OutputSettings::sdr(target, Gamut::Rec2020, false));
+        for (i, p) in got.chunks(4).enumerate() {
+            let steps = [p[0], p[1], p[2]].map(|v| (v * 65535.0).round() as i32);
+            assert!(steps.iter().max().unwrap() - steps.iter().min().unwrap() <= 1, "{target:?}: grey {i} came out {steps:?}");
+        }
+    }
+    // And through the whole chain into each 16-bit export.
+    commands::layer::add_layer(&mut engine, &layer_json("grey", 0, 0, 32, 4, 1.0)).expect("layer");
+    let pixels: Vec<u8> = (0..128).flat_map(|i| { let v = (i % 32 * 8) as u8; [v, v, v, 255] }).collect();
+    commands::layer::upload_layer_pixels(&mut engine, "grey", &pixels, 32, 4, 0, 0).expect("pixels");
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    for target in [OutputTarget::Srgb, OutputTarget::DisplayP3, OutputTarget::Rec2020] {
+        let out = now(compositor::composite_for_export_u16_to(&mut engine, target));
+        for p in out.chunks(4) {
+            let (lo, hi) = (p[0].min(p[1]).min(p[2]), p[0].max(p[1]).max(p[2]));
+            assert!(hi - lo <= 1, "{target:?}: {p:?}");
+        }
+    }
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn scene_luminance_through_tone_and_output_is_monotonic_with_no_step_at_white() {
+    let Some(mut engine) = engine(4, 4) else { return };
+    commands::develop::set_raw_develop_json(&mut engine, &serde_json::to_string(&develop_settings()).unwrap()).expect("develop");
+    // Scene luminance 0..16, densest around the old clamp at 1, in grey and
+    // in a warm colour.
+    let n = 256;
+    let lum: Vec<f32> = (0..n).map(|i| { let t = i as f32 / (n - 1) as f32; 16.0 * t * t * t }).collect();
+    let mut scene = Vec::new();
+    for &l in &lum {
+        scene.extend_from_slice(&[l, l, l, 1.0]);
+    }
+    for &l in &lum {
+        scene.extend_from_slice(&[1.3 * l, 0.9 * l, 0.6 * l, 1.0]);
+    }
+    let program = engine.shaders.tone().expect("compiles");
+    let src = float_texture(&mut engine, 16, &scene);
+    let toned = engine.texture_pool.acquire(16, (scene.len() / 64) as u32).expect("texture");
+    let state = engine.raw_develop.as_ref().expect("state");
+    let (pass, _) = lopsy_engine::develop::tone::pass(&engine, &program, src, state);
+    assert!(pass.draw(Target::Texture(toned)));
+    let rendered = floats(&engine, toned);
+    let shown = gpu_output(&mut engine, &rendered, &OutputSettings::sdr(OutputTarget::Srgb, Gamut::Rec2020, false));
+    let w = lopsy_core::working_space::luma(Gamut::Rec2020);
+    let y = |p: &[f32]| w[0] * p[0] + w[1] * p[1] + w[2] * p[2];
+    for (name, start) in [("grey", 0), ("warm", n)] {
+        let r: Vec<f32> = (start..start + n).map(|i| y(&rendered[i * 4..i * 4 + 3])).collect();
+        // The output's luminance, decoded: a colour's channels may trade
+        // places as it reaches white, its brightness may not fall.
+        let ws = lopsy_core::working_space::luma(Gamut::Srgb);
+        let s: Vec<f32> = (start..start + n)
+            .map(|i| (0..3).map(|c| ws[c] * lopsy_core::working_space::srgb_decode(shown[i * 4 + c])).sum())
+            .collect();
+        for i in 1..n {
+            assert!(r[i] >= r[i - 1], "{name}: rendered luminance falls at scene {}", lum[i]);
+            assert!(s[i] >= s[i - 1] - 1e-4, "{name}: output falls at scene {}: {} -> {}", lum[i], s[i - 1], s[i]);
+        }
+        // Rendered values above white exist (HDR headroom), and below the
+        // shoulder's ceiling.
+        assert!(r[n - 1] > 1.2 && r[n - 1] < 4.0, "{name}: rendered at 16 is {}", r[n - 1]);
+        // No step at the old clamp: the largest change between neighbours
+        // around scene 1 is no bigger than the steps either side of it.
+        let around: Vec<usize> = (1..n).filter(|&i| (0.8..1.25).contains(&lum[i])).collect();
+        let jump = around.iter().map(|&i| r[i] - r[i - 1]).fold(0.0f32, f32::max);
+        let below = r[around[0] - 1] - r[around[0] - 2];
+        assert!(jump <= 2.0 * below.max(1e-4), "{name}: rendered jumps by {jump} at the old clamp (steps below {below})");
+    }
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn the_scene_raw_step_matches_its_cpu_reference() {
+    let size = 16u32;
+    let Some(mut engine) = engine(size, size) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("raw", 0, 0, size, size, 1.0)).expect("layer");
+    let linear = linear_camera_rgb(size);
+    commands::layer::upload_layer_pixels_f32_rect(&mut engine, "raw", size, size, 0, 0, size, size, &linear).expect("pixels");
+    // No curve, saturation or desaturation: the tone step passes scene data through.
+    let s = lopsy_core::raf::develop::RawDevelopSettings {
+        wb_ratio: [1.1, 1.0, 0.9],
+        base_curve: None,
+        saturation: 1.0,
+        highlight_desaturation: false,
+        ..develop_settings()
+    };
+    commands::develop::set_raw_develop_json(&mut engine, &serde_json::to_string(&s).unwrap()).expect("develop");
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    let got = now(commands::develop::read_rendered_f32(&mut engine));
+    let expected = lopsy_core::raf::develop::scene_reference(&as_halves(&linear), &s);
+    assert!(expected.iter().any(|&v| v < 0.0) && expected.iter().any(|&v| v > 1.0), "the picture leaves 0..1 in Rec. 2020");
+    assert_within_halves("scene RAW step", &got, &as_halves(&expected), 4.0);
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn an_unedited_photo_comes_back_out_as_it_went_in_alpha_included() {
+    let (w, h) = (16u32, 8u32);
+    let Some(mut engine) = engine(w, h) else { return };
+    engine.set_background_color(0.0, 0.0, 0.0, 0.0);
+    commands::layer::add_layer(&mut engine, &layer_json("photo", 0, 0, w, h, 1.0)).expect("layer");
+    let pixels: Vec<u8> = (0..w * h)
+        .flat_map(|i| {
+            let alpha = [255u8, 255, 128, 37, 1, 255, 200, 0][i as usize % 8];
+            [(i * 37 % 256) as u8, (i * 91 % 256) as u8, if i % 5 == 0 { 255 } else { (i * 13 % 256) as u8 }, alpha]
+        })
+        .collect();
+    commands::layer::upload_layer_pixels(&mut engine, "photo", &pixels, w, h, 0, 0).expect("pixels");
+    let before8 = now(compositor::composite_for_export(&mut engine));
+    let before16 = now(compositor::composite_for_export_u16(&mut engine));
+    for (source, target) in [(0u8, OutputTarget::Srgb), (1, OutputTarget::DisplayP3)] {
+        commands::develop::set_develop_working_space(&mut engine, true, source).expect("working space");
+        let after16 = now(compositor::composite_for_export_u16_to(&mut engine, target));
+        let after8 = (source == 0).then(|| now(compositor::composite_for_export(&mut engine)));
+        for i in 0..(w * h) as usize {
+            let a = before8[i * 4 + 3];
+            let channels = if a == 0 { 3..4 } else { 0..4 };
+            for c in channels {
+                let k = i * 4 + c;
+                let d16 = (i32::from(after16[k]) - i32::from(before16[k])).abs();
+                assert!(d16 <= 257, "source {source}, pixel {i} channel {c}: 16-bit {} against {}", after16[k], before16[k]);
+                if let Some(after8) = &after8 {
+                    let d8 = (i32::from(after8[k]) - i32::from(before8[k])).abs();
+                    assert!(d8 <= 1, "pixel {i} channel {c}: 8-bit {} against {} (went in as {})", after8[k], before8[k], pixels[k]);
+                }
+            }
+        }
+    }
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn statistics_read_the_srgb_output_whatever_the_screen_is() {
+    let Some(mut engine) = engine(8, 4) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, 8, 4, 1.0)).expect("layer");
+    let pixels: Vec<[u8; 4]> = (0..32).map(|i| if i % 8 < 4 { [230, 40, 30, 255] } else { [90, 160, 220, 255] }).collect();
+    commands::layer::upload_layer_pixels(&mut engine, "art", pixels.as_flattened(), 8, 4, 0, 0).expect("pixels");
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    let read = |engine: &mut EngineInner| {
+        let histogram = now(commands::develop::read_develop_histogram(engine));
+        let sample = now(commands::drawing::sample_color(engine, 1.0, 1.0, 1));
+        let screen = now(engine.gpu().read_rgba(engine.composite_texture, 1, 1, 1, 1));
+        (histogram, sample, screen)
+    };
+    engine.set_screen_output(false, false);
+    let (h_srgb, s_srgb, screen_srgb) = read(&mut engine);
+    engine.set_screen_output(true, false);
+    let (h_p3, s_p3, screen_p3) = read(&mut engine);
+    assert_ne!(screen_srgb, screen_p3, "the screen is rendered for its own space");
+    assert_eq!(h_srgb, h_p3, "the histogram does not depend on the screen");
+    assert_eq!(s_srgb, s_p3, "the readout does not depend on the screen");
+    for c in 0..3 {
+        assert!((i32::from(s_srgb[c]) - i32::from(pixels[9][c])).abs() <= 1, "{s_srgb:?} against {:?}", pixels[9]);
+    }
+    // The clipping warning, the area overlay and the mask view stay off the statistics.
+    commands::develop::set_clipping_warning(&mut engine, true, true);
+    assert_eq!(read(&mut engine).0, h_p3);
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn with_the_working_space_screen_only_views_still_never_reach_exports() {
+    let Some(mut engine) = engine(8, 4) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, 8, 4, 1.0)).expect("layer");
+    let texels: Vec<[u8; 4]> = (0..32).map(|i| if i % 8 < 4 { [0, 0, 0, 255] } else { WHITE }).collect();
+    commands::layer::upload_layer_pixels(&mut engine, "art", texels.as_flattened(), 8, 4, 0, 0).expect("pixels");
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    commands::develop::set_image_detail(&mut engine, &[100.0, 1.0, 20.0, 0.0, 0.0, 0.0, 1.0]).expect("detail");
+    let before = now(compositor::composite_for_export(&mut engine));
+    let before_png = now(compositor::export_png_16(&mut engine, 2));
+    compositor::render(&mut engine);
+    let shown = now(engine.gpu().read_rgba(engine.composite_texture, 0, 0, 8, 4));
+    commands::develop::set_clipping_warning(&mut engine, true, true);
+    compositor::render(&mut engine);
+    let warned = now(engine.gpu().read_rgba(engine.composite_texture, 0, 0, 8, 4));
+    assert_ne!(warned, shown, "the live frame marks black and white as clipped");
+    assert_eq!(&warned[..4], &[0, 0, 255, 255], "black is marked in blue");
+    commands::develop::set_image_detail_mask_view(&mut engine, true);
+    assert_eq!(now(compositor::composite_for_export(&mut engine)), before);
+    assert_eq!(now(compositor::export_png_16(&mut engine, 2)), before_png);
+    commands::develop::set_develop_working_space(&mut engine, false, 0).expect("off");
+    assert!(engine.working_space.is_none());
+    assert_no_gpu_errors();
+}

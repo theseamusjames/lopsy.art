@@ -8,7 +8,9 @@ use lopsy_core::raf::develop::RawDevelopSettings;
 use crate::document::{compositor, thumbnail_gpu};
 use crate::gpu::read::Read;
 
+use crate::develop::working_space::WorkingSpace;
 use crate::develop::{curve_texels, RawDevelopState, CURVE_WIDTH};
+use lopsy_core::working_space::SourceEncoding;
 use crate::engine::EngineInner;
 
 /// Develop the composite with `settings` from the next frame on. Uploads
@@ -77,6 +79,28 @@ pub fn clear_raw_develop(engine: &mut EngineInner) {
         engine.texture_pool.release(texture);
     }
     engine.needs_recomposite = true;
+}
+
+/// Turn the develop working space on or off (`develop::working_space`).
+/// On, the chain holds linear Rec. 2020 from the RAW step (with a RAW
+/// develop state) or the input step (without one) to the output step, and
+/// the live frame, the exports and the statistics go through the output
+/// step. `source` says how the composite is encoded when there is no RAW
+/// develop state: 0 sRGB, 1 Display P3. Off, everything is as it was.
+pub fn set_develop_working_space(engine: &mut EngineInner, on: bool, source: u8) -> Result<(), String> {
+    let rendered = engine.working_space.and_then(|ws| ws.rendered);
+    if !on {
+        if let Some(texture) = rendered {
+            engine.texture_pool.release(texture);
+        }
+        engine.working_space = None;
+        engine.needs_recomposite = true;
+        return Ok(());
+    }
+    let source = SourceEncoding::from_code(source)?;
+    engine.working_space = Some(WorkingSpace { source, rendered });
+    engine.needs_recomposite = true;
+    Ok(())
 }
 
 /// Color by hue on the composite, after the image adjustments: 24 values,
@@ -303,7 +327,9 @@ pub fn set_image_detail_mask_view(engine: &mut EngineInner, on: bool) {
 
 /// Mark clipped pixels on the live frame (never in exports): shadows in
 /// blue where any channel is at or below 0, highlights in red where any is
-/// at or above 1, after the whole develop chain.
+/// at or above 1, after the whole develop chain. With the working space it
+/// runs on the screen's output, where every channel is inside 0..1, and
+/// marks what shows as 0 or 255.
 pub fn set_clipping_warning(engine: &mut EngineInner, shadows: bool, highlights: bool) {
     engine.clipping_warning = (shadows, highlights);
     engine.needs_recomposite = true;
@@ -348,11 +374,16 @@ pub const HISTOGRAM_MAX_EDGE: u32 = 512;
 /// (`lopsy_core::develop_stats`). Draws the frame first if it is stale.
 /// Changes nothing in the document. A Lab document's composite is encoded
 /// Lab, so its bins are not RGB.
+///
+/// With the working space it counts the image as the output step renders
+/// it for sRGB (`compositor::statistics_image`), whatever the screen is,
+/// and without the screen-only views, so the histogram and Auto tone do
+/// not depend on the display.
 pub fn read_develop_histogram(engine: &mut EngineInner) -> Read<Vec<u32>> {
     if engine.needs_recomposite {
         compositor::render(engine);
     }
-    let composite = engine.composite_texture;
+    let composite = compositor::statistics_image(engine, None).unwrap_or(engine.composite_texture);
     if engine.texture_pool.get(composite).is_none() {
         return Read::ready(Ok(vec![0; develop_stats::HISTOGRAM_LEN]));
     }
@@ -366,4 +397,23 @@ pub fn set_raw_develop_json(engine: &mut EngineInner, json: &str) -> Result<(), 
     let settings: RawDevelopSettings =
         serde_json::from_str(json).map_err(|e| format!("Raw develop settings: {e}"))?;
     set_raw_develop(engine, settings)
+}
+
+/// The last live frame's rendered image, the working space's linear
+/// Rec. 2020 before the output step: straight-alpha RGBA as 32-bit floats,
+/// `doc_width × doc_height` texels row by row from the top, unclamped (1.0
+/// is white; above it is HDR headroom). Draws the frame first if it is
+/// stale. Fails without the working space. Changes nothing in the document.
+pub fn read_rendered_f32(engine: &mut EngineInner) -> Read<Vec<f32>> {
+    if engine.working_space.is_none() {
+        return Read::failed("The document has no working space".to_string());
+    }
+    if engine.needs_recomposite {
+        compositor::render(engine);
+    }
+    let Some(rendered) = engine.working_space.and_then(|ws| ws.rendered) else {
+        return Read::failed("No frame has been rendered in the working space".to_string());
+    };
+    let (w, h) = (engine.doc_width, engine.doc_height);
+    engine.gpu().read_rgba_f32(rendered, 0, 0, w, h)
 }

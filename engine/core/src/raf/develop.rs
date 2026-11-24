@@ -17,6 +17,10 @@
 //!   the neutralized cam→sRGB matrix, the film-sim saturation, the 1.3×
 //!   boost as a baseline EV, highlight desaturation and the base-curve LUT.
 //! - [`develop_reference`] is that GPU stage's maths on the CPU, for tests.
+//! - [`scene_reference`] is the same stage with the develop working space
+//!   on (`crate::working_space`): white balance, [`cam_to_working`] and
+//!   exposure only, to unclamped scene data in linear Rec. 2020. The rest
+//!   of the look moves to the tone step ([`tone_settings`], `crate::tone`).
 //!
 //! **Chroma denoise.** Today's denoise median-filters chroma *after* the
 //! camera matrix. A median does not commute with a matrix, so filtering in
@@ -263,6 +267,42 @@ pub fn develop_reference(linear_rgba: &[f32], settings: &RawDevelopSettings) -> 
         out.extend_from_slice(&[c[0], c[1], c[2], px[3]]);
     }
     out
+}
+
+/// The camera matrix of the working space: `cam_to_rgb` (camera RGB to
+/// linear sRGB) followed by sRGB to Rec. 2020, row-major, so the RAW step
+/// lands in linear Rec. 2020 and colours outside sRGB are kept.
+pub fn cam_to_working(settings: &RawDevelopSettings) -> [f32; 9] {
+    use crate::working_space::{conversion, Gamut};
+    let s = conversion(Gamut::Srgb, Gamut::Rec2020);
+    let m = &settings.cam_to_rgb;
+    std::array::from_fn(|i| {
+        let (r, c) = (i / 3, i % 3);
+        (0..3).map(|k| f64::from(s[r * 3 + k]) * f64::from(m[k * 3 + c])).sum::<f64>() as f32
+    })
+}
+
+/// The RAW step with the working space on (`crate::working_space`), on the
+/// CPU: straight-alpha RGBA in linear camera RGB to scene linear Rec. 2020,
+/// through white balance, [`cam_to_working`] and exposure only. Nothing is
+/// clamped and alpha is untouched; saturation, highlight desaturation and
+/// the base curve are the tone step's (`crate::tone`).
+pub fn scene_reference(linear_rgba: &[f32], settings: &RawDevelopSettings) -> Vec<f32> {
+    let m = cam_to_working(settings);
+    let gain = settings.exposure_ev.exp2();
+    crate::working_space::map_rgb(linear_rgba, |c| {
+        let balanced = [c[0] * settings.wb_ratio[0], c[1] * settings.wb_ratio[1], c[2] * settings.wb_ratio[2]];
+        crate::working_space::apply(&m, balanced).map(|v| v * gain)
+    })
+}
+
+/// The settings of the tone step that follows [`scene_reference`].
+pub fn tone_settings(settings: &RawDevelopSettings) -> crate::tone::ToneSettings<'_> {
+    crate::tone::ToneSettings {
+        saturation: settings.saturation,
+        highlight_desaturation: settings.highlight_desaturation,
+        curve: settings.base_curve.as_deref().filter(|c| c.len() >= 2),
+    }
 }
 
 // ── Binned preview (spec E7) ─────────────────────────────────────────

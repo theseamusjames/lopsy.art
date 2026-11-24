@@ -253,6 +253,11 @@ pub(in crate::gpu) fn halves_to_u16(bytes: &[u8]) -> Vec<u16> {
     bytes.chunks_exact(2).map(|b| table[usize::from(u16::from_le_bytes([b[0], b[1]]))]).collect()
 }
 
+/// Half-float texel bytes as 32-bit floats, unclamped.
+pub(in crate::gpu) fn halves_to_f32(bytes: &[u8]) -> Vec<f32> {
+    bytes.chunks_exact(2).map(|b| f16_to_f32(u16::from_le_bytes([b[0], b[1]]))).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

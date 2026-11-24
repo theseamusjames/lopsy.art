@@ -18,7 +18,7 @@ use lopsy_core::geometry::Rect;
 use super::context::{quad_bytes, GpuContext};
 use super::framebuffer::{FramebufferHandle, FramebufferPool};
 use super::program::{BindingKind, LinkedProgram, ParamSink};
-use super::read::{halves_to_u16, halves_to_u8, read_texels};
+use super::read::{halves_to_u16, halves_to_f32, halves_to_u8, read_texels};
 use super::texture_pool::{TextureHandle, TexturePool};
 use crate::gpu::pass::{Blend, ReadFormat, Scissor, Target};
 use crate::gpu::read::Read;
@@ -291,6 +291,16 @@ impl<'a> GpuRef<'a> {
         };
         let texels = read_texels(self.ctx, texture, x, y, w, h, HALF_RGBA_BYTES);
         Read::later(async move { Ok(halves_to_u16(&texels.await?)) })
+    }
+
+    /// Read back `w × h` texels of `texture` starting at `(x, y)` as 32-bit
+    /// float RGBA, unclamped: each half-float texel exactly.
+    pub fn read_rgba_f32(self, texture: TextureHandle, x: i32, y: i32, w: u32, h: u32) -> Read<Vec<f32>> {
+        let Some(texture) = self.textures.get(texture) else {
+            return Read::failed("Texture not found");
+        };
+        let texels = read_texels(self.ctx, texture, x, y, w, h, HALF_RGBA_BYTES);
+        Read::later(async move { Ok(halves_to_f32(&texels.await?)) })
     }
 }
 

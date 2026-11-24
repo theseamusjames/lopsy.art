@@ -554,6 +554,35 @@ impl TexturePool {
         }
     }
 
+    /// Read pixels from the currently-bound FBO as f32 RGBA, unclamped.
+    pub(in crate::gpu) fn read_rgba_f32(&self, x: i32, y: i32, w: u32, h: u32) -> Result<Vec<f32>, String> {
+        let gl = &self.gl;
+        let count = (w * h * 4) as usize;
+        if self.use_float {
+            let f32_buf = js_sys::Float32Array::new_with_length(count as u32);
+            gl.read_pixels_with_opt_array_buffer_view(
+                x, y,
+                w as i32, h as i32,
+                WebGl2RenderingContext::RGBA,
+                WebGl2RenderingContext::FLOAT,
+                Some(&f32_buf),
+            ).map_err(|e| format!("readPixels float failed: {:?}", e))?;
+            let mut pixels = vec![0f32; count];
+            f32_buf.copy_to(&mut pixels);
+            Ok(pixels)
+        } else {
+            let mut u8_pixels = vec![0u8; count];
+            gl.read_pixels_with_opt_u8_array(
+                x, y,
+                w as i32, h as i32,
+                WebGl2RenderingContext::RGBA,
+                WebGl2RenderingContext::UNSIGNED_BYTE,
+                Some(&mut u8_pixels),
+            ).map_err(|e| format!("readPixels failed: {:?}", e))?;
+            Ok(u8_pixels.iter().map(|&v| f32::from(v) / 255.0).collect())
+        }
+    }
+
     /// Upload u16 RGBA pixel data, converting to the pool's native format.
     pub fn upload_rgba_u16(
         &self,

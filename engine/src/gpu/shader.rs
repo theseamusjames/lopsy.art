@@ -164,6 +164,9 @@ pub const BLUR_AXIS_FRAG: &str = translated!("develop/blur_axis");
 pub const NOISE_REDUCE_FRAG: &str = translated!("develop/noise_reduce");
 pub const DETAIL_SHARPEN_FRAG: &str = translated!("develop/detail_sharpen");
 pub const LOCAL_CONTRAST_FRAG: &str = translated!("develop/local_contrast");
+pub const WORKING_SPACE_FRAG: &str = translated!("develop/working_space");
+pub const TONE_FRAG: &str = translated!("develop/tone");
+pub const OUTPUT_FRAG: &str = translated!("develop/output");
 
 /// Declares the typed shaders: each source tagged with the uniform struct
 /// its passes are created with. A test checks every struct against its
@@ -259,6 +262,9 @@ typed_shaders! {
     NOISE_REDUCE: params::develop::NoiseReduceParams = NOISE_REDUCE_FRAG;
     DETAIL_SHARPEN: params::develop::DetailSharpenParams = DETAIL_SHARPEN_FRAG;
     LOCAL_CONTRAST: params::develop::LocalContrastParams = LOCAL_CONTRAST_FRAG;
+    WORKING_SPACE: params::develop::WorkingSpaceParams = WORKING_SPACE_FRAG;
+    TONE: params::develop::ToneParams = TONE_FRAG;
+    OUTPUT: params::develop::OutputParams = OUTPUT_FRAG;
     GRADIENT_LINEAR: params::gradient::GradientLinearParams = GRADIENT_LINEAR_FRAG;
     GRADIENT_RADIAL: params::gradient::GradientRadialParams = GRADIENT_RADIAL_FRAG;
     SHAPE_FILL: params::shape::ShapeFillParams = SHAPE_FILL_FRAG;
@@ -448,6 +454,9 @@ pub struct ShaderPrograms {
     noise_reduce: RefCell<Option<Rc<ShaderProgram<params::develop::NoiseReduceParams>>>>,
     detail_sharpen: RefCell<Option<Rc<ShaderProgram<params::develop::DetailSharpenParams>>>>,
     local_contrast: RefCell<Option<Rc<ShaderProgram<params::develop::LocalContrastParams>>>>,
+    working_space: RefCell<Option<Rc<ShaderProgram<params::develop::WorkingSpaceParams>>>>,
+    tone: RefCell<Option<Rc<ShaderProgram<params::develop::ToneParams>>>>,
+    output: RefCell<Option<Rc<ShaderProgram<params::develop::OutputParams>>>>,
     pub mask_luminance: ShaderProgram<()>,
     pub liquify_dab: ShaderProgram<params::filters::LiquifyDabParams>,
     // Text
@@ -527,6 +536,21 @@ impl ShaderPrograms {
     /// `develop/local_contrast.wgsl`, compiled the first time it is asked for.
     pub fn local_contrast(&self) -> Result<Rc<ShaderProgram<params::develop::LocalContrastParams>>, String> {
         lazily(&self.local_contrast, || compile(&self.linker, &LOCAL_CONTRAST))
+    }
+
+    /// `develop/working_space.wgsl`, compiled the first time it is asked for.
+    pub fn working_space(&self) -> Result<Rc<ShaderProgram<params::develop::WorkingSpaceParams>>, String> {
+        lazily(&self.working_space, || compile(&self.linker, &WORKING_SPACE))
+    }
+
+    /// `develop/tone.wgsl`, compiled the first time it is asked for.
+    pub fn tone(&self) -> Result<Rc<ShaderProgram<params::develop::ToneParams>>, String> {
+        lazily(&self.tone, || compile(&self.linker, &TONE))
+    }
+
+    /// `develop/output.wgsl`, compiled the first time it is asked for.
+    pub fn output(&self) -> Result<Rc<ShaderProgram<params::develop::OutputParams>>, String> {
+        lazily(&self.output, || compile(&self.linker, &OUTPUT))
     }
 
     pub fn compile_all(ctx: &crate::gpu::context::GpuContext) -> Result<Self, String> {
@@ -643,6 +667,9 @@ impl ShaderPrograms {
             noise_reduce: RefCell::new(None),
             detail_sharpen: RefCell::new(None),
             local_contrast: RefCell::new(None),
+            working_space: RefCell::new(None),
+            tone: RefCell::new(None),
+            output: RefCell::new(None),
             mask_luminance: compile(linker, &MASK_LUMINANCE)?,
             liquify_dab: compile(linker, &LIQUIFY_DAB)?,
             // Text

@@ -19,9 +19,39 @@ pub fn clear_raw_develop(engine: &mut Engine) {
     lopsy_engine::commands::develop::clear_raw_develop(&mut engine.inner)
 }
 
+/// Turn the develop working space on (`on`) or off. On, the image is held
+/// as unclamped linear Rec. 2020 float from the RAW step (after
+/// `setRawDevelop`) or, for a photo that is not RAW, from an input step that
+/// decodes the composite, to an output step that renders it for the screen
+/// (the space `setScreenOutput` last said) and for each export's colour
+/// space. `sourceSpace` is how a photo that is not RAW is encoded: 0 sRGB,
+/// 1 Display P3; it is ignored while a RAW develop state is set. Off, every
+/// stage renders as it did before: Lopsy never turns it on. Fails, changing
+/// nothing, for another `sourceSpace`.
+#[wasm_bindgen(js_name = "setDevelopWorkingSpace")]
+pub fn set_develop_working_space(engine: &mut Engine, on: bool, source_space: u8) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::set_develop_working_space(&mut engine.inner, on, source_space)
+        .map_err(|e| JsError::new(&e))
+}
+
+readback_export! {
+    /// The rendered image of the last live frame with the working space on:
+    /// linear Rec. 2020 (D65) before the output step, unclamped (1.0 is
+    /// white, above it is HDR headroom), straight alpha. A `Float32Array`
+    /// of `docWidth × docHeight × 4` floats, RGBA, rows from the top.
+    /// Draws the frame first if it is stale. Fails without the working
+    /// space. Wrap with `'any-time'`.
+    #[wasm_bindgen(js_name = "readRenderedF32")]
+    pub fn read_rendered_f32(engine) -> Result<Vec<f32>> {
+        read(lopsy_engine::commands::develop::read_rendered_f32(engine))
+    }
+}
+
 readback_export! {
     /// 1024 bins of the displayed result: red 0..=255, green, blue, then
-    /// Rec. 709 luminance of the encoded values. Wrap with `'any-time'`.
+    /// Rec. 709 luminance of the encoded values. With the working space,
+    /// of the image rendered for sRGB whatever the screen is, without the
+    /// screen-only views. Wrap with `'any-time'`.
     #[wasm_bindgen(js_name = "readDevelopHistogram")]
     pub fn read_develop_histogram(engine) -> Result<Vec<u32>> {
         read(lopsy_engine::commands::develop::read_develop_histogram(engine))
@@ -170,6 +200,7 @@ pub fn set_image_area_overlay(engine: &mut Engine, index: i32) {
 
 /// Mark clipped pixels on screen only: shadows (any channel ≤ 0) in blue,
 /// highlights (any channel ≥ 1) in red, after the whole develop chain.
+/// With the working space, of the screen's output: what shows as 0 or 255.
 #[wasm_bindgen(js_name = "setClippingWarning")]
 pub fn set_clipping_warning(engine: &mut Engine, shadows: bool, highlights: bool) {
     lopsy_engine::commands::develop::set_clipping_warning(&mut engine.inner, shadows, highlights)

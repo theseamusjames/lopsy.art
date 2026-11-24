@@ -12,6 +12,7 @@ uniforms! {
         pub highlight_desat: i32,
         pub curve_size: i32,
         pub curve_width: i32,
+        pub scene_only: i32,
     }
 }
 
@@ -79,6 +80,7 @@ uniforms! {
     pub struct ClipWarningParams {
         pub shadows: i32,
         pub highlights: i32,
+        pub margin: f32,
     }
 }
 
@@ -89,5 +91,44 @@ uniforms! {
         pub grain: [f32; 4],
         pub doc_size: [f32; 2],
         pub seed: u32,
+    }
+}
+
+uniforms! {
+    /// `develop/working_space.wgsl`
+    pub struct WorkingSpaceParams {
+        pub matrix: Mat3,
+        pub mode: i32,
+    }
+}
+
+uniforms! {
+    /// `develop/tone.wgsl`
+    pub struct ToneParams {
+        pub to_srgb: Mat3,
+        pub from_srgb: Mat3,
+        pub luma: [f32; 3],
+        pub saturation: f32,
+        pub highlight_desat: i32,
+        pub curve_size: i32,
+        pub curve_width: i32,
+        pub curve_top: f32,
+        pub curve_slope: f32,
+        pub shoulder_headroom: f32,
+    }
+}
+
+uniforms! {
+    /// `develop/output.wgsl`
+    pub struct OutputParams {
+        pub to_target: Mat3,
+        pub luma: [f32; 3],
+        pub target_luma: [f32; 3],
+        pub peak: f32,
+        pub knee: f32,
+        pub gamut_threshold: f32,
+        pub transfer: i32,
+        pub gamma: f32,
+        pub dither: f32,
     }
 }

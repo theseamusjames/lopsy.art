@@ -63,10 +63,17 @@ pub fn sample_color(engine: &EngineInner, x: f64, y: f64, sample_size: u32) -> R
     let iy = y as i32;
     let half = (sample_size / 2) as i32;
     let doc_color_mode = engine.doc_color_mode;
+    // With the develop working space, the image as the output step renders
+    // it for sRGB, whatever the screen is (`compositor::statistics_image`).
+    let doc = lopsy_core::geometry::Rect::new(0, 0, engine.doc_width, engine.doc_height);
+    let rect = lopsy_core::geometry::Rect::new(ix - half, iy - half, sample_size, sample_size).intersect(&doc);
+    let source = rect
+        .and_then(|r| crate::document::compositor::statistics_image(engine, Some(r)))
+        .unwrap_or(engine.composite_texture);
 
     engine
         .gpu()
-        .read_rgba(engine.composite_texture, ix - half, iy - half, sample_size, sample_size)
+        .read_rgba(source, ix - half, iy - half, sample_size, sample_size)
         .or(vec![0u8; (sample_size * sample_size * 4) as usize])
         .map(move |pixels| average_sample(pixels, doc_color_mode, sample_size))
 }

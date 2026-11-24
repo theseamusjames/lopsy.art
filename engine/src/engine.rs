@@ -245,6 +245,15 @@ pub struct EngineInner {
     /// The RAW develop stage (`develop/`), applied to the composite before
     /// `adjustments`. `None` (the default) leaves the composite untouched.
     pub raw_develop: Option<crate::develop::RawDevelopState>,
+    /// The develop chain's working space (`develop::working_space`): with
+    /// it, the composite is linear Rec. 2020 from the RAW or input step to
+    /// the output step. `None` (the default, and always in Lopsy) leaves
+    /// every stage as it was.
+    pub working_space: Option<crate::develop::working_space::WorkingSpace>,
+    /// Whether the screen's pixels are Display P3, as the host last said
+    /// through `set_screen_output`. Only the working space's output step
+    /// reads it.
+    pub screen_is_display_p3: bool,
     /// Color by hue (`develop/color_mixer.wgsl`): 24 values, applied after
     /// `adjustments`. `None` (the default) leaves the composite untouched.
     pub color_mixer: Option<[f32; lopsy_core::color_mixer::VALUES_LEN]>,
@@ -383,6 +392,8 @@ impl EngineInner {
             layer_transform: Vec::new(),
             adjustments: ImageAdjustmentState::default(),
             raw_develop: None,
+            working_space: None,
+            screen_is_display_p3: false,
             color_mixer: None,
             detail: None,
             local_contrast: None,
@@ -533,10 +544,13 @@ impl EngineInner {
     /// values above 1.0 should show brighter than white (HDR). Returns
     /// whether the screen is HDR afterwards: never on WebGL, where the host
     /// sets the colour space on the canvas itself and the canvas is 8-bit.
+    /// On both, the develop working space's output step renders the live
+    /// frame for the colour space said here.
     pub fn set_screen_output(&mut self, is_display_p3: bool, wants_hdr: bool) -> bool {
         // The document's adjustments keep or clip what goes above white
         // by whether the screen is HDR, so the composite is rebuilt.
         self.needs_recomposite = true;
+        self.screen_is_display_p3 = is_display_p3;
         self.gpu_ctx.set_screen_output(is_display_p3, wants_hdr)
     }
 
@@ -829,6 +843,9 @@ impl EngineInner {
         self.adjustments.has_gradient_map = false;
         if let Some(curve) = self.raw_develop.take().and_then(|d| d.curve_texture) {
             self.texture_pool.release(curve);
+        }
+        if let Some(rendered) = self.working_space.take().and_then(|w| w.rendered) {
+            self.texture_pool.release(rendered);
         }
         self.color_mixer = None;
         self.detail = None;
