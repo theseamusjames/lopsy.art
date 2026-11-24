@@ -492,6 +492,7 @@ fn a_fingerprint_survives_writing_and_reading_and_reports_what_moved() {
             saturation: 1.0,
             highlight_desaturation: false,
             base_curve: None,
+            clip_levels: None,
         },
         pixel_scale: 1.0,
     };

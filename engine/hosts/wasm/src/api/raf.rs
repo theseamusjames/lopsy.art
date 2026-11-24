@@ -20,8 +20,9 @@ pub struct RafPrepared {
 
 #[wasm_bindgen]
 impl RafPrepared {
-    /// `{ width, height, mosaicWidth, mosaicHeight }` — width and height are
-    /// the final (oriented) size.
+    /// `{ width, height, mosaicWidth, mosaicHeight, clipLevels }` — width
+    /// and height are the final (oriented) size; `clipLevels` is each
+    /// channel's clip level `[r, g, b]` in the linear renders' units.
     #[wasm_bindgen(getter, js_name = "metaJson")]
     pub fn meta_json(&self) -> String {
         self.meta_json.clone()
@@ -61,6 +62,10 @@ struct RafPreparedMeta {
     height: u32,
     mosaic_width: u32,
     mosaic_height: u32,
+    /// Each channel's clip level `[r, g, b]` in the linear renders' units
+    /// (camera RGB at the as-shot white balance), as `clipLevels` in the
+    /// params; `null` when unknown.
+    clip_levels: Option<[f32; 3]>,
 }
 
 #[wasm_bindgen(js_name = "rafPrepare")]
@@ -76,6 +81,7 @@ pub fn raf_prepare(data: &[u8]) -> Result<RafPrepared, JsError> {
         height,
         mosaic_width: prep.params.width,
         mosaic_height: prep.params.height,
+        clip_levels: prep.params.clip_levels,
     };
     let to_json = |e: serde_json::Error| JsError::new(&format!("JSON serialize: {e}"));
     let meta_json = serde_json::to_string(&meta).map_err(to_json)?;

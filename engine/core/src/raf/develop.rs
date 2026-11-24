@@ -9,8 +9,9 @@
 //!
 //! - [`render_linear_band`] renders a band to oriented RGBA f32 in **camera
 //!   RGB**, at the as-shot white balance (already applied to the mosaic by
-//!   `prepare_raf`), demosaiced, not clamped, with no matrix, curve, gamma
-//!   or sharpening. It keeps `render_band`'s banding contract: a band is
+//!   `prepare_raf`), demosaiced, not clamped (below black stays negative),
+//!   with clipped channels reconstructed before the demosaic
+//!   (`super::highlights`), and with no matrix, curve, gamma or sharpening. It keeps `render_band`'s banding contract: a band is
 //!   bit-identical to the same rows of a whole-frame [`render_linear_rgb`].
 //! - [`develop_defaults`] returns the [`RawDevelopSettings`] that reproduce
 //!   today's look on the GPU (`engine/src/gpu/shaders/develop/raw_develop.wgsl`):
@@ -44,10 +45,10 @@
 //! pipeline works in linear Rec. 2020 with no clamp until the output
 //! transform, derives the camera→working matrix from the white balance by
 //! interpolating two calibration illuminants (DNG method, temperature and
-//! tint in kelvin), reconstructs clipped highlights before the profile
-//! instead of desaturating them, turns the base curve and saturation into
-//! profiles, records per-channel clip levels, moves the denoise to its own
-//! stage and caches stage outputs.
+//! tint in kelvin), turns the base curve and saturation into profiles,
+//! moves the denoise to its own stage and caches stage outputs. Clipped
+//! channels are already reconstructed here, before the profile, and each
+//! channel's clip level is recorded (`RafRenderParams::clip_levels`).
 
 use serde::{Deserialize, Serialize};
 
@@ -55,8 +56,9 @@ use super::{base_curves, check_band, demosaic_rgb, denoise_chroma, orient_band, 
 use crate::dng::color;
 
 /// How far (in rows) a linear output pixel reaches into the mosaic: the
-/// demosaic and the separable chroma median of radius 1. No sharpening.
-pub const LINEAR_REACH_ROWS: u32 = super::markesteijn::REACH as u32 + 1;
+/// highlight reconstruction's window, the demosaic and the separable chroma
+/// median of radius 1. No sharpening.
+pub const LINEAR_REACH_ROWS: u32 = super::highlights::REACH_ROWS + super::markesteijn::REACH as u32 + 1;
 
 // The linear render reuses `render_band`'s halo, so it must be enough.
 const _: () = assert!(LINEAR_REACH_ROWS <= super::BAND_HALO_ROWS);
@@ -87,6 +89,12 @@ pub struct RawDevelopSettings {
     /// 0..1 (at least 2 entries); `None` for no curve.
     #[serde(default)]
     pub base_curve: Option<Vec<f32>>,
+    /// The photo's clip level per channel (R, G, B) in linear camera RGB at
+    /// the as-shot white balance, as `RafRenderParams::clip_levels`: the
+    /// white balance picker skips a pixel with any channel at or near its
+    /// level. Optional; absent, the picker measures every pixel.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clip_levels: Option<[f32; 3]>,
 }
 
 /// The defaults are what reproduces today's import.
@@ -103,6 +111,7 @@ pub fn develop_defaults(params: &RafRenderParams) -> RawDevelopDefaults {
         saturation: base_curves::saturation_for_film_mode(params.film_mode),
         highlight_desaturation: true,
         base_curve: Some(base_curves::curve_lut(curve).to_vec()),
+        clip_levels: params.clip_levels,
     }
 }
 
@@ -213,6 +222,19 @@ pub fn develop_profiles(params: &RafRenderParams) -> Vec<DevelopProfile> {
 /// and unclamped. Each output pixel depends only on mosaic pixels within
 /// `LINEAR_REACH_ROWS`.
 pub fn render_linear_rgb(mosaic: &[f32], w: usize, h: usize, params: &RafRenderParams) -> Vec<f32> {
+    render_linear_rgb_at(mosaic, w, h, 0, params)
+}
+
+/// [`render_linear_rgb`] of `h` mosaic rows that start at frame row
+/// `y_offset` (a multiple of the CFA period): clipped channels are
+/// reconstructed first (`super::highlights`), with the chroma at the rows'
+/// place in the frame.
+fn render_linear_rgb_at(mosaic: &[f32], w: usize, h: usize, y_offset: usize, params: &RafRenderParams) -> Vec<f32> {
+    let reconstructed = params.highlight_chroma.as_ref().and_then(|grid| {
+        let (p, cfa) = cfa_period_and_pattern(params);
+        grid.reconstruct(mosaic, w, h, y_offset, &cfa, p)
+    });
+    let mosaic = reconstructed.as_deref().unwrap_or(mosaic);
     let mut rgb = demosaic_rgb(mosaic, w, h, params);
     if params.denoise {
         if let Some(inverse) = invert_3x3(&params.cam_to_srgb) {
@@ -232,7 +254,7 @@ pub fn render_linear_rgb(mosaic: &[f32], w: usize, h: usize, params: &RafRenderP
 /// rows of a whole-frame [`render_linear_rgb`].
 pub fn render_linear_band(src: &[f32], params: &RafRenderParams, band: RafBand) -> Result<RafBandPixels, String> {
     let src_h = check_band(src, params, band)?;
-    let rgb = render_linear_rgb(src, params.width as usize, src_h, params);
+    let rgb = render_linear_rgb_at(src, params.width as usize, src_h, band.src_y0 as usize, params);
     Ok(orient_band(rgb, params, band, false))
 }
 
@@ -422,6 +444,10 @@ pub fn render_binned_linear(mosaic: &[f32], params: &RafRenderParams, factor: u3
     // recomputed with two remainders per sample.
     let colour_rows: Vec<Vec<u8>> =
         (0..p).map(|py| (0..bw * f).map(|x| cfa[py * p + x % p] % 3).collect()).collect();
+    // A sample near its clip level is reconstructed exactly as the full
+    // render reconstructs it before demosaicing, so the two agree.
+    let grid = params.highlight_chroma.as_ref();
+    let thresholds = grid.map_or([f32::INFINITY; 3], |g| g.thresholds());
     let mut rgba = vec![0.0f32; bw * bh * 4];
     let mut sums = vec![[0.0f32; 3]; bw];
     for by in 0..bh {
@@ -430,8 +456,12 @@ pub fn render_binned_linear(mosaic: &[f32], params: &RafRenderParams, factor: u3
             let row = by * f + dy;
             let line = &mosaic[row * w..row * w + bw * f];
             let colours = &colour_rows[row % p];
-            for ((sum, samples), cols) in sums.iter_mut().zip(line.chunks_exact(f)).zip(colours.chunks_exact(f)) {
-                for (&v, &c) in samples.iter().zip(cols) {
+            for (bx, ((sum, samples), cols)) in sums.iter_mut().zip(line.chunks_exact(f)).zip(colours.chunks_exact(f)).enumerate() {
+                for (i, (&v, &c)) in samples.iter().zip(cols).enumerate() {
+                    let v = match grid {
+                        Some(g) if v >= thresholds[c as usize] => g.sample(mosaic, w, h, bx * f + i, row, 0, &cfa, p),
+                        _ => v,
+                    };
                     sum[c as usize] += v;
                 }
             }
@@ -498,6 +528,9 @@ mod tests {
             cam_to_srgb: [1.71, -0.62, -0.09, -0.21, 1.48, -0.27, 0.04, -0.47, 1.43],
             film_mode,
             orientation: 1,
+            white_level: 16383,
+            clip_levels: None,
+            highlight_chroma: None,
         }
     }
 
@@ -509,6 +542,7 @@ mod tests {
             saturation: p.saturation,
             highlight_desaturation: p.highlight_desaturation,
             base_curve: p.base_curve.clone(),
+            clip_levels: None,
         }
     }
 
@@ -581,6 +615,7 @@ mod tests {
             saturation: 1.2,
             highlight_desaturation: true,
             base_curve: None,
+            clip_levels: None,
         };
         let json = serde_json::to_string(&s).unwrap();
         for key in ["wbRatio", "camToRgb", "exposureEv", "saturation", "highlightDesaturation", "baseCurve"] {
@@ -604,6 +639,7 @@ mod tests {
             saturation: 1.0,
             highlight_desaturation: false,
             base_curve: None,
+            clip_levels: None,
         };
         let out = develop_reference(&[0.18, -0.1, 2.0, 0.5], &s);
         assert!((out[0] - 0.4613).abs() < 1e-3);

@@ -20,6 +20,7 @@ pub mod base_curves;
 pub mod compression;
 pub mod dcp;
 pub mod develop;
+pub mod highlights;
 mod markesteijn;
 pub mod wb_presets;
 pub mod xtrans;
@@ -94,6 +95,26 @@ pub struct RafRenderParams {
     pub cam_to_srgb: [f32; 9],
     pub film_mode: Option<u16>,
     pub orientation: u16,
+    /// The raw value at which the sensor clips, in raw units, which the
+    /// mosaic's 1.0 stands for (before white balance). It is the bit
+    /// depth's largest value: no RAF tag this decoder reads records a
+    /// lower saturation. 0 in params written before it was recorded.
+    #[serde(default)]
+    pub white_level: u32,
+    /// The level at which each channel (R, G, B) clips, in the units of the
+    /// mosaic and of the linear renders (`develop::render_linear_band`,
+    /// `develop::render_binned_linear`): linear camera RGB at the as-shot
+    /// white balance, where the white level is 1.0 before that balance.
+    /// A reconstructed value can lie above it. `None` in params written
+    /// before it was recorded.
+    #[serde(default)]
+    pub clip_levels: Option<[f32; 3]>,
+    /// What the linear renders need to reconstruct clipped channels
+    /// (`highlights`), measured once over the whole frame so every band
+    /// and the binned view use the same. `None` when nothing in the frame
+    /// comes near its clip level, and in params written before it existed.
+    #[serde(default)]
+    pub highlight_chroma: Option<highlights::ChromaGrid>,
 }
 
 impl RafRenderParams {
@@ -176,8 +197,22 @@ pub struct RafBandPixels {
 pub fn render_band(src: &[f32], params: &RafRenderParams, band: RafBand) -> Result<RafBandPixels, String> {
     let w = params.width as usize;
     let src_h = check_band(src, params, band)?;
-    let rgb = render_rgb(src, w, src_h, params);
+    let clamped = baked_mosaic(src.to_vec());
+    let rgb = render_rgb(&clamped, w, src_h, params);
+    drop(clamped);
     Ok(orient_band(rgb, params, band, true))
+}
+
+/// The mosaic as the baked decode has always seen it: below black clamped
+/// to 0. `prepare_raf` keeps what the file holds for the linear path, and
+/// no sample there exceeds its channel's white-balance gain (samples are
+/// capped at the white level), so this alone reproduces the old clamp of
+/// every sample to 0..1 before white balance, bit for bit.
+fn baked_mosaic(mut mosaic: Vec<f32>) -> Vec<f32> {
+    for v in mosaic.iter_mut() {
+        *v = v.max(0.0);
+    }
+    mosaic
 }
 
 /// Check that `src` holds exactly mosaic rows `[band.src_y0, band.src_y1)`
@@ -254,6 +289,7 @@ pub fn read_raf(data: &[u8]) -> Result<RafImage, String> {
 /// post-demosaic pass.
 pub fn read_raf_opts(data: &[u8], opts: RafDecodeOpts) -> Result<RafImage, String> {
     let RafMosaic { params, mosaic, exif_info, debug_log } = prepare_raf(data, opts)?;
+    let mosaic = baked_mosaic(mosaic);
     let rgb = render_rgb(&mosaic, params.width as usize, params.height as usize, &params);
     drop(mosaic);
     let rgba = rgb_to_rgba(&rgb);
@@ -455,7 +491,9 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
     // Every sample value of a site maps the same way, so the f64 maths runs
     // once per value (at most 65536) and level instead of once per sample
     // (40 million). Each sample has its own site's black level subtracted.
-    let unit = UnitTables::new(cfa_meta.black_level.as_ref(), white_level, f64::NEG_INFINITY);
+    // Not clamped: a sample below black stays negative, so noise in the
+    // shadows averages to black instead of being rectified above it.
+    let unit = UnitTables::new(cfa_meta.black_level.as_ref(), white_level, f64::NEG_INFINITY, false);
     let pixel_count = w * h;
     let mut normalized: Vec<f32> = Vec::with_capacity(pixel_count);
     for row in 0..h {
@@ -533,7 +571,14 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
         cam_to_srgb,
         film_mode: exif_info.film_mode,
         orientation: exif_orientation,
+        white_level: u32::from(white_level),
+        // A sample is capped at the white level, which is 1.0 before white
+        // balance, so each channel clips at exactly its gain.
+        clip_levels: Some(wb),
+        highlight_chroma: highlights::ChromaGrid::measure(&normalized, w, h, &cfa[..cfa_period * cfa_period], cfa_period, wb),
     };
+    raf_log!("[RAF] clip levels: [{:.4}, {:.4}, {:.4}], highlight reconstruction: {}",
+        wb[0], wb[1], wb[2], if params.highlight_chroma.is_some() { "on" } else { "nothing clipped" });
 
     raf_log!("[RAF] demosaic: {}", match (is_xtrans, opts.demosaic) {
         (false, _) => "Bayer bilinear",
@@ -763,7 +808,7 @@ pub fn debug_wb_mosaic(data: &[u8]) -> Result<(Vec<f32>, usize, usize, [u8; 36])
     let w = width as usize;
     let h = height as usize;
 
-    let unit = UnitTables::new(cfa_meta.black_level.as_ref(), white_level, f64::NEG_INFINITY);
+    let unit = UnitTables::new(cfa_meta.black_level.as_ref(), white_level, f64::NEG_INFINITY, true);
     let mut normalized: Vec<f32> = Vec::with_capacity(w * h);
     for row in 0..h {
         let src_row = row + crop_top as usize;
@@ -889,7 +934,7 @@ pub fn debug_raw_mosaic(data: &[u8]) -> Result<(Vec<f32>, usize, usize, [u8; 36]
     let w = width as usize;
     let h = height as usize;
 
-    let unit = UnitTables::new(cfa_meta.black_level.as_ref(), white_level, 1.0);
+    let unit = UnitTables::new(cfa_meta.black_level.as_ref(), white_level, 1.0, true);
     let mut normalized = Vec::with_capacity(w * h);
     for row in 0..h {
         let src_row = row + crop_top as usize;
@@ -1590,7 +1635,8 @@ struct CfaMeta {
 }
 
 /// For each position of the black-level tile, a table from raw sample
-/// (0..=white level) to 0..1 with that position's level subtracted. Sites
+/// (0..=white level) to 0..1 with that position's level subtracted
+/// (clamped to 0..1 when asked; otherwise below black is negative). Sites
 /// with the same level share a table, so a file with one level has the one
 /// table the decoder has always built.
 struct UnitTables {
@@ -1602,7 +1648,7 @@ struct UnitTables {
 
 impl UnitTables {
     /// `min_range` floors white minus black (`f64::NEG_INFINITY` for none).
-    fn new(black: Option<&BlackLevels>, white_level: u16, min_range: f64) -> Self {
+    fn new(black: Option<&BlackLevels>, white_level: u16, min_range: f64, clamp: bool) -> Self {
         let uniform = BlackLevels::uniform(0.0);
         let black = black.unwrap_or(&uniform);
         let (rows, cols) = black.period();
@@ -1620,7 +1666,10 @@ impl UnitTables {
                         levels.push(b);
                         tables.push(
                             (0..=white_level as u32)
-                                .map(|v| ((v as f64 - b) / range).clamp(0.0, 1.0) as f32)
+                                .map(|v| {
+                                    let u = (v as f64 - b) / range;
+                                    (if clamp { u.clamp(0.0, 1.0) } else { u }) as f32
+                                })
                                 .collect(),
                         );
                         levels.len() - 1
@@ -1768,13 +1817,13 @@ mod tests {
     #[test]
     fn one_black_level_builds_the_old_table() {
         let black = BlackLevels::from_raf(&[1020; 36]).unwrap();
-        let unit = UnitTables::new(Some(&black), 16383, f64::NEG_INFINITY);
+        let unit = UnitTables::new(Some(&black), 16383, f64::NEG_INFINITY, true);
         assert_eq!(unit.tables.len(), 1);
         for v in [0u32, 1020, 1021, 5000, 16383] {
             let old = ((v as f64 - 1020.0) / (16383.0 - 1020.0)).clamp(0.0, 1.0) as f32;
             assert_eq!(unit.at(3, 5)[v as usize], old);
         }
-        assert_eq!(UnitTables::new(None, 255, f64::NEG_INFINITY).at(0, 0)[255], 1.0);
+        assert_eq!(UnitTables::new(None, 255, f64::NEG_INFINITY, true).at(0, 0)[255], 1.0);
     }
 
     /// Each site subtracts its own level, the tile starting at the raw
@@ -1782,7 +1831,7 @@ mod tests {
     #[test]
     fn black_levels_are_subtracted_per_site() {
         let black = BlackLevels::from_raf(&[100, 200, 300, 400]).unwrap();
-        let unit = UnitTables::new(Some(&black), 1000, f64::NEG_INFINITY);
+        let unit = UnitTables::new(Some(&black), 1000, f64::NEG_INFINITY, true);
         assert_eq!(unit.tables.len(), 4);
         assert_eq!(unit.at(0, 0)[100], 0.0);
         assert_eq!(unit.at(0, 1)[200], 0.0);
@@ -2026,6 +2075,9 @@ mod tests {
                 cam_to_srgb: color::neutralize_matrix(&color_matrix_for_model(model)),
                 film_mode: Some(0x200),
                 orientation: 6,
+                white_level: 16383,
+                clip_levels: Some([1.7, 1.0, 1.8]),
+                highlight_chroma: None,
             };
             let json = serde_json::to_string(&params).unwrap();
             let back: RafRenderParams = serde_json::from_str(&json).unwrap();

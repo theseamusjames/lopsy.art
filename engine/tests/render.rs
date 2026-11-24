@@ -489,6 +489,7 @@ fn develop_settings() -> lopsy_core::raf::develop::RawDevelopSettings {
         saturation: 1.2,
         highlight_desaturation: true,
         base_curve: Some(base_curves::curve_lut(base_curves::curve_for_film_mode(None)).to_vec()),
+        clip_levels: None,
     }
 }
 
