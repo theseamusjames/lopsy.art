@@ -36,8 +36,8 @@
 //! | 8 | Sharpening | display | [`detail::apply_sharpening`] | `develop/detail_sharpen.wgsl` | `detail::sharpen_reference` |
 //! | 9 | Finish: shaped vignette, grain | display | `compositor::apply_finish` | `develop/finish.wgsl` | `finish::finish_reference` |
 //! | D′ | Back from the display encoding, after the last of 3–9 that drew | display → rendered | `compositor::convert_composite` | `develop/working_space.wgsl` | `working_space::from_display_reference` |
-//! | 11 | Output: highlight roll-off, gamut mapping, the target's transfer curve, dither for 8 bits; for the screen (the space `setScreenOutput` said) or the file | rendered → target | [`output`] | `develop/output.wgsl` | `output::output_reference` |
-//! | 10 | Screen only, after 11: sharpening mask view (in place of 8), area mask overlay, clipping warning | screen | `compositor` (live frame) | `develop/detail_sharpen.wgsl`, `develop/areas.wgsl`, `develop/clip_warning.wgsl` | `areas::overlay_reference` |
+//! | 11 | Output: highlight roll-off, gamut mapping, the target's transfer curve, dither for 8 bits; for the screen (the space `setScreenOutput` said; the HDR canvas with the HDR view's peak while the screen is HDR and the view on) or the file (SDR, or linear Rec. 2020 up to a peak for an HDR file) | rendered → target | [`output`] | `develop/output.wgsl` | `output::output_reference` |
+//! | 10 | Screen only, after 11: sharpening mask view (in place of 8), area mask overlay, clipping warning (at white, or at the peak in the HDR view) | screen | `compositor` (live frame) | `develop/detail_sharpen.wgsl`, `develop/areas.wgsl`, `develop/clip_warning.wgsl` | `areas::overlay_reference` |
 //!
 //! Blurs for stages 3, 4 and 8 are `develop/blur_axis.wgsl`, separable up
 //! to σ = 4 working pixels and box-downscaled first above that
@@ -65,6 +65,26 @@
 //! their `colorSpace` (0 sRGB, 1 Display P3, 2 Rec. 2020), not dithered; the
 //! 8-bit one for sRGB, dithered when the photo is RAW; Flatten for sRGB, not
 //! dithered (it is copied at the layer's precision).
+//!
+//! **The screen.** With the working space, the live frame's output step
+//! renders for the screen (`output::live_settings`). While the screen
+//! really is HDR (wgpu, `setScreenOutput` asked for it and the canvas could
+//! be made `rgba16float` with extended tone mapping: `screenIsHdr`) and the
+//! HDR view is on (`setDevelopHdr`, on by default at a peak of 4), it
+//! renders for the HDR canvas: Display P3 or sRGB primaries as the screen
+//! is, the sRGB curve continued past 1, highlights rolled off from white
+//! toward the peak (`lopsy_core::output`, step 1). Otherwise, the HDR view
+//! off included, it renders the SDR output for the screen's space, which
+//! an HDR canvas shows with 1.0 at its SDR white. Nothing after the output
+//! step clamps: the area overlay mixes toward red, the clipping warning
+//! replaces a pixel, the final blit passes values through (it dithers only
+//! an 8-bit screen), and every texture on the way is half float. On WebGL
+//! the HDR request is ignored and `screenIsHdr` is false.
+//!
+//! **HDR files.** `readHdrOutputF32` runs the 8-bit export's chain at the
+//! document's size and then stage 11 for linear Rec. 2020 up to a peak, and
+//! reads it as f32: the HDR picture `encodePqPng` and `computeGainMap`
+//! take, with `compositeForExport` as the gain map's SDR picture.
 //!
 //! **Statistics.** With the working space, the live frame keeps its
 //! rendered image (after D′, before 11) in the working space's own texture.
@@ -95,6 +115,9 @@
 //! - `setDevelopWorkingSpace(engine, on, sourceSpace)`: on or off; `sourceSpace` 0 sRGB, 1 Display P3 for a photo that is not RAW.
 //! - `setScreenOutput(engine, isDisplayP3, wantsHdr)`: the screen's space, which the live frame's output step renders for (on WebGL too).
 //! - `readRenderedF32(engine)` (readback): the rendered image, linear Rec. 2020 RGBA f32, unclamped.
+//! - `screenIsHdr(engine)` (`lib.rs`): whether the canvas really is HDR now; false on WebGL.
+//! - `setDevelopHdr(engine, on, peak)`: the HDR view of the live frame, on by default; `peak` in units of SDR white (4.0 to start, 1..=64).
+//! - `readHdrOutputF32(engine, peak)` (readback): the HDR picture for a file, linear Rec. 2020 RGBA f32 at the document's size, 1.0 = SDR white, up to `peak`.
 //!
 //! White balance and statistics:
 //! - `rafAutoWhiteBalance(linearRgba)`: near-neutral-pixel white balance, as `wbRatio`.
@@ -182,10 +205,11 @@
 //!   are blended into the photo's own values through the mask and the maths
 //!   is evaluated once; its layer's Color by hue, grade and curves run over
 //!   a copy and are laid back through the mask.
-//! - The output step is SDR only (peak 1.0); an HDR target with a headroom
-//!   is a later phase (`lopsy_core::output::OutputSettings` has its
-//!   parameters). Its gamut mapping is a compression toward the neutral
-//!   axis (`lopsy_core::output`), not a perceptual mapping.
+//! - The HDR output's peak is fixed by the app (4 times SDR white to
+//!   start), not the display's headroom, which a page cannot learn; the
+//!   browser limits what the display cannot show. The gamut mapping is a
+//!   compression toward the neutral axis (`lopsy_core::output`), not a
+//!   perceptual mapping.
 //! - The camera matrix does not follow the white balance (no dual-
 //!   illuminant interpolation, so no true Kelvin; the Kelvin readout is a
 //!   fit to the body's presets). Clipped channels are reconstructed on the

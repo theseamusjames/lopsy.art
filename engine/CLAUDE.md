@@ -295,8 +295,8 @@ Effect images (glows, shadow, stroke) are cached per layer in the live composito
 
 - `texture_pool.rs` detects `EXT_color_buffer_float` and uses `RGBA16F` textures when available.
 - `engine-state.ts` sets `drawingBufferColorSpace = 'display-p3'` on capable displays.
-- With the develop working space on, the output step renders the live frame for the space `setScreenOutput` last said (sRGB or Display P3, SDR) before the final blit; the final blit's dither is the screen's only dither.
-- `final_blit.wgsl` passes values through without clamping. On the wgpu engine the canvas is HDR (`rgba16float`, extended tone mapping) while the display is (`screen-output.ts`, `setScreenOutput`), and the document's own adjustments then keep what they push above white (`OverWhite::Kept`). Everything else in the pipeline is 0..1: `docs/hdr-support.md` lists what HDR editing would need.
+- With the develop working space on, the output step renders the live frame for the space `setScreenOutput` last said (sRGB or Display P3, SDR) before the final blit; the final blit's dither is the screen's only dither. While the canvas really is HDR (`screenIsHdr`) and the HDR view is on (`setDevelopHdr`), it renders for the HDR canvas instead: highlights above white up to a peak, sRGB curve extended past 1 (`develop/mod.rs`, "The screen"). `readHdrOutputF32` is the HDR picture for a file.
+- `final_blit.wgsl` passes values through without clamping. On the wgpu engine the canvas is HDR (`rgba16float`, extended tone mapping) while the display is (`screen-output.ts`, `setScreenOutput`), and the document's own adjustments then keep what they push above white (`OverWhite::Kept`). Without the working space everything else in the pipeline is 0..1: `docs/hdr-support.md` lists what HDR editing would need.
 
 ### Commands
 

@@ -15,12 +15,17 @@ line is, so that "HDR" in the status bar is not read as more than it is.
   16-bit float with extended tone mapping. A value above 1.0 drawn to it
   shows brighter than white. The status bar reads `HDR` after the colour
   space. The WebGL engine's canvas is 8 bits a channel and never HDR.
-- **One source of values above white.** The document's own adjustments
-  (the root group's): what Exposure, Contrast, Highlights and Whites
-  push above white is kept on screen instead of clipped. That is
-  the only place in the engine a value above 1.0 is produced.
+- **One source of values above white in Lopsy.** The document's own
+  adjustments (the root group's): what Exposure, Contrast, Highlights and
+  Whites push above white is kept on screen instead of clipped. That is
+  the only place in Lopsy's pipeline a value above 1.0 is produced.
+  (Photonamous's develop working space is separate: it renders linear
+  light with highlights above white, shows them on an HDR canvas through
+  its output step, `setDevelopHdr`, and reads them for HDR files,
+  `readHdrOutputF32`; Lopsy never turns it on. `screenIsHdr` says
+  whether the canvas really is HDR.)
 
-It is a display effect. Layers, group adjustments, filters, the
+In Lopsy it is a display effect. Layers, group adjustments, filters, the
 eyedropper, thumbnails and every export still clip at white, so an
 exported file does not contain what the screen shows above white.
 
