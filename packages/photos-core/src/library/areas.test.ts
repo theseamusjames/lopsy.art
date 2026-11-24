@@ -3,8 +3,12 @@ import { newId } from './ids';
 import { MemoryLocalStore } from './local-store';
 import {
   addArea,
+  areaEffectPath,
+  areaEffectPaths,
+  isAreaEffectPath,
   DEFAULT_COPY_GROUPS,
   DEFAULT_RECIPE,
+  duplicateArea,
   liveAreas,
   MAX_AREAS,
   pickGroups,
@@ -93,6 +97,91 @@ describe('areas in the recipe', () => {
     const freed = recipeFromPaths({ ...recipeToPaths(recipe), ...removeArea(ids[0]!) });
     expect(liveAreas(freed)).toHaveLength(MAX_AREAS - 1);
     expect(addArea(freed, 'linear', newId(6000))).not.toBeNull();
+  });
+
+  it('gives an area effects of its own: the recipe\'s other settings, at their defaults when new, kept leaf by leaf and held to their ranges', () => {
+    const { recipe, id } = withArea(DEFAULT_RECIPE, 'radial', 1000);
+    const fx = (path: string) => areaEffectPath(id, path);
+    // Whites, blacks and vibrance, and whole groups; never what an area has built in, or framing.
+    expect(areaEffectPaths()).toContain('tone.whites');
+    expect(areaEffectPaths()).toContain('colorGrading.shadows.hue');
+    expect(areaEffectPaths()).toContain('finish.grain.amount');
+    expect(isAreaEffectPath('tone.exposure')).toBe(false);
+    expect(isAreaEffectPath('color.saturation')).toBe(false);
+    expect(isAreaEffectPath('framing.angle')).toBe(false);
+
+    const area = liveAreas(recipe)[0]!;
+    expect(area.effects).toEqual(DEFAULT_RECIPE);
+    expect(recipeToPaths(recipe)[fx('colorGrading.blending')]).toBe(50);
+    // A new area writes none of them: a missing leaf is its default.
+    expect(Object.keys(addArea(DEFAULT_RECIPE, 'radial', newId(3000))!.values).some((p) => p.includes('.fx.'))).toBe(false);
+
+    const edited = recipeFromPaths({
+      ...recipeToPaths(recipe),
+      [fx('colorGrading.shadows.hue')]: 216.7,
+      [fx('colorGrading.shadows.saturation')]: 140,
+      [fx('tone.whites')]: 30,
+      [fx('localContrast.large')]: -500,
+      [fx('curves.red')]: [
+        { x: 0, y: 0 },
+        { x: 0.5, y: 0.7 },
+        { x: 1, y: 1 },
+      ],
+      // Not an area's to have: ignored.
+      [fx('tone.exposure')]: 2,
+    });
+    const effects = liveAreas(edited)[0]!.effects;
+    expect(effects.colorGrading.shadows).toEqual({ hue: 216.7, saturation: 100, luminance: 0 });
+    expect(effects.tone.whites).toBe(30);
+    expect(effects.tone.exposure).toBe(0);
+    expect(effects.localContrast.large).toBe(-100);
+    expect(effects.curves.red).toHaveLength(3);
+    expect(effects.colorByHue).toEqual(DEFAULT_RECIPE.colorByHue);
+    // The photo's own settings are untouched by an area's.
+    expect(edited.tone.whites).toBe(0);
+    expect(rangeForPath(fx('colorGrading.shadows.hue'))).toEqual(rangeForPath('colorGrading.shadows.hue'));
+    expect(rangeForPath(fx('sharpness.radius'))).toEqual(rangeForPath('sharpness.radius'));
+    // A leaf alone is sanitized as its recipe setting is; one that is not an area's is dropped.
+    expect(sanitizeRecipeValues({ [fx('noise.luminance')]: 500, [fx('tone.exposure')]: 1, [fx('nonsense.value')]: 3 })).toEqual({
+      [fx('noise.luminance')]: 100,
+    });
+    // A copy carries them.
+    const copy = duplicateArea(edited, id, newId(2000))!;
+    expect(copy.values[areaEffectPath(copy.id, 'colorGrading.shadows.hue')]).toBe(216.7);
+    expect(copy.values[areaEffectPath(copy.id, 'tone.whites')]).toBe(30);
+  });
+
+  it('duplicates an area under a new ID: the same shape and adjustments, its name marked as a copy', () => {
+    const { recipe: one, id } = withArea(DEFAULT_RECIPE, 'radial', 1000);
+    const edited = recipeFromPaths({
+      ...recipeToPaths(one),
+      [`areas.${id}.adjustments.exposure`]: -1.5,
+      [`areas.${id}.amount`]: 60,
+      [`areas.${id}.invert`]: true,
+      [`areas.${id}.name`]: 'Sky',
+    });
+    const copyId = newId(2000);
+    const made = duplicateArea(edited, id, copyId)!;
+    const both = recipeFromPaths({ ...recipeToPaths(edited), ...made.values });
+    const [source, copy] = liveAreas(both);
+    expect(copy).toEqual({ ...source, id: copyId, name: 'Sky copy' });
+    // An unnamed mask's copy is unnamed too, so it is called by its place in the list.
+    const { recipe: plain, id: plainId } = withArea(DEFAULT_RECIPE, 'linear', 1000);
+    const plainCopy = duplicateArea(plain, plainId, newId(2000))!;
+    expect(plainCopy.values[`areas.${plainCopy.id}.name`]).toBe('');
+    expect(plainCopy.values[`areas.${plainCopy.id}.kind`]).toBe('linear');
+  });
+
+  it('duplicates nothing that is not there, and nothing past the limit', () => {
+    expect(duplicateArea(DEFAULT_RECIPE, 'missing', newId(1))).toBeNull();
+    let recipe = DEFAULT_RECIPE;
+    let last = '';
+    for (let i = 0; i < MAX_AREAS; i++) {
+      const made = withArea(recipe, 'radial', 1000 + i);
+      recipe = made.recipe;
+      last = made.id;
+    }
+    expect(duplicateArea(recipe, last, newId(5000))).toBeNull();
   });
 
   it('is its own copy group, off by default, and sanitizes leaf by leaf', () => {

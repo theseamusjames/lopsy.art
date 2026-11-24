@@ -133,6 +133,15 @@ export type Area = {
   readonly amount: number;
   readonly name: string;
   readonly adjustments: AreaAdjustments;
+  /**
+   * The area's own further edits, kept as a recipe of its own: of it only
+   * the settings `isAreaEffectPath` names are ever off their defaults
+   * (whites, blacks, vibrance, curves, colour by hue, colour grading, local
+   * contrast, sharpness, noise and finish). Rendered as the area's layer:
+   * the photo with all its other edits, run through these, laid over it
+   * through the area's mask. Leaves are `areas.<id>.fx.<recipe path>`.
+   */
+  readonly effects: Recipe;
 } & ({ readonly kind: 'linear'; readonly geometry: LinearGeometry } | { readonly kind: 'radial'; readonly geometry: RadialGeometry });
 
 /** The most live areas a recipe holds; past it, the newest are dropped. */
@@ -283,10 +292,13 @@ export const RECIPE_RANGES: Readonly<Record<string, RecipeRange>> = {
 const AREA_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const AREA_PATH = /^areas\.([A-Za-z0-9_-]{1,64})\.(.+)$/;
 
-/** The range for a recipe path, area paths included ('areas.<id>.amount' -> 'areas.*.amount'). */
+/** The range for a recipe path, area paths included ('areas.<id>.amount' -> 'areas.*.amount', 'areas.<id>.fx.tone.whites' -> 'tone.whites'). */
 export function rangeForPath(path: string): RecipeRange | undefined {
   const m = AREA_PATH.exec(path);
-  return RECIPE_RANGES[m ? `areas.*.${m[2]}` : path];
+  const field = m?.[2];
+  if (field === undefined) return RECIPE_RANGES[path];
+  // An area's own effect has the range of the recipe setting it mirrors.
+  return RECIPE_RANGES[field.startsWith('fx.') ? field.slice('fx.'.length) : `areas.*.${field}`];
 }
 
 export const IDENTITY_CURVE: readonly CurvePoint[] = [
@@ -298,6 +310,45 @@ const NEUTRAL_HUE: HueAdjustment = { hue: 0, saturation: 0, luminance: 0 };
 const NEUTRAL_WHEEL: GradeWheel = { hue: 0, saturation: 0, luminance: 0 };
 /** Lopsy's DEFAULT_GRADE_BLENDING. */
 const DEFAULT_BLENDING = 50;
+
+/** Colour grading that changes nothing: the recipe's default. */
+const NEUTRAL_GRADE: ColorGrading = {
+  shadows: NEUTRAL_WHEEL,
+  midtones: NEUTRAL_WHEEL,
+  highlights: NEUTRAL_WHEEL,
+  global: NEUTRAL_WHEEL,
+  blending: DEFAULT_BLENDING,
+  balance: 0,
+};
+
+/** What follows 'areas.<id>.' in the path of one of an area's own effects. */
+const AREA_FX = 'fx.';
+
+/**
+ * Whether a recipe path ('tone.whites', 'curves.red') is a setting an area
+ * can also have of its own. Exposure, contrast, highlights, shadows,
+ * temperature, tint and saturation are not: an area has those built in
+ * (`AreaAdjustments`).
+ */
+export function isAreaEffectPath(path: string): boolean {
+  if (path === 'tone.whites' || path === 'tone.blacks' || path === 'color.vibrance') return true;
+  return AREA_EFFECT_GROUPS.some((prefix) => path.startsWith(prefix));
+}
+
+const AREA_EFFECT_GROUPS = ['curves.', 'colorByHue.', 'colorGrading.', 'localContrast.', 'sharpness.', 'noise.', 'finish.'] as const;
+
+let areaEffectPathList: readonly string[] | null = null;
+
+/** Every recipe path an area can have of its own, in the recipe's order. */
+export function areaEffectPaths(): readonly string[] {
+  areaEffectPathList ??= Object.keys(recipeToPaths(DEFAULT_RECIPE)).filter(isAreaEffectPath);
+  return areaEffectPathList;
+}
+
+/** The leaf of area `areaId` that holds its own value of the recipe path `path`. */
+export function areaEffectPath(areaId: string, path: string): string {
+  return `areas.${areaId}.${AREA_FX}${path}`;
+}
 
 /**
  * The shaped vignette's defaults reproduce the amount-only one it replaces
@@ -338,14 +389,7 @@ export const DEFAULT_RECIPE: Recipe = {
     purple: NEUTRAL_HUE,
     magenta: NEUTRAL_HUE,
   },
-  colorGrading: {
-    shadows: NEUTRAL_WHEEL,
-    midtones: NEUTRAL_WHEEL,
-    highlights: NEUTRAL_WHEEL,
-    global: NEUTRAL_WHEEL,
-    blending: DEFAULT_BLENDING,
-    balance: 0,
-  },
+  colorGrading: NEUTRAL_GRADE,
   areas: {},
 };
 
@@ -414,6 +458,8 @@ function areaPaths(area: Area): Record<string, RecipeLeaf> {
     [`${p}name`]: area.name,
   };
   for (const key of AREA_ADJUSTMENTS) out[`${p}adjustments.${key}`] = area.adjustments[key];
+  const effects = recipeToPaths(area.effects ?? DEFAULT_RECIPE);
+  for (const path of areaEffectPaths()) out[`${p}${AREA_FX}${path}`] = effects[path] ?? null;
   return out;
 }
 
@@ -482,6 +528,8 @@ function areaFrom(id: string, paths: Readonly<Record<string, unknown>>): Area | 
     amount: clamp(`${p}amount`, paths[`${p}amount`], 100),
     name: typeof name === 'string' ? name.slice(0, 100) : '',
     adjustments,
+    // Read as a recipe is, so each leaf is held to its range and a missing or broken one is its default.
+    effects: recipeFromPaths(Object.fromEntries(areaEffectPaths().map((path) => [path, paths[`${p}${AREA_FX}${path}`]]))),
   };
   return kind === 'linear'
     ? { ...common, kind, geometry: geometry as LinearGeometry }
@@ -500,6 +548,11 @@ function areaLeafJson(path: string, value: unknown): Json | undefined {
   if (field === 'amount') return clamp(path, value, 100);
   if (field.startsWith('adjustments.')) {
     return (AREA_ADJUSTMENTS as readonly string[]).includes(field.slice('adjustments.'.length)) ? clamp(path, value, 0) : undefined;
+  }
+  if (field.startsWith(AREA_FX)) {
+    const effect = field.slice(AREA_FX.length);
+    if (!areaEffectPaths().includes(effect)) return undefined;
+    return recipeLeafJson(recipeToPaths(recipeFromPaths({ [effect]: value }))[effect] ?? null);
   }
   if (field === 'geometry') {
     // The kind is not known here: geometry that fits either is kept, and checked again when read.
@@ -532,10 +585,31 @@ export function addArea(recipe: Recipe, kind: AreaKind, id: string, name = ''): 
     amount: 100,
     name,
     adjustments: Object.fromEntries(AREA_ADJUSTMENTS.map((k) => [k, 0])) as unknown as AreaAdjustments,
+    effects: DEFAULT_RECIPE,
     ...(kind === 'linear' ? { kind, geometry: geometry as LinearGeometry } : { kind, geometry: geometry as RadialGeometry }),
   } as Area;
   const values: Record<string, Json> = { [`areas.${id}.deleted`]: false };
-  for (const [path, value] of Object.entries(areaPaths(area))) values[path] = recipeLeafJson(value);
+  // A new area's own effects are all at their defaults, which a missing leaf reads as: they are not written.
+  for (const [path, value] of Object.entries(areaPaths(area))) {
+    if (!path.startsWith(`areas.${id}.${AREA_FX}`)) values[path] = recipeLeafJson(value);
+  }
+  return { id, values };
+}
+
+/**
+ * A copy of the live area `sourceId` under a new ID: its kind, shape,
+ * amount, invert and adjustments, and its name with " copy" when it has
+ * one. Null when there is no such area or the recipe already holds
+ * MAX_AREAS.
+ */
+export function duplicateArea(recipe: Recipe, sourceId: string, id: string): NewArea | null {
+  if (!AREA_ID.test(id)) throw new Error(`Invalid area ID: ${id}`);
+  const source = (recipe.areas ?? {})[sourceId];
+  if (!source || liveAreas(recipe).length >= MAX_AREAS) return null;
+  const name = source.name.trim() ? `${source.name.trim()} copy`.slice(0, 100) : '';
+  const copy = { ...source, id, name } as Area;
+  const values: Record<string, Json> = { [`areas.${id}.deleted`]: false };
+  for (const [path, value] of Object.entries(areaPaths(copy))) values[path] = recipeLeafJson(value);
   return { id, values };
 }
 
