@@ -56,6 +56,18 @@
 //! the local-contrast stage makes is of the image before the tone and
 //! colour adjustments, so reusing it here would put their differences into
 //! the detail; a blur of its own per frame is left for later.
+//!
+//! **An area's layer.** The adjustments above are built into the areas
+//! pass. Anything further an area is given works as a layer does: after
+//! the areas pass, in the areas' order, the whole image is run through the
+//! document's develop stages again with that area's settings (noise
+//! reduction, local contrast and haze, whites, blacks, vibrance, curves and
+//! colour grading, colour by hue, sharpening, vignette and grain: the same
+//! passes, so the maths is theirs), and the result is laid over the image
+//! with the area's mask as its opacity: `out = img + m · (adjusted − img)`,
+//! on encoded values, alpha untouched (`area_layer_reference`,
+//! `develop/area_layer.wgsl`). The mask is the one above, amount and invert
+//! included. An area with nothing further set draws no layer.
 
 /// Most areas one pass applies.
 pub const MAX_AREAS: usize = 8;
@@ -213,6 +225,23 @@ pub fn areas_reference(rgba: &[f32], w: usize, h: usize, areas: &[Area]) -> Vec<
     out
 }
 
+/// An area's layer: `adjusted` (the image with the area's further
+/// adjustments applied to all of it) over `rgba` with the area's mask as
+/// its opacity. Both are straight-alpha RGBA f32, `w`×`h`; alpha is `rgba`'s.
+pub fn area_layer_reference(rgba: &[f32], adjusted: &[f32], w: usize, h: usize, area: &Area) -> Vec<f32> {
+    let mut out = rgba.to_vec();
+    for y in 0..h {
+        for x in 0..w {
+            let i = (y * w + x) * 4;
+            let m = mask(area, x as f32 + 0.5, y as f32 + 0.5);
+            for c in 0..3 {
+                out[i + c] += m * (adjusted[i + c] - out[i + c]);
+            }
+        }
+    }
+    out
+}
+
 /// Overlay colour and opacity at full mask.
 pub const OVERLAY_RGB: [f32; 3] = [1.0, 0.1, 0.1];
 pub const OVERLAY_OPACITY: f32 = 0.5;
@@ -341,5 +370,24 @@ mod tests {
         let ov = overlay_reference(&img, 4, 1, &areas[0]);
         assert!(ov[0] > ov[1] && ov[3] == 1.0);
         assert_eq!(ov[12..16], img[12..16]);
+    }
+
+    #[test]
+    fn an_areas_layer_shows_through_its_mask_and_nowhere_else() {
+        // Full effect at x = 0, none from x = 3 on.
+        let (areas, _) = parse_areas(&linear((0.0, 0.0), (3.0, 0.0))).unwrap();
+        let img: Vec<f32> = (0..4).flat_map(|_| [0.2f32, 0.4, 0.6, 0.5]).collect();
+        let adjusted: Vec<f32> = (0..4).flat_map(|_| [0.8f32, 0.4, 0.1, 1.0]).collect();
+        let out = area_layer_reference(&img, &adjusted, 4, 1, &areas[0]);
+        // Most of the layer at the left, less each pixel, none past the mask; alpha is the image's.
+        assert!(out[0] > 0.7 && out[0] > out[4] && out[4] > out[8]);
+        assert_eq!(out[12..16], img[12..16]);
+        assert!(out.chunks(4).all(|p| p[3] == 0.5));
+        // Half the amount is half the layer.
+        let mut half = linear((0.0, 0.0), (3.0, 0.0));
+        half[2] = 0.5;
+        let (halved, _) = parse_areas(&half).unwrap();
+        let out_half = area_layer_reference(&img, &adjusted, 4, 1, &halved[0]);
+        assert!((out_half[0] - img[0] - 0.5 * (out[0] - img[0])).abs() < 1e-6);
     }
 }

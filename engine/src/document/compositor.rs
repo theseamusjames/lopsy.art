@@ -472,6 +472,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
     apply_image_adjustments(engine);
     apply_color_mixer(engine);
     apply_areas(engine, AreasMode::Apply);
+    apply_area_layers(engine);
     crate::develop::detail::apply_sharpening_live(engine);
     apply_finish(engine);
     // The selected area's mask, on screen only: exports composite again.
@@ -1620,6 +1621,7 @@ fn composite_layers_for_export_with(engine: &mut EngineInner, finish: ExportFini
     if finish == ExportFinish::Full {
         apply_color_mixer(engine);
         apply_areas(engine, AreasMode::Apply);
+        apply_area_layers(engine);
         crate::develop::detail::apply_sharpening(engine);
         apply_finish(engine);
     }
@@ -1741,6 +1743,7 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Read<Vec<u16>> {
     apply_image_adjustments(engine);
     apply_color_mixer(engine);
     apply_areas(engine, AreasMode::Apply);
+    apply_area_layers(engine);
     crate::develop::detail::apply_sharpening(engine);
     apply_finish(engine);
 
@@ -2022,6 +2025,84 @@ fn apply_areas(engine: &EngineInner, mode: AreasMode) {
     doc_pass(engine, &engine.shaders.copy_exact, ())
         .texture("u_tex", engine.scratch_texture_a)
         .draw(Target::Framebuffer(engine.composite_fbo));
+}
+
+/// Each area's layer, in the areas' order, after the areas pass
+/// (`lopsy_core::areas`, "An area's layer"). For an area that was given
+/// settings of its own (`engine.area_layers`), the composite is kept aside,
+/// run through the document's develop stages again with the area's settings
+/// in place of the document's, and laid back over what was kept with the
+/// area's mask as its opacity (`area_layer.wgsl`). An area without any draws
+/// nothing.
+fn apply_area_layers(engine: &mut EngineInner) {
+    let Some(values) = engine.areas.clone() else {
+        return;
+    };
+    let stride = lopsy_core::areas::STRIDE;
+    let count = (values.len() / stride).min(engine.area_layers.len());
+    for index in 0..count {
+        let Some(layer) = engine.area_layers[index].clone().filter(area_layer_draws) else {
+            continue;
+        };
+        if let Err(e) = area_layer(engine, &values[index * stride..(index + 1) * stride], layer) {
+            crate::host::log(crate::host::LogLevel::Error, &format!("Area layer: {e}"));
+            return;
+        }
+    }
+}
+
+/// Whether a layer would change the image: a stage of it is set and on.
+fn area_layer_draws(layer: &crate::engine::AreaLayer) -> bool {
+    has_any_adjustment(&layer.adjustments)
+        || layer.color_mixer.is_some()
+        || layer.detail.is_some_and(|d| d.reduces_noise() || d.sharpens())
+        || layer.local_contrast.is_some_and(|l| l.is_active())
+        || layer.finish.is_some()
+}
+
+fn area_layer(engine: &mut EngineInner, area: &[f32], layer: crate::engine::AreaLayer) -> Result<(), String> {
+    let program = engine.shaders.area_layer()?;
+    let (w, h) = (engine.doc_width, engine.doc_height);
+    // The image as it is, kept while the stages below work on the composite.
+    let original = engine.texture_pool.acquire(w, h)?;
+    let is_kept = doc_pass(engine, &engine.shaders.copy_exact, ())
+        .texture("u_tex", engine.composite_texture)
+        .draw(Target::Texture(original));
+    engine.gpu().unbind_textures(1);
+    if !is_kept {
+        engine.texture_pool.release(original);
+        return Err("the composite could not be kept".to_string());
+    }
+
+    // The document's settings step aside for the area's, and the stages run as
+    // they do for the document. Each logs its own failure, so nothing here
+    // returns before the document's settings are back.
+    let document = (
+        std::mem::replace(&mut engine.adjustments, layer.adjustments),
+        std::mem::replace(&mut engine.color_mixer, layer.color_mixer),
+        std::mem::replace(&mut engine.detail, layer.detail),
+        std::mem::replace(&mut engine.local_contrast, layer.local_contrast),
+        std::mem::replace(&mut engine.finish, layer.finish),
+    );
+    crate::develop::detail::apply_noise_reduction(engine);
+    crate::develop::detail::apply_local_contrast(engine);
+    apply_image_adjustments(engine);
+    apply_color_mixer(engine);
+    crate::develop::detail::apply_sharpening(engine);
+    apply_finish(engine);
+    (engine.adjustments, engine.color_mixer, engine.detail, engine.local_contrast, engine.finish) = document;
+
+    let params = crate::gpu::params::develop::AreaLayerParams { area: Vec4Array::from_floats(area) };
+    let pass = engine.pass(&program, params).texture("u_tex", original).texture("u_adjusted", engine.composite_texture);
+    let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
+    engine.gpu().unbind_textures(2);
+    engine.texture_pool.release(original);
+    if is_drawn {
+        doc_pass(engine, &engine.shaders.copy_exact, ())
+            .texture("u_tex", engine.scratch_texture_a)
+            .draw(Target::Framebuffer(engine.composite_fbo));
+    }
+    Ok(())
 }
 
 /// Color by hue over the composite in place when it is set: composite ->

@@ -179,6 +179,19 @@ pub struct BrushState {
 
 pub use crate::imaging::adjustments::ImageAdjustmentState;
 
+/// What one area's layer runs the image through, with the area's own
+/// settings: the document's develop stages again, each `None` (or at its
+/// defaults) unless the area was given it. Of `adjustments` an area sets
+/// whites, blacks, vibrance, the curves LUT and colour grading.
+#[derive(Clone, Default)]
+pub struct AreaLayer {
+    pub adjustments: ImageAdjustmentState,
+    pub color_mixer: Option<[f32; lopsy_core::color_mixer::VALUES_LEN]>,
+    pub detail: Option<lopsy_core::detail::DetailSettings>,
+    pub local_contrast: Option<lopsy_core::detail::LocalContrastSettings>,
+    pub finish: Option<lopsy_core::finish::FinishSettings>,
+}
+
 pub struct EngineInner {
     pub gpu_ctx: GpuContext,
     pub shaders: ShaderPrograms,
@@ -243,6 +256,10 @@ pub struct EngineInner {
     /// Areas (`lopsy_core::areas`): the clamped floats, `STRIDE` per area.
     /// `None` (the default) runs no pass.
     pub areas: Option<Vec<f32>>,
+    /// Each area's own further settings, by its place in `areas`: the
+    /// area's layer (`compositor::apply_area_layers`). `None`, or one with
+    /// nothing set, draws no layer. Empty by default.
+    pub area_layers: Vec<Option<AreaLayer>>,
     /// The area whose mask the live frame shows in red, or −1. Never in exports.
     pub area_overlay: i32,
     /// (shadows, highlights) clipping warnings on the live frame only.
@@ -293,6 +310,23 @@ pub struct SnapshotTexture {
 }
 
 impl EngineInner {
+    /// Area `index`'s layer off: its curves texture goes back to the pool.
+    pub fn clear_area_layer(&mut self, index: usize) {
+        if let Some(layer) = self.area_layers.get_mut(index).and_then(Option::take) {
+            if let Some(tex) = layer.adjustments.curves_texture {
+                self.texture_pool.release(tex);
+            }
+        }
+    }
+
+    /// Every area's layer off.
+    pub fn clear_area_layers(&mut self) {
+        for index in 0..self.area_layers.len() {
+            self.clear_area_layer(index);
+        }
+        self.area_layers.clear();
+    }
+
     pub fn new(gpu_ctx: GpuContext, shaders: ShaderPrograms) -> Result<Self, String> {
         let (mut texture_pool, mut fbo_pool) = gpu_ctx.create_pools();
 
@@ -353,6 +387,7 @@ impl EngineInner {
             detail: None,
             local_contrast: None,
             areas: None,
+            area_layers: Vec::new(),
             area_overlay: -1,
             clipping_warning: (false, false),
             detail_mask_view: false,
@@ -799,6 +834,7 @@ impl EngineInner {
         self.detail = None;
         self.local_contrast = None;
         self.areas = None;
+        self.clear_area_layers();
         self.area_overlay = -1;
         self.finish = None;
         self.detail_mask_view = false;

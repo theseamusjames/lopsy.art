@@ -141,7 +141,133 @@ pub fn set_image_areas(engine: &mut EngineInner, values: &[f32]) -> Result<(), S
 
 pub fn clear_image_areas(engine: &mut EngineInner) {
     engine.areas = None;
+    engine.clear_area_layers();
     engine.area_overlay = -1;
+    engine.needs_recomposite = true;
+}
+
+// An area's layer (`lopsy_core::areas`, "An area's layer"): after the areas
+// pass, the image is run through the document's develop stages again with
+// the area's own settings, and the result is laid over the image through
+// the area's mask. `index` is the area's place in `set_image_areas`
+// (0..`MAX_AREAS`). What is set stays until `clear_image_area_layer`,
+// `clear_image_area_layers` or `clear_image_areas`: a host that changes
+// which area is at an index clears and sets them again.
+
+/// Area `index`'s layer, made if it has none yet.
+fn area_layer(engine: &mut EngineInner, index: u32) -> Result<&mut crate::engine::AreaLayer, String> {
+    let index = index as usize;
+    if index >= lopsy_core::areas::MAX_AREAS {
+        return Err(format!("Area index must be below {}", lopsy_core::areas::MAX_AREAS));
+    }
+    if engine.area_layers.len() <= index {
+        engine.area_layers.resize(index + 1, None);
+    }
+    engine.needs_recomposite = true;
+    Ok(engine.area_layers[index].get_or_insert_with(Default::default))
+}
+
+/// Whites, blacks and vibrance of area `index`'s layer, −100..100 each as
+/// `set_image_whites`, `set_image_blacks` and `set_image_vibrance` take them.
+pub fn set_image_area_tone(engine: &mut EngineInner, index: u32, whites: f32, blacks: f32, vibrance: f32) -> Result<(), String> {
+    if ![whites, blacks, vibrance].iter().all(|v| v.is_finite()) {
+        return Err("Area tone values must be finite".to_string());
+    }
+    let layer = area_layer(engine, index)?;
+    layer.adjustments.whites = whites;
+    layer.adjustments.blacks = blacks;
+    layer.adjustments.vibrance = vibrance;
+    Ok(())
+}
+
+/// The curves of area `index`'s layer: the packed 256×4 LUT of
+/// `set_image_curves_lut`. Its texture is the layer's until the layer is cleared.
+pub fn set_image_area_curves_lut(engine: &mut EngineInner, index: u32, lut: &[u8]) -> Result<(), String> {
+    if lut.len() != 256 * 4 {
+        return Err("Curves LUT must be exactly 256 * 4 bytes".to_string());
+    }
+    let existing = area_layer(engine, index)?.adjustments.curves_texture;
+    let tex = match existing {
+        Some(tex) => tex,
+        None => engine.texture_pool.acquire(256, 1)?,
+    };
+    if let Err(e) = engine.texture_pool.upload_rgba(tex, 0, 0, 256, 1, lut) {
+        if existing.is_none() {
+            engine.texture_pool.release(tex);
+        }
+        return Err(e);
+    }
+    let layer = area_layer(engine, index)?;
+    layer.adjustments.curves_texture = Some(tex);
+    layer.adjustments.has_curves = true;
+    Ok(())
+}
+
+/// Colour grading of area `index`'s layer, with the 18-float block of
+/// `set_image_color_grading`.
+pub fn set_image_area_color_grading(engine: &mut EngineInner, index: u32, values: &[f32]) -> Result<(), String> {
+    if values.len() != 18 {
+        return Err("Color grading values must be exactly 18 floats".to_string());
+    }
+    if !values.iter().all(|v| v.is_finite()) {
+        return Err("Color grading values must be finite".to_string());
+    }
+    let adj = &mut area_layer(engine, index)?.adjustments;
+    let wheel = |i: usize| [values[i], values[i + 1], values[i + 2], values[i + 3]];
+    adj.cg_shadows = wheel(0);
+    adj.cg_midtones = wheel(4);
+    adj.cg_highlights = wheel(8);
+    adj.cg_global = wheel(12);
+    adj.cg_exponent = values[16];
+    adj.cg_width = values[17];
+    adj.cg_enabled = true;
+    Ok(())
+}
+
+/// Color by hue of area `index`'s layer: the 24 values of `set_image_color_mixer`.
+pub fn set_image_area_color_mixer(engine: &mut EngineInner, index: u32, values: &[f32]) -> Result<(), String> {
+    let values: [f32; color_mixer::VALUES_LEN] = values
+        .try_into()
+        .map_err(|_| format!("Color mixer values must be exactly {} floats", color_mixer::VALUES_LEN))?;
+    if !values.iter().all(|v| v.is_finite()) {
+        return Err("Color mixer values must be finite".to_string());
+    }
+    area_layer(engine, index)?.color_mixer = Some(values.map(|v| v.clamp(-100.0, 100.0)));
+    Ok(())
+}
+
+/// Sharpening and noise reduction of area `index`'s layer: the values of `set_image_detail`.
+pub fn set_image_area_detail(engine: &mut EngineInner, index: u32, values: &[f32]) -> Result<(), String> {
+    let settings = lopsy_core::detail::DetailSettings::from_values(values)?;
+    area_layer(engine, index)?.detail = Some(settings);
+    Ok(())
+}
+
+/// Large details, small details and haze of area `index`'s layer: the values
+/// of `set_image_local_contrast`. The blurs are of the image as the area's
+/// layer receives it, after the document's own edits.
+pub fn set_image_area_local_contrast(engine: &mut EngineInner, index: u32, values: &[f32]) -> Result<(), String> {
+    let settings = lopsy_core::detail::LocalContrastSettings::from_values(values)?;
+    area_layer(engine, index)?.local_contrast = Some(settings);
+    Ok(())
+}
+
+/// Vignette and grain of area `index`'s layer: the values of `set_image_finish`.
+pub fn set_image_area_finish(engine: &mut EngineInner, index: u32, values: &[f32]) -> Result<(), String> {
+    let settings = lopsy_core::finish::FinishSettings::from_values(values)?;
+    area_layer(engine, index)?.finish = Some(settings);
+    Ok(())
+}
+
+/// Area `index`'s layer off: the area keeps its mask and built-in adjustments.
+pub fn clear_image_area_layer(engine: &mut EngineInner, index: u32) {
+    engine.clear_area_layer(index as usize);
+    engine.needs_recomposite = true;
+}
+
+/// Every area's layer off.
+pub fn clear_image_area_layers(engine: &mut EngineInner) {
+    engine.clear_area_layers();
     engine.needs_recomposite = true;
 }
 

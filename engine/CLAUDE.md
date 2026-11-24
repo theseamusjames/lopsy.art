@@ -112,14 +112,14 @@ gpu/shaders/
   develop/                # Photonamous' develop chain (src/develop/mod.rs lists them)
     raw_develop.wgsl      # RAW stage: linear camera RGB → sRGB
     noise_reduce.wgsl, local_contrast.wgsl, detail_sharpen.wgsl, blur_axis.wgsl
-    color_mixer.wgsl, areas.wgsl, finish.wgsl, clip_warning.wgsl
+    color_mixer.wgsl, areas.wgsl, area_layer.wgsl, finish.wgsl, clip_warning.wgsl
 ```
 
 ### The Photonamous develop chain
 
 `src/develop/mod.rs` is the map: the stage order (RAW develop, noise
-reduction, local contrast and haze, image adjustments, colour mixer, areas,
-sharpening, finish, then the screen-only views), where each pass lives, the
+reduction, local contrast and haze, image adjustments, colour mixer, areas
+and each area's layer, sharpening, finish, then the screen-only views), where each pass lives, the
 JS API, and the deviations from `docs/photonamous-spec.md` 6.10. Rules:
 
 - Every stage is off (`None`) by default, and then the composite is

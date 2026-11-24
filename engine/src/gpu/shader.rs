@@ -157,6 +157,7 @@ pub const COLOR_CONVERT_FRAG: &str = translated!("color/color_convert");
 pub const RAW_DEVELOP_FRAG: &str = translated!("develop/raw_develop");
 pub const COLOR_MIXER_FRAG: &str = translated!("develop/color_mixer");
 pub const AREAS_FRAG: &str = translated!("develop/areas");
+pub const AREA_LAYER_FRAG: &str = translated!("develop/area_layer");
 pub const CLIP_WARNING_FRAG: &str = translated!("develop/clip_warning");
 pub const FINISH_FRAG: &str = translated!("develop/finish");
 pub const BLUR_AXIS_FRAG: &str = translated!("develop/blur_axis");
@@ -251,6 +252,7 @@ typed_shaders! {
     RAW_DEVELOP: params::develop::RawDevelopParams = RAW_DEVELOP_FRAG;
     COLOR_MIXER: params::develop::ColorMixerParams = COLOR_MIXER_FRAG;
     AREAS: params::develop::AreasParams = AREAS_FRAG;
+    AREA_LAYER: params::develop::AreaLayerParams = AREA_LAYER_FRAG;
     CLIP_WARNING: params::develop::ClipWarningParams = CLIP_WARNING_FRAG;
     FINISH: params::develop::FinishParams = FINISH_FRAG;
     BLUR_AXIS: params::develop::BlurAxisParams = BLUR_AXIS_FRAG;
@@ -439,6 +441,7 @@ pub struct ShaderPrograms {
     raw_develop: RefCell<Option<Rc<ShaderProgram<params::develop::RawDevelopParams>>>>,
     color_mixer: RefCell<Option<Rc<ShaderProgram<params::develop::ColorMixerParams>>>>,
     areas: RefCell<Option<Rc<ShaderProgram<params::develop::AreasParams>>>>,
+    area_layer: RefCell<Option<Rc<ShaderProgram<params::develop::AreaLayerParams>>>>,
     clip_warning: RefCell<Option<Rc<ShaderProgram<params::develop::ClipWarningParams>>>>,
     finish: RefCell<Option<Rc<ShaderProgram<params::develop::FinishParams>>>>,
     blur_axis: RefCell<Option<Rc<ShaderProgram<params::develop::BlurAxisParams>>>>,
@@ -489,6 +492,11 @@ impl ShaderPrograms {
     /// `develop/areas.wgsl`, compiled the first time it is asked for.
     pub fn areas(&self) -> Result<Rc<ShaderProgram<params::develop::AreasParams>>, String> {
         lazily(&self.areas, || compile(&self.linker, &AREAS))
+    }
+
+    /// `develop/area_layer.wgsl`, compiled the first time it is asked for.
+    pub fn area_layer(&self) -> Result<Rc<ShaderProgram<params::develop::AreaLayerParams>>, String> {
+        lazily(&self.area_layer, || compile(&self.linker, &AREA_LAYER))
     }
 
     /// `develop/clip_warning.wgsl`, compiled the first time it is asked for.
@@ -628,6 +636,7 @@ impl ShaderPrograms {
             raw_develop: RefCell::new(None),
             color_mixer: RefCell::new(None),
             areas: RefCell::new(None),
+            area_layer: RefCell::new(None),
             clip_warning: RefCell::new(None),
             finish: RefCell::new(None),
             blur_axis: RefCell::new(None),

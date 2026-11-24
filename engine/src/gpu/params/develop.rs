@@ -68,6 +68,13 @@ uniforms! {
 }
 
 uniforms! {
+    /// `develop/area_layer.wgsl`
+    pub struct AreaLayerParams {
+        pub area: Vec4Array<4>,
+    }
+}
+
+uniforms! {
     /// `develop/clip_warning.wgsl`
     pub struct ClipWarningParams {
         pub shadows: i32,

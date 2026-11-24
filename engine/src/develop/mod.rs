@@ -17,6 +17,7 @@
 //! | 5 | Image adjustments: tone, colour, curves, levels, colour grading | `imaging::adjustments` | `filters/adjustments.wgsl` | — (Lopsy's) |
 //! | 6 | Colour by hue | `compositor::apply_color_mixer` | `develop/color_mixer.wgsl` | `color_mixer::color_mixer_reference` |
 //! | 7 | Areas (linear and radial masks) | `compositor::apply_areas` | `develop/areas.wgsl` | `areas::areas_reference` |
+//! | 7b | Each area's layer: stages 3–6, 8 and 9 again with the area's own settings, through its mask | `compositor::apply_area_layers` | those stages' shaders, then `develop/area_layer.wgsl` | `areas::area_layer_reference` (the mix) |
 //! | 8 | Sharpening | [`detail::apply_sharpening`] | `develop/detail_sharpen.wgsl` | `detail::sharpen_reference` |
 //! | 9 | Finish: shaped vignette, grain | `compositor::apply_finish` | `develop/finish.wgsl` | `finish::finish_reference` |
 //! | 10 | Screen only: sharpening mask view (in place of 8), area mask overlay, clipping warning | `compositor` (live frame) | `develop/detail_sharpen.wgsl`, `develop/areas.wgsl`, `develop/clip_warning.wgsl` | `areas::overlay_reference` |
@@ -64,6 +65,12 @@
 //! (4 floats).
 //!
 //! Areas: `setImageAreas` / `clearImageAreas` (16 floats an area, at most 8).
+//! An area's layer, by the area's index: `setImageAreaTone` (whites,
+//! blacks, vibrance), `setImageAreaCurvesLut`, `setImageAreaColorGrading`,
+//! `setImageAreaColorMixer`, `setImageAreaDetail`,
+//! `setImageAreaLocalContrast`, `setImageAreaFinish`, each with its
+//! document-wide twin's values; `clearImageAreaLayer(engine, index)` and
+//! `clearImageAreaLayers`.
 //!
 //! Finish: `setImageFinish` / `clearImageFinish` (9 floats).
 //!
@@ -93,7 +100,11 @@
 //!   tone, colour and curves are one pass (stage 5).
 //! - Areas apply their own adjustments after the global colour stages
 //!   rather than re-running stages 3–12 per area, and the large-details
-//!   control is not offered per area.
+//!   control is not offered in that pass. An area's further settings (its
+//!   layer, stage 7b) run over the whole composite once per area that has
+//!   any: a copy of the composite, the stages the area set, and the mix.
+//!   Its noise reduction and local contrast therefore work on the image
+//!   after the document's tone and colour, not before as stages 3 and 4 do.
 //! - There is no stage caching: a frame runs every active stage.
 //! - The RAW stage develops the whole composite, so anything else in the
 //!   document (other layers, the background colour) is developed too. On a

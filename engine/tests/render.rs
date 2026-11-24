@@ -578,6 +578,112 @@ fn areas_change_exports_but_their_overlay_never_does() {
 }
 
 #[test]
+fn an_areas_layer_grades_inside_its_mask_as_its_reference_says() {
+    let Some(mut engine) = engine(16, 8) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, 16, 8, 1.0)).expect("layer");
+    commands::layer::upload_layer_pixels(&mut engine, "art", &[[100u8, 110, 120, 255]; 128].concat(), 16, 8, 0, 0).expect("pixels");
+    let plain = now(compositor::composite_for_export(&mut engine));
+    // A linear mask with none of the built-in adjustments: all of its effect at x = 0, none from x = 12.
+    let mut area = [0.0f32; 16];
+    area[2] = 1.0;
+    area[5] = 12.0;
+    commands::develop::set_image_areas(&mut engine, &area).expect("areas");
+    assert_eq!(now(compositor::composite_for_export(&mut engine)), plain, "an area with nothing set changes nothing");
+
+    // Its layer: a warm global tint, as `compileColorGrade` packs one.
+    let mut grade = [0.0f32; 18];
+    grade[12] = 0.2;
+    grade[14] = -0.2;
+    grade[16] = 1.0;
+    grade[17] = 0.25;
+    commands::develop::set_image_area_color_grading(&mut engine, 0, &grade).expect("grade");
+    let graded = now(compositor::composite_for_export(&mut engine));
+    let texel = |image: &[u8], x: usize| image[4 * x..4 * x + 4].to_vec();
+    assert_ne!(texel(&graded, 0), texel(&plain, 0), "graded where the mask is full");
+    assert_eq!(texel(&graded, 13), texel(&plain, 13), "untouched past the mask");
+
+    // The same grade through a mask that covers everything is the layer itself: the reference lays it over
+    // the plain image with the first mask as its opacity.
+    let mut everywhere = area;
+    everywhere[3] = 1000.0;
+    everywhere[5] = 2000.0;
+    commands::develop::set_image_areas(&mut engine, &everywhere).expect("areas");
+    let layer = now(compositor::composite_for_export(&mut engine));
+    let floats = |image: &[u8]| image.iter().map(|&v| f32::from(v) / 255.0).collect::<Vec<f32>>();
+    let (parsed, _) = lopsy_core::areas::parse_areas(&area).expect("parse");
+    let expected = lopsy_core::areas::area_layer_reference(&floats(&plain), &floats(&layer), 16, 8, &parsed[0]);
+    for (i, (&got, want)) in graded.iter().zip(expected).enumerate() {
+        assert!((f32::from(got) / 255.0 - want).abs() <= 2.0 / 255.0, "byte {i}: {got} against {want}");
+    }
+
+    // A layer for a place no area has draws nothing, and clearing them puts the photo back.
+    commands::develop::set_image_areas(&mut engine, &area).expect("areas");
+    commands::develop::set_image_area_color_grading(&mut engine, 3, &grade).expect("grade");
+    assert_eq!(now(compositor::composite_for_export(&mut engine)), graded);
+    assert!(commands::develop::set_image_area_color_grading(&mut engine, 8, &grade).is_err());
+    commands::develop::clear_image_area_layers(&mut engine);
+    assert_eq!(now(compositor::composite_for_export(&mut engine)), plain);
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn an_areas_layer_runs_every_stage_it_was_given_and_leaves_the_documents_settings_alone() {
+    let Some(mut engine) = engine(64, 32) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, 64, 32, 1.0)).expect("layer");
+    // Stripes, so local contrast, sharpening and noise reduction have something to work on.
+    let texels: Vec<[u8; 4]> = (0..64 * 32).map(|i| if (i % 64) / 4 % 2 == 0 { [70, 90, 120, 255] } else { [170, 150, 110, 255] }).collect();
+    commands::layer::upload_layer_pixels(&mut engine, "art", texels.as_flattened(), 64, 32, 0, 0).expect("pixels");
+    // The document's own colour by hue stays on throughout: a layer must not disturb it.
+    let mut mixer = [0.0f32; 24];
+    mixer[1] = 40.0;
+    commands::develop::set_image_color_mixer(&mut engine, &mixer).expect("mixer");
+    // A mask over the left half: all of its effect up to x = 16, none from x = 48.
+    let mut area = [0.0f32; 16];
+    area[2] = 1.0;
+    area[3] = 16.0;
+    area[5] = 48.0;
+    commands::develop::set_image_areas(&mut engine, &area).expect("areas");
+    let plain = now(compositor::composite_for_export(&mut engine));
+    let column = |image: &[u8], x: usize| image[4 * x..4 * x + 4].to_vec();
+
+    // Each stage alone changes the image under the mask and nothing past it; taken off, the image is back.
+    let lut: Vec<u8> = (0..256u32).flat_map(|i| [(255 - i) as u8; 4]).collect();
+    let mut area_mixer = [0.0f32; 24];
+    area_mixer[16] = -80.0;
+    let stages: [(&str, &dyn Fn(&mut EngineInner)); 6] = [
+        ("tone", &|e| commands::develop::set_image_area_tone(e, 0, 60.0, -40.0, 50.0).expect("tone")),
+        ("curves", &|e| commands::develop::set_image_area_curves_lut(e, 0, &lut).expect("curves")),
+        ("colour by hue", &|e| commands::develop::set_image_area_color_mixer(e, 0, &area_mixer).expect("mixer")),
+        ("detail", &|e| commands::develop::set_image_area_detail(e, 0, &[120.0, 1.0, 0.0, 60.0, 60.0, 50.0, 1.0]).expect("detail")),
+        ("local contrast", &|e| commands::develop::set_image_area_local_contrast(e, 0, &[60.0, 60.0, 30.0, 1.0]).expect("local contrast")),
+        ("finish", &|e| commands::develop::set_image_area_finish(e, 0, &[-60.0, 50.0, 0.0, 50.0, 40.0, 25.0, 50.0, 7.0, 1.0]).expect("finish")),
+    ];
+    for (name, set) in stages {
+        set(&mut engine);
+        let layered = now(compositor::composite_for_export(&mut engine));
+        assert_ne!(layered, plain, "{name} changes the image");
+        for x in 48..64 {
+            assert_eq!(column(&layered, x), column(&plain, x), "{name} stays inside the mask (column {x})");
+        }
+        assert_eq!(now(compositor::composite_for_export(&mut engine)), layered, "{name} draws the same twice");
+        commands::develop::clear_image_area_layer(&mut engine, 0);
+        assert_eq!(now(compositor::composite_for_export(&mut engine)), plain, "{name} taken off puts the image back");
+    }
+
+    // All of them at once, then the document's settings are as they were set.
+    for (_, set) in stages {
+        set(&mut engine);
+    }
+    assert_ne!(now(compositor::composite_for_export(&mut engine)), plain);
+    assert_eq!(engine.color_mixer, Some(mixer));
+    assert!(engine.detail.is_none() && engine.local_contrast.is_none() && engine.finish.is_none());
+    assert!(!engine.adjustments.has_curves && engine.adjustments.curves_texture.is_none());
+    commands::develop::clear_image_areas(&mut engine);
+    assert!(engine.area_layers.is_empty());
+    assert_no_gpu_errors();
+}
+
+#[test]
 fn screen_only_views_never_reach_exports() {
     let Some(mut engine) = engine(8, 4) else { return };
     commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, 8, 4, 1.0)).expect("layer");

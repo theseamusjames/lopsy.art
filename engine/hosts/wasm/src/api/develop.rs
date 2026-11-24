@@ -101,6 +101,67 @@ pub fn clear_image_areas(engine: &mut Engine) {
     lopsy_engine::commands::develop::clear_image_areas(&mut engine.inner)
 }
 
+// An area's layer: after the areas pass, the image is run through the
+// develop stages again with the area's own settings and shows through the
+// area's mask, over the photo's own edits. `index` is the area's place in
+// `setImageAreas` (0..7). Each setter throws on an index out of range or
+// on values its document-wide twin would refuse. What is set stays until
+// `clearImageAreaLayer`, `clearImageAreaLayers` or `clearImageAreas`.
+
+/// Whites, blacks and vibrance of an area's layer, −100..100 each.
+#[wasm_bindgen(js_name = "setImageAreaTone")]
+pub fn set_image_area_tone(engine: &mut Engine, index: u32, whites: f32, blacks: f32, vibrance: f32) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::set_image_area_tone(&mut engine.inner, index, whites, blacks, vibrance).map_err(|e| JsError::new(&e))
+}
+
+/// The curves of an area's layer: the 256×4 LUT of `setImageCurvesLut`.
+#[wasm_bindgen(js_name = "setImageAreaCurvesLut")]
+pub fn set_image_area_curves_lut(engine: &mut Engine, index: u32, lut: &[u8]) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::set_image_area_curves_lut(&mut engine.inner, index, lut).map_err(|e| JsError::new(&e))
+}
+
+/// Colour grading of an area's layer: the 18 floats of `setImageColorGrading`.
+#[wasm_bindgen(js_name = "setImageAreaColorGrading")]
+pub fn set_image_area_color_grading(engine: &mut Engine, index: u32, values: &[f32]) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::set_image_area_color_grading(&mut engine.inner, index, values).map_err(|e| JsError::new(&e))
+}
+
+/// Color by hue of an area's layer: the 24 floats of `setImageColorMixer`.
+#[wasm_bindgen(js_name = "setImageAreaColorMixer")]
+pub fn set_image_area_color_mixer(engine: &mut Engine, index: u32, values: &[f32]) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::set_image_area_color_mixer(&mut engine.inner, index, values).map_err(|e| JsError::new(&e))
+}
+
+/// Sharpening and noise reduction of an area's layer: the 7 floats of `setImageDetail`.
+#[wasm_bindgen(js_name = "setImageAreaDetail")]
+pub fn set_image_area_detail(engine: &mut Engine, index: u32, values: &[f32]) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::set_image_area_detail(&mut engine.inner, index, values).map_err(|e| JsError::new(&e))
+}
+
+/// Large details, small details and haze of an area's layer: the 4 floats of `setImageLocalContrast`.
+#[wasm_bindgen(js_name = "setImageAreaLocalContrast")]
+pub fn set_image_area_local_contrast(engine: &mut Engine, index: u32, values: &[f32]) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::set_image_area_local_contrast(&mut engine.inner, index, values).map_err(|e| JsError::new(&e))
+}
+
+/// Vignette and grain of an area's layer: the 9 floats of `setImageFinish`.
+#[wasm_bindgen(js_name = "setImageAreaFinish")]
+pub fn set_image_area_finish(engine: &mut Engine, index: u32, values: &[f32]) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::set_image_area_finish(&mut engine.inner, index, values).map_err(|e| JsError::new(&e))
+}
+
+/// One area's layer off; the area keeps its mask and built-in adjustments.
+#[wasm_bindgen(js_name = "clearImageAreaLayer")]
+pub fn clear_image_area_layer(engine: &mut Engine, index: u32) {
+    lopsy_engine::commands::develop::clear_image_area_layer(&mut engine.inner, index)
+}
+
+/// Every area's layer off; the areas themselves stay.
+#[wasm_bindgen(js_name = "clearImageAreaLayers")]
+pub fn clear_image_area_layers(engine: &mut Engine) {
+    lopsy_engine::commands::develop::clear_image_area_layers(&mut engine.inner)
+}
+
 /// Show area `index`'s mask as a red overlay on screen only; −1 for none.
 #[wasm_bindgen(js_name = "setImageAreaOverlay")]
 pub fn set_image_area_overlay(engine: &mut Engine, index: i32) {
