@@ -178,12 +178,42 @@ pub fn nr_range_sigma(s: &DetailSettings) -> f32 {
     (0.02 + 0.10 * s.nr_luminance / 100.0) * (1.0 - 0.75 * s.nr_detail / 100.0)
 }
 
+/// How noise reduction is run: on what data, and so with what thresholds.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct NoiseRun {
+    /// The luminance thresholds (the bilateral's range σ and the colour
+    /// edge guard) are divided by this.
+    pub threshold_scale: f32,
+    /// Leave negative values as they come out, rather than clamping them to
+    /// 0: with the working space, whose encoded values go below 0 for a
+    /// colour outside sRGB.
+    pub keep_negative: bool,
+}
+
+/// Noise reduction as it always ran: on sRGB-encoded values after the tone
+/// curve, clamped at 0.
+pub const DISPLAY_RUN: NoiseRun = NoiseRun { threshold_scale: 1.0, keep_negative: false };
+
+/// With the working space, a RAW photo's noise reduction runs on scene data
+/// (still wrapped in the display encoding), before the tone pass and so
+/// before the camera's base curve, whose slope in encoded values over
+/// scene 0.05..0.3 is 0.92 to 1.53 on the sample files (1.3 on average;
+/// 0.76 to 1.3 below 0.02): noise there is that much smaller than after the
+/// curve. Its thresholds are divided by this so a slider value removes
+/// about as much as it did.
+pub const NR_SCENE_THRESHOLD_SCALE: f32 = 1.25;
+
 /// Noise reduction (`noise_reduce.wgsl`): a 5×5 bilateral on luminance,
 /// mixed in by the luminance amount, and chroma replaced by the chroma of
 /// `chroma_blur` (the image blurred by `NR_CHROMA_SIGMA`) by the colour
 /// amount, except across luminance edges.
 pub fn noise_reduce_reference(img: &[f32], chroma_blur: &[f32], w: usize, h: usize, s: &DetailSettings) -> Vec<f32> {
-    let sr = nr_range_sigma(s);
+    noise_reduce_run_reference(img, chroma_blur, w, h, s, DISPLAY_RUN)
+}
+
+/// `noise_reduce_reference`, run as `run` says.
+pub fn noise_reduce_run_reference(img: &[f32], chroma_blur: &[f32], w: usize, h: usize, s: &DetailSettings, run: NoiseRun) -> Vec<f32> {
+    let sr = nr_range_sigma(s) / run.threshold_scale;
     let (lum, col) = (s.nr_luminance / 100.0, s.nr_color / 100.0);
     let mut out = img.to_vec();
     for y in 0..h {
@@ -206,12 +236,13 @@ pub fn noise_reduce_reference(img: &[f32], chroma_blur: &[f32], w: usize, h: usi
             let y_new = yc + lum * (acc / total - yc);
             let b = px(chroma_blur, i);
             let yb = luma(b);
-            let guard = (-((yb - yc) / 0.08).powi(2)).exp();
+            let guard = (-((yb - yc) / 0.08 * run.threshold_scale).powi(2)).exp();
             let k = col * guard;
             for ch in 0..3 {
                 let chroma = c[ch] - yc;
                 let chroma_b = b[ch] - yb;
-                out[i * 4 + ch] = (y_new + chroma + k * (chroma_b - chroma)).max(0.0);
+                let v = y_new + chroma + k * (chroma_b - chroma);
+                out[i * 4 + ch] = if run.keep_negative { v } else { v.max(0.0) };
             }
         }
     }

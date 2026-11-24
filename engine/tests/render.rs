@@ -2134,3 +2134,56 @@ fn an_areas_layer_local_contrast_is_the_linear_stage_through_its_mask() {
     }
     assert_no_gpu_errors();
 }
+
+#[test]
+fn noise_reduction_on_scene_data_matches_its_cpu_reference_and_keeps_negatives() {
+    use lopsy_core::detail::{self, DetailSettings, NoiseRun};
+    let (w, h) = (STAGE_W as usize, STAGE_H as usize);
+    // Display-encoded scene data: the test picture stretched past 0..1 at
+    // both ends, as a colour outside sRGB and a highlight above white are.
+    let picture: Vec<f32> = develop_test_picture(STAGE_W, STAGE_H)
+        .chunks_exact(4)
+        .flat_map(|p| [1.4 * p[0] - 0.15, 1.4 * p[1] - 0.1, 1.4 * p[2] - 0.2, p[3]])
+        .collect();
+    let values = [0.0, 1.0, 0.0, 70.0, 80.0, 30.0, 1.0];
+    let set = |e: &mut EngineInner| commands::develop::set_image_detail(e, &values).expect("detail");
+    let Some((input, gpu)) = run_on_composite(&picture, &set, lopsy_engine::develop::detail::apply_noise_reduction_scene) else { return };
+    let s = DetailSettings::from_values(&values).unwrap();
+    // Not a RAW document: no base curve to scale for.
+    let run = NoiseRun { threshold_scale: 1.0, keep_negative: true };
+    let reference = |rounding| {
+        let chroma = engine_blur(&input, w, h, detail::NR_CHROMA_SIGMA * s.pixel_scale, rounding);
+        detail::noise_reduce_run_reference(&input, &chroma, w, h, &s, run)
+    };
+    assert!(gpu.iter().any(|&v| v < -0.05), "negatives come out as they are");
+    // As in the display test: the result's ulp where a value straddles a
+    // boundary, and an ulp of the colour blur carried through the edge
+    // guard, whose slope reaches 11, into a value near 0, whose ulps are
+    // the floor's (1/65536). Measured: a mean of 0.04 ulps, a worst of 10.
+    assert_matches_in_halves("noise reduction on scene data", &gpu, &reference, 0.25, 24.0);
+}
+
+#[test]
+fn with_the_working_space_noise_reduction_runs_before_tone_and_keeps_colours_outside_srgb() {
+    let (w, h) = (16u32, 8u32);
+    let Some(mut engine) = engine(w, h) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, w, h, 1.0)).expect("layer");
+    commands::layer::upload_layer_pixels_f32_rect(&mut engine, "art", w, h, 0, 0, w, h, &develop_test_picture(w, h)).expect("pixels");
+    commands::develop::set_develop_working_space(&mut engine, true, 1).expect("working space, Display P3");
+    // A flat Display P3 green, outside sRGB: its red is below 0 in sRGB.
+    let green: Vec<f32> = (0..w * h).flat_map(|_| [0.1f32, 0.8, 0.1, 1.0]).collect();
+    commands::layer::upload_layer_pixels_f32_rect(&mut engine, "art", w, h, 0, 0, w, h, &green).expect("pixels");
+    let plain = now(commands::develop::read_rendered_f32(&mut engine));
+    commands::develop::set_image_detail(&mut engine, &[0.0, 1.0, 0.0, 80.0, 100.0, 50.0, 1.0]).expect("detail");
+    let reduced = now(commands::develop::read_rendered_f32(&mut engine));
+    for (a, b) in plain.iter().zip(&reduced) {
+        assert!((a - b).abs() <= a.abs().max(1.0 / 64.0) / 256.0, "a flat colour outside sRGB comes through: {a} -> {b}");
+    }
+    // It runs before the tone pass: the scene statistics see it.
+    commands::layer::upload_layer_pixels_f32_rect(&mut engine, "art", w, h, 0, 0, w, h, &develop_test_picture(w, h)).expect("pixels");
+    let with_nr = now(commands::develop::read_scene_statistics(&mut engine));
+    commands::develop::clear_image_detail(&mut engine);
+    let without = now(commands::develop::read_scene_statistics(&mut engine));
+    assert_ne!(with_nr, without, "the scene statistics are taken after noise reduction");
+    assert_no_gpu_errors();
+}

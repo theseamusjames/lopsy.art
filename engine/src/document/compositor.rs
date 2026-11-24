@@ -2041,9 +2041,15 @@ struct MiddleStage {
 /// `apply` whatever `draws` says.
 const MIDDLE_STAGES: [MiddleStage; 9] = [
     MiddleStage {
+        // With the working space, noise reduction runs on scene data before
+        // the tone pass (`scene_stages`).
         space: StageSpace::Display,
-        draws: |e, _| e.detail.is_some_and(|d| d.reduces_noise()),
-        apply: |e, _| crate::develop::detail::apply_noise_reduction(e),
+        draws: |e, _| e.working_space.is_none() && e.detail.is_some_and(|d| d.reduces_noise()),
+        apply: |e, _| {
+            if e.working_space.is_none() {
+                crate::develop::detail::apply_noise_reduction(e);
+            }
+        },
     },
     MiddleStage {
         // With the working space, large and small details on rendered
@@ -2188,9 +2194,17 @@ fn enter_working_space(engine: &mut EngineInner) {
 }
 
 /// The stages on scene data, before the tone pass (and before the scene
-/// statistics are read, so they describe what the tone pass sees): haze
-/// (`lopsy_core::linear_detail`). Each is skipped when it has nothing to do.
+/// statistics are read, so they describe what the tone pass sees): noise
+/// reduction, today's algorithm inside the display encoding, which keeps
+/// values above 1 and below 0, then haze (`lopsy_core::linear_detail`).
+/// Each is skipped when it has nothing to do.
 fn scene_stages(engine: &mut EngineInner) {
+    use crate::develop::working_space::Conversion;
+    if engine.detail.is_some_and(|d| d.reduces_noise()) {
+        convert_composite(engine, Conversion::ToDisplay);
+        crate::develop::detail::apply_noise_reduction_scene(engine);
+        convert_composite(engine, Conversion::FromDisplay);
+    }
     crate::develop::detail::apply_haze(engine);
 }
 

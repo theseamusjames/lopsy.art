@@ -37,6 +37,8 @@ uniforms! {
         pub luminance: f32,
         pub color: f32,
         pub range_sigma: f32,
+        pub guard_scale: f32,
+        pub keep_negative: i32,
     }
 }
 

@@ -5,8 +5,12 @@ struct Params {
     // 0..1 each.
     u_luminance: f32,
     u_color: f32,
-    // Range sigma of the bilateral (nr_range_sigma).
+    // Range sigma of the bilateral (nr_range_sigma over the threshold scale).
     u_rangeSigma: f32,
+    // The colour edge guard's threshold is 0.08 over this (NoiseRun).
+    u_guardScale: f32,
+    // 1 leaves negative results as they are (the working space); 0 clamps.
+    u_keepNegative: i32,
 }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var u_tex: texture_2d<f32>;
@@ -41,10 +45,13 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     }
     let yNew = yc + params.u_luminance * (acc / total - yc);
     let yb = luma(blurred);
-    let g = (yb - yc) / 0.08;
+    let g = (yb - yc) / 0.08 * params.u_guardScale;
     let k = params.u_color * exp(-(g * g));
     let chroma = src.rgb - vec3<f32>(yc);
     let chromaB = blurred - vec3<f32>(yb);
     let rgb = vec3<f32>(yNew) + chroma + k * (chromaB - chroma);
+    if (params.u_keepNegative == 1) {
+        return vec4<f32>(rgb, src.a);
+    }
     return vec4<f32>(max(rgb, vec3<f32>(0.0)), src.a);
 }

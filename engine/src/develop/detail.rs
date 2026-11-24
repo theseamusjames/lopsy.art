@@ -12,7 +12,7 @@
 //! does not grow with the radius. Every stage is `None` by default; then
 //! nothing runs and the composite is byte-identical.
 
-use lopsy_core::detail::{self, DetailSettings, LocalContrastSettings};
+use lopsy_core::detail::{self, DetailSettings, LocalContrastSettings, NoiseRun};
 use lopsy_core::linear_detail::{self, Statistic};
 use lopsy_core::working_space::{luma, Gamut};
 
@@ -109,22 +109,40 @@ fn scratch_to_composite(engine: &EngineInner) {
 }
 
 /// Noise reduction on the composite, when the document's detail settings
-/// reduce noise.
+/// reduce noise: on display-encoded values after the tone pass (without the
+/// working space, and an area layer's with it), never clamped with the
+/// working space.
 pub fn apply_noise_reduction(engine: &mut EngineInner) {
+    let run = NoiseRun { keep_negative: engine.working_space.is_some(), ..detail::DISPLAY_RUN };
+    reduce_noise(engine, run);
+}
+
+/// The document's noise reduction with the working space, on scene data
+/// wrapped in the display encoding, before haze and the tone pass: a RAW
+/// photo's thresholds scaled for data before its base curve
+/// (`detail::NR_SCENE_THRESHOLD_SCALE`), nothing clamped.
+pub fn apply_noise_reduction_scene(engine: &mut EngineInner) {
+    let threshold_scale = if engine.raw_develop.is_some() { detail::NR_SCENE_THRESHOLD_SCALE } else { 1.0 };
+    reduce_noise(engine, NoiseRun { threshold_scale, keep_negative: true });
+}
+
+fn reduce_noise(engine: &mut EngineInner, run: NoiseRun) {
     let Some(s) = engine.detail.filter(DetailSettings::reduces_noise) else { return };
-    if let Err(e) = noise_reduction(engine, &s) {
+    if let Err(e) = noise_reduction(engine, &s, run) {
         log_error("Noise reduction", &e);
     }
 }
 
-fn noise_reduction(engine: &mut EngineInner, s: &DetailSettings) -> Result<(), String> {
+fn noise_reduction(engine: &mut EngineInner, s: &DetailSettings, run: NoiseRun) -> Result<(), String> {
     let program = engine.shaders.noise_reduce()?;
     let (w, h) = (engine.doc_width, engine.doc_height);
     let chroma = blur(engine, engine.composite_texture, w, h, detail::NR_CHROMA_SIGMA * s.pixel_scale)?;
     let params = NoiseReduceParams {
         luminance: s.nr_luminance / 100.0,
         color: s.nr_color / 100.0,
-        range_sigma: detail::nr_range_sigma(s),
+        range_sigma: detail::nr_range_sigma(s) / run.threshold_scale,
+        guard_scale: run.threshold_scale,
+        keep_negative: i32::from(run.keep_negative),
     };
     let drawn = engine
         .pass(&program, params)
