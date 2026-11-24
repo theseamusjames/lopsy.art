@@ -9,6 +9,13 @@
 //! curves stages rather than repeating them per area. Areas apply in order,
 //! each to the result of the one before.
 //!
+//! **With the working space** the adjustments below are not used: the same
+//! layout's Exposure, Temperature, Tint, Contrast, Highlights and Shadows act
+//! on scene data in the tone pass (`crate::scene_tone`) and its Saturation
+//! in the look pass (`crate::look`), blended through the mask below. This
+//! pass then draws only the mask overlay. The masks and the layer's mix
+//! stay as described here.
+//!
 //! **Layout.** `setImageAreas` takes `STRIDE` (16) floats per area:
 //!
 //! | # | field | units |

@@ -29,6 +29,8 @@ engine/
       color.rs        # Color space conversions
       working_space.rs # The develop working space: gamuts, matrices from primaries, the input step
       tone.rs         # The develop tone step (scene to rendered) and its curve's shoulder
+      scene_tone.rs   # Tone on scene data: the tone sliders and masks, a monotone map in stops
+      look.rs         # Colour in OkLab, colour grading and curves on rendered linear data
       output.rs       # The develop output step: roll-off, gamut mapping, transfer, dither
       compress.rs     # RLE compression for undo snapshots
       layer.rs        # Layer descriptor types (GlowDesc, ShadowDesc, etc.)
@@ -115,7 +117,8 @@ gpu/shaders/
   develop/                # Photonamous' develop chain (src/develop/mod.rs lists them)
     raw_develop.wgsl      # RAW stage: linear camera RGB → sRGB (or scene Rec. 2020)
     working_space.wgsl    # Input step, and into and out of the display encoding
-    tone.wgsl             # Tone step: scene → rendered, linear Rec. 2020
+    tone.wgsl             # Tone pass: scene → rendered, linear Rec. 2020 (tone sliders, masks, profile)
+    look.wgsl             # Look pass: OkLab colour, colour grading, curves on rendered linear data
     output.wgsl           # Output step: rendered → the screen's or a file's space
     noise_reduce.wgsl, local_contrast.wgsl, detail_sharpen.wgsl, blur_axis.wgsl
     color_mixer.wgsl, areas.wgsl, area_layer.wgsl, finish.wgsl, clip_warning.wgsl
@@ -133,14 +136,20 @@ JS API, and the deviations from `docs/photonamous-spec.md` 6.10. Rules:
 - The working space (`develop::working_space`, `setDevelopWorkingSpace`)
   is a per-document opt-in that Photonamous turns on and Lopsy never does.
   With it the image is unclamped linear Rec. 2020 from the RAW (or input)
-  step to the output step, and the stages that still assume sRGB-encoded
-  values run inside one display encoding (`compositor::MIDDLE_STAGES`; move
-  a stage out by changing its `space`). Without it nothing changes: the
-  render tests that predate it hold that. Readbacks that are statistics
+  step to the output step. Tone (the tone sliders and the areas' built-in
+  ones, through their masks) runs on scene data in the tone pass, and
+  colour, grading and curves on rendered data in the look pass
+  (`lopsy_core::scene_tone`, `lopsy_core::look`, set with `setDevelop…`);
+  Lopsy's image adjustments, the old colour by hue and the old areas pass
+  do not run at all then. The stages that still assume sRGB-encoded
+  values (noise reduction, local contrast and haze, sharpening, finish)
+  run inside a display encoding (`compositor::MIDDLE_STAGES`; move a stage
+  out by changing its `space`). Without it nothing changes: the render
+  tests that predate it hold that. Readbacks that are statistics
   (histogram, pixel readout) read the output rendered for sRGB, never the
   screen's space.
 - Every stage has a CPU reference in `lopsy-core` (`raf::develop`,
-  `detail`, `color_mixer`, `areas`, `finish`, `working_space`, `tone`,
+  `detail`, `color_mixer`, `areas`, `finish`, `working_space`, `tone`, `scene_tone`, `look`,
   `output`). Change a shader and its
   reference together; the tests compare them.
 - Develop shaders compile lazily through `ShaderPrograms::<name>()`, never

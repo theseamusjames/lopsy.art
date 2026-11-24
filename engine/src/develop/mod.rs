@@ -23,15 +23,16 @@
 //! |---|---|---|---|---|---|
 //! | 1 | Layers composited | camera RGB (RAW) or the photo's encoding | `document::compositor` | `blend.wgsl` | — |
 //! | 2 | RAW develop. Working space off: white balance, camera matrix, exposure, saturation, highlight desaturation, base curve, sRGB. On: white balance, camera matrix to Rec. 2020, exposure, nothing else | camera RGB → scene | this module | `develop/raw_develop.wgsl` | `raf::develop::develop_reference`, `raf::develop::scene_reference` |
-//! | 2i | Input step, a photo that is not RAW: decode sRGB or Display P3 to linear Rec. 2020, no curve (rendered equals scene) | encoded → rendered | `compositor::enter_working_space` | `develop/working_space.wgsl` | `working_space::input_reference` |
-//! | 2t | Tone, a RAW photo: the profile's saturation, highlight desaturation (in sRGB primaries), base curve with its shoulder above 1 | scene → rendered | [`tone`] | `develop/tone.wgsl` | `tone::tone_reference` |
-//! | D | Into the display encoding, before the first of 3–9 that draws: sRGB primaries, sRGB curve extended past 0..1 | rendered → display | `compositor::convert_composite` | `develop/working_space.wgsl` | `working_space::to_display_reference` |
+//! | 2i | Input step, a photo that is not RAW: decode sRGB or Display P3 to linear Rec. 2020, no curve (rendered equals scene) | encoded → scene | `compositor::enter_working_space` | `develop/working_space.wgsl` | `working_space::input_reference` |
+//! | 2t | Tone pass. First tone on scene data: the photo's Exposure, Temperature and Tint (not RAW: the RAW step has a RAW photo's), Contrast, Highlights, Shadows, Whites and Blacks, with each area's Exposure, Temperature, Tint, Contrast, Highlights, Shadows and its layer's Whites and Blacks blended in through its mask; a gain, then the tone map on luminance in stops. Then a RAW photo's profile: saturation, highlight desaturation (in sRGB primaries), base curve with its shoulder above 1. A photo that is not RAW runs it only when tone on scene data has something to do | scene → rendered | [`tone`] | `develop/tone.wgsl` | `scene_tone::scene_tone_reference`, then `tone::tone_reference` |
+//! | D | Into the display encoding, before the first `Display` stage of a run of them that draws: sRGB primaries, sRGB curve extended past 0..1 | rendered → display | `compositor::convert_composite` | `develop/working_space.wgsl` | `working_space::to_display_reference` |
 //! | 3 | Noise reduction | display | [`detail::apply_noise_reduction`] | `develop/noise_reduce.wgsl` | `detail::noise_reduce_reference` |
 //! | 4 | Haze, large and small details | display | [`detail::apply_local_contrast`] | `develop/local_contrast.wgsl` | `detail::local_contrast_reference` |
-//! | 5 | Image adjustments: tone, colour, curves, levels, colour grading | display | `imaging::adjustments` | `filters/adjustments.wgsl` | — (Lopsy's) |
-//! | 6 | Colour by hue | display | `compositor::apply_color_mixer` | `develop/color_mixer.wgsl` | `color_mixer::color_mixer_reference` |
-//! | 7 | Areas (linear and radial masks) | display | `compositor::apply_areas` | `develop/areas.wgsl` | `areas::areas_reference` |
-//! | 7b | Each area's layer: stages 3–6, 8 and 9 again with the area's own settings, through its mask | display | `compositor::apply_area_layers` | those stages' shaders, then `develop/area_layer.wgsl` | `areas::area_layer_reference` (the mix) |
+//! | 5 | Image adjustments: tone, colour, curves, levels, colour grading. **Working space off only** | display | `imaging::adjustments` | `filters/adjustments.wgsl` | — (Lopsy's) |
+//! | 6 | Colour by hue, on sRGB-encoded values. **Working space off only** | display | `compositor::apply_color_mixer` | `develop/color_mixer.wgsl` | `color_mixer::color_mixer_reference` |
+//! | 6L | Look pass. **Working space on only**: Saturation and Vibrance (each area's Saturation and its layer's Vibrance blended in through its mask) and Color by hue in OkLab, colour grading, curves (4096-entry float tables) through the sRGB curve on Rec. 2020 primaries; unclamped | rendered | [`look`] | `develop/look.wgsl` | `look::look_reference` |
+//! | 7 | Areas' built-in adjustments (linear and radial masks). **Working space off only**: with it they act in 2t and 6L | display | `compositor::apply_areas` | `develop/areas.wgsl` | `areas::areas_reference` |
+//! | 7b | Each area's layer, through its mask. Working space off: stages 3–6, 8 and 9 again with the area's own settings. On: 6L with the area's Color by hue, grade and curves on rendered data, then its 3, 4, 8 and 9 inside D and D′ | display (off); rendered, with its own D and D′ (on) | `compositor::apply_area_layers` | those stages' shaders, then `develop/area_layer.wgsl` | `areas::area_layer_reference` (the mix) |
 //! | 8 | Sharpening | display | [`detail::apply_sharpening`] | `develop/detail_sharpen.wgsl` | `detail::sharpen_reference` |
 //! | 9 | Finish: shaped vignette, grain | display | `compositor::apply_finish` | `develop/finish.wgsl` | `finish::finish_reference` |
 //! | D′ | Back from the display encoding, after the last of 3–9 that drew | display → rendered | `compositor::convert_composite` | `develop/working_space.wgsl` | `working_space::from_display_reference` |
@@ -44,17 +45,17 @@
 //! (working width / full width), so the reduced working image and the
 //! full-size export blur over the same part of the picture.
 //!
-//! Stages 3–9 still assume sRGB-encoded values, so with the working space
-//! they run between D and D′, once each way however many of them draw, and
-//! not at all when none does. A stage rewritten for linear light moves out
-//! of that block by changing its `space` in `compositor::MIDDLE_STAGES`.
-//! Stages that clamp still clamp there: the image adjustments (5) and
-//! colour by hue (6) to 0..1 whenever they run, which also means nothing is
-//! outside sRGB after them (the output step then compresses no gamut,
-//! `output::source_gamut`); noise reduction (3), local contrast and haze
-//! (4), the areas (7, inside an area), sharpening (8) and finish (9) clamp
-//! negative values to 0. The rest of a value above 1 is kept by all but 5
-//! and 6.
+//! With the working space, the stages that still assume sRGB-encoded
+//! values (3, 4, 8, 9 and an area layer's own 3, 4, 8 and 9) run between D
+//! and D′, once each way for each run of consecutive ones that draw, and not
+//! at all when none does; 6L and 7b work on rendered data
+//! (`compositor::MIDDLE_STAGES`, each stage's `space`). The image
+//! adjustments (5), the old colour by hue (6) and the old areas pass (7) do
+//! not run at all then, so nothing clamps the image to sRGB any more and
+//! the output step maps whatever gamut it reaches (`output::source_gamut`).
+//! Noise reduction (3), local contrast and haze (4), sharpening (8) and
+//! finish (9) still clamp negative encoded values to 0 and keep the rest of
+//! a value above 1.
 //!
 //! **Exports.** The 16-bit exports (`exportPng16`, `exportTiff16`) run stages
 //! 1–9. The 8-bit `compositeForExport` and Flatten run 1–9 except 5:
@@ -75,7 +76,7 @@
 //!
 //! **Lazily compiled.** Every shader under `gpu/shaders/develop/` (raw
 //! develop, colour mixer, areas, blur, noise reduction, sharpening, local
-//! contrast, finish, clipping warning, working space, tone, output) is compiled the first time a stage
+//! contrast, finish, clipping warning, working space, tone, look, output) is compiled the first time a stage
 //! asks for it through `ShaderPrograms::<name>()`, never in `compile_all`,
 //! so a Lopsy session never links them and a driver that rejects one cannot
 //! stop the engine from starting.
@@ -102,9 +103,32 @@
 //! - `sampleColor(engine, x, y, size)` (readback, `drawing.rs`): the pixel readout; with the working space, of the sRGB output.
 //! - `autoTone(histogram, currentJson)`.
 //!
-//! Colour: `setImageColorMixer` / `clearImageColorMixer` (24 floats),
-//! `setImageColorGrading` / `clearImageColorGrading` (Lopsy's 18 floats, on
-//! the document's image adjustments).
+//! Tone, colour and curves with the working space (`develop.rs`; all zeros
+//! is the identity, and each acts only with the working space):
+//! - `setDevelopTone(engine, Float32Array(8))`: exposure EV, temperature,
+//!   tint, contrast, highlights, shadows, whites, blacks (recipe units);
+//!   exposure, temperature and tint 0 for a RAW photo.
+//! - `setDevelopLook(engine, Float32Array(44))`: vibrance, saturation,
+//!   Color by hue's 24, a grade's 18.
+//! - `setDevelopCurves(engine, Float32Array(16384))`: master, red, green,
+//!   blue, 4096 entries each; `clearDevelopCurves(engine)`.
+//! - `clearDevelopAdjustments(engine)`: the three above off.
+//! - `setDevelopAreaLook(engine, index, Float32Array(45))`: an area layer's
+//!   whites, blacks, vibrance, Color by hue's 24, a grade's 18;
+//!   `setDevelopAreaCurves(engine, index, Float32Array(16384))`.
+//!
+//! With the working space these older calls change nothing (they still
+//! work without it): Lopsy's image adjustments (`setImageExposure` …
+//! `setImageVibrance`, `setImagePhotoFilter`, `setImageCurvesLut`,
+//! `setImageColorGrading`), `setImageColorMixer`, and an area layer's
+//! `setImageAreaTone`, `setImageAreaCurvesLut`, `setImageAreaColorGrading`
+//! and `setImageAreaColorMixer`. An area's seven built-in sliders keep
+//! `setImageAreas`' layout and act in the tone and look passes.
+//!
+//! Colour without the working space: `setImageColorMixer` /
+//! `clearImageColorMixer` (24 floats), `setImageColorGrading` /
+//! `clearImageColorGrading` (Lopsy's 18 floats, on the document's image
+//! adjustments).
 //!
 //! Detail: `setImageDetail` / `clearImageDetail` (7 floats: sharpening and
 //! noise reduction), `setImageLocalContrast` / `clearImageLocalContrast`
@@ -137,14 +161,19 @@
 //! This is a proof of concept on Lopsy's compositor, not the scene-referred
 //! pipeline the spec describes:
 //! - Without the working space, everything after the RAW stage is
-//!   display-referred (sRGB-encoded) in sRGB primaries. With it, the image
-//!   is linear Rec. 2020 at both ends (stages 2–2t and 11), but stages 3–9
-//!   still run on a display encoding in between (D, D′), so the tone
-//!   sliders, colour and detail still act on encoded values, and the image
-//!   adjustments and colour by hue clamp to sRGB. Only the profile's
-//!   saturation and curve act on scene data, in the tone step; spec 6.10's
-//!   tone, colour and curves stages are later phases
-//!   (`docs/photonamous-linear-plan.md`).
+//!   display-referred (sRGB-encoded) in sRGB primaries. With it, tone acts
+//!   on scene data (2t) and colour, grading and curves on rendered linear
+//!   data (6L), but noise reduction, local contrast and haze, sharpening and
+//!   finish still run on a display encoding (D, D′), and local contrast
+//!   runs after tone with the noise reduction, before colour
+//!   (`docs/photonamous-linear-plan.md`, Phase 5).
+//! - Highlights and Shadows are a per-pixel curve on luminance, not the
+//!   spec's edge-aware version, so they cannot make halos but do not
+//!   separate local from global contrast.
+//! - An area's built-in sliders and its layer's Whites, Blacks and Vibrance
+//!   are blended into the photo's own values through the mask and the maths
+//!   is evaluated once; its layer's Color by hue, grade and curves run over
+//!   a copy and are laid back through the mask.
 //! - The output step is SDR only (peak 1.0); an HDR target with a headroom
 //!   is a later phase (`lopsy_core::output::OutputSettings` has its
 //!   parameters). Its gamut mapping is a compression toward the neutral
@@ -153,16 +182,16 @@
 //!   illuminant interpolation, so no true Kelvin; the Kelvin readout is a
 //!   fit to the body's presets), and highlights are desaturated, not
 //!   reconstructed.
-//! - Noise reduction and local contrast run on encoded values, and local
-//!   contrast runs before the tone controls instead of after them, because
-//!   tone, colour and curves are one pass (stage 5).
-//! - Areas apply their own adjustments after the global colour stages
-//!   rather than re-running stages 3–12 per area, and the large-details
-//!   control is not offered in that pass. An area's further settings (its
-//!   layer, stage 7b) run over the whole composite once per area that has
-//!   any: a copy of the composite, the stages the area set, and the mix.
-//!   Its noise reduction and local contrast therefore work on the image
-//!   after the document's tone and colour, not before as stages 3 and 4 do.
+//! - Without the working space, noise reduction and local contrast run on
+//!   encoded values before the tone controls, because tone, colour and
+//!   curves are one pass (stage 5), and areas apply their own adjustments
+//!   after the global colour stages (7) rather than re-running stages 3–12
+//!   per area; the large-details control is not offered per area.
+//! - An area's further settings (its layer, stage 7b) run over the whole
+//!   composite once per area that has any: a copy of the composite, the
+//!   stages the area set, and the mix. Its noise reduction and local
+//!   contrast therefore work on the image after the document's tone and
+//!   colour, not before as stages 3 and 4 do.
 //! - There is no stage caching: a frame runs every active stage.
 //! - The RAW stage develops the whole composite, so anything else in the
 //!   document (other layers, the background colour) is developed too. On a
