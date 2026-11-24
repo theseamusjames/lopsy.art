@@ -162,8 +162,8 @@ fn luminance_weights(primaries: &[(f64, f64); 3]) -> [f32; 3] {
 ///
 /// The gains use Ultra HDR's offsets (1/64) and gamma 1.0. `gain_map_min`
 /// and `gain_map_max` are the smallest and largest gains in the map,
-/// widened to include 0 (Ultra HDR requires min ≤ 0 ≤ max) and to span at
-/// least 1/64 stop; `hdr_capacity_min` is 0 and `hdr_capacity_max` is
+/// widened to include 0 (Ultra HDR requires min ≤ 0 ≤ max), to span at
+/// least 1/64 stop and to put max at least 1/64 stop above 0; `hdr_capacity_min` is 0 and `hdr_capacity_max` is
 /// `gain_map_max`, as Ultra HDR advises, so a display with as much
 /// headroom as the brightest gain shows the whole HDR picture.
 pub fn compute_gain_map(
@@ -222,7 +222,10 @@ pub fn compute_gain_map(
 
     let (lo, hi) = gains.iter().fold((0f32, 0f32), |(lo, hi), &g| (lo.min(g), hi.max(g)));
     let min = lo as f64;
-    let max = (hi as f64).max(min + MIN_SPAN);
+    // The floor at MIN_SPAN keeps max above 0 when no gain is positive (an
+    // HDR rendition nowhere brighter than the SDR one): HDR capacity max is
+    // max and capacity min is 0, and Ultra HDR requires max above min.
+    let max = (hi as f64).max(MIN_SPAN).max(min + MIN_SPAN);
     let metadata = GainMapMetadata {
         gain_map_min: min,
         gain_map_max: max,
@@ -404,6 +407,51 @@ mod tests {
         assert!(m.gain_map_min <= 0.0 && m.gain_map_max > m.gain_map_min);
         assert!(m.hdr_capacity_max > m.hdr_capacity_min);
         assert!(m.gain_map_min.abs() < 1e-5);
+    }
+
+    /// Every channel of `scene().sdr` times `boost` in linear light, as
+    /// the encoder's Rec. 2020 input.
+    fn scaled(s: &Scene, boost: f64) -> Vec<f32> {
+        let to_2020 = rgb_to_rgb_matrix(&rgb_space(ColorSpace::Srgb), &rgb_space(ColorSpace::Rec2020));
+        let t = rgb_space(ColorSpace::Srgb).transfer;
+        s.sdr
+            .chunks_exact(4)
+            .flat_map(|px| {
+                let lin = [0, 1, 2].map(|c| t.to_linear(px[c] as f64 / 255.0) * boost);
+                let r = mat_vec(&to_2020, &lin);
+                [r[0] as f32, r[1] as f32, r[2] as f32, 1.0]
+            })
+            .collect()
+    }
+
+    /// An HDR rendition dimmer than the SDR one everywhere, and one equal
+    /// to it everywhere: the metadata is valid (capacity max above min),
+    /// and a reader applying the map gets the HDR luminance back.
+    #[test]
+    fn a_rendition_nowhere_brighter_than_sdr_round_trips() {
+        let s = scene();
+        let wy = luminance_weights(&rgb_space(ColorSpace::Srgb).primaries).map(|v| v as f64);
+        let y = |c: &[f64; 3]| wy[0] * c[0] + wy[1] * c[1] + wy[2] * c[2];
+        let t = rgb_space(ColorSpace::Srgb).transfer;
+        for boost in [0.25, 1.0] {
+            let hdr = scaled(&s, boost);
+            let map = compute_gain_map(&hdr, &s.sdr, s.w as u32, s.h as u32, ColorSpace::Srgb, GainMapScale::Full).unwrap();
+            let m = map.metadata;
+            assert!(m.gain_map_min <= 0.0 && m.gain_map_max > 0.0, "{boost}: {m:?}");
+            assert!(m.gain_map_max - m.gain_map_min >= MIN_SPAN, "{boost}: {m:?}");
+            assert_eq!(m.hdr_capacity_min, 0.0, "{boost}");
+            assert!(m.hdr_capacity_max > m.hdr_capacity_min, "{boost}: {m:?}");
+            if boost < 1.0 {
+                assert!(m.gain_map_min < -1.0, "{boost}: {m:?}");
+            }
+            let step = ((m.gain_map_max - m.gain_map_min) / 510.0).exp2() - 1.0;
+            for (i, got) in apply(&s.sdr, ColorSpace::Srgb, s.w, &map).iter().enumerate() {
+                let sdr = [0, 1, 2].map(|c| t.to_linear(s.sdr[i * 4 + c] as f64 / 255.0));
+                let want = y(&sdr) * boost;
+                let quant = (want + DEFAULT_OFFSET) * step + 2e-6;
+                assert!((y(got) - want).abs() <= quant, "{boost}: pixel {i}: luminance {} vs {want}", y(got));
+            }
+        }
     }
 
     #[test]

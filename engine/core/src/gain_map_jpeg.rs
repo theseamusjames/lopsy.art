@@ -609,6 +609,19 @@ mod tests {
         assemble_gain_map_jpeg(BASE_JPEG, GAIN_MAP_JPEG, &metadata(), None).unwrap()
     }
 
+    /// The metadata a dim, low-key photo's gain map gets (its HDR rendition
+    /// nowhere brighter than the SDR one) is metadata a file may carry.
+    #[test]
+    fn a_map_with_no_positive_gain_is_accepted() {
+        use crate::color::ColorSpace;
+        use crate::gain_map::{compute_gain_map, GainMapScale};
+        let hdr = [0.05f32, 0.05, 0.05, 1.0].repeat(4);
+        let sdr = [128u8, 128, 128, 255].repeat(4);
+        let map = compute_gain_map(&hdr, &sdr, 2, 2, ColorSpace::Srgb, GainMapScale::Full).unwrap();
+        assert!(map.metadata.gain_map_min < -1.0, "{:?}", map.metadata);
+        assert_eq!(check_metadata(&map.metadata), Ok(()));
+    }
+
     #[test]
     fn the_test_jpegs_decode() {
         for (bytes, w, h) in [(BASE_JPEG, 16, 8), (GAIN_MAP_JPEG, 8, 8)] {
