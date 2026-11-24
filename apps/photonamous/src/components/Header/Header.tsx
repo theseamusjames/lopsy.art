@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Cloud, CloudOff, Download, Keyboard, LoaderCircle, LogOut, Settings, TriangleAlert, CloudCheck } from 'lucide-react';
+import { Download, Keyboard, LoaderCircle, LogOut, Settings, TriangleAlert } from 'lucide-react';
 import { getBackend } from '../../app/backend-registry';
 import { showToast } from '../../app/toasts';
 import { LOCK_LOST_MESSAGE } from '@lopsy/photos-core/library/lock';
 import { useSyncStatus } from '../../app/hooks';
+import { Cloud02 } from '../../icons/Cloud02';
+import { Cloud02Check } from '../../icons/Cloud02Check';
+import { Cloud02Off } from '../../icons/Cloud02Off';
 import { useUi } from '../../app/store';
 import { clearPreviewCache } from '../../app/preview-cache';
 import { Button } from '../Button/Button';
@@ -23,6 +26,7 @@ export function Header() {
   const openDialog = useUi((s) => s.openDialog);
   const selectionSize = useUi((s) => s.selection.ids.size);
   const focus = useUi((s) => s.selection.focus);
+  const isEditing = useUi((s) => s.editing !== null);
   const status = useSyncStatus();
   const [leaving, setLeaving] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
@@ -42,20 +46,21 @@ export function Header() {
   }, [dialog]);
 
   if (!connection) return null;
-  const exportCount = selectionSize > 0 ? selectionSize : focus !== null ? 1 : 0;
+  // In the Edit view Export takes the photo being edited, whatever is selected under it.
+  const exportCount = isEditing ? 1 : selectionSize > 0 ? selectionSize : focus !== null ? 1 : 0;
   const where = describeWhere(connection.session.adapter.kind, connection.accountLabel);
 
   const icon =
     status.state === 'syncing' ? (
       <LoaderCircle size={16} className={styles.spin} />
     ) : status.state === 'offline' ? (
-      <CloudOff size={16} />
+      <Cloud02Off size={16} />
     ) : status.state === 'error' || status.state === 'paused' ? (
       <TriangleAlert size={16} />
     ) : status.pendingOps > 0 ? (
-      <Cloud size={16} />
+      <Cloud02 size={16} />
     ) : (
-      <CloudCheck size={16} />
+      <Cloud02Check size={16} />
     );
 
   const signOut = async () => {

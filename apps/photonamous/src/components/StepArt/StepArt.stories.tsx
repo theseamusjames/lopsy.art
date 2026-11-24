@@ -22,5 +22,5 @@ export const Connect: Story = {};
 /** Photos going up into the visitor's own cloud. */
 export const Upload: Story = { args: { step: 'upload' } };
 
-/** A photo under the divider, with sliders and the way out. */
+/** A photo under the before-and-after divider. */
 export const Edit: Story = { args: { step: 'edit' } };

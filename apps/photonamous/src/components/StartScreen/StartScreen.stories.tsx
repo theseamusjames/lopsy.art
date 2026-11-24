@@ -16,7 +16,7 @@ const meta: Meta<typeof StartScreen> = {
 export default meta;
 type Story = StoryObj<typeof StartScreen>;
 
-/** A first visit to photonamous.com: Try it now opens the three steps and Sign in with Google (the GetStarted stories). */
+/** A first visit to photonamous.com: Try it now opens the three steps and Continue with Google (the GetStarted stories). */
 export const FirstVisit: Story = {
   args: {
     choices: ['google-drive'],

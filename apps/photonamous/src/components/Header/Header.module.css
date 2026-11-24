@@ -4,7 +4,10 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  height: 48px;
+  /* At the top of a narrow window's scrolling column too: the Edit view is laid under it. */
+  position: sticky;
+  top: 0;
+  height: var(--ph-header-height);
   padding: 0 var(--space-3) 0 var(--space-4);
   background: var(--color-bg-secondary);
   border-bottom: 1px solid var(--color-border);

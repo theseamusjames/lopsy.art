@@ -40,7 +40,7 @@ interface GetStartedProps {
 /**
  * What a new visitor sees after "Try it now": the three steps from here
  * to an edited photo, each with a drawing, and under them the way in,
- * Sign in with Google.
+ * Continue with Google.
  */
 export function GetStarted({ connecting, error, onSignIn, onClose }: GetStartedProps) {
   return (
@@ -65,7 +65,7 @@ export function GetStarted({ connecting, error, onSignIn, onClose }: GetStartedP
       <div className={styles.signIn}>
         <button type="button" className={styles.google} disabled={connecting} onClick={onSignIn} data-autofocus>
           {connecting ? <LoaderCircle size={18} className={styles.spin} /> : <GoogleG />}
-          Sign in with Google
+          Continue with Google
         </button>
         {error && (
           <p className={styles.error} role="alert">

@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
-import { Cloud, Folder, LoaderCircle, Monitor } from 'lucide-react';
+import { Folder, LoaderCircle, Monitor } from 'lucide-react';
 import type { ReconnectOffer, StorageChoice } from '../../app/backend';
+import { Cloud02 } from '../../icons/Cloud02';
 import { GitHubMark } from '../../icons/GitHubMark';
 import { Button } from '../Button/Button';
 import { DemoReel } from '../DemoReel/DemoReel';
@@ -58,7 +59,7 @@ function reopenWords(offer: ReconnectOffer): string {
 }
 
 function reopenIcon(kind: StorageChoice): ReactNode {
-  if (kind === 'google-drive') return <Cloud size={16} />;
+  if (kind === 'google-drive') return <Cloud02 size={16} />;
   return kind === 'browser' ? <Monitor size={16} /> : <Folder size={16} />;
 }
 
@@ -66,7 +67,7 @@ function reopenIcon(kind: StorageChoice): ReactNode {
  * The page a visitor lands on. The film fills two thirds of the window;
  * the column on the right keeps the wordmark, one line of what it is and
  * the way in. For a new visitor that is "Try it now", which opens the
- * three steps and Sign in with Google (`GetStarted`); someone who has
+ * three steps and Continue with Google (`GetStarted`); someone who has
  * been here before gets their library back in one press. On a narrow
  * window the two stack.
  */
@@ -118,7 +119,7 @@ export function StartScreen({ choices, offer, connecting, error, onChoose, onRec
             )}
 
             {hasDrive && returningToDrive && (
-              <Button variant="link" disabled={isBusy} onClick={() => onChoose('google-drive')}>
+              <Button variant="link" className={styles.another} disabled={isBusy} onClick={() => onChoose('google-drive')}>
                 Use a different Google account
               </Button>
             )}

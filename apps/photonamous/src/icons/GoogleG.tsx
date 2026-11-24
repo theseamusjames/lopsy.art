@@ -3,7 +3,8 @@ interface GoogleGProps {
 }
 
 /**
- * Google's "G", for the Sign in with Google button only. The paths and the
+ * Google's "G", for the Continue with Google button only (one of the three
+ * wordings its sign-in branding guidelines give the mark). The paths and the
  * four colours are Google's own, from its sign-in branding guidelines, which
  * ask for the mark unaltered: so they are not tokens, and this is not a
  * Lucide icon.

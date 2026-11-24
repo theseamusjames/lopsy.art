@@ -46,37 +46,26 @@ function Upload() {
         className={styles.line}
         vectorEffect="non-scaling-stroke"
         transform="translate(150 39) scale(3.2)"
-        d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"
+        d="M6 19c-2.2091 0-4-1.7909-4-4 0-1.8642 1.2753-3.4306 3.0011-3.8743A7 7 0 0 1 5 11c0-3.866 3.134-7 7-7 3.6099 0 6.5815 2.7325 6.9594 6.2419C20.7284 10.8481 22 12.5255 22 14.5c0 2.4853-2.0147 4.5-4.5 4.5z"
       />
       <path className={styles.thin} d="M176 75a2 2 0 0 1 2-2h6l3 3h11a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-20a2 2 0 0 1-2-2z" />
     </>
   );
 }
 
-/** A photo under the before-and-after divider, the sliders beside it, and the way out. */
+/** A photo under the before-and-after divider, in the middle of the drawing: the edit, and nothing else. */
 function Edit({ clip }: { clip: string }) {
   return (
     <>
       <clipPath id={clip}>
-        <rect x={24} y={28} width={112} height={84} rx={6} />
+        <rect x={64} y={28} width={112} height={84} rx={6} />
       </clipPath>
-      <rect className={styles.tint} x={80} y={28} width={56} height={84} clipPath={`url(#${clip})`} />
-      <rect className={styles.line} x={24} y={28} width={112} height={84} rx={6} />
-      <circle className={styles.line} cx={50} cy={52} r={7} />
-      <path className={styles.line} d="M32 104l26-28 18 18 14-14 34 24" />
-      <path className={styles.accent} d="M80 20v100" />
-      <circle className={styles.knob} cx={80} cy={70} r={5} />
-      {[
-        [44, 200],
-        [64, 172],
-        [84, 190],
-      ].map(([y, at]) => (
-        <g key={y}>
-          <path className={styles.faint} d={`M156 ${y}h60`} />
-          <circle className={styles.knob} cx={at} cy={y} r={4.5} />
-        </g>
-      ))}
-      <path className={styles.line} d="M186 98v14M180 106l6 6 6-6M174 116v4h24v-4" />
+      <rect className={styles.tint} x={120} y={28} width={56} height={84} clipPath={`url(#${clip})`} />
+      <rect className={styles.line} x={64} y={28} width={112} height={84} rx={6} />
+      <circle className={styles.line} cx={90} cy={52} r={7} />
+      <path className={styles.line} d="M72 104l26-28 18 18 14-14 34 24" />
+      <path className={styles.accent} d="M120 20v100" />
+      <circle className={styles.knob} cx={120} cy={70} r={5} />
     </>
   );
 }

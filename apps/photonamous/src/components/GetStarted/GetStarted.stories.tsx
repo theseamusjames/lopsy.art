@@ -10,7 +10,7 @@ const meta: Meta<typeof GetStarted> = {
 export default meta;
 type Story = StoryObj<typeof GetStarted>;
 
-/** What "Try it now" opens: three steps, then Sign in with Google. */
+/** What "Try it now" opens: three steps, then Continue with Google. */
 export const Steps: Story = {};
 
 /** Google's sign-in window is open. */

@@ -1,11 +1,15 @@
 import { useCallback, useId, useRef, useState, type ChangeEvent } from 'react';
-import { ChevronDown, Cloud, FolderOpen, Images, Upload } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ChevronDown, FolderOpen, Images, Upload } from 'lucide-react';
 import { getBackend } from '../../app/backend-registry';
-import { loadDriveAddMode } from '../../app/device-settings';
+import { loadDriveAddMode, loadDrivePicker, saveDrivePicker } from '../../app/device-settings';
 import { showErrorToast } from '../../app/toasts';
 import { useUi } from '../../app/store';
+import { Cloud02 } from '../../icons/Cloud02';
 import { canPickFolder } from '../../import/collect-files';
+import { blocksCrossSiteCookies, chooseDrivePicker, type DrivePicker } from '../../import/drive-picker';
 import { Button } from '../Button/Button';
+import { DrivePickerHelp } from '../DrivePickerHelp/DrivePickerHelp';
 import { useMenuKeys } from '@lopsy/ui/a11y/use-menu-keys';
 import { Menu, MenuItem } from '@lopsy/ui/Menu';
 import styles from './ImportButton.module.css';
@@ -23,6 +27,23 @@ export function ImportButton({ variant = 'primary' }: { variant?: 'primary' | 's
   const close = useCallback(() => setOpen(false), []);
   const menuKeys = useMenuKeys({ isOpen: open, onClose: close, onOpen: () => setOpen(true), triggerRef });
   const id = useId();
+
+  /** Google's Picker, while it is open in the page: aborting closes it. */
+  const [pagePicker, setPagePicker] = useState<AbortController | null>(null);
+
+  /** Call straight from a click: the Picker as a window is a pop-up. */
+  const addFromDrive = (picker: DrivePicker) => {
+    if (!session) return;
+    const inPage = picker === 'page' ? new AbortController() : null;
+    setPagePicker(inPage);
+    getBackend()
+      .addFromDrive(session, { move: loadDriveAddMode() === 'move', picker, ...(inPage ? { signal: inPage.signal } : {}) })
+      .then((job) => {
+        if (job) useUi.getState().setImportJob(job);
+      })
+      .catch((error: unknown) => showErrorToast(`Adding from Google Drive failed: ${error instanceof Error ? error.message : String(error)}`))
+      .finally(() => setPagePicker((open) => (open === inPage ? null : open)));
+  };
 
   const onPicked = (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -77,16 +98,17 @@ export function ImportButton({ variant = 'primary' }: { variant?: 'primary' | 's
           )}
           {session && getBackend().canAddFromDrive(session) && (
             <MenuItem
-              icon={<Cloud size={16} />}
+              icon={<Cloud02 size={16} />}
               detail="Photos already in your Drive"
               onSelect={() => {
                 close();
-                getBackend()
-                  .addFromDrive(session, { move: loadDriveAddMode() === 'move' })
-                  .then((job) => {
-                    if (job) useUi.getState().setImportJob(job);
-                  })
-                  .catch((error: unknown) => showErrorToast(`Adding from Google Drive failed: ${error instanceof Error ? error.message : String(error)}`));
+                addFromDrive(
+                  chooseDrivePicker({
+                    pageAvailable: getBackend().canPickDriveInPage(session),
+                    remembered: loadDrivePicker(),
+                    blocksCrossSiteCookies: blocksCrossSiteCookies(),
+                  }),
+                );
               }}
             >
               Add from Google Drive…
@@ -94,6 +116,18 @@ export function ImportButton({ variant = 'primary' }: { variant?: 'primary' | 's
           )}
         </Menu>
       )}
+      {pagePicker &&
+        createPortal(
+          <DrivePickerHelp
+            onOpenWindow={() => {
+              // The Picker in the page is closed, the window is what this device uses from now on, and it opens.
+              pagePicker.abort();
+              saveDrivePicker('window');
+              addFromDrive('window');
+            }}
+          />,
+          document.body,
+        )}
       <input ref={filesRef} className={styles.hidden} type="file" multiple accept={ACCEPT} onChange={onPicked} />
       <input
         ref={folderRef}
