@@ -34,9 +34,13 @@
 //!   `BaselineExposure`.
 //! - **Temperatures of the calibration illuminants.** The EXIF LightSource
 //!   codes are mapped to kelvin by [`illuminant_kelvin`]: the CIE standard
-//!   illuminants by their correlated colour temperature, the named lights
-//!   by the middle of the range EXIF gives them. These values were written
-//!   from memory of the EXIF standard, not from its text. A code with no
+//!   illuminants (A, B, C, D50, D55, D65, D75) by the correlated colour
+//!   temperature `cct` computes for their chromaticities, so the weight is
+//!   exactly 0 or 1 at their white points (A reads 2848 K, not its nominal
+//!   2856 K, which used an older radiation constant; D65 reads 6501 K);
+//!   the named lights by the middle of the range EXIF gives them. The
+//!   codes, ranges and chromaticities were written from memory of the
+//!   EXIF standard and CIE 15, not from their text. A code with no
 //!   temperature (0 unknown, 255 other with `IlluminantData`) makes the
 //!   profile use one calibration, the second when it has one.
 //! - **D50** is the ICC connection-space white (`colorimetry::PCS_D50`),
@@ -66,7 +70,7 @@ pub struct Calibration {
 }
 
 /// A DNG's colour calibration as data: what the specification's colour
-/// method needs, read from the file (`DngCalibration::from_tags`).
+/// method needs, read from the file (`dng::linear::calibration_from_tags`).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DngCalibration {
@@ -91,9 +95,27 @@ pub struct DngCalibration {
 /// an as-shot white: D65.
 pub const DEFAULT_WHITE_XY: (f64, f64) = (0.31271, 0.32902);
 
+/// The CIE 1931 chromaticity of a CIE standard illuminant by its EXIF
+/// LightSource code.
+pub fn standard_illuminant_xy(code: u16) -> Option<(f64, f64)> {
+    Some(match code {
+        17 => (0.44757, 0.40745), // A
+        18 => (0.34842, 0.35161), // B
+        19 => (0.31006, 0.31616), // C
+        20 => (0.33242, 0.34743), // D55
+        21 => (0.31271, 0.32902), // D65
+        22 => (0.29902, 0.31485), // D75
+        23 => (0.34567, 0.35850), // D50
+        _ => return None,
+    })
+}
+
 /// The correlated colour temperature of an EXIF LightSource code, in
 /// kelvin, or `None` for a code without one.
 pub fn illuminant_kelvin(code: u16) -> Option<f64> {
+    if let Some((x, y)) = standard_illuminant_xy(code) {
+        return Some(cct::temperature_from_xy(x, y).0);
+    }
     Some(match code {
         1 | 4 | 9 => 5500.0, // Daylight, Flash, Fine weather
         2 => 4150.0,          // Fluorescent, taken as cool white
@@ -105,13 +127,6 @@ pub fn illuminant_kelvin(code: u16) -> Option<f64> {
         14 => 4150.0,         // Cool white fluorescent, 3800–4500 K
         15 => 3525.0,         // White fluorescent, 3250–3800 K
         16 => 2925.0,         // Warm white fluorescent, 2600–3250 K
-        17 => 2856.0,         // Standard light A
-        18 => 4874.0,         // Standard light B
-        19 => 6774.0,         // Standard light C
-        20 => 5503.0,         // D55
-        21 => 6504.0,         // D65
-        22 => 7504.0,         // D75
-        23 => 5003.0,         // D50
         24 => 3200.0,         // ISO studio tungsten
         _ => return None,
     })
@@ -440,8 +455,10 @@ mod tests {
     #[test]
     fn weight_is_one_and_zero_at_the_illuminants_and_monotonic_between() {
         let cal = dual();
-        assert_eq!(cal.weight_for_kelvin(2856.0), 1.0);
-        assert!(cal.weight_for_kelvin(6504.0).abs() < 1e-12);
+        let a = standard_illuminant_xy(17).unwrap();
+        let d65 = standard_illuminant_xy(21).unwrap();
+        assert_eq!(cal.weight_for_xy(a), 1.0);
+        assert!(cal.weight_for_xy(d65).abs() < 1e-12);
         assert_eq!(cal.weight_for_kelvin(2000.0), 1.0, "colder than A uses A's set");
         assert_eq!(cal.weight_for_kelvin(12000.0), 0.0, "warmer than D65 uses D65's set");
         let mut last = 1.0;
@@ -451,7 +468,8 @@ mod tests {
             last = w;
         }
         // Linear in inverse temperature: halfway in mireds is weight 0.5.
-        let mid = 2.0 / (1.0 / 2856.0 + 1.0 / 6504.0);
+        let (ta, td) = (illuminant_kelvin(17).unwrap(), illuminant_kelvin(21).unwrap());
+        let mid = 2.0 / (1.0 / ta + 1.0 / td);
         assert!((cal.weight_for_kelvin(mid) - 0.5).abs() < 1e-9);
     }
 
