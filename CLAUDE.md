@@ -36,6 +36,8 @@ What you may be looking for:
   `docs/photonamous-spec.md`. Its proof of concept: what it does,
   `apps/photonamous/FEATURES.md`; how to run, test and deploy it,
   `docs/photonamous-setup.md`.
+- **The plan to make Photonamous edit in linear light, with correct
+  colour, WebGPU and HDR**: `docs/photonamous-linear-plan.md`.
 - **Where pixel buffers still live in JavaScript**:
   `docs/pixel-data-debt.md`.
 - **Contributor workflow for AI-assisted PRs**: `AGENTS.md`.
