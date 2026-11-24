@@ -876,6 +876,44 @@ was.
     `rgba16float` with extended tone mapping. Whether highlights look
     brighter than white is for a person to judge.
 
+50. **A second review covered the night's app code**, and its findings
+    were fixed. The worst: with the clipping warning on, moving the
+    pointer over the photo while an export waited for the full size
+    could paint the warning colours into the exported file. Screen-only
+    views are now held off by a counted scope, and on the linear path
+    the histogram and readout never touch the screen.
+51. **The engine's lost-device event now names its engine**
+    (`detail.engineId`), and a freed engine stays silent, so releasing
+    the idle export engine cannot reset the Edit view.
+52. **The chosen engine build is fetched and compiled at start-up in
+    production**, not at the first photo, so the app works offline
+    straight after an update. The cost is the engine's download and
+    compile on every start, photo or not.
+53. **The histogram and pixel readout include the sharpening mask view
+    while it is held** (it takes the sharpening stage's place in the
+    chain); the app turns it off around those reads. The engine's doc
+    comments now say so.
+54. **Three of Lopsy's composition specs fail, and failed before this
+    work** (`composition-export-roundtrip`, `composition-painting`,
+    `composition-zen-enclaves`): they fail identically on the commit
+    the run started from. Not touched.
+
+### Verified at the end
+
+- Engine: `cargo test`, the native GPU suite (62 render, 9 HDR, 2
+  golden tests on the eight sample RAFs), both wasm targets, and all
+  118 shaders in Chromium's WebGPU validator.
+- Photonamous browser suite: 165 passed on WebGPU and 163 on WebGL;
+  the only failures are the three known before the run (`a11y-edit`
+  "holding \ for Before", `export-share.drive`, and on WebGL
+  `edit-in-app` "Loading…").
+- The production-site tests (service worker, offline, CSP): 15 passed.
+  The Lopsy round trip: passed on both renderers. Storybook builds.
+- Lopsy: type-check, lint, 3293 unit tests, and its browser specs that
+  touch the engine.
+- By eye, on this Mac's GPU and HDR display: a RAF in the Edit view on
+  WebGPU and on WebGL; the HDR canvas configuration.
+
 ### Not done
 
 - **RAF camera colour** (Phase 6, items 1 to 3 for Fujifilm): waits on
