@@ -1,6 +1,7 @@
 import { chromium, defineConfig, devices } from '@playwright/test';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { gpuArgs, rendererEnv } from './e2e/gpu-args';
 
 /**
  * The Chromium to run. Playwright's own build when it is installed; else
@@ -27,8 +28,9 @@ export function chromiumExecutable(): string | undefined {
  * server left running in another worktree would otherwise be tested in
  * this one's place.
  *
- * Headless Chromium has no GPU: WebGL runs on SwiftShader through ANGLE,
- * with the flags lopsy-web's suite uses (apps/lopsy-web/e2e/gpu-args.ts).
+ * The suite runs on WebGPU, the app's default, or on WebGL with
+ * PHOTONAMOUS_RENDERER=webgl: both dev servers are started with it, and the
+ * browser with the flags for it (e2e/gpu-args.ts).
  *
  * The RAF test reads real camera files from LOPSY_RAF_SAMPLES and is
  * skipped when it is unset.
@@ -49,14 +51,6 @@ const DRIVE_SPECS = /\.drive\.spec\.ts$/;
  * testIgnore replaces the top-level one, so each project lists these again.
  */
 const OWN_CONFIG_SPECS = [/site\.spec\.ts$/, /roundtrip\.spec\.ts$/, /offline\.spec\.ts$/];
-
-const gpuArgs = [
-  '--use-gl=angle',
-  '--use-angle=swiftshader',
-  '--enable-webgl',
-  '--enable-webgl2-compute-context',
-  '--ignore-gpu-blocklist',
-];
 
 /**
  * The Edit panel's sections start folded, and which ones are open is kept
@@ -112,6 +106,7 @@ export default defineConfig({
       port,
       reuseExistingServer: false,
       timeout: 120_000,
+      env: rendererEnv,
     },
     {
       command: `npx vite --port ${drivePort} --strictPort`,
@@ -119,7 +114,7 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 120_000,
       // A Picker key and app ID, so the build offers Google's Picker in the page as well as in a window.
-      env: { VITE_GOOGLE_CLIENT_ID: 'e2e-client.apps.googleusercontent.com', VITE_GOOGLE_API_KEY: 'e2e-picker-key', VITE_GOOGLE_APP_ID: '123456789012' },
+      env: { ...rendererEnv, VITE_GOOGLE_CLIENT_ID: 'e2e-client.apps.googleusercontent.com', VITE_GOOGLE_API_KEY: 'e2e-picker-key', VITE_GOOGLE_APP_ID: '123456789012' },
     },
   ],
 });

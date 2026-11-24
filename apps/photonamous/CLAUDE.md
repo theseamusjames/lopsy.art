@@ -23,9 +23,25 @@ you change what users see).
 | `packages/ui/` | `@lopsy/ui`, shared with Lopsy: tokens, reset and fonts, the Slider, the Menu, and the keyboard and focus helpers (`a11y/`) |
 
 The engine is the wasm package `npm run wasm:build` (or `wasm:build:dev`)
-writes into `apps/lopsy-web/src/engine-wasm/pkg/`; this app imports it as
-`@lopsy/engine-pkg/…`. It moves to a shared package in Phase 0 of the
-spec; until then, read it where it is.
+writes into `apps/lopsy-web/src/engine-wasm/pkg/` (WebGL) and
+`pkg-wgpu/` (WebGPU); this app imports it as `@lopsy/engine-pkg/…`. It
+moves to a shared package in Phase 0 of the spec; until then, read it
+where it is.
+
+**Two builds, one page.** As in Lopsy, `@lopsy/engine-pkg/lopsy_wasm`
+resolves to a generated module that forwards each call to the build this
+page load chose: Lopsy's `scripts/vite-plugin-renderer.ts`, given this
+app's choice module, `src/engine/renderer-choice.ts` (`?renderer=`, else
+`PHOTONAMOUS_RENDERER`, else WebGPU where the browser offers an adapter;
+a wgpu engine that fails to start changes the page to WebGL at once). On
+the wgpu build `createEngine` returns a Promise and readbacks answer
+later, and the glue's declarations are the WebGL build's: import
+`createEngine`, `rendererName` and the readbacks from `src/engine/wasm.ts`,
+which types them for both builds and orders reads as Lopsy's
+`asyncReadback` does (`apps/lopsy-web/src/engine-wasm/readback-order.ts`).
+ESLint refuses them from the glue. A new readback the app uses goes in
+`wasm.ts` and in that ESLint list. The RAF workers load the glue by its
+`.js` name, past the selector, for the build the page runs.
 
 The UI this app shares with Lopsy is `packages/ui` (`@lopsy/ui`, see its
 `README.md`): the design tokens, reset and fonts (`src/styles/index.css`
@@ -105,7 +121,8 @@ npm run typecheck:photos
 npm run lint:photos
 npm run storybook:photos        # Storybook on port 6007
 npm run build-storybook:photos  # static build (storybook-static/; delete it after)
-npm run test:e2e:photos    # Playwright
+npm run test:e2e:photos    # Playwright, on WebGPU (the app's default)
+PHOTONAMOUS_RENDERER=webgl npm run test:e2e:photos   # Playwright on WebGL
 
 # The production build, as photonamous.com serves it (spec 6.3)
 npm run build:photos       # apps/photonamous/dist; the engine must be built first

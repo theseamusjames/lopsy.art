@@ -21,7 +21,10 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@lopsy/engine-pkg/*": ["../lopsy-web/src/engine-wasm/pkg/*"]
+      "@lopsy/engine-pkg/*": ["../lopsy-web/src/engine-wasm/pkg/*"],
+      "@lopsy/engine-pkg-wgpu/*": ["../lopsy-web/src/engine-wasm/pkg-wgpu/*", "../lopsy-web/src/engine-wasm/pkg/*"],
+      "@lopsy/engine-wasm/renderer-choice": ["../lopsy-web/src/engine-wasm/renderer-choice.ts"],
+      "@lopsy/engine-wasm/readback-order": ["../lopsy-web/src/engine-wasm/readback-order.ts"]
     }
   },
   "include": ["src"],

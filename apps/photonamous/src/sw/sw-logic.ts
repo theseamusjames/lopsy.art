@@ -23,6 +23,13 @@ export interface PrecacheManifest {
   readonly hashes: Readonly<Record<string, string>>;
   /** Pages that are not the app (`/privacy`, `/terms`): never precached, never answered by the worker. */
   readonly documents?: readonly string[];
+  /**
+   * Files of `files` left out of the install: the engine's two wasm builds,
+   * of which a page uses one. A page names the one it runs
+   * (KEEP_FOR_OFFLINE_MESSAGE) and the worker caches that one then; until
+   * it is cached, it comes from the network like any other request.
+   */
+  readonly onDemand?: readonly string[];
 }
 
 export function cacheName(manifest: PrecacheManifest): string {
@@ -94,3 +101,36 @@ export function mayRequestUpdate(
 
 /** The message the page sends to let a waiting worker take over. */
 export const SKIP_WAITING_MESSAGE = 'photonamous:skip-waiting';
+
+/** The type of the message a page sends to have one of `onDemand` cached: `{ type, path }`. */
+export const KEEP_FOR_OFFLINE_MESSAGE = 'photonamous:keep-for-offline';
+
+/** The files the install fetches: every file but those cached on demand. */
+export function installPaths(manifest: PrecacheManifest): string[] {
+  const onDemand = new Set(manifest.onDemand ?? []);
+  return manifest.files.filter((path) => !onDemand.has(path));
+}
+
+/**
+ * The on-demand file a page's message asks to cache, as a path; null for
+ * any other message, a path or URL that is not one of `onDemand`, or a
+ * sender that is not one of this app's pages.
+ */
+export function keepForOfflinePath(
+  data: unknown,
+  source: { readonly type?: string; readonly url?: string } | null,
+  scopeOrigin: string,
+  manifest: PrecacheManifest,
+): string | null {
+  if (typeof data !== 'object' || data === null) return null;
+  const { type, path } = data as { type?: unknown; path?: unknown };
+  if (type !== KEEP_FOR_OFFLINE_MESSAGE || typeof path !== 'string') return null;
+  if (!mayRequestUpdate(source, scopeOrigin, manifest)) return null;
+  try {
+    const url = new URL(path, scopeOrigin);
+    if (url.origin !== scopeOrigin) return null;
+    return (manifest.onDemand ?? []).includes(url.pathname) ? url.pathname : null;
+  } catch {
+    return null;
+  }
+}

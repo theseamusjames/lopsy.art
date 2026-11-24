@@ -11,8 +11,9 @@
  * terminates them at once.
  */
 
-import wasmUrl from '@lopsy/engine-pkg/lopsy_wasm_bg.wasm?url';
 import { rafPlanBands } from '@lopsy/engine-pkg/lopsy_wasm';
+import { wasmUrlFor } from '../engine-files';
+import { rendererName } from '../wasm';
 import { RAF_BANDS_PER_WORKER, rafWorkerCount } from './raf-decode-plan';
 import type { RafBandPixels, RafPrepareMeta, RafWorkerRequest, RafWorkerResponse } from './raf-worker-protocol';
 
@@ -30,17 +31,34 @@ export class DecodeAbortedError extends Error {
   }
 }
 
-let modulePromise: Promise<WebAssembly.Module> | null = null;
+interface CompiledEngine {
+  readonly module: WebAssembly.Module;
+  readonly renderer: 'webgl' | 'wgpu';
+}
 
-/** Compiles the engine module once; workers instantiate it without recompiling. */
-function compileWasmModule(): Promise<WebAssembly.Module> {
+let modulePromise: Promise<CompiledEngine> | null = null;
+let moduleRenderer: 'webgl' | 'wgpu' = 'webgl';
+
+/**
+ * Compiles the engine module once; workers instantiate it without
+ * recompiling. It is the build the page runs (the page's engine has
+ * started by the time a RAF is decoded), so the browser fetches one wasm,
+ * not both. The workers call only its pure decode functions, which are the
+ * same on either build.
+ */
+function compileWasmModule(): Promise<CompiledEngine> {
+  const renderer = rendererName();
+  if (modulePromise && moduleRenderer !== renderer) modulePromise = null;
   if (!modulePromise) {
+    moduleRenderer = renderer;
+    const wasmUrl = wasmUrlFor(renderer);
     modulePromise = WebAssembly.compileStreaming(fetch(wasmUrl))
       .catch(() =>
         fetch(wasmUrl)
           .then((r) => r.arrayBuffer())
           .then((b) => WebAssembly.compile(b)),
       )
+      .then((module) => ({ module, renderer }))
       .catch((err: unknown) => {
         modulePromise = null;
         throw err;
@@ -49,9 +67,9 @@ function compileWasmModule(): Promise<WebAssembly.Module> {
   return modulePromise;
 }
 
-function spawnWorker(module: WebAssembly.Module): Worker {
+function spawnWorker({ module, renderer }: CompiledEngine): Worker {
   const worker = new Worker(new URL('./raf-worker.ts', import.meta.url), { type: 'module' });
-  const init: RafWorkerRequest = { kind: 'init', module };
+  const init: RafWorkerRequest = { kind: 'init', module, renderer };
   worker.postMessage(init);
   return worker;
 }
@@ -151,9 +169,9 @@ export async function decodeRafInWorkers(
 ): Promise<RafPrepareMeta> {
   const { signal, onProgress, onPrepared } = options;
   const linear = options.linear === true;
-  const module = await compileWasmModule();
+  const compiled = await compileWasmModule();
   if (signal?.aborted) throw new DecodeAbortedError();
-  const workers = Array.from({ length: rafWorkerCount(navigator.hardwareConcurrency) }, () => spawnWorker(module));
+  const workers = Array.from({ length: rafWorkerCount(navigator.hardwareConcurrency) }, () => spawnWorker(compiled));
   try {
     const [first] = workers;
     if (!first) throw new Error('No RAF decode workers');

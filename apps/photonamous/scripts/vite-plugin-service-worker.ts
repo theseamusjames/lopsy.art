@@ -8,7 +8,8 @@ import type { Plugin, ResolvedConfig } from 'vite';
  * `<base>sw.js`, a fixed name so its scope is the app's base, and writes
  * the precache manifest into it once the build is on disk: every file
  * written (the hashed JS and CSS, the engine's wasm, the public fonts,
- * icons and manifest) with the SHA-256 of its bytes. The page itself is
+ * icons and manifest) with the SHA-256 of its bytes. The engine's two
+ * wasm builds are listed but cached on demand (ON_DEMAND), not at install. The page itself is
  * precached as the base URL (`/`), since Pages answers `/index.html`
  * with a redirect to it. The cache version is a hash
  * of every name and checksum, so any changed byte gives a new cache, and
@@ -32,6 +33,12 @@ const PLACEHOLDER = '__PRECACHE_MANIFEST__';
  * poster is precached, so the start screen is whole offline without it).
  */
 const SKIPPED = [/^_headers$/, /^_redirects$/, /\.map$/, /^edit-harness\.html$/, /^sw\.js$/, /\.mp4$/];
+/**
+ * Files in the manifest that the install leaves out: the engine's two wasm
+ * builds (WebGL and WebGPU), of which a page runs one. The page asks the
+ * worker to keep the one it runs (src/sw/register.ts `keepForOffline`).
+ */
+const ON_DEMAND = [/(^|\/)lopsy_wasm_bg[^/]*\.wasm$/];
 
 function filesUnder(dir: string): string[] {
   const files: string[] = [];
@@ -88,7 +95,9 @@ export function serviceWorkerPlugin(options: ServiceWorkerOptions = {}): Plugin 
         .digest('hex')
         .slice(0, 16);
       const documents = documentPages.map((page) => `${base}${page}`);
-      const manifest = JSON.stringify({ version, base, files: Object.keys(hashes), hashes, documents });
+      const files = Object.keys(hashes);
+      const onDemand = files.filter((path) => ON_DEMAND.some((pattern) => pattern.test(path)));
+      const manifest = JSON.stringify({ version, base, files, hashes, documents, onDemand });
       const workerPath = join(outDir, WORKER_FILE);
       writeFileSync(workerPath, readFileSync(workerPath, 'utf8').split(PLACEHOLDER).join(manifest));
     },

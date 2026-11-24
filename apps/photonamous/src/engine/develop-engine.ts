@@ -43,27 +43,21 @@ import initWasm, {
   dropFloat,
   duplicateLayerTexture,
   getLayerEngineBounds,
+  loseGpuDevice,
   prepareLayerTransformTarget,
   clearImageColorGrading,
   clearImageColorMixer,
   clearImageCurves,
   clearRawDevelop,
-  createEngine,
   decodeAndUploadDng,
   decodeAndUploadImage,
-  exportPng16,
-  exportTiff16,
-  resumeTask,
   flipLayer,
-  readDevelopHistogram,
-  sampleColor,
   removeLayer,
   render,
   rotateLayer90,
   setBackgroundColor,
   rafWhiteBalanceKelvin,
   rafWhiteBalancePresets,
-  sampleNeutralWhiteBalance,
   setDocumentSize,
   setImageBlacks,
   setImageColorGrading,
@@ -86,6 +80,19 @@ import initWasm, {
   uploadLayerPixelsFromCanvas,
   type Engine,
 } from '@lopsy/engine-pkg/lopsy_wasm';
+import {
+  createEngine,
+  exportPng16,
+  exportTiff16,
+  readDevelopHistogram,
+  rendererName,
+  sampleColor,
+  sampleNeutralWhiteBalance,
+} from './wasm';
+import { fallBackToWebgl, markWgpuFailed, type Renderer } from './renderer-choice';
+import { wasmUrlFor } from './engine-files';
+import { keepForOffline } from '../sw/register';
+import { webGpuTextureLimit } from '@lopsy/engine-wasm/renderer-choice';
 import type { ImageFormat } from '@lopsy/photos-core/library/types';
 import { DEFAULT_RECIPE, liveAreas, type Recipe } from '@lopsy/photos-core/library/recipe';
 import { parseKelvinScale, parsePresets, type KelvinScale, type WhiteBalancePresetValues } from './white-balance';
@@ -111,6 +118,13 @@ import { parseRawDevelopSettings, rawSettingsFor, rawSettingsJson, temperatureTi
 import { parseDevelopProfiles, profilesFor, type DevelopProfile } from './profiles';
 
 export { DecodeAbortedError };
+
+declare global {
+  interface Window {
+    /** Development builds: the build the last engine started on, and a way to lose its GPU, for e2e tests. */
+    __photonamousEngine?: { rendererName: () => Renderer; loseDevice: () => boolean };
+  }
+}
 
 export interface LoadProgress {
   /** 'refining': a first view is on screen while the full-size image is decoded. */
@@ -169,8 +183,8 @@ export interface DevelopEngine {
   photoInfo(): PhotoInfo;
   /** 4 × 256 bins (R, G, B, luminance) of the displayed render; null when the engine cannot read one now. */
   readHistogram(): Promise<Uint32Array | null>;
-  /** The rendered colour at a document pixel, 0..255; null outside the image or when the engine cannot read it now. */
-  sampleAt(x: number, y: number): readonly [number, number, number] | null;
+  /** The rendered colour at a document pixel, 0..255, with the screen-only views off; null outside the image or when the engine cannot read it. */
+  sampleAt(x: number, y: number): Promise<readonly [number, number, number] | null>;
   /** Auto tone for `recipe`: renders it, reads its histogram and returns the tone values the engine suggests. */
   autoTone(recipe: Recipe): Promise<ToneValues>;
   /** Decodes `source` into the engine, replacing any image already loaded. Resolves with its oriented size. */
@@ -230,8 +244,25 @@ export interface DevelopEngine {
    * [0, 0].
    */
   sampleWhiteBalance(x: number, y: number, radius: number): Promise<{ temperature: number; tint: number } | null>;
+  /** Which build draws: 'wgpu' (WebGPU) or 'webgl'. */
+  rendererName(): Renderer;
+  /**
+   * Whether the GPU objects are gone: a lost WebGL context or WebGPU
+   * device. A lost engine draws nothing again; dispose it and make another.
+   */
+  isLost(): boolean;
+  /** Called once, when the GPU objects are lost. */
+  onLost(listener: () => void): () => void;
   dispose(): void;
 }
+
+/**
+ * The window event the wgpu engine raises when its device is lost
+ * (engine/hosts/wasm/src/lib.rs). It does not say which engine's: every
+ * wgpu engine in the page takes it as its own. A WebGL canvas fires
+ * `webglcontextlost` itself.
+ */
+export const GPU_LOST_EVENT = 'lopsy-gpu-lost';
 
 /**
  * The MIME type of a Lopsy layer handed over to be graded: the engine's
@@ -256,38 +287,23 @@ const PNG_MIME = 'image/png';
 const SRGB = 0;
 const DISPLAY_P3 = 1;
 const TIFF_MIME = 'image/tiff';
-
-interface PendingReadback {
-  readonly lopsyTask: number;
-  readonly ready: Promise<void>;
-}
-
-function isPendingReadback(value: unknown): value is PendingReadback {
-  return typeof value === 'object' && value !== null && 'lopsyTask' in value;
-}
-
-/**
- * A GPU readback as a Promise, like lopsy-web's `asyncReadback`: WebGL
- * answers at once; a wgpu build parks the read, which this waits out.
- */
-async function readback<T>(engine: Engine, read: () => unknown, isDisposed: () => boolean): Promise<T> {
-  let step: unknown = read();
-  while (isPendingReadback(step)) {
-    await step.ready;
-    if (isDisposed()) throw new Error('The engine was released while it was exporting');
-    step = resumeTask(engine, step.lopsyTask);
-  }
-  return step as T;
-}
+/** WebGPU's guaranteed largest texture side, when the adapter's is not known. */
+const WEBGPU_DEFAULT_TEXTURE_LIMIT = 8192;
 
 let wasmReady: Promise<unknown> | null = null;
 
 function ensureWasm(): Promise<unknown> {
   if (!wasmReady) {
-    wasmReady = initWasm().catch((err: unknown) => {
-      wasmReady = null;
-      throw err;
-    });
+    wasmReady = initWasm().then(
+      (output) => {
+        keepForOffline(wasmUrlFor(rendererName()));
+        return output;
+      },
+      (err: unknown) => {
+        wasmReady = null;
+        throw err;
+      },
+    );
   }
   return wasmReady;
 }
@@ -346,9 +362,65 @@ async function decodeToCanvas(source: Blob, maxLongEdge: number | undefined): Pr
   }
 }
 
-export async function createDevelopEngine(canvas: HTMLCanvasElement): Promise<DevelopEngine> {
+/**
+ * The wgpu engine could not start, and the page now runs the WebGL build
+ * (renderer-choice.ts `fallBackToWebgl`). The canvas it was given may hold
+ * a WebGPU context, which a WebGL engine cannot draw into: start again on a
+ * new canvas.
+ */
+export class RendererChangedError extends Error {
+  constructor(cause: unknown) {
+    super(`WebGPU could not start (${cause instanceof Error ? cause.message : String(cause)}); the editor now uses WebGL`);
+    this.name = 'RendererChangedError';
+  }
+}
+
+/** wgpu engines being started, and whether one ever started, in this page load. */
+const wgpuStarts = new Set<Promise<unknown>>();
+let hasStartedWgpu = false;
+
+/**
+ * Whether the page can change to WebGL after a wgpu engine failed to
+ * start, and does. Only while no wgpu engine exists: the WebGL build
+ * cannot drive one, and every engine call would go to it from then on.
+ */
+async function changeToWebgl(): Promise<boolean> {
+  markWgpuFailed();
+  await Promise.allSettled([...wgpuStarts]);
+  if (hasStartedWgpu) return false;
+  return fallBackToWebgl();
+}
+
+/**
+ * An engine on `canvas`. A wgpu engine that fails to start is recorded for
+ * the tab, so a reload runs WebGL; the adapter probe that let wgpu be
+ * chosen cannot tell that the device will fail.
+ */
+async function startEngine(canvas: HTMLCanvasElement): Promise<Engine> {
   await ensureWasm();
-  const engine = createEngine(canvas);
+  if (rendererName() !== 'wgpu') return createEngine(canvas);
+  const start = createEngine(canvas);
+  wgpuStarts.add(start);
+  try {
+    const engine = await start;
+    hasStartedWgpu = true;
+    return engine;
+  } catch (err) {
+    wgpuStarts.delete(start);
+    if (await changeToWebgl()) throw new RendererChangedError(err);
+    throw new Error(`WebGPU could not start (${err instanceof Error ? err.message : String(err)}). Reload the page to use WebGL.`);
+  } finally {
+    wgpuStarts.delete(start);
+  }
+}
+
+/**
+ * A develop engine on `canvas`. Rejects with `RendererChangedError` when
+ * WebGPU failed and the page changed to WebGL: the caller starts again on
+ * a new canvas.
+ */
+export async function createDevelopEngine(canvas: HTMLCanvasElement): Promise<DevelopEngine> {
+  const engine = await startEngine(canvas);
   setBackgroundColor(engine, 0, 0, 0, 1);
   return new PhotoEngine(engine, canvas);
 }
@@ -415,9 +487,23 @@ class PhotoEngine implements DevelopEngine {
   /** The full image's oriented size, before framing. */
   private fullSize: Size | null = null;
 
+  private hasLostGpu = false;
+  private readonly lostListeners = new Set<() => void>();
+  private readonly handleGpuLost = (event: Event) => {
+    // Lets the browser restore the WebGL context, which the Edit view waits for.
+    if (event.type === 'webglcontextlost') event.preventDefault();
+    if (this.hasLostGpu || this.isDisposed) return;
+    this.hasLostGpu = true;
+    for (const listener of [...this.lostListeners]) listener();
+    this.lostListeners.clear();
+  };
+
   constructor(engine: Engine, canvas: HTMLCanvasElement) {
     this.engine = engine;
     this.canvas = canvas;
+    if (rendererName() === 'wgpu') window.addEventListener(GPU_LOST_EVENT, this.handleGpuLost);
+    else canvas.addEventListener('webglcontextlost', this.handleGpuLost);
+    if (import.meta.env.DEV) window.__photonamousEngine = { rendererName, loseDevice: () => this.loseDevice() };
     this.resizeObserver = new ResizeObserver((entries) => this.handleResize(entries));
     try {
       this.resizeObserver.observe(canvas, { box: 'device-pixel-content-box' });
@@ -700,10 +786,10 @@ class PhotoEngine implements DevelopEngine {
 
   /** Whether the composite is float, which the RAW develop stage needs (engine/src/develop). */
   private hasFloatTargets(): boolean {
+    // The wgpu build's targets are always float.
+    if (rendererName() === 'wgpu') return true;
     const gl = this.canvas.getContext('webgl2');
-    // No WebGL context means the wgpu build, whose targets are always float.
-    if (!gl) return true;
-    return gl.getExtension('EXT_color_buffer_float') !== null;
+    return gl !== null && gl.getExtension('EXT_color_buffer_float') !== null;
   }
 
   /** Shows a freshly loaded image, unframed, fitted, with the recipe applied. */
@@ -1103,23 +1189,22 @@ class PhotoEngine implements DevelopEngine {
     };
   }
 
-  sampleAt(x: number, y: number): readonly [number, number, number] | null {
+  async sampleAt(x: number, y: number): Promise<readonly [number, number, number] | null> {
     const size = this.imageSize();
     if (!size || this.isDisposed || x < 0 || y < 0 || x >= size.width || y >= size.height) return null;
-    // One pixel of the composite, which holds the developed, adjusted image.
-    // WebGL answers at once; a wgpu build parks the read, which this does not wait for.
-    const rgba: unknown = sampleColor(this.engine, Math.floor(x), Math.floor(y), 1);
-    if (!(rgba instanceof Uint8Array) || rgba.length < 3) return null;
-    return [rgba[0] ?? 0, rgba[1] ?? 0, rgba[2] ?? 0];
+    // One pixel of the composite, which holds the developed, adjusted image:
+    // the photo, not the clipping colours, the sharpening mask or a mask's red.
+    return this.withScreenViewsOff(async () => {
+      this.renderFrameNow();
+      const rgba: unknown = await sampleColor(this.engine, Math.floor(x), Math.floor(y), 1);
+      if (!(rgba instanceof Uint8Array) || rgba.length < 3) return null;
+      return [rgba[0] ?? 0, rgba[1] ?? 0, rgba[2] ?? 0] as const;
+    });
   }
 
   async sampleWhiteBalance(x: number, y: number, radius: number): Promise<{ temperature: number; tint: number } | null> {
     if (!this.sourceSize || this.isDisposed) return null;
-    const out = await readback<Float32Array>(
-      this.engine,
-      () => sampleNeutralWhiteBalance(this.engine, x, y, Math.max(0, Math.min(64, radius))),
-      () => this.isDisposed,
-    );
+    const out = await sampleNeutralWhiteBalance(this.engine, x, y, Math.max(0, Math.min(64, radius)));
     const temperature = out[0];
     const tint = out[1];
     if (temperature === undefined || tint === undefined || !Number.isFinite(temperature) || !Number.isFinite(tint)) return null;
@@ -1130,9 +1215,8 @@ class PhotoEngine implements DevelopEngine {
     // The histogram counts the photo, not the clipping colours or the sharpening mask.
     return this.withScreenViewsOff(async () => {
       this.renderFrameNow();
-      // WebGL answers at once; a wgpu build parks the read, which this does not wait for yet.
       renderCounts.histogramReads += 1;
-      const bins: unknown = readDevelopHistogram(this.engine);
+      const bins: unknown = await readDevelopHistogram(this.engine);
       return bins instanceof Uint32Array && bins.length === 1024 ? bins : null;
     });
   }
@@ -1355,7 +1439,7 @@ class PhotoEngine implements DevelopEngine {
 
   private async encodeTiff16(space: number): Promise<Blob> {
     this.renderFor('readback');
-    const bytes = await readback<Uint8Array>(this.engine, () => exportTiff16(this.engine, space), () => this.isDisposed);
+    const bytes = await exportTiff16(this.engine, space);
     return new Blob([bytes as BlobPart], { type: TIFF_MIME });
   }
 
@@ -1381,10 +1465,14 @@ class PhotoEngine implements DevelopEngine {
   }
 
   private drawOne(image: Size, size: Size): OffscreenCanvas | null {
+    if (!this.canDrawAt(size)) return null;
     this.canvas.width = size.width;
     this.canvas.height = size.height;
-    const gl = this.canvas.getContext('webgl2');
-    if (!gl || gl.drawingBufferWidth !== size.width || gl.drawingBufferHeight !== size.height) return null;
+    if (rendererName() === 'webgl') {
+      // WebGL may give a smaller drawing buffer than the canvas asks for.
+      const gl = this.canvas.getContext('webgl2');
+      if (!gl || gl.drawingBufferWidth !== size.width || gl.drawingBufferHeight !== size.height) return null;
+    }
     setViewport(this.engine, size.width / image.width, 0, 0, size.width, size.height);
     this.renderFor('offscreen');
     const out = new OffscreenCanvas(size.width, size.height);
@@ -1394,9 +1482,21 @@ class PhotoEngine implements DevelopEngine {
     return out;
   }
 
+  /**
+   * Whether the canvas can be drawn at `size`. A WebGPU canvas is as large
+   * as the device's largest texture (the adapter's, which the engine asks
+   * for), and the copy taken from it in `drawOne` is exact; the WebGL
+   * drawing buffer is checked after the resize instead.
+   */
+  private canDrawAt(size: Size): boolean {
+    if (rendererName() !== 'wgpu') return true;
+    const limit = webGpuTextureLimit() ?? WEBGPU_DEFAULT_TEXTURE_LIMIT;
+    return size.width <= limit && size.height <= limit;
+  }
+
   private async encodePng16(space = SRGB): Promise<Blob> {
     this.renderFor('readback');
-    const bytes = await readback<Uint8Array>(this.engine, () => exportPng16(this.engine, space), () => this.isDisposed);
+    const bytes = await exportPng16(this.engine, space);
     return new Blob([bytes as BlobPart], { type: PNG_MIME });
   }
 
@@ -1416,9 +1516,37 @@ class PhotoEngine implements DevelopEngine {
     }
   }
 
+  rendererName(): Renderer {
+    return rendererName();
+  }
+
+  /** Development builds: loses the GPU as a crash would, for e2e tests of the recovery. */
+  private loseDevice(): boolean {
+    if (rendererName() === 'wgpu') return loseGpuDevice(this.engine);
+    const lose = this.canvas.getContext('webgl2')?.getExtension('WEBGL_lose_context');
+    lose?.loseContext();
+    return lose !== undefined && lose !== null;
+  }
+
+  isLost(): boolean {
+    return this.hasLostGpu;
+  }
+
+  onLost(listener: () => void): () => void {
+    if (this.hasLostGpu) {
+      listener();
+      return () => undefined;
+    }
+    this.lostListeners.add(listener);
+    return () => this.lostListeners.delete(listener);
+  }
+
   dispose(): void {
     if (this.isDisposed) return;
     this.isDisposed = true;
+    window.removeEventListener(GPU_LOST_EVENT, this.handleGpuLost);
+    this.canvas.removeEventListener('webglcontextlost', this.handleGpuLost);
+    this.lostListeners.clear();
     this.loadAbort?.abort();
     this.upgradeAbort?.abort();
     this.resizeObserver.disconnect();

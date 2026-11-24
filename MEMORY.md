@@ -811,3 +811,16 @@ button (several of Lopsy's do: `.applyButton`, `.createButton`,
 `.exportButton`) takes `@lopsy/ui`'s `--color-primary-bg`, `-hover`,
 `-active` and `--color-primary-text`, never `--color-accent` under white
 text (2.75:1). The accent stays for selection, toggles and borders.
+
+## Photonamous on both engine builds
+Photonamous runs the wgpu build by default (`src/engine/renderer-choice.ts`,
+through Lopsy's `scripts/vite-plugin-renderer.ts` with options). The e2e
+suite follows `PHOTONAMOUS_RENDERER` (`wgpu` by default, or `webgl`) for
+the dev server and the browser flags at once; `e2e/renderer.spec.ts`
+checks the page ran it. Engine exports whose type differs by build
+(`createEngine`, readbacks) come from `src/engine/wasm.ts`, and ESLint
+refuses them from the glue. In dev, `performance` resource entries ending
+`.wasm?import&url` are the dev server's modules for `?url` imports, not
+downloads of the wasm. Edits under `apps/photonamous/src` or its Vite
+config while a Playwright run is going reload or restart its dev server
+and fail tests at random: wait for the run to end.

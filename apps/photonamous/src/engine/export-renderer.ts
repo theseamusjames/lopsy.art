@@ -29,9 +29,26 @@ export class ExportAbortedError extends Error {
 
 const DEFAULT_IDLE_MS = 20_000;
 
-/** The engine module (and its wasm) loads with the first export, not with the app. */
-function createRealEngine(canvas: HTMLCanvasElement): Promise<DevelopEngine> {
-  return import('./develop-engine').then((m) => m.createDevelopEngine(canvas));
+function hiddenCanvas(): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1;
+  canvas.height = 1;
+  return canvas;
+}
+
+/**
+ * The engine module (and its wasm) loads with the first export, not with
+ * the app. When WebGPU fails to start and the page changes to WebGL, the
+ * engine is made again on a new canvas (develop-engine.ts `RendererChangedError`).
+ */
+async function createRealEngine(canvas: HTMLCanvasElement): Promise<DevelopEngine> {
+  const m = await import('./develop-engine');
+  try {
+    return await m.createDevelopEngine(canvas);
+  } catch (err) {
+    if (err instanceof m.RendererChangedError) return m.createDevelopEngine(hiddenCanvas());
+    throw err;
+  }
 }
 
 function checkSignal(signal: AbortSignal): void {
@@ -77,10 +94,7 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
 
   const getEngine = (): Promise<DevelopEngine> => {
     if (!engine) {
-      const canvas = document.createElement('canvas');
-      canvas.width = 1;
-      canvas.height = 1;
-      engine = create(canvas);
+      engine = create(hiddenCanvas());
       engine.catch(() => {
         engine = null;
       });
@@ -96,7 +110,12 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
   const loaded = async (asset: Asset, signal: AbortSignal, resolution: 'working' | 'full'): Promise<DevelopEngine> => {
     checkSignal(signal);
     if (isDisposed) throw new Error('The export renderer was disposed');
-    const e = await getEngine();
+    let e = await getEngine();
+    if (e.isLost()) {
+      // The GPU was lost since the last render: a new engine, with nothing loaded.
+      release();
+      e = await getEngine();
+    }
     checkSignal(signal);
     if (loadedAssetId !== asset.id) {
       loadedAssetId = null;

@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { withEditSectionsOpen } from '../playwright.config';
+import { gpuArgs as photonamousGpuArgs, rendererEnv } from './gpu-args';
 
 /**
  * The Photonamous ⇄ Lopsy round trip, with both apps running: Lopsy's dev
@@ -40,13 +41,11 @@ function chromiumExecutable(): string | undefined {
   return link && existsSync(link) ? link : undefined;
 }
 
-const gpuArgs = [
-  '--use-gl=angle',
-  '--use-angle=swiftshader',
-  '--enable-webgl',
-  '--enable-webgl2-compute-context',
-  '--ignore-gpu-blocklist',
-];
+/**
+ * Photonamous runs on PHOTONAMOUS_RENDERER's build (WebGPU without it) and
+ * Lopsy on LOPSY_RENDERER's (WebGL without it); the browser offers both.
+ */
+const gpuArgs = [...new Set([...photonamousGpuArgs, '--enable-unsafe-webgpu', '--enable-unsafe-swiftshader'])];
 
 export default defineConfig({
   testDir: '.',
@@ -84,7 +83,7 @@ export default defineConfig({
       command: `npx vite --port ${photosPort} --strictPort`,
       cwd: join(here, '..'),
       port: photosPort,
-      env: { VITE_LOPSY_URL: lopsyUrl },
+      env: { ...rendererEnv, VITE_LOPSY_URL: lopsyUrl },
       reuseExistingServer: false,
       timeout: 120_000,
     },

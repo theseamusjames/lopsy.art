@@ -53,6 +53,48 @@ test('the app starts offline and keeps working', async ({ page, context }) => {
   expect(problems).toEqual([]);
 });
 
+test('the engine build the page runs is kept for offline, and only that one', async ({ page, context }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: /This browser/ }).click();
+  await expect(page.getByText('Your library is empty')).toBeVisible();
+  await importFiles(page, [{ name: 'engine.jpg', buffer: await generatedJpeg(page, 200) }]);
+  await page.getByRole('button', { name: /^All photos/ }).click();
+  await expect(tiles(page)).toHaveCount(1);
+  await expect
+    .poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null))
+    .toBe(true);
+  const openInEdit = async () => {
+    await tiles(page).first().click();
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('edit-view')).toHaveAttribute('data-status', 'ready', { timeout: 60_000 });
+  };
+  await openInEdit();
+  const cachedWasm = () =>
+    page.evaluate(async () => {
+      const found: string[] = [];
+      for (const name of await caches.keys()) {
+        const cache = await caches.open(name);
+        found.push(...(await cache.keys()).map((request) => new URL(request.url).pathname).filter((path) => path.endsWith('.wasm')));
+      }
+      return found;
+    });
+  const fetched = await page.evaluate(() =>
+    performance
+      .getEntriesByType('resource')
+      .map((entry) => new URL(entry.name).pathname)
+      .filter((path) => path.endsWith('.wasm')),
+  );
+  expect(fetched).toHaveLength(1);
+  await expect.poll(cachedWasm).toEqual(fetched);
+
+  // And the Edit view opens offline from it.
+  await context.setOffline(true);
+  await page.reload();
+  await expect(tiles(page)).toHaveCount(1, { timeout: 30_000 });
+  await openInEdit();
+  await context.setOffline(false);
+});
+
 test('a cached file that another script on the origin changed is not served', async ({ page, context }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Photonamous' })).toBeVisible();

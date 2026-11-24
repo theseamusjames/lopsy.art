@@ -5,19 +5,29 @@
  * private instance of the engine's WASM module, instantiated from the
  * module the main thread compiled, and only calls its pure decode
  * functions: no engine, no GPU.
+ *
+ * The module is whichever build the page runs, and the JS glue must be that
+ * build's: the init message says which, and only that glue is loaded. The
+ * glue is imported by its file name (`.js`) so the page's renderer selector
+ * (vite.config.ts) does not stand in for it.
  */
 
-import {
-  initSync,
-  rafAutoWhiteBalance,
-  rafDevelopDefaults,
-  rafDevelopProfiles,
-  rafPrepare,
-  rafRenderBand,
-  rafRenderLinearBand,
-  type RafRenderedBand,
-} from '@lopsy/engine-pkg/lopsy_wasm';
+import type { RafRenderedBand } from '@lopsy/engine-pkg/lopsy_wasm.js';
 import type { RafBandPixels, RafWorkerRequest, RafWorkerResponse } from './raf-worker-protocol';
+
+/** What this worker calls: the same on both builds, unlike the glue's engine exports. */
+type Glue = Pick<
+  typeof import('@lopsy/engine-pkg/lopsy_wasm.js'),
+  'rafAutoWhiteBalance' | 'rafDevelopDefaults' | 'rafDevelopProfiles' | 'rafPrepare' | 'rafRenderBand' | 'rafRenderLinearBand'
+> & { initSync(module: { module: WebAssembly.Module }): unknown };
+
+let glue: Promise<Glue> | null = null;
+
+async function loadGlue(req: Extract<RafWorkerRequest, { kind: 'init' }>): Promise<Glue> {
+  const loaded: Glue = req.renderer === 'wgpu' ? await import('@lopsy/engine-pkg-wgpu/lopsy_wasm.js') : await import('@lopsy/engine-pkg/lopsy_wasm.js');
+  loaded.initSync({ module: req.module });
+  return loaded;
+}
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -33,19 +43,15 @@ function takeBand(band: RafRenderedBand): RafBandPixels {
   }
 }
 
-function autoWbRatio(binned: RafBandPixels | null): [number, number, number] | null {
+function autoWbRatio(wasm: Glue, binned: RafBandPixels | null): [number, number, number] | null {
   if (!binned) return null;
-  const [r = 1, g = 1, b = 1] = rafAutoWhiteBalance(binned.pixels);
+  const [r = 1, g = 1, b = 1] = wasm.rafAutoWhiteBalance(binned.pixels);
   return [r, g, b];
 }
 
-function handle(req: RafWorkerRequest): void {
-  if (req.kind === 'init') {
-    initSync({ module: req.module });
-    return;
-  }
+function handle(wasm: Glue, req: Exclude<RafWorkerRequest, { kind: 'init' }>): void {
   if (req.kind === 'prepare') {
-    const prepared = rafPrepare(req.data);
+    const prepared = wasm.rafPrepare(req.data);
     try {
       const paramsJson = prepared.paramsJson;
       // Bin from the mosaic the prepared result still holds: binning after
@@ -59,11 +65,11 @@ function handle(req: RafWorkerRequest): void {
           kind: 'prepared',
           metaJson: prepared.metaJson,
           paramsJson,
-          developDefaultsJson: rafDevelopDefaults(paramsJson),
+          developDefaultsJson: wasm.rafDevelopDefaults(paramsJson),
           mosaic,
           binned,
-          autoWbRatio: autoWbRatio(binned),
-          profilesJson: rafDevelopProfiles(paramsJson),
+          autoWbRatio: autoWbRatio(wasm, binned),
+          profilesJson: wasm.rafDevelopProfiles(paramsJson),
         },
         transfer,
       );
@@ -72,15 +78,26 @@ function handle(req: RafWorkerRequest): void {
     }
     return;
   }
-  const render = req.linear ? rafRenderLinearBand : rafRenderBand;
+  const render = req.linear ? wasm.rafRenderLinearBand : wasm.rafRenderBand;
   const band = takeBand(render(req.src, req.paramsJson, req.y0, req.y1, req.srcY0, req.srcY1));
   reply({ kind: 'band', index: req.index, ...band }, [band.pixels.buffer]);
 }
 
+function replyError(err: unknown): void {
+  reply({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
+}
+
+// Requests arrive before the glue has loaded; each waits for it, in order.
 self.onmessage = (e: MessageEvent<RafWorkerRequest>) => {
-  try {
-    handle(e.data);
-  } catch (err) {
-    reply({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
+  const req = e.data;
+  if (req.kind === 'init') {
+    glue = loadGlue(req);
+    glue.catch(replyError);
+    return;
   }
+  if (!glue) {
+    replyError(new Error('The RAF worker was asked to decode before it was given the engine'));
+    return;
+  }
+  glue.then((wasm) => handle(wasm, req)).catch(replyError);
 };

@@ -14,7 +14,17 @@
  * ready" and posts SKIP_WAITING_MESSAGE when the user chooses to reload.
  */
 
-import { cacheName, matchesBuild, mayRequestUpdate, planFetch, SKIP_WAITING_MESSAGE, staleCaches, type PrecacheManifest } from './sw-logic';
+import {
+  cacheName,
+  installPaths,
+  keepForOfflinePath,
+  matchesBuild,
+  mayRequestUpdate,
+  planFetch,
+  SKIP_WAITING_MESSAGE,
+  staleCaches,
+  type PrecacheManifest,
+} from './sw-logic';
 
 declare const __PRECACHE_MANIFEST__: PrecacheManifest;
 
@@ -28,7 +38,7 @@ interface FetchEvent extends ExtendableEvent {
   respondWith(response: Promise<Response>): void;
 }
 
-interface MessageEventLike extends Event {
+interface MessageEventLike extends ExtendableEvent {
   readonly data: unknown;
   readonly source: { readonly type?: string; readonly url?: string } | null;
 }
@@ -55,14 +65,22 @@ const verified = new Set<string>();
  */
 async function precache(): Promise<void> {
   const cache = await caches.open(current);
-  for (const path of manifest.files) {
-    const response = await fetch(new Request(path, { cache: 'reload' }));
-    if (!response.ok) throw new Error(`Could not precache ${path}: ${response.status}`);
-    const bytes = await response.arrayBuffer();
-    if (!(await matchesBuild(manifest, path, bytes))) throw new Error(`${path} is not the file this build wrote`);
-    await cache.put(path, new Response(bytes, { status: 200, headers: response.headers }));
-    verified.add(path);
-  }
+  for (const path of installPaths(manifest)) await cacheFile(cache, path);
+}
+
+async function cacheFile(cache: Cache, path: string): Promise<void> {
+  const response = await fetch(new Request(path, { cache: 'reload' }));
+  if (!response.ok) throw new Error(`Could not precache ${path}: ${response.status}`);
+  const bytes = await response.arrayBuffer();
+  if (!(await matchesBuild(manifest, path, bytes))) throw new Error(`${path} is not the file this build wrote`);
+  await cache.put(path, new Response(bytes, { status: 200, headers: response.headers }));
+  verified.add(path);
+}
+
+/** An on-demand file a page runs: cached now, unless it already is. */
+async function keepForOffline(path: string): Promise<void> {
+  if (await fromCache(path)) return;
+  await cacheFile(await caches.open(current), path);
 }
 
 /** The cached file once its bytes match the build; a cached file that does not match is deleted. */
@@ -94,6 +112,11 @@ scope.addEventListener('activate', (event) => {
 });
 
 scope.addEventListener('message', (event) => {
+  const keep = keepForOfflinePath(event.data, event.source, scope.location.origin, manifest);
+  if (keep !== null) {
+    event.waitUntil(keepForOffline(keep).catch(() => undefined));
+    return;
+  }
   if (event.data !== SKIP_WAITING_MESSAGE) return;
   if (!mayRequestUpdate(event.source, scope.location.origin, manifest)) return;
   void scope.skipWaiting();

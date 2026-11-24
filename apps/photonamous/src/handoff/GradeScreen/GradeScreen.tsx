@@ -21,7 +21,6 @@ interface GradeScreenProps {
 type Phase =
   | { readonly kind: 'waiting' }
   | { readonly kind: 'grading'; readonly layer: GradeLayer; readonly asset: Asset }
-  | { readonly kind: 'sending' }
   | { readonly kind: 'finished'; readonly message: string }
   | { readonly kind: 'failed'; readonly message: string };
 
@@ -96,9 +95,16 @@ export function GradeScreen({ session, onFinished }: GradeScreenProps) {
     onFinished();
   }, [session, onFinished]);
 
+  /**
+   * Set while Done renders the grade. The Edit view stays mounted until the
+   * render has answered: its engine draws it, and on WebGPU the read answers
+   * a frame or more later, after an unmounted view would have freed it.
+   */
+  const isSending = useRef(false);
   const handleDone = useCallback(
     (renderPng16: () => Promise<ArrayBuffer>, recipe: Recipe) => {
-      setPhase({ kind: 'sending' });
+      if (isSending.current) return;
+      isSending.current = true;
       renderPng16().then(
         (png) => {
           if (!session.done(png, recipeJson(recipe))) {
@@ -110,6 +116,7 @@ export function GradeScreen({ session, onFinished }: GradeScreenProps) {
           onFinished();
         },
         (err: unknown) => {
+          isSending.current = false;
           session.fail(`The grade could not be rendered: ${describe(err)}`);
           setPhase({ kind: 'failed', message: `The grade could not be rendered: ${describe(err)}` });
         },
@@ -141,11 +148,9 @@ export function GradeScreen({ session, onFinished }: GradeScreenProps) {
   const words =
     phase.kind === 'waiting'
       ? 'Waiting for the layer from Lopsy…'
-      : phase.kind === 'sending'
-        ? 'Sending the graded layer to Lopsy…'
-        : phase.kind === 'grading'
-          ? 'Opening the layer…'
-          : phase.message;
+      : phase.kind === 'grading'
+        ? 'Opening the layer…'
+        : phase.message;
   return (
     <main className={styles.message} data-testid="grade-screen" data-phase={phase.kind}>
       <h1 ref={headingRef} className={styles.title} tabIndex={-1}>

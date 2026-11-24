@@ -13,6 +13,8 @@ interface FakeEngine {
   readonly recipes: Recipe[];
   readonly exports: ExportOptions[];
   isDisposed: boolean;
+  /** Whether its GPU objects are gone. */
+  isLost: boolean;
   /** The resolution the photo is loaded at; ensureFullResolution raises it in place. */
   resolution: 'working' | 'full';
   upgrades: number;
@@ -24,6 +26,7 @@ function fakeEngine(): FakeEngine {
     recipes: [],
     exports: [],
     isDisposed: false,
+    isLost: false,
     resolution: 'working',
     upgrades: 0,
     engine: undefined as unknown as DevelopEngine,
@@ -48,6 +51,7 @@ function fakeEngine(): FakeEngine {
       fake.exports.push(options);
       return new Blob(['x'], { type: options.format === 'png' ? 'image/png' : 'image/jpeg' });
     },
+    isLost: () => fake.isLost,
     dispose: () => {
       fake.isDisposed = true;
     },
@@ -117,6 +121,20 @@ describe('createEngineExportRenderer', () => {
     await r.render(assetA, version, { ...DEFAULT_EXPORT_SETTINGS, format: 'tiff', colorSpace: 'display-p3', maxLongEdge: 2048 }, signal);
     expect(fakes[0]?.exports.at(-1)).toEqual({ format: 'tiff', quality: 0.9, maxSize: undefined, colorSpace: 'display-p3' });
     await expect(r.render(assetA, version, { ...DEFAULT_EXPORT_SETTINGS, format: 'tiff', colorSpace: 'rec2020' }, signal)).rejects.toThrow(/Rec\. 2020/);
+  });
+
+  it('replaces an engine whose GPU was lost, and loads the photo into the new one', async () => {
+    const r = renderer();
+    const signal = new AbortController().signal;
+    await r.render(assetA, harnessVersion(assetA), DEFAULT_EXPORT_SETTINGS, signal);
+    const [first] = fakes;
+    if (first) first.isLost = true;
+    await r.render(assetA, harnessVersion(assetA, warm), DEFAULT_EXPORT_SETTINGS, signal);
+    await vi.runAllTimersAsync();
+    expect(fakes).toHaveLength(2);
+    expect(first?.isDisposed).toBe(true);
+    expect(fakes[1]?.loads).toEqual(['a']);
+    expect(fakes[1]?.exports).toHaveLength(1);
   });
 
   it('reuses one engine and one decode for versions of the same photo', async () => {

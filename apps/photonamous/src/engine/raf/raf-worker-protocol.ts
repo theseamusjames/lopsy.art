@@ -6,7 +6,8 @@
  */
 
 export type RafWorkerRequest =
-  | { kind: 'init'; module: WebAssembly.Module }
+  /** `renderer`: which build `module` was compiled from, so the worker loads that build's glue. */
+  | { kind: 'init'; module: WebAssembly.Module; renderer: 'webgl' | 'wgpu' }
   | {
       kind: 'prepare';
       data: Uint8Array;

@@ -20,7 +20,24 @@ import { showToast } from '../app/toasts';
  */
 export const SKIP_WAITING = 'photonamous:skip-waiting';
 
+/** sw-logic.ts's KEEP_FOR_OFFLINE_MESSAGE, repeated for the same reason. */
+export const KEEP_FOR_OFFLINE = 'photonamous:keep-for-offline';
+
 export const UPDATE_MESSAGE = 'New version ready';
+
+/**
+ * Asks the service worker to keep `url` for offline use: one of the files
+ * it caches on demand, the engine's wasm for the build this page runs (the
+ * install leaves both builds out). Production builds only; a page with no
+ * worker yet asks once one is active.
+ */
+export function keepForOffline(url: string): void {
+  if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
+  const path = new URL(url, location.href).pathname;
+  navigator.serviceWorker.ready
+    .then((registration) => registration.active?.postMessage({ type: KEEP_FOR_OFFLINE, path }))
+    .catch(() => undefined);
+}
 
 /** The parts of ServiceWorkerRegistration the update check reads. */
 export interface RegistrationLike {

@@ -9,7 +9,8 @@ unless it says otherwise.
 
 ```bash
 npm ci
-npm run wasm:build          # the engine; or wasm:build:noopt where wasm-opt cannot be downloaded
+npm run wasm:build          # the engine's WebGL build; or wasm:build:noopt where wasm-opt cannot be downloaded
+npm run wasm:build:wgpu     # its WebGPU build, which the app uses where the browser has WebGPU (optional: WebGL without it)
 npm run dev:photonamous     # http://localhost:5174 (npm run dev starts Lopsy with it, section 2)
 ```
 
@@ -81,7 +82,14 @@ Only the configured URL's origin is trusted for handoff messages. The two
 apps are on different origins in production (lopsy.art and
 photonamous.com), as the two dev servers are on different ports. The
 round-trip e2e (`apps/photonamous/e2e/roundtrip.config.ts`) starts both
-dev servers with each other's URL set.
+dev servers with each other's URL set, on 5173 and 5174. Where those are
+taken, move both and tell the Grade test where Lopsy is:
+
+```bash
+cd apps/photonamous
+ROUNDTRIP_LOPSY_PORT=5186 ROUNDTRIP_PHOTOS_PORT=5187 ROUNDTRIP_LOPSY_URL=http://localhost:5186/ \
+  npx playwright test -c e2e/roundtrip.config.ts      # Photonamous on WebGPU; PHOTONAMOUS_RENDERER=webgl for WebGL
+```
 
 ## 3. Google Cloud setup
 
@@ -332,6 +340,31 @@ cd apps/lopsy-web && npx playwright test e2e/photos-handoff.spec.ts --project=ch
 ```
 
 No test talks to Google: the Drive tests use photos-core's fake Drive.
+
+**Renderers.** The app runs the engine's wgpu build (WebGPU) where the
+browser offers WebGPU and its WebGL build otherwise
+(`apps/photonamous/src/engine/renderer-choice.ts`). The e2e suite runs on
+WebGPU, the app's default; `PHOTONAMOUS_RENDERER=webgl` runs it on WebGL.
+The variable sets the dev server's (or a build's) default and the
+browser's flags together (`apps/photonamous/e2e/gpu-args.ts`), and
+`e2e/renderer.spec.ts` checks the page really runs that build. Both run
+headless on SwiftShader. Both engine builds must be current:
+`npm run wasm:build` and `npm run wasm:build:wgpu` (Lopsy's `npm run build`
+makes both, as the deploy does). Without the wgpu build the app runs WebGL
+only, and the suite should then be run with `PHOTONAMOUS_RENDERER=webgl`.
+
+```bash
+npm run test:e2e:photos                                  # on WebGPU
+PHOTONAMOUS_RENDERER=webgl npm run test:e2e:photos       # on WebGL
+PHOTONAMOUS_RENDERER=webgl npm run test:e2e:site         # the production build, made and tested on WebGL
+cd apps/photonamous && PHOTONAMOUS_RENDERER=webgl npx playwright test e2e/edit-view.spec.ts   # one spec on WebGL
+```
+
+In a browser, `?renderer=webgl` or `?renderer=wgpu` on any page chooses
+the build for that page load, for support and for trying one out; a
+browser without WebGPU runs WebGL either way. A tab where WebGPU failed to
+start keeps to WebGL until it is closed (the `photonamous:renderer-failed`
+flag in sessionStorage); open a new tab to try WebGPU again.
 
 `test:e2e:site` builds Photonamous without the settings in `.env.local`,
 runs `site.spec.ts` and `offline.spec.ts` against the build

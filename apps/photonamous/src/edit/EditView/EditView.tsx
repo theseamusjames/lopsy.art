@@ -212,7 +212,7 @@ export function EditView({
   const [problem, setProblem] = useState<{ readonly id: number; readonly text: string } | null>(null);
   const announce = useCallback((text: string) => setNews({ id: ++messageId.current, text }), []);
   const reportProblem = useCallback((text: string) => setProblem({ id: ++messageId.current, text }), []);
-  const { engine, status, view } = usePhotoEngine(canvasRef, asset, loadOriginal);
+  const { engine, status, view, canvasKey } = usePhotoEngine(canvasRef, asset, loadOriginal);
   useClippingWarningOnEngine(engine);
   useGrainSeed(engine, asset.id);
   const [draft, setDraft] = useState<Readonly<Record<string, Json>> | null>(null);
@@ -750,7 +750,7 @@ export function EditView({
     const stage = stageRef.current;
     const size = engine?.imageSize() ?? null;
     const box = boxOf(size);
-    if (!stage || !engine || !size || !box || !canEdit) return null;
+    if (!stage || !engine || !size || !box || !canEdit) return Promise.resolve(null);
     const rect = stage.getBoundingClientRect();
     const scale = box.width / size.width;
     return engine.sampleAt((clientX - rect.left - box.left) / scale, (clientY - rect.top - box.top) / scale);
@@ -1067,7 +1067,7 @@ export function EditView({
             onPointerCancel={handleStagePointerUp}
             onPointerLeave={pixel.onPointerLeave}
           >
-            <canvas ref={canvasRef} className={styles.canvas} role="img" aria-label={photoLabel} data-testid="edit-canvas" />
+            <canvas key={canvasKey} ref={canvasRef} className={styles.canvas} role="img" aria-label={photoLabel} data-testid="edit-canvas" />
             {storedPreviewUrl && !canEdit && status.kind !== 'error' && (
               <img className={styles.storedPreview} src={storedPreviewUrl} alt="" data-testid="stored-preview" draggable={false} />
             )}

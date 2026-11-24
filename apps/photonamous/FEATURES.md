@@ -388,7 +388,8 @@ without a picture to edit here, and offers **Open in Lopsy** and **Back**.
   hold `\`) and **Split** (before and after side by side, with a divider
   to drag), each blue while it is on, as Crop is in the top bar.
 - **Pixel readout**: the rendered colour under the pointer (R G B,
-  0–255).
+  0–255): the photo's, never the clipping warning's or a mask's red
+  painted over it.
 - **Histogram** of the rendered edit, updated as it changes. Its shadow
   and highlight markers light when the photo clips, and clicking them
   shows clipped pixels on the photo (blue at black, red at white; never
@@ -620,9 +621,20 @@ never talks to Google. Lopsy's side is in `apps/lopsy-web/FEATURES.md`
 - **One tab per library.** A second tab that opens the same library takes
   it over, and the first says so and stops writing.
 - **Offline.** In production builds a service worker keeps the app
-  shell, so the app starts without a connection; changes wait in the
+  shell, so the app starts without a connection; of the editor's two
+  engine builds (WebGPU and WebGL) it keeps the one the browser uses,
+  once the editor or an import has started it online; changes wait in the
   device's queue and are saved when storage is reachable again. Photonamous
   whose originals are kept on the device can be edited offline.
+- **Graphics.** The editor draws with WebGPU where the browser offers
+  it, and with WebGL otherwise, in the same visit and with nothing for
+  the user to do. When WebGPU is offered but fails to start, the editor
+  changes to WebGL at once, and the browser tab keeps using WebGL until
+  it is closed. When the graphics processor stops while a photo is open
+  (a driver reset, a GPU crash), the Edit view starts the editor again
+  and loads the photo again, and says "The graphics processor was
+  reset"; if it cannot, it says so. The edit is never lost: it is in the
+  library, not in the editor.
 - **Settings**:
   - *This device*: its name, as other devices see it.
   - *Kept on this device*: keep originals on this device (only the photo

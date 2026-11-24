@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasWaitingUpdate, SKIP_WAITING } from './register';
+import { hasWaitingUpdate, KEEP_FOR_OFFLINE, SKIP_WAITING } from './register';
 import {
   cacheName,
   CACHE_PREFIX,
@@ -9,6 +9,9 @@ import {
   planFetch,
   sha256Hex,
   SKIP_WAITING_MESSAGE,
+  KEEP_FOR_OFFLINE_MESSAGE,
+  installPaths,
+  keepForOfflinePath,
   staleCaches,
   type PrecacheManifest,
 } from './sw-logic';
@@ -95,9 +98,43 @@ describe('the service worker', async () => {
     expect(SKIP_WAITING).toBe(SKIP_WAITING_MESSAGE);
   });
 
+  it('agrees with the page on the keep-for-offline message', () => {
+    expect(KEEP_FOR_OFFLINE).toBe(KEEP_FOR_OFFLINE_MESSAGE);
+  });
+
   it('offers an update only when its own worker is active and another waits', () => {
     expect(hasWaitingUpdate({ active: null, waiting: {} })).toBe(false);
     expect(hasWaitingUpdate({ active: {}, waiting: null })).toBe(false);
     expect(hasWaitingUpdate({ active: {}, waiting: {} })).toBe(true);
+  });
+
+  describe('the engine wasm, cached on demand', () => {
+    const withOnDemand = { ...manifest, onDemand: ['/assets/lopsy_wasm_bg-2.wasm'] };
+    const page = { type: 'window', url: 'https://photonamous.com/' };
+    const ask = (path: unknown, source: { type?: string; url?: string } | null = page) =>
+      keepForOfflinePath({ type: KEEP_FOR_OFFLINE_MESSAGE, path }, source, origin, withOnDemand);
+
+    it('is left out of the install, and still served from the cache once there', () => {
+      expect(installPaths(withOnDemand)).toEqual(['/', '/assets/index-1.js']);
+      expect(installPaths(manifest)).toEqual(manifest.files);
+      expect(planFetch({ url: 'https://photonamous.com/assets/lopsy_wasm_bg-2.wasm', mode: 'cors', method: 'GET' }, origin, withOnDemand)).toEqual({
+        kind: 'precached',
+        path: '/assets/lopsy_wasm_bg-2.wasm',
+      });
+    });
+
+    it('is cached when one of the app\'s pages names it', () => {
+      expect(ask('/assets/lopsy_wasm_bg-2.wasm')).toBe('/assets/lopsy_wasm_bg-2.wasm');
+      expect(ask('https://photonamous.com/assets/lopsy_wasm_bg-2.wasm')).toBe('/assets/lopsy_wasm_bg-2.wasm');
+    });
+
+    it('ignores any other file, origin, sender or message', () => {
+      expect(ask('/assets/index-1.js')).toBeNull();
+      expect(ask('https://example.com/assets/lopsy_wasm_bg-2.wasm')).toBeNull();
+      expect(ask(42)).toBeNull();
+      expect(ask('/assets/lopsy_wasm_bg-2.wasm', { type: 'window', url: 'https://example.com/' })).toBeNull();
+      expect(ask('/assets/lopsy_wasm_bg-2.wasm', null)).toBeNull();
+      expect(keepForOfflinePath(SKIP_WAITING_MESSAGE, page, origin, withOnDemand)).toBeNull();
+    });
   });
 });

@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { withEditSectionsOpen } from '../playwright.config';
+import { hardwareGpuArgs, rendererEnv } from './gpu-args';
 
 /**
  * Records the start screen's demo reel (src/components/DemoReel). Not a
@@ -53,7 +54,7 @@ export default defineConfig({
         channel: 'chromium',
         viewport: { width: REEL_WIDTH, height: REEL_HEIGHT },
         deviceScaleFactor: 2,
-        launchOptions: { args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] },
+        launchOptions: { args: hardwareGpuArgs },
       },
     },
   ],
@@ -62,7 +63,7 @@ export default defineConfig({
     cwd: join(here, '..'),
     port,
     // Any client ID makes the start screen offer Google sign-in; the recording stubs Google itself.
-    env: { VITE_GOOGLE_CLIENT_ID: 'demo-reel.apps.googleusercontent.com', VITE_GOOGLE_API_KEY: '', VITE_GOOGLE_APP_ID: '' },
+    env: { ...rendererEnv, VITE_GOOGLE_CLIENT_ID: 'demo-reel.apps.googleusercontent.com', VITE_GOOGLE_API_KEY: '', VITE_GOOGLE_APP_ID: '' },
     reuseExistingServer: false,
     timeout: 120_000,
   },
