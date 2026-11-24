@@ -141,7 +141,10 @@ pub fn clear_image_detail(engine: &mut EngineInner) {
 }
 
 /// Large details, small details and haze: `[large, small, haze (each
-/// −100..100), pixelScale]`, clamped.
+/// −100..100), pixelScale]`, clamped. With the working space, haze acts on
+/// scene data before the tone pass and the two details on rendered data
+/// after it (`lopsy_core::linear_detail`); without it, all three on encoded
+/// values (`lopsy_core::detail`).
 pub fn set_image_local_contrast(engine: &mut EngineInner, values: &[f32]) -> Result<(), String> {
     engine.local_contrast = Some(lopsy_core::detail::LocalContrastSettings::from_values(values)?);
     engine.needs_recomposite = true;

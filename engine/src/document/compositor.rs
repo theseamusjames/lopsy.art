@@ -2034,7 +2034,8 @@ struct MiddleStage {
 /// it always was and none is wrapped. With it, a `Display` stage still
 /// assumes sRGB-encoded values, and the chain runs consecutive ones inside
 /// one conversion there and one back; a `Rendered` stage works on rendered
-/// linear Rec. 2020. The image adjustments (Lopsy's), the old colour by hue
+/// linear Rec. 2020. Noise reduction and haze have run on scene data by
+/// then (`scene_stages`), so their entries here draw only without it. The image adjustments (Lopsy's), the old colour by hue
 /// and the old areas pass do not run at all with the working space: the
 /// tone pass (`enter_working_space`) and the look pass do their jobs.
 /// Each `apply` checks what its `draws` checks, since the chain calls
@@ -2505,8 +2506,12 @@ fn area_look_run(layer: &crate::engine::AreaLayer) -> crate::develop::look::Look
 }
 
 /// An area layer's stages with the working space: its look pass on the
-/// rendered image, then its noise reduction, local contrast, sharpening and
-/// finish inside the display encoding, as the document's own run there.
+/// rendered image; its noise reduction inside the display encoding; its
+/// haze and its large and small details on the rendered image, with the
+/// document's linear stages (an area's layer runs after the tone pass, so
+/// its haze acts on rendered data); then its sharpening and finish inside
+/// the display encoding. With no local contrast or haze, noise reduction,
+/// sharpening and finish share one trip into the encoding and back.
 fn area_layer_working_space(engine: &mut EngineInner, layer: &crate::engine::AreaLayer) {
     use crate::develop::working_space::Conversion;
     let run = area_look_run(layer);

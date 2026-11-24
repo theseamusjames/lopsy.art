@@ -14,7 +14,11 @@
 //! whole chain is in `engine/src/develop/mod.rs`). Deviations: all of them
 //! work on display-referred (sRGB-encoded) values rather than linear
 //! light, and local contrast runs before the tone controls instead of
-//! after them.
+//! after them. That is the chain without the working space. With it, noise
+//! reduction runs here, wrapped in the display encoding, on scene data
+//! before the tone pass ([`NoiseRun`]); sharpening runs here on rendered
+//! data, wrapped; and haze and local contrast are
+//! `crate::linear_detail`'s instead.
 //!
 //! **Resolution.** Radii are in full-resolution pixels; each stage takes
 //! `pixel_scale` = working width / full width and scales its radii by it,

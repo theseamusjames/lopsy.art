@@ -31,6 +31,8 @@ engine/
       tone.rs         # The develop tone step (scene to rendered) and its curve's shoulder
       scene_tone.rs   # Tone on scene data: the tone sliders and masks, a monotone map in stops
       look.rs         # Colour in OkLab, colour grading and curves on rendered linear data
+      detail.rs       # Noise reduction, sharpening, and local contrast and haze on encoded values
+      linear_detail.rs # Large and small details on log luminance, haze on scene data
       output.rs       # The develop output step: roll-off, gamut mapping, transfer, dither
       compress.rs     # RLE compression for undo snapshots
       layer.rs        # Layer descriptor types (GlowDesc, ShadowDesc, etc.)
@@ -121,6 +123,9 @@ gpu/shaders/
     look.wgsl             # Look pass: OkLab colour, colour grading, curves on rendered linear data
     output.wgsl           # Output step: rendered → the screen's or a file's space
     noise_reduce.wgsl, local_contrast.wgsl, detail_sharpen.wgsl, blur_axis.wgsl
+    luminance_stats.wgsl  # What the linear local contrast and haze blur: log-luminance moments, the veil
+    local_contrast_log.wgsl # Large and small details on rendered linear data (working space on)
+    haze.wgsl             # Haze on scene data, before the tone pass (working space on)
     color_mixer.wgsl, areas.wgsl, area_layer.wgsl, finish.wgsl, clip_warning.wgsl
 ```
 
@@ -128,7 +133,10 @@ gpu/shaders/
 
 `src/develop/mod.rs` is the map: the stage order (RAW develop, noise
 reduction, local contrast and haze, image adjustments, colour mixer, areas
-and each area's layer, sharpening, finish, then the screen-only views), where each pass lives, the
+and each area's layer, sharpening, finish, then the screen-only views; with
+the working space, noise reduction and haze on scene data, the tone pass,
+local contrast, the look pass, the areas' layers, sharpening, finish,
+output), where each pass lives, the
 JS API, and the deviations from `docs/photonamous-spec.md` 6.10. Rules:
 
 - Every stage is off (`None`) by default, and then the composite is
@@ -141,15 +149,19 @@ JS API, and the deviations from `docs/photonamous-spec.md` 6.10. Rules:
   colour, grading and curves on rendered data in the look pass
   (`lopsy_core::scene_tone`, `lopsy_core::look`, set with `setDevelop…`);
   Lopsy's image adjustments, the old colour by hue and the old areas pass
-  do not run at all then. The stages that still assume sRGB-encoded
-  values (noise reduction, local contrast and haze, sharpening, finish)
-  run inside a display encoding (`compositor::MIDDLE_STAGES`; move a stage
-  out by changing its `space`). Without it nothing changes: the render
-  tests that predate it hold that. Readbacks that are statistics
+  do not run at all then. Noise reduction (today's algorithm, inside a
+  display encoding that keeps values above 1 and below 0) and haze run on
+  scene data before the tone pass (`compositor::scene_stages`), and large
+  and small details on rendered data after it (`lopsy_core::linear_detail`;
+  `setImageDetail` and `setImageLocalContrast` drive them). The stages that
+  still assume sRGB-encoded values (sharpening, finish) run inside a
+  display encoding (`compositor::MIDDLE_STAGES`; move a stage out by
+  changing its `space`). Without it nothing changes: the render tests that
+  predate it hold that. Readbacks that are statistics
   (histogram, pixel readout) read the output rendered for sRGB, never the
   screen's space.
 - Every stage has a CPU reference in `lopsy-core` (`raf::develop`,
-  `detail`, `color_mixer`, `areas`, `finish`, `working_space`, `tone`, `scene_tone`, `look`,
+  `detail`, `linear_detail`, `color_mixer`, `areas`, `finish`, `working_space`, `tone`, `scene_tone`, `look`,
   `output`). Change a shader and its
   reference together; the tests compare them.
 - Develop shaders compile lazily through `ShaderPrograms::<name>()`, never

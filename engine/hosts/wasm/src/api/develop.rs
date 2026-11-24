@@ -188,7 +188,8 @@ pub fn clear_image_detail(engine: &mut Engine) {
 }
 
 /// Local contrast and haze: 4 floats `[large, small, haze (−100..100),
-/// pixelScale]`.
+/// pixelScale]`. With the working space they act in linear light (haze
+/// before tone, the details after it); the layout is the same.
 #[wasm_bindgen(js_name = "setImageLocalContrast")]
 pub fn set_image_local_contrast(engine: &mut Engine, values: &[f32]) -> Result<(), JsError> {
     lopsy_engine::commands::develop::set_image_local_contrast(&mut engine.inner, values).map_err(|e| JsError::new(&e))
