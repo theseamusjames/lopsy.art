@@ -102,11 +102,11 @@ pub fn raf_plan_bands(height: u32, max_bands: u32) -> Vec<u32> {
 /// One rendered, oriented band and where it goes in the final image.
 #[wasm_bindgen]
 pub struct RafRenderedBand {
-    x: u32,
-    y: u32,
-    width: u32,
-    height: u32,
-    pixels: Vec<f32>,
+    pub(crate) x: u32,
+    pub(crate) y: u32,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
+    pub(crate) pixels: Vec<f32>,
 }
 
 #[wasm_bindgen]

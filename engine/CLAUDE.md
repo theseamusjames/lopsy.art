@@ -28,6 +28,10 @@ engine/
       brush.rs        # Brush dab geometry
       color.rs        # Color space conversions
       working_space.rs # The develop working space: gamuts, matrices from primaries, the input step
+      cct.rs          # Correlated colour temperature and tint of a white point, and back
+      raf/            # RAF decode: the baked import, and linear camera RGB for the develop chain
+      dng/            # DNG decode: the baked import (mod.rs), linear camera RGB (linear.rs),
+                      # and camera colour by the DNG specification's method (camera_color.rs)
       tone.rs         # The develop tone step (scene to rendered) and its curve's shoulder
       scene_tone.rs   # Tone on scene data: the tone sliders and masks, a monotone map in stops
       look.rs         # Colour in OkLab, colour grading and curves on rendered linear data
@@ -164,6 +168,18 @@ JS API, and the deviations from `docs/photonamous-spec.md` 6.10. Rules:
   `detail`, `linear_detail`, `color_mixer`, `areas`, `finish`, `working_space`, `tone`, `scene_tone`, `look`,
   `output`). Change a shader and its
   reference together; the tests compare them.
+- **Camera colour.** The RAW step takes a white-balance gain (`wbRatio`)
+  and a camera matrix (`camToRgb`, to linear sRGB, carried on to Rec.
+  2020). For a RAF the matrix is one daylight matrix per sensor
+  generation and Kelvin is a readout fitted to the body's presets
+  (`raf::wb_presets`); nothing about it follows the white balance. For a
+  DNG the matrix comes from the file's own calibration by the DNG
+  specification's method (`dng::camera_color`: two illuminants
+  interpolated by inverse colour temperature, forward matrices or Bradford
+  to D50) and is recomputed on the CPU for each white balance, and Kelvin
+  and tint are real (`cct`); the app sends `wbRatio` and `camToRgb`
+  together. The tests on real DNGs read `LOPSY_DNG_SAMPLES`
+  (`core/tests/dng_develop.rs`, `--release`).
 - Develop shaders compile lazily through `ShaderPrograms::<name>()`, never
   in `compile_all`.
 - Screen-only views (overlays, clipping warning, mask view) run only in the

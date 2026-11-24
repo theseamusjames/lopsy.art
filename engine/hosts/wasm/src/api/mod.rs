@@ -7,6 +7,7 @@
 pub mod adjustment;
 pub mod color_mode;
 pub mod develop;
+pub mod dng;
 pub mod drawing;
 pub mod fill;
 pub mod filter;

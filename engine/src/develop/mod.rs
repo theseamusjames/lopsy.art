@@ -23,7 +23,7 @@
 //! | # | Stage | Space (working space on) | Pass | Shader (`gpu/shaders/`) | CPU reference (`lopsy_core::`) |
 //! |---|---|---|---|---|---|
 //! | 1 | Layers composited | camera RGB (RAW) or the photo's encoding | `document::compositor` | `blend.wgsl` | — |
-//! | 2 | RAW develop. Working space off: white balance, camera matrix, exposure, saturation, highlight desaturation, base curve, sRGB. On: white balance, camera matrix to Rec. 2020, exposure, nothing else | camera RGB → scene | this module | `develop/raw_develop.wgsl` | `raf::develop::develop_reference`, `raf::develop::scene_reference` |
+//! | 2 | RAW develop (a RAF or a DNG). Working space off: white balance, camera matrix, exposure, saturation, highlight desaturation, base curve, sRGB. On: white balance, camera matrix to Rec. 2020, exposure, nothing else. A DNG's matrix comes from its own calibration and is recomputed on the CPU for each white balance (`dng::camera_color`) | camera RGB → scene | this module | `develop/raw_develop.wgsl` | `raf::develop::develop_reference`, `raf::develop::scene_reference` |
 //! | 2i | Input step, a photo that is not RAW: decode sRGB or Display P3 to linear Rec. 2020, no curve (rendered equals scene) | encoded → scene | `compositor::enter_working_space` | `develop/working_space.wgsl` | `working_space::input_reference` |
 //! | 2n | Noise reduction on scene data. **Working space on only**: stage 3's algorithm inside a D and D′ of its own, a RAW photo's thresholds divided by `detail::NR_SCENE_THRESHOLD_SCALE` (data before the base curve), nothing clamped | scene, display-encoded | [`detail::apply_noise_reduction_scene`] | `develop/noise_reduce.wgsl` | `detail::noise_reduce_run_reference` |
 //! | 2h | Haze on scene data. **Working space on only**: the blurred darkest channel is the veil, taken away softly with exposure compensation (or a veil of the neighbourhood's light added) | scene | [`detail::apply_haze`] | `develop/luminance_stats.wgsl`, then `develop/haze.wgsl` | `linear_detail::statistics`, `linear_detail::haze_reference` |
@@ -118,6 +118,13 @@
 //! - `rafDevelopProfiles(paramsJson)`: the Profile menu (camera, the film-simulation looks, neutral, monochrome).
 //! - `setRawDevelop(engine, json)`, `clearRawDevelop(engine)`.
 //!
+//! DNG as a RAW photo (`hosts/wasm/src/api/dng.rs`; `lopsy_core::dng::linear`), the RAF calls' twins in the same units:
+//! - `dngPrepare(bytes)`: `paramsJson`, `metaJson` (`width`, `height`, `mosaicWidth`, `mosaicHeight`, `samplesPerPixel` 3 for LinearRaw or 1 for Bayer, `clipLevels`, `kind`, `cameraModel`, `asShotKelvin`, `asShotTint`, `baselineExposure`, `notApplied`), `binnedLinear(minLongEdge)`, `takeMosaic()`. An error ("DNG cannot open as RAW: …") means the app opens it with `decodeAndUploadDng`, the baked decode, as before.
+//! - `dngRenderLinearBand(src, paramsJson, y0, y1, srcY0, srcY1)` with bands from `rafPlanBands`; `src` is rows of the plane, `mosaicWidth · samplesPerPixel` values a row.
+//! - `dngRenderBinnedLinear(src, paramsJson, minLongEdge)`.
+//! - `dngDevelopDefaults(paramsJson)`: `setRawDevelop`'s JSON at the as-shot balance, the file's baseline exposure, the neutral base curve.
+//! - `dngWhiteBalance(paramsJson, wbRatio)` and `dngWhiteBalanceKelvin(paramsJson, kelvin, tint)`: `{ wbRatio, camToRgb, kelvin, tint, whiteXy }`; a DNG's `camToRgb` follows its white balance, so the app sends both to `setRawDevelop` together.
+//!
 //! Working space (`develop.rs`, `lib.rs`):
 //! - `setDevelopWorkingSpace(engine, on, sourceSpace)`: on or off; `sourceSpace` 0 sRGB, 1 Display P3 for a photo that is not RAW.
 //! - `setScreenOutput(engine, isDisplayP3, wantsHdr)`: the screen's space, which the live frame's output step renders for (on WebGL too).
@@ -129,7 +136,7 @@
 //! White balance and statistics:
 //! - `rafAutoWhiteBalance(linearRgba)`: near-neutral-pixel white balance, as `wbRatio`.
 //! - `rafAutoWhiteBalanceClipped(linearRgba, clipLevels)`: the same, leaving out clipped and reconstructed pixels.
-//! - `rafWhiteBalancePresets(rafBytes)`, `rafWhiteBalanceKelvin(rafBytes)`: the body's presets in recipe units, and the Kelvin scale.
+//! - `rafWhiteBalancePresets(rafBytes)`, `rafWhiteBalanceKelvin(rafBytes)`: the body's presets in recipe units, and the Kelvin scale, a line fitted through the presets (a RAF has no calibration data, so its Kelvin is a readout, not a colour temperature). A DNG's Kelvin is real: `dngWhiteBalance` and `dngWhiteBalanceKelvin`.
 //! - `sampleNeutralWhiteBalance(engine, x, y, radius)` (readback): the picker; leaves out clipped and reconstructed pixels when `setRawDevelop`'s JSON has `clipLevels`.
 //! - `readDevelopHistogram(engine)` (readback): 4 × 256 bins of the displayed result; with the working space, of the sRGB output.
 //! - `readHdrHistogram(engine, peak)` (readback, working space only): 4 × 256 bins of the HDR rendering for the HDR canvas in sRGB primaries, encoded values from black (bin 0) to the peak (bin 255); `hdrHistogramWhiteBin(peak)` is where white falls (139.7 for 4).
@@ -229,9 +236,16 @@
 //!   browser limits what the display cannot show. The gamut mapping is a
 //!   compression toward the neutral axis (`lopsy_core::output`), not a
 //!   perceptual mapping.
-//! - The camera matrix does not follow the white balance (no dual-
-//!   illuminant interpolation, so no true Kelvin; the Kelvin readout is a
-//!   fit to the body's presets). Clipped channels are reconstructed on the
+//! - For a RAF the camera matrix does not follow the white balance (one
+//!   daylight matrix per sensor generation, no true Kelvin; the Kelvin
+//!   readout is a fit to the body's presets). For a DNG it does: the DNG
+//!   specification's method (two calibrations interpolated by inverse
+//!   colour temperature, forward matrices or Bradford to D50) in
+//!   `lopsy_core::dng::camera_color`, with Kelvin and tint from
+//!   `lopsy_core::cct`; the matrix is computed on the CPU for each white
+//!   balance and the GPU stage is the same. A DNG's opcode lists, gain
+//!   table map, hue/saturation and look tables, tone curve and default
+//!   crop are not applied (`dng::linear`). Clipped channels of a RAF are reconstructed on the
 //!   CPU, once, in the linear decode (`lopsy_core::raf::highlights`), not
 //!   by a GPU stage: which samples clipped is fixed by the file, and the
 //!   RAW stage's white balance is a gain on the reconstructed data.
@@ -256,10 +270,13 @@
 //! # This module: the RAW stage
 //!
 //! A RAW document's layer holds linear camera RGB at the as-shot white
-//! balance (`lopsy_core::raf::develop::render_linear_band`). With a
-//! [`RawDevelopState`], stage 2 develops it; with the settings from
-//! `develop_defaults` the result matches Lopsy's baked RAF decode without
-//! its capture sharpening.
+//! balance (`lopsy_core::raf::develop::render_linear_band` for a RAF,
+//! `lopsy_core::dng::linear::render_linear_band` for a DNG). With a
+//! [`RawDevelopState`], stage 2 develops it. For a RAF, the settings from
+//! `raf::develop::develop_defaults` match Lopsy's baked RAF decode without
+//! its capture sharpening; for a DNG, `dng::linear::develop_defaults` gives
+//! the file's own colour and baseline exposure, which differ from Lopsy's
+//! baked DNG decode (that one stretches levels to fill 0..1).
 
 pub mod detail;
 pub mod look;
