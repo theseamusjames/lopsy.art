@@ -34,6 +34,7 @@ pub mod develop_stats;
 pub mod color_mixer;
 pub mod tiff;
 pub mod detail;
+pub mod linear_detail;
 pub mod areas;
 pub mod finish;
 pub mod working_space;

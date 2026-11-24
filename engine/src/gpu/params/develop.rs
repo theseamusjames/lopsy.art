@@ -59,6 +59,39 @@ uniforms! {
 }
 
 uniforms! {
+    /// `develop/luminance_stats.wgsl`
+    pub struct LuminanceStatsParams {
+        pub luma: [f32; 3],
+        pub mode: i32,
+        pub floor: f32,
+        pub centre: f32,
+    }
+}
+
+uniforms! {
+    /// `develop/local_contrast_log.wgsl`
+    pub struct LocalContrastLogParams {
+        pub luma: [f32; 3],
+        pub large_gain: f32,
+        pub small_gain: f32,
+        pub large_epsilon: f32,
+        pub small_epsilon: f32,
+        pub floor: f32,
+        pub centre: f32,
+    }
+}
+
+uniforms! {
+    /// `develop/haze.wgsl`
+    pub struct HazeParams {
+        pub haze: f32,
+        pub remove: f32,
+        pub add: f32,
+        pub middle_grey: f32,
+    }
+}
+
+uniforms! {
     /// `develop/areas.wgsl`
     pub struct AreasParams {
         pub areas: Vec4Array<32>,

@@ -1,6 +1,8 @@
 //! Sharpness & noise and local contrast & haze on the composite: the GPU
 //! side of `lopsy_core::detail`, whose module notes give the maths, the
-//! stage placement and its deviations from spec 6.10.
+//! stage placement and its deviations from spec 6.10, and, with the working
+//! space, of `lopsy_core::linear_detail` (large and small details on
+//! rendered linear data, haze on scene data).
 //!
 //! Each stage reads the composite, makes the blurred copies it needs in
 //! pooled textures, combines them into scratch A and copies that back
@@ -11,10 +13,15 @@
 //! nothing runs and the composite is byte-identical.
 
 use lopsy_core::detail::{self, DetailSettings, LocalContrastSettings};
+use lopsy_core::linear_detail::{self, Statistic};
+use lopsy_core::working_space::{luma, Gamut};
 
 use crate::engine::EngineInner;
 use crate::gpu::params::core::ThumbnailBoxParams;
-use crate::gpu::params::develop::{BlurAxisParams, DetailSharpenParams, LocalContrastParams, NoiseReduceParams};
+use crate::gpu::params::develop::{
+    BlurAxisParams, DetailSharpenParams, HazeParams, LocalContrastLogParams, LocalContrastParams, LuminanceStatsParams,
+    NoiseReduceParams,
+};
 use crate::gpu::pass::{Blend, Target};
 use crate::gpu::texture_pool::TextureHandle;
 
@@ -207,6 +214,121 @@ fn local_contrast(engine: &mut EngineInner, s: &LocalContrastSettings) -> Result
     engine.gpu().unbind_textures(3);
     engine.texture_pool.release(small);
     engine.texture_pool.release(large);
+    if drawn {
+        scratch_to_composite(engine);
+    }
+    Ok(())
+}
+
+/// The statistics image of the composite (`luminance_stats.wgsl`), in a
+/// pooled document-sized texture the caller releases.
+fn statistics(engine: &mut EngineInner, what: Statistic) -> Result<TextureHandle, String> {
+    let program = engine.shaders.luminance_stats()?;
+    let (w, h) = (engine.doc_width, engine.doc_height);
+    let target = engine.texture_pool.acquire(w, h)?;
+    let params = LuminanceStatsParams {
+        luma: luma(Gamut::Rec2020),
+        mode: what.mode(),
+        floor: linear_detail::LC_FLOOR,
+        centre: linear_detail::LC_CENTRE,
+    };
+    let drawn = engine
+        .pass(&program, params)
+        .texture("u_tex", engine.composite_texture)
+        .blend(Blend::Off)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Texture(target));
+    engine.gpu().unbind_textures(1);
+    if drawn {
+        Ok(target)
+    } else {
+        engine.texture_pool.release(target);
+        Err("statistics pass did not draw".to_string())
+    }
+}
+
+/// Large and small details on the rendered linear composite, with the
+/// working space, when either is set and not zero
+/// (`lopsy_core::linear_detail`). Haze is not part of it.
+pub fn apply_local_contrast_linear(engine: &mut EngineInner) {
+    let Some(s) = engine.local_contrast.filter(linear_detail::local_contrast_draws) else { return };
+    if let Err(e) = local_contrast_linear(engine, &s) {
+        log_error("Local contrast", &e);
+    }
+}
+
+fn local_contrast_linear(engine: &mut EngineInner, s: &LocalContrastSettings) -> Result<(), String> {
+    let program = engine.shaders.local_contrast_log()?;
+    let (w, h) = (engine.doc_width, engine.doc_height);
+    let moments = statistics(engine, Statistic::LogMoments)?;
+    let blurs = blur(engine, moments, w, h, detail::LC_SMALL_SIGMA * s.pixel_scale).and_then(|small| {
+        match blur(engine, moments, w, h, detail::LC_LARGE_SIGMA * s.pixel_scale) {
+            Ok(large) => Ok((small, large)),
+            Err(e) => {
+                engine.texture_pool.release(small);
+                Err(e)
+            }
+        }
+    });
+    engine.texture_pool.release(moments);
+    let (small, large) = blurs?;
+    let params = LocalContrastLogParams {
+        luma: luma(Gamut::Rec2020),
+        large_gain: linear_detail::detail_gain(s.large),
+        small_gain: linear_detail::detail_gain(s.small),
+        large_epsilon: linear_detail::LC_LARGE_EPSILON,
+        small_epsilon: linear_detail::LC_SMALL_EPSILON,
+        floor: linear_detail::LC_FLOOR,
+        centre: linear_detail::LC_CENTRE,
+    };
+    let drawn = engine
+        .pass(&program, params)
+        .texture("u_tex", engine.composite_texture)
+        .texture("u_small", small)
+        .texture("u_large", large)
+        .blend(Blend::Off)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Framebuffer(engine.scratch_fbo_a));
+    engine.gpu().unbind_textures(3);
+    engine.texture_pool.release(small);
+    engine.texture_pool.release(large);
+    if drawn {
+        scratch_to_composite(engine);
+    }
+    Ok(())
+}
+
+/// Haze on the scene linear composite, with the working space, when set and
+/// not zero (`lopsy_core::linear_detail`).
+pub fn apply_haze(engine: &mut EngineInner) {
+    let Some(s) = engine.local_contrast.filter(linear_detail::haze_draws) else { return };
+    if let Err(e) = haze(engine, &s) {
+        log_error("Haze", &e);
+    }
+}
+
+fn haze(engine: &mut EngineInner, s: &LocalContrastSettings) -> Result<(), String> {
+    let program = engine.shaders.haze()?;
+    let (w, h) = (engine.doc_width, engine.doc_height);
+    let stats = statistics(engine, Statistic::Veil)?;
+    let veil = blur(engine, stats, w, h, linear_detail::HAZE_SIGMA * s.pixel_scale);
+    engine.texture_pool.release(stats);
+    let veil = veil?;
+    let params = HazeParams {
+        haze: s.haze / 100.0,
+        remove: linear_detail::HAZE_REMOVE,
+        add: linear_detail::HAZE_ADD,
+        middle_grey: lopsy_core::scene_tone::MIDDLE_GREY,
+    };
+    let drawn = engine
+        .pass(&program, params)
+        .texture("u_tex", engine.composite_texture)
+        .texture("u_veil", veil)
+        .blend(Blend::Off)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Framebuffer(engine.scratch_fbo_a));
+    engine.gpu().unbind_textures(2);
+    engine.texture_pool.release(veil);
     if drawn {
         scratch_to_composite(engine);
     }

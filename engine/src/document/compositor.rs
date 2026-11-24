@@ -2046,9 +2046,18 @@ const MIDDLE_STAGES: [MiddleStage; 9] = [
         apply: |e, _| crate::develop::detail::apply_noise_reduction(e),
     },
     MiddleStage {
-        space: StageSpace::Display,
-        draws: |e, _| e.local_contrast.is_some_and(|l| l.is_active()),
-        apply: |e, _| crate::develop::detail::apply_local_contrast(e),
+        // With the working space, large and small details on rendered
+        // linear data (haze ran on scene data before the tone pass);
+        // without it, the old stage on encoded values with haze.
+        space: StageSpace::Rendered,
+        draws: |e, _| match e.working_space {
+            Some(_) => e.local_contrast.is_some_and(|l| lopsy_core::linear_detail::local_contrast_draws(&l)),
+            None => e.local_contrast.is_some_and(|l| l.is_active()),
+        },
+        apply: |e, _| match e.working_space {
+            Some(_) => crate::develop::detail::apply_local_contrast_linear(e),
+            None => crate::develop::detail::apply_local_contrast(e),
+        },
     },
     MiddleStage {
         space: StageSpace::Display,
@@ -2160,24 +2169,29 @@ fn conversion_between(from: StageSpace, to: StageSpace) -> crate::develop::worki
 }
 
 /// Into the working space after the RAW step: the tone step for a RAW
-/// photo (the RAW step left scene data), the input step for any other.
-/// The tone pass also holds tone on scene data; a photo that is not RAW
-/// runs it only when that has something to do.
-fn enter_working_space(engine: &EngineInner) {
-    match (&engine.raw_develop, engine.working_space) {
-        (Some(state), _) => {
-            capture_scene(engine);
-            apply_tone(engine, Some(state));
-        }
-        (None, Some(ws)) => {
-            convert_composite(engine, crate::develop::working_space::Conversion::Input(ws.source));
-            capture_scene(engine);
-            if crate::develop::tone::scene_is_active(engine) {
-                apply_tone(engine, None);
-            }
-        }
-        (None, None) => {}
+/// photo (the RAW step left scene data), the input step for any other;
+/// then the stages on scene data (`scene_stages`). The tone pass also holds
+/// tone on scene data; a photo that is not RAW runs it only when that has
+/// something to do.
+fn enter_working_space(engine: &mut EngineInner) {
+    let Some(ws) = engine.working_space else { return };
+    if engine.raw_develop.is_none() {
+        convert_composite(engine, crate::develop::working_space::Conversion::Input(ws.source));
     }
+    scene_stages(engine);
+    capture_scene(engine);
+    match &engine.raw_develop {
+        Some(state) => apply_tone(engine, Some(state)),
+        None if crate::develop::tone::scene_is_active(engine) => apply_tone(engine, None),
+        None => {}
+    }
+}
+
+/// The stages on scene data, before the tone pass (and before the scene
+/// statistics are read, so they describe what the tone pass sees): haze
+/// (`lopsy_core::linear_detail`). Each is skipped when it has nothing to do.
+fn scene_stages(engine: &mut EngineInner) {
+    crate::develop::detail::apply_haze(engine);
 }
 
 /// The scene image, before the tone pass, box-downscaled into
@@ -2480,29 +2494,45 @@ fn area_look_run(layer: &crate::engine::AreaLayer) -> crate::develop::look::Look
 /// rendered image, then its noise reduction, local contrast, sharpening and
 /// finish inside the display encoding, as the document's own run there.
 fn area_layer_working_space(engine: &mut EngineInner, layer: &crate::engine::AreaLayer) {
+    use crate::develop::working_space::Conversion;
     let run = area_look_run(layer);
     if run.draws() {
         apply_look(engine, &run);
     }
-    let wrapped = layer.detail.is_some_and(|d| d.reduces_noise() || d.sharpens())
-        || layer.local_contrast.is_some_and(|l| l.is_active())
-        || layer.finish.is_some_and(|f| f.is_active());
-    if !wrapped {
-        return;
-    }
-    use crate::develop::working_space::Conversion;
-    convert_composite(engine, Conversion::ToDisplay);
+    // The document's settings step aside for the area's, and each stage
+    // logs its own failure, so nothing here returns before they are back.
     let document = (
         std::mem::replace(&mut engine.detail, layer.detail),
         std::mem::replace(&mut engine.local_contrast, layer.local_contrast),
         std::mem::replace(&mut engine.finish, layer.finish),
     );
-    crate::develop::detail::apply_noise_reduction(engine);
-    crate::develop::detail::apply_local_contrast(engine);
-    crate::develop::detail::apply_sharpening(engine);
-    apply_finish(engine);
+    let noise = layer.detail.is_some_and(|d| d.reduces_noise());
+    let late = layer.detail.is_some_and(|d| d.sharpens()) || layer.finish.is_some_and(|f| f.is_active());
+    let wrapped = |engine: &mut EngineInner, stages: &[fn(&mut EngineInner)]| {
+        convert_composite(engine, Conversion::ToDisplay);
+        for stage in stages {
+            stage(engine);
+        }
+        convert_composite(engine, Conversion::FromDisplay);
+    };
+    let sharpen: fn(&mut EngineInner) = crate::develop::detail::apply_sharpening;
+    let reduce_noise: fn(&mut EngineInner) = crate::develop::detail::apply_noise_reduction;
+    let finish: fn(&mut EngineInner) = |e| apply_finish(e);
+    if layer.local_contrast.is_some_and(|l| l.is_active()) {
+        if noise {
+            wrapped(engine, &[reduce_noise]);
+        }
+        // Haze and the two details on the rendered image: the document's
+        // linear stages, through the area's mask.
+        crate::develop::detail::apply_haze(engine);
+        crate::develop::detail::apply_local_contrast_linear(engine);
+        if late {
+            wrapped(engine, &[sharpen, finish]);
+        }
+    } else if noise || late {
+        wrapped(engine, &[reduce_noise, sharpen, finish]);
+    }
     (engine.detail, engine.local_contrast, engine.finish) = document;
-    convert_composite(engine, Conversion::FromDisplay);
 }
 
 /// An area layer's stages without the working space, as they always ran.

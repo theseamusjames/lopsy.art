@@ -164,6 +164,9 @@ pub const BLUR_AXIS_FRAG: &str = translated!("develop/blur_axis");
 pub const NOISE_REDUCE_FRAG: &str = translated!("develop/noise_reduce");
 pub const DETAIL_SHARPEN_FRAG: &str = translated!("develop/detail_sharpen");
 pub const LOCAL_CONTRAST_FRAG: &str = translated!("develop/local_contrast");
+pub const LUMINANCE_STATS_FRAG: &str = translated!("develop/luminance_stats");
+pub const LOCAL_CONTRAST_LOG_FRAG: &str = translated!("develop/local_contrast_log");
+pub const HAZE_FRAG: &str = translated!("develop/haze");
 pub const WORKING_SPACE_FRAG: &str = translated!("develop/working_space");
 pub const TONE_FRAG: &str = translated!("develop/tone");
 pub const LOOK_FRAG: &str = translated!("develop/look");
@@ -263,6 +266,9 @@ typed_shaders! {
     NOISE_REDUCE: params::develop::NoiseReduceParams = NOISE_REDUCE_FRAG;
     DETAIL_SHARPEN: params::develop::DetailSharpenParams = DETAIL_SHARPEN_FRAG;
     LOCAL_CONTRAST: params::develop::LocalContrastParams = LOCAL_CONTRAST_FRAG;
+    LUMINANCE_STATS: params::develop::LuminanceStatsParams = LUMINANCE_STATS_FRAG;
+    LOCAL_CONTRAST_LOG: params::develop::LocalContrastLogParams = LOCAL_CONTRAST_LOG_FRAG;
+    HAZE: params::develop::HazeParams = HAZE_FRAG;
     WORKING_SPACE: params::develop::WorkingSpaceParams = WORKING_SPACE_FRAG;
     TONE: params::develop::ToneParams = TONE_FRAG;
     LOOK: params::develop::LookParams = LOOK_FRAG;
@@ -456,6 +462,9 @@ pub struct ShaderPrograms {
     noise_reduce: RefCell<Option<Rc<ShaderProgram<params::develop::NoiseReduceParams>>>>,
     detail_sharpen: RefCell<Option<Rc<ShaderProgram<params::develop::DetailSharpenParams>>>>,
     local_contrast: RefCell<Option<Rc<ShaderProgram<params::develop::LocalContrastParams>>>>,
+    luminance_stats: RefCell<Option<Rc<ShaderProgram<params::develop::LuminanceStatsParams>>>>,
+    local_contrast_log: RefCell<Option<Rc<ShaderProgram<params::develop::LocalContrastLogParams>>>>,
+    haze: RefCell<Option<Rc<ShaderProgram<params::develop::HazeParams>>>>,
     working_space: RefCell<Option<Rc<ShaderProgram<params::develop::WorkingSpaceParams>>>>,
     tone: RefCell<Option<Rc<ShaderProgram<params::develop::ToneParams>>>>,
     look: RefCell<Option<Rc<ShaderProgram<params::develop::LookParams>>>>,
@@ -539,6 +548,21 @@ impl ShaderPrograms {
     /// `develop/local_contrast.wgsl`, compiled the first time it is asked for.
     pub fn local_contrast(&self) -> Result<Rc<ShaderProgram<params::develop::LocalContrastParams>>, String> {
         lazily(&self.local_contrast, || compile(&self.linker, &LOCAL_CONTRAST))
+    }
+
+    /// `develop/luminance_stats.wgsl`, compiled the first time it is asked for.
+    pub fn luminance_stats(&self) -> Result<Rc<ShaderProgram<params::develop::LuminanceStatsParams>>, String> {
+        lazily(&self.luminance_stats, || compile(&self.linker, &LUMINANCE_STATS))
+    }
+
+    /// `develop/local_contrast_log.wgsl`, compiled the first time it is asked for.
+    pub fn local_contrast_log(&self) -> Result<Rc<ShaderProgram<params::develop::LocalContrastLogParams>>, String> {
+        lazily(&self.local_contrast_log, || compile(&self.linker, &LOCAL_CONTRAST_LOG))
+    }
+
+    /// `develop/haze.wgsl`, compiled the first time it is asked for.
+    pub fn haze(&self) -> Result<Rc<ShaderProgram<params::develop::HazeParams>>, String> {
+        lazily(&self.haze, || compile(&self.linker, &HAZE))
     }
 
     /// `develop/working_space.wgsl`, compiled the first time it is asked for.
@@ -675,6 +699,9 @@ impl ShaderPrograms {
             noise_reduce: RefCell::new(None),
             detail_sharpen: RefCell::new(None),
             local_contrast: RefCell::new(None),
+            luminance_stats: RefCell::new(None),
+            local_contrast_log: RefCell::new(None),
+            haze: RefCell::new(None),
             working_space: RefCell::new(None),
             tone: RefCell::new(None),
             look: RefCell::new(None),

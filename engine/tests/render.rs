@@ -1845,3 +1845,292 @@ fn scene_statistics_are_read_before_tone_with_the_exposure_applied() {
     assert!((tone.exposure - (1.0 - brighter[4])).abs() < 0.051, "the median goes to middle grey: {tone:?}");
     assert_no_gpu_errors();
 }
+
+// ---------------------------------------------------------------------------
+// Local contrast and haze in linear light (`lopsy_core::linear_detail`):
+// each pass against its reference, and what it must do
+// ---------------------------------------------------------------------------
+
+/// `develop_test_picture` as linear light: squared, so the shadows hold
+/// fine detail far below middle grey, and brighter toward the right, so
+/// some values are above white.
+fn linear_test_picture(w: u32, h: u32) -> Vec<f32> {
+    develop_test_picture(w, h)
+        .chunks_exact(4)
+        .enumerate()
+        .flat_map(|(i, p)| {
+            let k = 1.0 + 1.5 * (i as u32 % w) as f32 / (w - 1) as f32;
+            [k * p[0] * p[0], k * p[1] * p[1], k * p[2] * p[2], p[3]]
+        })
+        .collect()
+}
+
+/// `picture` (`STAGE_W` wide) put in the composite as it is, `apply` run
+/// over it, and the composite read back as f32. Returns the input as the
+/// texture held it, and the result. `None` with no GPU.
+fn run_on_composite(
+    picture: &[f32],
+    set: &dyn Fn(&mut EngineInner),
+    apply: fn(&mut EngineInner),
+) -> Option<(Vec<f32>, Vec<f32>)> {
+    let (w, h) = (STAGE_W, STAGE_H);
+    let mut engine = engine(w, h)?;
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    set(&mut engine);
+    engine.texture_pool.upload_rgba_f32(engine.composite_texture, 0, 0, w, h, picture).expect("upload");
+    let input = floats(&engine, engine.composite_texture);
+    apply(&mut engine);
+    let output = floats(&engine, engine.composite_texture);
+    assert_no_gpu_errors();
+    Some((input, output))
+}
+
+/// Compares `gpu` with `reference(rounding)` stored the same way, in
+/// half-float units in the last place of the expected value (with a floor
+/// near 0), for the rounding that fits better. Fails if the mean is over
+/// `mean_ulps` or any value is over `worst_ulps`.
+fn assert_matches_in_halves(what: &str, gpu: &[f32], reference: &dyn Fn(HalfRounding) -> Vec<f32>, mean_ulps: f32, worst_ulps: f32) {
+    let (rounding, expected, offs) = [HalfRounding::Nearest, HalfRounding::TowardZero]
+        .into_iter()
+        .map(|rounding| {
+            let mut expected = reference(rounding);
+            rounding.store(&mut expected);
+            let offs: Vec<f32> = gpu
+                .iter()
+                .zip(&expected)
+                .map(|(&g, &e)| (g - e).abs() / (e.abs().max(1.0 / 64.0) / 1024.0))
+                .collect();
+            (rounding, expected, offs)
+        })
+        .min_by(|a, b| a.2.iter().sum::<f32>().total_cmp(&b.2.iter().sum::<f32>()))
+        .unwrap();
+    let mean = offs.iter().sum::<f32>() / offs.len() as f32;
+    let (i, worst) = offs.iter().copied().enumerate().max_by(|a, b| a.1.total_cmp(&b.1)).unwrap();
+    eprintln!("{what}: rounding {rounding:?}, mean {mean:.2} ulps, worst {worst:.1} at value {i}");
+    assert!(mean <= mean_ulps, "{what}: off by {mean:.2} half-float ulps on average (rounding {rounding:?})");
+    assert!(worst <= worst_ulps, "{what}: value {i} is {}, the reference {}: {worst:.1} ulps (rounding {rounding:?})", gpu[i], expected[i]);
+}
+
+#[test]
+fn linear_local_contrast_matches_its_cpu_reference() {
+    use lopsy_core::detail::{self, LocalContrastSettings};
+    use lopsy_core::linear_detail::{self as ld, Statistic};
+    let (w, h) = (STAGE_W as usize, STAGE_H as usize);
+    let picture = linear_test_picture(STAGE_W, STAGE_H);
+    let luma = lopsy_core::working_space::luma(Gamut::Rec2020);
+    // Both directions of each, at full size (the large blur through the
+    // box downscale, the small one not) and at half size.
+    for (name, values) in [("details up, full size", [60.0, 50.0, 0.0, 1.0]), ("details down, half size", [-50.0, -80.0, 0.0, 0.5])] {
+        let set = |e: &mut EngineInner| commands::develop::set_image_local_contrast(e, &values).expect("local contrast");
+        let Some((input, gpu)) = run_on_composite(&picture, &set, lopsy_engine::develop::detail::apply_local_contrast_linear) else { return };
+        let s = LocalContrastSettings::from_values(&values).unwrap();
+        let reference = |rounding: HalfRounding| {
+            let mut stats = ld::statistics(&input, luma, Statistic::LogMoments);
+            rounding.store(&mut stats);
+            let small = engine_blur(&stats, w, h, detail::LC_SMALL_SIGMA * s.pixel_scale, rounding);
+            let large = engine_blur(&stats, w, h, detail::LC_LARGE_SIGMA * s.pixel_scale, rounding);
+            ld::local_contrast_log_reference(&input, &small, &large, luma, &s)
+        };
+        // The CPU stores the statistics, each blur pass and the result as
+        // halves, both ways a GPU may round, so what is left is a value
+        // whose f32 maths lands on either side of a half's rounding
+        // boundary: one ulp, rarely. Measured on this GPU: a mean of 0.02
+        // ulps and a worst of 1. Two are allowed for a GPU whose log2,
+        // exp2 or bilinear weights differ a little; a wrong formula is off
+        // by many ulps nearly everywhere.
+        assert_matches_in_halves(name, &gpu, &reference, 0.25, 2.0);
+    }
+}
+
+#[test]
+fn linear_haze_matches_its_cpu_reference() {
+    use lopsy_core::detail::LocalContrastSettings;
+    use lopsy_core::linear_detail::{self as ld, Statistic};
+    let (w, h) = (STAGE_W as usize, STAGE_H as usize);
+    // Scene data with negatives, above-white values and a veil.
+    let picture: Vec<f32> = linear_test_picture(STAGE_W, STAGE_H)
+        .chunks_exact(4)
+        .enumerate()
+        .flat_map(|(i, p)| {
+            let veil = 0.08 * (i % w) as f32 / w as f32;
+            let neg = if i % 97 == 0 { -0.03 } else { 0.0 };
+            [p[0] + veil + neg, p[1] + veil, p[2] + veil, p[3]]
+        })
+        .collect();
+    let luma = lopsy_core::working_space::luma(Gamut::Rec2020);
+    for (name, values) in [("dehaze, full size", [0.0, 0.0, 70.0, 1.0]), ("added haze, half size", [0.0, 0.0, -60.0, 0.5])] {
+        let set = |e: &mut EngineInner| commands::develop::set_image_local_contrast(e, &values).expect("haze");
+        let Some((input, gpu)) = run_on_composite(&picture, &set, lopsy_engine::develop::detail::apply_haze) else { return };
+        let s = LocalContrastSettings::from_values(&values).unwrap();
+        let reference = |rounding: HalfRounding| {
+            let mut stats = ld::statistics(&input, luma, Statistic::Veil);
+            rounding.store(&mut stats);
+            let veil = engine_blur(&stats, w, h, ld::HAZE_SIGMA * s.pixel_scale, rounding);
+            ld::haze_reference(&input, &veil, s.haze)
+        };
+        // As for local contrast: the statistics, the veil's blur passes and
+        // the result are stored as halves both ways, so one ulp is a value
+        // on a rounding boundary. Measured: a mean of 0.05 ulps, a worst
+        // of 1; two allowed for another GPU's exp and bilinear weights.
+        assert_matches_in_halves(name, &gpu, &reference, 0.25, 2.0);
+        if values[2] > 0.0 {
+            assert!(gpu.iter().zip(&input).all(|(g, i)| *g >= 0.0 || *i < 0.0), "dehazing makes no negatives");
+        }
+    }
+}
+
+/// A grey picture `w` wide and 2 × `half` high: bright above (`bright`,
+/// linear), dark below (`dark`), both with a fine texture of ±`texture`
+/// stops along each row (period 8, so a row's mean of log luminance is its
+/// level's), as sRGB-encoded values.
+fn step_edge(w: u32, half: u32, dark: f32, bright: f32, texture: f32) -> Vec<f32> {
+    (0..w * half * 2)
+        .flat_map(|i| {
+            let (x, y) = (i % w, i / w);
+            let level = if y < half { bright } else { dark };
+            let v = level * (texture * (std::f32::consts::TAU * x as f32 / 8.0).sin()).exp2();
+            let e = lopsy_core::working_space::srgb_encode(v);
+            [e, e, e, 1.0]
+        })
+        .collect()
+}
+
+/// Per row: the mean of log2 luminance and its spread (standard deviation),
+/// of a 16-bit sRGB grey export.
+fn row_stats(pixels: &[u16], w: usize) -> Vec<(f32, f32)> {
+    pixels
+        .chunks_exact(w * 4)
+        .map(|row| {
+            let l: Vec<f32> =
+                row.chunks_exact(4).map(|p| lopsy_core::working_space::srgb_decode(f32::from(p[1]) / 65535.0).max(1e-6).log2()).collect();
+            let mean = l.iter().sum::<f32>() / w as f32;
+            let var = l.iter().map(|v| (v - mean) * (v - mean)).sum::<f32>() / w as f32;
+            (mean, var.sqrt())
+        })
+        .collect()
+}
+
+#[test]
+fn large_details_plus_50_boosts_texture_at_a_strong_edge_with_a_small_halo_and_less_than_before() {
+    // A dark horizon (0.02, 4.6 stops under the sky at 0.5) with texture of
+    // ±0.15 stops on both sides, at a quarter of full size, so the large
+    // blur's σ is 12.5 pixels and each side is 5 of them.
+    let (w, half) = (64u32, 64u32);
+    let Some(mut engine) = engine(w, 2 * half) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("edge", 0, 0, w, 2 * half, 1.0)).expect("layer");
+    let picture = step_edge(w, half, 0.02, 0.5, 0.15);
+    commands::layer::upload_layer_pixels_f32_rect(&mut engine, "edge", w, 2 * half, 0, 0, w, 2 * half, &picture).expect("pixels");
+    let lc = [50.0, 0.0, 0.0, 0.25];
+    let measure = |engine: &mut EngineInner| {
+        let before = row_stats(&now(compositor::composite_for_export_u16(engine)), w as usize);
+        commands::develop::set_image_local_contrast(engine, &lc).expect("local contrast");
+        let after = row_stats(&now(compositor::composite_for_export_u16(engine)), w as usize);
+        commands::develop::clear_image_local_contrast(engine);
+        // The halo: how far a row's mean moves, the texture averaged out.
+        let halo = before.iter().zip(&after).map(|(b, a)| (a.0 - b.0).abs()).fold(0.0f32, f32::max);
+        // The texture's gain, away from the edge on each side.
+        let gain = |rows: std::ops::Range<usize>| rows.clone().map(|y| after[y].1 / before[y].1).sum::<f32>() / rows.len() as f32;
+        (halo, gain(4..20), gain(108..124))
+    };
+    let (old_halo, old_bright, old_dark) = measure(&mut engine);
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    let (new_halo, new_bright, new_dark) = measure(&mut engine);
+    eprintln!(
+        "Large details +50 at a 4.6-stop edge: halo {old_halo:.3} stops on encoded values, {new_halo:.3} in linear light; \
+         texture x{old_bright:.2} / x{old_dark:.2} before, x{new_bright:.2} / x{new_dark:.2} now (bright / dark side)"
+    );
+    assert!(new_bright > 1.3 && new_dark > 1.3, "texture gains contrast on both sides: x{new_bright} and x{new_dark}");
+    // The Wiener filter's bound for a step of S stops is about
+    // a · 2ε / S (`lopsy_core::linear_detail`): 0.75 · 0.5 / 4.6 = 0.08
+    // stops here, at the edge itself, and less beside it.
+    assert!(new_halo < 0.1, "the halo stays under 0.1 stops: {new_halo}");
+    assert!(old_halo > 2.0 * new_halo, "the old method's halo ({old_halo}) is bigger than the new one's ({new_halo})");
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn zero_large_and_small_details_change_nothing_with_the_working_space() {
+    let (w, h) = (32u32, 16u32);
+    let Some(mut engine) = engine(w, h) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, w, h, 1.0)).expect("layer");
+    let picture = develop_test_picture(w, h);
+    commands::layer::upload_layer_pixels_f32_rect(&mut engine, "art", w, h, 0, 0, w, h, &picture).expect("pixels");
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    let plain = now(compositor::composite_for_export_u16(&mut engine));
+    commands::develop::set_image_local_contrast(&mut engine, &[0.0, 0.0, 0.0, 1.0]).expect("zeros");
+    assert_eq!(now(compositor::composite_for_export_u16(&mut engine)), plain);
+    commands::develop::set_image_local_contrast(&mut engine, &[30.0, 0.0, 0.0, 1.0]).expect("large");
+    assert_ne!(now(compositor::composite_for_export_u16(&mut engine)), plain);
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn haze_runs_on_scene_data_before_tone_zero_changes_nothing_and_removing_it_lowers_a_veil() {
+    let (w, h) = (48u32, 32u32);
+    let Some(mut engine) = engine(w, h) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, w, h, 1.0)).expect("layer");
+    // A picture with a uniform veil of 0.12 (linear) added to every channel.
+    let picture: Vec<f32> = linear_test_picture(w, h)
+        .chunks_exact(4)
+        .flat_map(|p| [0.12 + 0.5 * p[0], 0.12 + 0.5 * p[1], 0.12 + 0.5 * p[2], 1.0].map(lopsy_core::working_space::srgb_encode))
+        .collect();
+    commands::layer::upload_layer_pixels_f32_rect(&mut engine, "art", w, h, 0, 0, w, h, &picture).expect("pixels");
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    let plain = now(commands::develop::read_rendered_f32(&mut engine));
+    commands::develop::set_image_local_contrast(&mut engine, &[0.0, 0.0, 0.0, 1.0]).expect("zeros");
+    assert_eq!(now(commands::develop::read_rendered_f32(&mut engine)), plain, "zero is the identity");
+    commands::develop::set_image_local_contrast(&mut engine, &[0.0, 0.0, 80.0, 1.0]).expect("haze");
+    let cleaned = now(commands::develop::read_rendered_f32(&mut engine));
+    let darkest = |o: &[f32]| o.chunks_exact(4).map(|p| p[0].min(p[1]).min(p[2])).sum::<f32>() / (w * h) as f32;
+    eprintln!("darkest channel: {} with the veil, {} dehazed", darkest(&plain), darkest(&cleaned));
+    assert!(darkest(&cleaned) < darkest(&plain) - 0.03, "the veil comes down");
+    assert!(cleaned.iter().all(|&v| v >= 0.0), "no negatives");
+    commands::develop::set_image_local_contrast(&mut engine, &[0.0, 0.0, -80.0, 1.0]).expect("added haze");
+    let hazier = now(commands::develop::read_rendered_f32(&mut engine));
+    assert!(darkest(&hazier) > darkest(&plain) + 0.01 && hazier.iter().all(|&v| v >= 0.0));
+    // Before tone: the scene statistics, read before the tone pass, see it.
+    commands::develop::set_image_local_contrast(&mut engine, &[0.0, 0.0, 0.0, 1.0]).expect("zeros");
+    let stats_plain = now(commands::develop::read_scene_statistics(&mut engine));
+    commands::develop::set_image_local_contrast(&mut engine, &[0.0, 0.0, 80.0, 1.0]).expect("haze");
+    let stats_cleaned = now(commands::develop::read_scene_statistics(&mut engine));
+    assert!(stats_cleaned[1] < stats_plain[1] - 0.1, "the darkest percentile falls: {stats_plain:?} -> {stats_cleaned:?}");
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn an_areas_layer_local_contrast_is_the_linear_stage_through_its_mask() {
+    let (w, h) = (32u32, 16u32);
+    let Some(mut engine) = engine(w, h) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, w, h, 1.0)).expect("layer");
+    commands::layer::upload_layer_pixels_f32_rect(&mut engine, "art", w, h, 0, 0, w, h, &develop_test_picture(w, h)).expect("pixels");
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    // A hard-edged radial area over the whole picture, then one over x < 10.
+    let mut everywhere = radial_area(16.0, 8.0, 100.0, 100.0, [0.0; 7]);
+    everywhere[8] = 0.0;
+    commands::develop::set_image_areas(&mut engine, &everywhere).expect("areas");
+    let before = now(commands::develop::read_rendered_f32(&mut engine));
+    let lc = [60.0, 40.0, 0.0, 1.0];
+    commands::develop::set_image_area_local_contrast(&mut engine, 0, &lc).expect("area local contrast");
+    let through_area = now(commands::develop::read_rendered_f32(&mut engine));
+    commands::develop::clear_image_area_layers(&mut engine);
+    commands::develop::set_image_local_contrast(&mut engine, &lc).expect("local contrast");
+    let document = now(commands::develop::read_rendered_f32(&mut engine));
+    assert_ne!(document, before);
+    // The area's mask is 1 everywhere: the layer's mix of the same stage.
+    let worst = through_area.iter().zip(&document).map(|(a, b)| (a - b).abs() / b.abs().max(1.0 / 64.0) * 1024.0).fold(0.0f32, f32::max);
+    assert!(worst <= 2.0, "the area's stage is the document's: {worst} half ulps apart");
+    commands::develop::clear_image_local_contrast(&mut engine);
+    let mut left = radial_area(4.0, 8.0, 6.0, 40.0, [0.0; 7]);
+    left[8] = 0.0;
+    commands::develop::set_image_areas(&mut engine, &left).expect("areas");
+    commands::develop::set_image_area_local_contrast(&mut engine, 0, &lc).expect("area local contrast");
+    let masked = now(commands::develop::read_rendered_f32(&mut engine));
+    let px = |v: &[f32], x: u32, y: u32| v[((y * w + x) * 4) as usize..((y * w + x) * 4 + 4) as usize].to_vec();
+    for y in 0..h {
+        assert_ne!(px(&masked, 3, y), px(&before, 3, y), "inside the area at row {y}");
+        for x in 11..w {
+            assert_eq!(px(&masked, x, y), px(&before, x, y), "outside the area at ({x}, {y})");
+        }
+    }
+    assert_no_gpu_errors();
+}
