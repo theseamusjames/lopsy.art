@@ -390,6 +390,7 @@ fn with_the_hdr_view_off_an_hdr_screen_is_given_the_sdr_rendering() {
     // And the frame: the composite after a live frame (what the final blit
     // reads) is the rendered image through the SDR output, bit for bit
     // the GPU's.
+    compositor::want_rendered(&mut engine);
     compositor::render(&mut engine);
     let frame = now(engine.gpu().read_rgba_f32(engine.composite_texture, 0, 0, w, h));
     let rendered = engine.working_space.and_then(|ws| ws.rendered).expect("rendered");
@@ -439,4 +440,50 @@ fn a_failed_frame_is_an_error_from_the_scene_statistics() {
     engine.doc_width = engine.texture_pool.max_size() + 1;
     let read = block_on(commands::develop::read_scene_statistics(&mut engine));
     assert!(read.is_err(), "statistics of a frame that failed: {read:?}");
+}
+
+/// Textures the pool has lent out and not had back.
+fn textures_in_use(engine: &EngineInner) -> usize {
+    engine.texture_pool.live_entry_count() - engine.texture_pool.free_entry_count()
+}
+
+/// Live frames keep their rendered image (a document-sized float texture)
+/// only once a statistics read has asked for it. An engine that draws and
+/// exports never allocates it; the first histogram read draws the frame
+/// again and counts what an engine that kept it from the start counts;
+/// later reads use the kept image without drawing again; and turning the
+/// working space off gives the texture back.
+#[test]
+fn only_an_engine_that_reads_statistics_keeps_the_rendered_image() {
+    let (w, h) = (32u32, 8u32);
+    let Some(mut export) = hdr_document(w, h) else { return };
+    compositor::render(&mut export);
+    let before_export = textures_in_use(&export);
+    let _ = now(compositor::composite_for_export(&mut export));
+    let _ = now(commands::develop::read_hdr_output_f32(&mut export, 4.0));
+    compositor::render(&mut export);
+    assert_eq!(export.working_space.and_then(|ws| ws.rendered), None, "an exporting engine keeps no rendered image");
+    assert_eq!(textures_in_use(&export), before_export);
+
+    let Some(mut from_the_start) = hdr_document(w, h) else { return };
+    compositor::want_rendered(&mut from_the_start);
+    let expected = now(commands::develop::read_develop_histogram(&mut from_the_start));
+
+    let Some(mut engine) = hdr_document(w, h) else { return };
+    compositor::render(&mut engine);
+    let in_use = textures_in_use(&engine);
+    let first = now(commands::develop::read_develop_histogram(&mut engine));
+    assert_eq!(first, expected, "the first read draws the frame again and counts it");
+    assert_eq!(textures_in_use(&engine), in_use + 1, "one rendered image, kept from then on");
+    let rendered = engine.working_space.and_then(|ws| ws.rendered).expect("kept");
+    // Painted over, the kept image shows in the next read: it did not draw
+    // the frame again.
+    assert!(engine.gpu().clear(rendered, [0.0, 0.0, 0.0, 1.0]));
+    let second = now(commands::develop::read_develop_histogram(&mut engine));
+    assert_ne!(second, first, "the second read drew the frame again");
+    assert_eq!(second[3 * 256], w * h, "every pixel black");
+
+    commands::develop::set_develop_working_space(&mut engine, false, 0).expect("off");
+    assert_eq!(textures_in_use(&engine), in_use, "off gives the rendered image back");
+    assert_no_gpu_errors();
 }

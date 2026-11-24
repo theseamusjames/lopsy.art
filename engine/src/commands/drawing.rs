@@ -58,7 +58,8 @@ pub fn compute_radial_gradient_t(px: f64, py: f64, cx: f64, cy: f64, radius: f64
 // Eyedropper
 // ============================================================
 
-pub fn sample_color(engine: &EngineInner, x: f64, y: f64, sample_size: u32) -> Read<Vec<u8>> {
+pub fn sample_color(engine: &mut EngineInner, x: f64, y: f64, sample_size: u32) -> Read<Vec<u8>> {
+    crate::document::compositor::want_rendered(engine);
     let ix = x as i32;
     let iy = y as i32;
     let half = (sample_size / 2) as i32;

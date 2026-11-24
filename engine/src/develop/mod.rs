@@ -91,7 +91,9 @@
 //! take, with `compositeForExport` as the gain map's SDR picture.
 //!
 //! **Statistics.** With the working space, the live frame keeps its
-//! rendered image (after D′, before 11) in the working space's own texture.
+//! rendered image (after D′, before 11) in the working space's own texture,
+//! from the first read of it on (`compositor::want_rendered`, which draws
+//! the frame again then): an engine that only exports never holds it.
 //! The histogram (`readDevelopHistogram`, and so Auto tone) and the pixel
 //! readout (`sampleColor`) read that image through stage 11 for sRGB with no
 //! dither (`compositor::statistics_image`), whatever the screen is and

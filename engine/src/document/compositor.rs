@@ -2289,9 +2289,9 @@ fn apply_output(engine: &EngineInner, settings: &lopsy_core::output::OutputSetti
 
 /// Keep the live frame's rendered image (the composite now, before the
 /// output step) in the working space's own texture, for the statistics and
-/// the float read.
+/// the float read, once one of them has asked (`want_rendered`).
 fn keep_rendered(engine: &mut EngineInner) -> Result<(), String> {
-    let Some(mut ws) = engine.working_space else { return Ok(()) };
+    let Some(mut ws) = engine.working_space.filter(|ws| ws.keep_rendered) else { return Ok(()) };
     let size = (engine.doc_width, engine.doc_height);
     let texture = match ws.rendered.filter(|&t| engine.texture_pool.get_size(t) == Some(size)) {
         Some(texture) => texture,
@@ -2311,6 +2311,21 @@ fn keep_rendered(engine: &mut EngineInner) -> Result<(), String> {
         .draw(Target::Texture(texture));
     engine.gpu().unbind_textures(1);
     Ok(())
+}
+
+/// What a read of the rendered image calls first (the statistics through
+/// `statistics_image` and `hdr_statistics_image`, and the float read): from
+/// now on live frames keep their rendered image, and if they did not until
+/// now the frame is drawn again so there is one to read. Without the
+/// working space it does nothing.
+pub fn want_rendered(engine: &mut EngineInner) {
+    let Some(ws) = engine.working_space.as_mut() else { return };
+    if ws.keep_rendered {
+        return;
+    }
+    ws.keep_rendered = true;
+    engine.needs_recomposite = true;
+    render(engine);
 }
 
 /// The last live frame's rendered image through the output step for sRGB,

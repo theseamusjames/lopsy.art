@@ -26,8 +26,13 @@ pub struct WorkingSpace {
     pub source: SourceEncoding,
     /// The last live frame's rendered image (linear Rec. 2020, before the
     /// output step), document-sized, for the statistics and the float
-    /// read; made by the first live frame.
+    /// read; made by the first live frame after `keep_rendered` is set.
     pub rendered: Option<TextureHandle>,
+    /// Whether live frames keep their rendered image in `rendered`. The
+    /// first statistics read sets it (`compositor::want_rendered`): the
+    /// copy is 8 bytes a pixel, about 320 MB for 40 megapixels, which an
+    /// engine that only exports never needs.
+    pub keep_rendered: bool,
 }
 
 /// A conversion of the whole composite.

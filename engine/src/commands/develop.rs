@@ -104,7 +104,8 @@ pub fn set_develop_working_space(engine: &mut EngineInner, on: bool, source: u8)
         return Ok(());
     }
     let source = SourceEncoding::from_code(source)?;
-    engine.working_space = Some(WorkingSpace { source, rendered });
+    let keep_rendered = engine.working_space.is_some_and(|ws| ws.keep_rendered);
+    engine.working_space = Some(WorkingSpace { source, rendered, keep_rendered });
     engine.needs_recomposite = true;
     Ok(())
 }
@@ -394,6 +395,7 @@ pub const HISTOGRAM_MAX_EDGE: u32 = 512;
 /// and without the screen-only views, so the histogram and Auto tone do
 /// not depend on the display.
 pub fn read_develop_histogram(engine: &mut EngineInner) -> Read<Vec<u32>> {
+    compositor::want_rendered(engine);
     if engine.needs_recomposite {
         compositor::render(engine);
     }
@@ -422,6 +424,7 @@ pub fn read_hdr_histogram(engine: &mut EngineInner, peak: f32) -> Read<Vec<u32>>
     if engine.working_space.is_none() {
         return Read::failed("The document has no working space".to_string());
     }
+    compositor::want_rendered(engine);
     if engine.needs_recomposite {
         compositor::render(engine);
     }
@@ -461,6 +464,7 @@ pub fn read_rendered_f32(engine: &mut EngineInner) -> Read<Vec<f32>> {
     if engine.working_space.is_none() {
         return Read::failed("The document has no working space".to_string());
     }
+    compositor::want_rendered(engine);
     if engine.needs_recomposite {
         compositor::render(engine);
     }
