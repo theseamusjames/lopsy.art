@@ -180,6 +180,11 @@ impl<'a> TiffReader<'a> {
         Ok(Self { data, le, ifd0_offset })
     }
 
+    /// Whether the file is little-endian ("II").
+    pub fn is_little_endian(&self) -> bool {
+        self.le
+    }
+
     pub fn read_ifd(&self, index: usize) -> Result<Vec<IfdEntry>, String> {
         let mut offset = self.ifd0_offset;
         for _ in 0..index {

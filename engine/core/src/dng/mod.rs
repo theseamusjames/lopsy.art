@@ -123,6 +123,14 @@ pub(crate) struct StoredImage {
     /// Values the decode was asked for: `width × height` for CFA data,
     /// times `samples` for LinearRaw.
     pub expected_pixels: usize,
+    /// The samples are 8-bit values moved into the high byte (uncompressed
+    /// and deflate data at 8 bits a sample), so `>> 8` gives what the file
+    /// stores.
+    pub eight_bit_shifted: bool,
+    /// The samples are 16-bit values of a big-endian file read as
+    /// little-endian (uncompressed and deflate data), so `swap_bytes`
+    /// gives what the file stores.
+    pub byte_swapped: bool,
 }
 
 impl StoredImage {
@@ -219,7 +227,9 @@ pub(crate) fn read_stored_image(data: &[u8], debug_log: &mut Vec<String>) -> Res
             pixel_data.len(), expected_pixels, width, height, samples
         ));
     }
-    Ok(StoredImage { ifd0, main_ifd, width, height, bits, samples, photo_interp, pixel_data, expected_pixels })
+    let eight_bit_shifted = bits == 8 && matches!(compression, 1 | 8 | 32946);
+    let byte_swapped = bits == 16 && matches!(compression, 1 | 8 | 32946) && !reader.is_little_endian();
+    Ok(StoredImage { ifd0, main_ifd, width, height, bits, samples, photo_interp, pixel_data, expected_pixels, eight_bit_shifted, byte_swapped })
 }
 
 pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {

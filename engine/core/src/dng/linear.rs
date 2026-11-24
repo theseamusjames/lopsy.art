@@ -327,7 +327,14 @@ pub fn prepare_dng(data: &[u8]) -> Result<DngPrepared, String> {
         for col in 0..w {
             let i = ((row + top) * sw + col + left) * stored_spp;
             for s in 0..spp {
-                let raw = pixel_data[i + s];
+                let stored_value = pixel_data[i + s];
+                let raw = if stored.eight_bit_shifted {
+                    stored_value >> 8
+                } else if stored.byte_swapped {
+                    stored_value.swap_bytes()
+                } else {
+                    stored_value
+                };
                 let lin = match &table {
                     Some(t) => t[(raw as usize).min(last)],
                     None => raw,
