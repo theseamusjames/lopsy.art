@@ -680,10 +680,27 @@ was.
   (`engine/core/src/linear_detail.rs`), haze on scene data, noise
   reduction moved before tone. On the plan's test (a 4.6-stop horizon
   at +50) the halo fell from 0.41 stops to 0.08.
+- **Phases 3 to 5, app**: Photonamous sends the recipe to the new stages
+  (`apps/photonamous/src/engine/develop-stages.ts`: `setDevelopTone`,
+  `setDevelopLook`, `setDevelopCurves` as 4096-entry float tables, the
+  masks' `setDevelopAreaLook` and `setDevelopAreaCurves`), Auto tone from
+  scene statistics, `clipLevels` kept through to `setRawDevelop` and the
+  RAF worker's white balance; the 8-bit fallback keeps the old calls on a
+  path of its own. New browser tests in `e2e/linear-tone.spec.ts`
+  (Highlights −100 on `DSCF8005.RAF` brings its sky below white).
 - **Phase 7, engine**: HDR targets for the output step, the live frame
   in HDR with a headroom (`setDevelopHdr`, `screenIsHdr`), float reads
   for HDR files (`readHdrOutputF32`) and a histogram of the HDR
   rendering.
+
+- **Phase 6, the part that needs no camera data (engine only)**: the
+  DNG specification's colour method with two illuminants
+  (`engine/core/src/dng/camera_color.rs`), colour temperature and tint
+  (`engine/core/src/cct.rs`), and a linear decode so a DNG can be
+  developed as a RAW photo (`dngPrepare`, `dngRenderLinearBand`,
+  `dngDevelopDefaults`, `dngWhiteBalance`, `dngWhiteBalanceKelvin`).
+  **The app does not use it yet**: a DNG is still edited as today.
+  Comparison pictures: `samples/linear-pipeline-review/dng/`.
 
 ### Decided
 
@@ -810,3 +827,27 @@ was.
     DNG specification's two-illuminant method as engine code, and DNG
     files joining the RAW pipeline with their own matrices. RAF colour
     is untouched until the data source is decided.
+38. **An independent review of the night's engine changes was run**,
+    and its findings fixed: a gain-map export that failed on low-key
+    photos, two overflows reachable only in the browser build, a
+    texture leak, unchecked colour-grade values. It confirmed Lopsy's
+    paths unchanged (its RAF import bit-identical on all eight
+    samples), with the exceptions listed in decision 5.
+39. **A Bayer RAF is RGGB again.** Reading the pattern from the file
+    (decision 7) could not be checked against a real Bayer file, and a
+    wrong phase would swap red and blue in both apps, so it was put
+    back until a sample exists.
+40. **Lopsy's test for its Display P3 PNG was updated** to expect the
+    `cICP` chunk beside the profile (decision 5).
+41. **DNG colour temperature uses Kim's Planckian-locus fit evaluated
+    directly; tint is 3000 × Duv**, positive for greener light. Not
+    yet matched to another raw converter's scale.
+42. **A DNG's `ProfileGainTableMap` (Apple's local tone map) is not
+    applied.** It was built from the specification and taken out
+    again: it washed out one sample. Without it the dark-scene sample
+    (+4.1 EV baseline exposure) blows its highlights. **Worth a look
+    by eye** before DNGs are switched to this path.
+43. **Not handled for DNG yet**: opcode lists (lens corrections),
+    hue/saturation maps, the profile's tone curve, DefaultCrop,
+    highlight reconstruction. Files the new path cannot take fall back
+    to today's decode with a reason.
