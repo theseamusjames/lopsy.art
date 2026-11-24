@@ -108,32 +108,6 @@ impl BlackLevels {
     }
 }
 
-/// The 2×2 Bayer pattern (0 R, 1 G, 2 B; top-left, top-right,
-/// bottom-left, bottom-right) of a 6×6 pattern that repeats every two
-/// rows and columns, read at its (`row_shift`, `col_shift`). None for a
-/// pattern that does not repeat that way (X-Trans).
-pub fn bayer_from_6x6(pattern: &[u8; 36], row_shift: usize, col_shift: usize) -> Option<[u8; 4]> {
-    let at = |r: usize, c: usize| pattern[(r % 6) * 6 + c % 6];
-    for r in 0..6 {
-        for c in 0..6 {
-            if at(r, c) != at(r % 2, c % 2) {
-                return None;
-            }
-        }
-    }
-    let quad = [
-        at(row_shift, col_shift),
-        at(row_shift, col_shift + 1),
-        at(row_shift + 1, col_shift),
-        at(row_shift + 1, col_shift + 1),
-    ];
-    // A Bayer quad has its two greens on one diagonal and red and blue on
-    // the other.
-    let greens_on_a_diagonal = (quad[0] == 1 && quad[3] == 1) || (quad[1] == 1 && quad[2] == 1);
-    let has_red_and_blue = quad.contains(&0) && quad.contains(&2);
-    (greens_on_a_diagonal && has_red_and_blue).then_some(quad)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,21 +176,5 @@ mod tests {
         assert_eq!(b.at(1, 1, 0), 99.5);
         assert_eq!(b.at(1, 5, 0), 100.0, "columns past the delta table get none");
         assert!(!b.is_uniform());
-    }
-
-    #[test]
-    fn bayer_quads_come_from_a_two_periodic_pattern() {
-        let rggb: [u8; 36] = std::array::from_fn(|i| [[0, 1], [1, 2]][(i / 6) % 2][i % 2]);
-        assert_eq!(bayer_from_6x6(&rggb, 0, 0), Some([0, 1, 1, 2]));
-        assert_eq!(bayer_from_6x6(&rggb, 0, 1), Some([1, 0, 2, 1]), "GRBG");
-        assert_eq!(bayer_from_6x6(&rggb, 1, 0), Some([1, 2, 0, 1]), "GBRG");
-        assert_eq!(bayer_from_6x6(&rggb, 1, 1), Some([2, 1, 1, 0]), "BGGR");
-        assert_eq!(bayer_from_6x6(&rggb, 2, 2), Some([0, 1, 1, 2]));
-        let xtrans: [u8; 36] = [
-            1, 0, 2, 1, 2, 0, 2, 1, 1, 0, 1, 1, 0, 1, 1, 2, 1, 1, //
-            1, 2, 0, 1, 0, 2, 0, 1, 1, 2, 1, 1, 2, 1, 1, 0, 1, 1,
-        ];
-        assert_eq!(bayer_from_6x6(&xtrans, 0, 0), None);
-        assert_eq!(bayer_from_6x6(&[1; 36], 0, 0), None, "all green is no Bayer pattern");
     }
 }

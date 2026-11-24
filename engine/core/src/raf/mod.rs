@@ -523,7 +523,7 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
         raf_log!("[RAF] CFA phase auto-detected: row_shift={}, col_shift={}", rs, cs);
         shift_cfa(&base_pat, rs, cs)
     } else {
-        bayer_cfa(cfa_pattern.as_ref(), crop_top as usize, crop_left as usize)
+        BAYER_RGGB_CFA
     };
     let cfa_period = if is_xtrans { 6 } else { 2 };
 
@@ -826,7 +826,7 @@ pub fn debug_wb_mosaic(data: &[u8]) -> Result<(Vec<f32>, usize, usize, [u8; 36])
         let (rs, cs) = detect_cfa_shift(&normalized, w, h, &base_pat, crop_top as usize, crop_left as usize);
         shift_cfa(&base_pat, rs, cs)
     } else {
-        bayer_cfa(cfa_pattern.as_ref(), crop_top as usize, crop_left as usize)
+        BAYER_RGGB_CFA
     };
     let cfa_period = if is_xtrans { 6 } else { 2 };
 
@@ -1692,22 +1692,17 @@ impl UnitTables {
     }
 }
 
-/// The 2×2 pattern of a Bayer RAF, as the first four of 36 entries (the
-/// layout `RafRenderParams::cfa` has for Bayer), each 0 R, 1 G, 2 B.
-///
-/// It is read from the CFA header's pattern (tag 0x0131) when that
-/// repeats every two rows and columns, shifted the way the X-Trans path
-/// resolves the same tag's phase (the crop offset plus (4, 1), see
-/// `detect_cfa_shift`). A file without such a pattern keeps RGGB.
-fn bayer_cfa(file_pattern: Option<&[u8; 36]>, crop_top: usize, crop_left: usize) -> [u8; 36] {
-    let quad = file_pattern
-        .and_then(|pat| {
-            let aligned = shift_cfa(pat, (crop_top % 6 + 4) % 6, (crop_left % 6 + 1) % 6);
-            crate::black_level::bayer_from_6x6(&aligned, 0, 0)
-        })
-        .unwrap_or([0, 1, 1, 2]);
-    std::array::from_fn(|i| quad[i % 4])
-}
+/// A Bayer RAF's pattern, RGGB from the crop's top-left, repeated over the
+/// 36 entries `RafRenderParams::cfa` holds (Bayer uses the first four), 0 R,
+/// 1 G, 2 B. It is fixed rather than read from the CFA header's pattern
+/// (tag 0x0131): reading it needs a real Bayer RAF to check the pattern's
+/// phase against, and a wrong phase would swap red and blue in every
+/// Bayer RAF.
+const BAYER_RGGB_CFA: [u8; 36] = [
+    0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, //
+    0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, //
+    0, 1, 1, 2,
+];
 
 fn parse_cfa_tiff(cfa_section: &[u8]) -> Result<CfaMeta, String> {
     let reader = TiffReader::new(cfa_section)
@@ -1840,26 +1835,12 @@ mod tests {
         assert_eq!(unit.at(2, 1)[600], 0.5, "(600 - 200) / (1000 - 200)");
     }
 
-    /// Without a two-periodic pattern a Bayer RAF keeps RGGB, in the layout
-    /// it always had.
+    /// A Bayer RAF is RGGB, the pattern the decoder has always used for
+    /// one, whatever its CFA header says.
     #[test]
-    fn bayer_cfa_falls_back_to_rggb() {
+    fn a_bayer_raf_is_rggb() {
         let rggb: [u8; 36] = std::array::from_fn(|i| [0u8, 1, 1, 2][i % 4]);
-        assert_eq!(bayer_cfa(None, 0, 0), rggb);
-        assert_eq!(bayer_cfa(Some(&DEFAULT_XTRANS_CFA), 0, 0), rggb);
-    }
-
-    /// A two-periodic pattern in the file decides the quad. The file uses
-    /// Fujifilm's indices (0 B, 2 R); the result is 0 R, 2 B.
-    #[test]
-    fn bayer_cfa_reads_the_file_pattern() {
-        // Fujifilm BGGR tiled over 6×6.
-        let fuji: [u8; 36] = std::array::from_fn(|i| [[0u8, 1], [1, 2]][(i / 6) % 2][i % 2]);
-        // Shifted by (4, 1) for a crop at (0, 0): the quad at row 0, col 1.
-        let cfa = bayer_cfa(Some(&fuji), 0, 0);
-        assert_eq!(&cfa[..4], &[1, 2, 0, 1], "GBRG");
-        let cfa = bayer_cfa(Some(&fuji), 0, 1);
-        assert_eq!(&cfa[..4], &[2, 1, 1, 0], "BGGR");
+        assert_eq!(BAYER_RGGB_CFA, rggb);
     }
 
     #[test]
