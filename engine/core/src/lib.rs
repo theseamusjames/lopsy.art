@@ -20,6 +20,7 @@ pub mod filters;
 pub mod export;
 pub mod hdr_png;
 pub mod gain_map;
+pub mod gain_map_jpeg;
 pub mod flood_fill;
 pub mod magnetic_lasso;
 pub mod compress;
