@@ -300,6 +300,24 @@ readback_export! {
     }
 }
 
+readback_export! {
+    /// The composite as a 16-bit PNG in `file_space`, its numbers taken to
+    /// be in `pixel_space` and converted. 0 is sRGB, 1 Display P3, 2
+    /// Rec. 2020. `exportPng16(cs)` is `exportPng16To(cs, cs)`.
+    #[wasm_bindgen(js_name = "exportPng16To")]
+    pub fn export_png_16_to(engine, pixel_space: u8, file_space: u8) -> Result<Vec<u8>> {
+        read(lopsy_engine::commands::export::export_png_16_to(engine, pixel_space, file_space))
+    }
+}
+
+readback_export! {
+    /// As `exportPng16To`, as a 16-bit RGBA TIFF with `file_space`'s ICC profile.
+    #[wasm_bindgen(js_name = "exportTiff16To")]
+    pub fn export_tiff_16_to(engine, pixel_space: u8, file_space: u8) -> Result<Vec<u8>> {
+        read(lopsy_engine::commands::export::export_tiff_16_to(engine, pixel_space, file_space))
+    }
+}
+
 /// Continue a command that was waiting for a readback (see `readback`).
 /// WebGL never leaves one waiting.
 #[cfg(not(feature = "wgpu"))]
@@ -320,15 +338,29 @@ pub fn get_composite_size(engine: &Engine) -> Vec<u32> {
     vec![engine.inner.doc_width, engine.inner.doc_height]
 }
 
-/// Build an ICC profile for the given color space (0 = sRGB, 1 = Display P3).
+/// Build an ICC profile for the given color space (0 = sRGB, 1 = Display
+/// P3, 2 = Rec. 2020; anything else sRGB).
 /// Used by the JS export path to tag files when the browser encoder did not.
 #[wasm_bindgen(js_name = "buildIccProfile")]
 pub fn build_icc_profile(color_space: u8) -> Vec<u8> {
     let cs = match color_space {
         1 => lopsy_core::color::ColorSpace::DisplayP3,
+        2 => lopsy_core::color::ColorSpace::Rec2020,
         _ => lopsy_core::color::ColorSpace::Srgb,
     };
     lopsy_core::export::build_icc_profile(cs)
+}
+
+/// Convert an RGBA8 pixel buffer from one colour space to another (0 =
+/// sRGB, 1 = Display P3, 2 = Rec. 2020), alpha untouched: the 8-bit
+/// counterpart of the conversion `exportPng16To` does.
+#[wasm_bindgen(js_name = "convertColorSpace8")]
+pub fn convert_color_space_8(mut pixels: Vec<u8>, from: u8, to: u8) -> Result<Vec<u8>, JsError> {
+    use lopsy_engine::commands::export::color_space_from_code;
+    let from = color_space_from_code(from).map_err(|e| JsError::new(&e))?;
+    let to = color_space_from_code(to).map_err(|e| JsError::new(&e))?;
+    lopsy_core::space_convert::convert_rgba8(&mut pixels, from, to);
+    Ok(pixels)
 }
 
 /// Convert an RGBA8 pixel buffer from Display P3 to sRGB.

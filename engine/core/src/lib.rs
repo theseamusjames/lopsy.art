@@ -1,4 +1,6 @@
 pub mod color;
+pub mod colorimetry;
+pub mod space_convert;
 pub mod orientation;
 pub mod blend;
 pub mod geometry;

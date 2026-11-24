@@ -8,6 +8,7 @@ pub mod adjustment;
 pub mod color_mode;
 pub mod develop;
 pub mod drawing;
+pub mod export;
 pub mod fill;
 pub mod filter;
 pub mod layer;
