@@ -628,3 +628,87 @@ They are re-based in the phase that moves them, not before.
 - **Two tone systems in one engine.** Lopsy's and Photonamous's sliders
   with the same names will differ. That is deliberate; the engine's
   develop notes must say so.
+
+---
+
+## 8. Progress, and decisions taken while building
+
+Kept as the work goes. "Decided" means a choice made without asking, for
+Seamus to review; each says what was chosen and what the other course
+was.
+
+### Done
+
+- **Phase 0, items 5 to 7** (the test bed): golden renders of the eight
+  sample RAF files times four sets of settings
+  (`engine/tests/golden.rs`, fingerprints in `engine/tests/golden/`);
+  every develop stage compared with its CPU reference on the GPU; the
+  two screen-less failures fixed.
+
+- **Phase 0, items 1 to 3 and 8**: files tagged P3 or Rec. 2020 hold
+  pixels in that space; real sRGB (v4, piecewise curve) and Rec. 2020
+  profiles; `cICP` in PNG; black levels per colour site; the Bayer
+  pattern read from the file.
+- **Phase 2, engine**: the linear Rec. 2020 working space
+  (`setDevelopWorkingSpace`), the tone step, the input step for photos
+  that are not RAW, the display-encoded block for the stages that have
+  not moved, the output step, statistics on an sRGB rendering, and the
+  float read (`readRenderedF32`).
+- **Phase 7, item 5 (the encoders only)**: 16-bit PQ PNG
+  (`encodePqPng`), gain maps (`computeGainMap`) and the gain-map JPEG
+  container (`assembleGainMapJpeg`) in `lopsy-core`. Not yet wired to
+  the export dialog.
+
+### Decided
+
+1. **The work that was uncommitted when the run began was committed
+   first**, as eleven local commits, so each later step has a clean
+   base. Nothing is pushed.
+2. **A headless engine presents nothing** (rather than being given a
+   nominal screen). The histogram and the screen-only views read the
+   composite texture, which is what the two failing tests needed.
+3. **The golden harness drives the engine crate directly**, not the
+   command-line host the plan named: the same code path with less
+   plumbing. Its tolerance is 256 of 65535 a cell; that figure is
+   reasoned for other GPUs, measured only on this machine's.
+4. **Rec. 2020 files use the BT.709/BT.2020 curve** (not gamma 2.4),
+   declared exactly by a parametric ICC curve and by `cICP` transfer 1.
+5. **Display P3's profile keeps its existing bytes**, and Lopsy's sRGB
+   PSD keeps the old gamma-2.2 profile, so no Lopsy export changes. The
+   one visible change to Lopsy: its Display P3 16-bit PNG gains a
+   `cICP` chunk describing the same space as its profile.
+6. **An sRGB PNG carries the `sRGB` chunk only** (no `iCCP` beside it,
+   which PNG forbids, and no `cICP`).
+7. **A Bayer RAF's pattern is read from the file but is unverified**:
+   every sample is X-Trans. A file without the tag decodes as before.
+8. **Phase 2 moved some pixels a long way, on purpose.** Typical cells
+   of the golden renders moved by under 256 of 65535, but the worst
+   moved by up to 12,000: colours above white or outside sRGB, which
+   the old chain clipped channel by channel (turning an orange drink
+   yellow, banding a sky cyan) and the new one rolls off keeping hue.
+   The plan asked that the picture "barely move"; it holds for
+   everything except those colours. **Worth a look by eye.**
+9. **Gamut compression starts at 95% of the way to the edge** (ACES
+   uses about 80%, which visibly paled saturated photos here). Colours
+   inside that are untouched.
+10. **The SDR roll-off is a hard knee at white** (knee = peak = 1), so
+    nothing below white moves. HDR output will set a knee below the
+    headroom.
+11. **Dither on 8-bit exports only for RAW photos**, one value per
+    pixel for all three channels, fixed per position. An 8-bit photo
+    passed through unedited is not noised.
+12. **The histogram, pixel readout and Auto tone read an sRGB
+    rendering** whatever the display, so an edit made with Auto does
+    not depend on the screen. The clipping warning marks what the
+    screen shows.
+13. **HDR PNG carries no ICC fallback** (no small standard profile
+    describes PQ). Its mastering luminance is the picture's own peak.
+14. **Gain maps are single-channel, on luminance, half size by
+    default.** Luminance is exact; a saturated colour pushed far into
+    HDR is up to about 10% low in its weaker channels. A three-channel
+    map would fix that and can be added.
+15. **The ISO 21496-1 byte layout and the MPF index were written from
+    memory of the standards** (ISO's is paywalled). Apple's ImageIO
+    reads every field back under the right name and rebuilds the HDR
+    picture; Chrome and Android are untested. **Needs a person with an
+    HDR display.**
