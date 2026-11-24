@@ -26,6 +26,7 @@ pub mod xtrans;
 
 use serde::{Deserialize, Serialize};
 
+use crate::black_level::BlackLevels;
 use crate::dng::color;
 use crate::dng::tiff::TiffReader;
 use crate::dng::demosaic;
@@ -434,7 +435,7 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
     }
     sample_vals.sort();
     let sample_median = sample_vals.get(sample_vals.len() / 2).copied().unwrap_or(0);
-    let black_u16 = cfa_meta.black_level.unwrap_or(1024.0) as u16;
+    let black_u16 = cfa_meta.black_level.as_ref().map_or(1024.0, BlackLevels::mean) as u16;
 
     let is_plain_strip = !is_compressed && pixel_bytes == raw_w * raw_h * 2;
     if !is_plain_strip && !sample_vals.is_empty() && sample_median < black_u16 + 50 {
@@ -449,25 +450,21 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
 
     // ── Crop to output area and normalize, in one pass ──────────
 
-    let black = cfa_meta.black_level.unwrap_or(0.0);
-    let max_val = white_level as f64;
-    let range = max_val - black;
+    raf_log!("[RAF] white_level={}, black={:?}", white_level, cfa_meta.black_level);
 
-    raf_log!("[RAF] white_level={}, black={:.1}", white_level, black);
-
-    // Every sample value maps the same way, so the f64 maths runs once
-    // per value (at most 65536) instead of once per sample (40 million).
-    let to_unit: Vec<f32> = (0..=white_level as u32)
-        .map(|v| ((v as f64 - black) / range).clamp(0.0, 1.0) as f32)
-        .collect();
+    // Every sample value of a site maps the same way, so the f64 maths runs
+    // once per value (at most 65536) and level instead of once per sample
+    // (40 million). Each sample has its own site's black level subtracted.
+    let unit = UnitTables::new(cfa_meta.black_level.as_ref(), white_level, f64::NEG_INFINITY);
     let pixel_count = w * h;
     let mut normalized: Vec<f32> = Vec::with_capacity(pixel_count);
     for row in 0..h {
         let src_row = row + crop_top as usize;
         for col in 0..w {
-            let idx = src_row * raw_w + col + crop_left as usize;
+            let src_col = col + crop_left as usize;
+            let idx = src_row * raw_w + src_col;
             let v = if idx < plane_len { raw_at(idx).min(white_level) } else { 0 };
-            normalized.push(to_unit[v as usize]);
+            normalized.push(unit.at(src_row, src_col)[v as usize]);
         }
     }
     drop(decompressed);
@@ -488,9 +485,7 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
         raf_log!("[RAF] CFA phase auto-detected: row_shift={}, col_shift={}", rs, cs);
         shift_cfa(&base_pat, rs, cs)
     } else {
-        [0u8, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2,
-         0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2,
-         0, 1, 1, 2]
+        bayer_cfa(cfa_pattern.as_ref(), crop_top as usize, crop_left as usize)
     };
     let cfa_period = if is_xtrans { 6 } else { 2 };
 
@@ -768,10 +763,7 @@ pub fn debug_wb_mosaic(data: &[u8]) -> Result<(Vec<f32>, usize, usize, [u8; 36])
     let w = width as usize;
     let h = height as usize;
 
-    let black   = cfa_meta.black_level.unwrap_or(0.0);
-    let max_val = white_level as f64;
-    let range   = max_val - black;
-
+    let unit = UnitTables::new(cfa_meta.black_level.as_ref(), white_level, f64::NEG_INFINITY);
     let mut normalized: Vec<f32> = Vec::with_capacity(w * h);
     for row in 0..h {
         let src_row = row + crop_top as usize;
@@ -779,7 +771,7 @@ pub fn debug_wb_mosaic(data: &[u8]) -> Result<(Vec<f32>, usize, usize, [u8; 36])
             let src_col = col + crop_left as usize;
             let idx = src_row * raw_w + src_col;
             let v = raw_plane.get(idx).copied().unwrap_or(0).min(white_level);
-            normalized.push(((v as f64 - black) / range).clamp(0.0, 1.0) as f32);
+            normalized.push(unit.at(src_row, src_col)[v as usize]);
         }
     }
 
@@ -789,9 +781,7 @@ pub fn debug_wb_mosaic(data: &[u8]) -> Result<(Vec<f32>, usize, usize, [u8; 36])
         let (rs, cs) = detect_cfa_shift(&normalized, w, h, &base_pat, crop_top as usize, crop_left as usize);
         shift_cfa(&base_pat, rs, cs)
     } else {
-        [0u8, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2,
-         0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2,
-         0, 1, 1, 2]
+        bayer_cfa(cfa_pattern.as_ref(), crop_top as usize, crop_left as usize)
     };
     let cfa_period = if is_xtrans { 6 } else { 2 };
 
@@ -899,10 +889,7 @@ pub fn debug_raw_mosaic(data: &[u8]) -> Result<(Vec<f32>, usize, usize, [u8; 36]
     let w = width as usize;
     let h = height as usize;
 
-    let black   = cfa_meta.black_level.unwrap_or(0.0);
-    let max_val = white_level as f64;
-    let range   = (max_val - black).max(1.0);
-
+    let unit = UnitTables::new(cfa_meta.black_level.as_ref(), white_level, 1.0);
     let mut normalized = Vec::with_capacity(w * h);
     for row in 0..h {
         let src_row = row + crop_top as usize;
@@ -910,7 +897,7 @@ pub fn debug_raw_mosaic(data: &[u8]) -> Result<(Vec<f32>, usize, usize, [u8; 36]
             let src_col = col + crop_left as usize;
             let idx = src_row * raw_w + src_col;
             let v = raw_plane.get(idx).copied().unwrap_or(0).min(white_level);
-            normalized.push(((v as f64 - black) / range).clamp(0.0, 1.0) as f32);
+            normalized.push(unit.at(src_row, src_col)[v as usize]);
         }
     }
 
@@ -1598,8 +1585,79 @@ struct CfaMeta {
     strip_offset: u32,
     strip_byte_count: u32,
     is_compressed: bool,
-    black_level: Option<f64>,
+    black_level: Option<BlackLevels>,
     as_shot_wb: Option<[f32; 3]>,
+}
+
+/// For each position of the black-level tile, a table from raw sample
+/// (0..=white level) to 0..1 with that position's level subtracted. Sites
+/// with the same level share a table, so a file with one level has the one
+/// table the decoder has always built.
+struct UnitTables {
+    rows: usize,
+    cols: usize,
+    site: Vec<usize>,
+    tables: Vec<Vec<f32>>,
+}
+
+impl UnitTables {
+    /// `min_range` floors white minus black (`f64::NEG_INFINITY` for none).
+    fn new(black: Option<&BlackLevels>, white_level: u16, min_range: f64) -> Self {
+        let uniform = BlackLevels::uniform(0.0);
+        let black = black.unwrap_or(&uniform);
+        let (rows, cols) = black.period();
+        let max_val = white_level as f64;
+        let mut levels: Vec<f64> = Vec::new();
+        let mut tables: Vec<Vec<f32>> = Vec::new();
+        let mut site = Vec::with_capacity(rows * cols);
+        for r in 0..rows {
+            for c in 0..cols {
+                let b = black.at(r, c, 0);
+                let i = match levels.iter().position(|&l| l == b) {
+                    Some(i) => i,
+                    None => {
+                        let range = (max_val - b).max(min_range);
+                        levels.push(b);
+                        tables.push(
+                            (0..=white_level as u32)
+                                .map(|v| ((v as f64 - b) / range).clamp(0.0, 1.0) as f32)
+                                .collect(),
+                        );
+                        levels.len() - 1
+                    }
+                };
+                site.push(i);
+            }
+        }
+        Self { rows, cols, site, tables }
+    }
+
+    /// The table for the sample at (`raw_row`, `raw_col`) of the uncropped
+    /// raw frame, where the black-level tile starts.
+    #[inline]
+    fn at(&self, raw_row: usize, raw_col: usize) -> &[f32] {
+        if self.tables.len() == 1 {
+            return &self.tables[0];
+        }
+        &self.tables[self.site[(raw_row % self.rows) * self.cols + raw_col % self.cols]]
+    }
+}
+
+/// The 2×2 pattern of a Bayer RAF, as the first four of 36 entries (the
+/// layout `RafRenderParams::cfa` has for Bayer), each 0 R, 1 G, 2 B.
+///
+/// It is read from the CFA header's pattern (tag 0x0131) when that
+/// repeats every two rows and columns, shifted the way the X-Trans path
+/// resolves the same tag's phase (the crop offset plus (4, 1), see
+/// `detect_cfa_shift`). A file without such a pattern keeps RGGB.
+fn bayer_cfa(file_pattern: Option<&[u8; 36]>, crop_top: usize, crop_left: usize) -> [u8; 36] {
+    let quad = file_pattern
+        .and_then(|pat| {
+            let aligned = shift_cfa(pat, (crop_top % 6 + 4) % 6, (crop_left % 6 + 1) % 6);
+            crate::black_level::bayer_from_6x6(&aligned, 0, 0)
+        })
+        .unwrap_or([0, 1, 1, 2]);
+    std::array::from_fn(|i| quad[i % 4])
 }
 
 fn parse_cfa_tiff(cfa_section: &[u8]) -> Result<CfaMeta, String> {
@@ -1629,13 +1687,10 @@ fn parse_cfa_tiff(cfa_section: &[u8]) -> Result<CfaMeta, String> {
 
     let is_compressed = (strip_byte_count as u64) < (width as u64 * height as u64 * 2);
 
+    // Tag 0xF00A: one black level per CFA site (36 for X-Trans).
     let black_level = sub_ifd.iter()
         .find(|e| e.tag == 0xF00A)
-        .and_then(|e| {
-            let vals = e.as_u32_vec()?;
-            if vals.is_empty() { return None; }
-            Some(vals.iter().map(|&v| v as f64).sum::<f64>() / vals.len() as f64)
-        });
+        .and_then(|e| BlackLevels::from_raf(&e.as_u32_vec()?));
 
     // Tag 0xF00D: Fujifilm as-shot white balance, LONG[3] in [G, R, B] order.
     // Green is the reference channel (typically 302); R and B are larger when
@@ -1708,6 +1763,55 @@ fn color_matrix_for_model(model: &str) -> [f32; 9] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// One level: one table, the formula the decoder always used.
+    #[test]
+    fn one_black_level_builds_the_old_table() {
+        let black = BlackLevels::from_raf(&[1020; 36]).unwrap();
+        let unit = UnitTables::new(Some(&black), 16383, f64::NEG_INFINITY);
+        assert_eq!(unit.tables.len(), 1);
+        for v in [0u32, 1020, 1021, 5000, 16383] {
+            let old = ((v as f64 - 1020.0) / (16383.0 - 1020.0)).clamp(0.0, 1.0) as f32;
+            assert_eq!(unit.at(3, 5)[v as usize], old);
+        }
+        assert_eq!(UnitTables::new(None, 255, f64::NEG_INFINITY).at(0, 0)[255], 1.0);
+    }
+
+    /// Each site subtracts its own level, the tile starting at the raw
+    /// frame's corner.
+    #[test]
+    fn black_levels_are_subtracted_per_site() {
+        let black = BlackLevels::from_raf(&[100, 200, 300, 400]).unwrap();
+        let unit = UnitTables::new(Some(&black), 1000, f64::NEG_INFINITY);
+        assert_eq!(unit.tables.len(), 4);
+        assert_eq!(unit.at(0, 0)[100], 0.0);
+        assert_eq!(unit.at(0, 1)[200], 0.0);
+        assert_eq!(unit.at(1, 0)[300], 0.0);
+        assert_eq!(unit.at(3, 3)[400], 0.0);
+        assert_eq!(unit.at(2, 1)[600], 0.5, "(600 - 200) / (1000 - 200)");
+    }
+
+    /// Without a two-periodic pattern a Bayer RAF keeps RGGB, in the layout
+    /// it always had.
+    #[test]
+    fn bayer_cfa_falls_back_to_rggb() {
+        let rggb: [u8; 36] = std::array::from_fn(|i| [0u8, 1, 1, 2][i % 4]);
+        assert_eq!(bayer_cfa(None, 0, 0), rggb);
+        assert_eq!(bayer_cfa(Some(&DEFAULT_XTRANS_CFA), 0, 0), rggb);
+    }
+
+    /// A two-periodic pattern in the file decides the quad. The file uses
+    /// Fujifilm's indices (0 B, 2 R); the result is 0 R, 2 B.
+    #[test]
+    fn bayer_cfa_reads_the_file_pattern() {
+        // Fujifilm BGGR tiled over 6×6.
+        let fuji: [u8; 36] = std::array::from_fn(|i| [[0u8, 1], [1, 2]][(i / 6) % 2][i % 2]);
+        // Shifted by (4, 1) for a crop at (0, 0): the quad at row 0, col 1.
+        let cfa = bayer_cfa(Some(&fuji), 0, 0);
+        assert_eq!(&cfa[..4], &[1, 2, 0, 1], "GBRG");
+        let cfa = bayer_cfa(Some(&fuji), 0, 1);
+        assert_eq!(&cfa[..4], &[2, 1, 1, 0], "BGGR");
+    }
 
     #[test]
     fn detect_cfa_shift_finds_correct_phase() {

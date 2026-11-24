@@ -82,6 +82,7 @@ pub mod demosaic;
 pub mod color;
 
 use tiff::{TiffReader, IfdEntry, TagId};
+use crate::black_level::BlackLevels;
 
 /// Luminance-percentile clip fractions for the default ProRAW auto-levels
 /// stretch. Conservative values keep shadow and highlight detail while still
@@ -221,16 +222,30 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         .or_else(|_| get_tag_u32(&ifd0, TagId::WhiteLevel))
         .ok();
 
-    // BlackLevel: may be RATIONAL (type 5) or SHORT (type 3). Handle both.
+    // BlackLevel: may be RATIONAL (type 5), SHORT (type 3) or LONG (type 4).
+    // Every value is kept: one per position of the BlackLevelRepeatDim tile
+    // and per sample, plus the per-column and per-row deltas when present.
     let black_level_rational = get_rational_array_either(&ifd0, &main_ifd, TagId::BlackLevel);
-    let black = if !black_level_rational.is_empty() {
-        black_level_rational[0]
+    let black_values: Vec<f64> = if !black_level_rational.is_empty() {
+        black_level_rational
     } else {
-        let bl_short = get_tag_u16_vec(&main_ifd, TagId::BlackLevel)
-            .or_else(|_| get_tag_u16_vec(&ifd0, TagId::BlackLevel))
-            .ok();
-        bl_short.and_then(|v| v.first().map(|&x| x as f64)).unwrap_or(0.0)
+        get_tag_u32_vec(&main_ifd, TagId::BlackLevel)
+            .or_else(|_| get_tag_u32_vec(&ifd0, TagId::BlackLevel))
+            .map(|v| v.iter().map(|&x| x as f64).collect())
+            .unwrap_or_default()
     };
+    let black_repeat = get_tag_u32_vec(&main_ifd, TagId::BlackLevelRepeatDim)
+        .ok()
+        .and_then(|v| (v.len() == 2).then(|| (v[0], v[1])));
+    let black = if black_values.is_empty() {
+        BlackLevels::uniform(0.0)
+    } else {
+        BlackLevels::from_dng(black_repeat, &black_values, samples as usize)
+    }
+    .with_deltas(
+        get_rational_array(&main_ifd, TagId::BlackLevelDeltaH),
+        get_rational_array(&main_ifd, TagId::BlackLevelDeltaV),
+    );
 
     // Determine normalization range. After the LinearizationTable (if present),
     // pixel values are in the table's output range and WhiteLevel is authoritative.
@@ -256,21 +271,27 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
 
     if is_linear && samples >= 3 {
         rgb_f32 = Vec::with_capacity((width * height * 3) as usize);
+        let w = width as usize;
         for i in 0..(width * height) as usize {
-            let r = ((pixel_data[i * samples as usize] as f64 - black) / (max_val - black)).max(0.0) as f32;
-            let g = ((pixel_data[i * samples as usize + 1] as f64 - black) / (max_val - black)).max(0.0) as f32;
-            let b = ((pixel_data[i * samples as usize + 2] as f64 - black) / (max_val - black)).max(0.0) as f32;
-            rgb_f32.push(r);
-            rgb_f32.push(g);
-            rgb_f32.push(b);
+            let (row, col) = (i / w, i % w);
+            for s in 0..3 {
+                let b = black.at(row, col, s);
+                let v = pixel_data[i * samples as usize + s] as f64;
+                rgb_f32.push(((v - b) / (max_val - b)).max(0.0) as f32);
+            }
         }
     } else if is_cfa {
         let cfa_pattern = get_tag_u8_vec(&main_ifd, TagId::CfaPattern)
             .unwrap_or_else(|_| vec![0, 1, 1, 2]);
 
+        let w = width as usize;
         let normalized: Vec<f32> = pixel_data[..expected_pixels]
             .iter()
-            .map(|&v| ((v as f64 - black) / (max_val - black)).max(0.0) as f32)
+            .enumerate()
+            .map(|(i, &v)| {
+                let b = black.at(i / w, i % w, 0);
+                ((v as f64 - b) / (max_val - b)).max(0.0) as f32
+            })
             .collect();
 
         rgb_f32 = demosaic::bilinear(&normalized, width, height, &cfa_pattern);
@@ -290,7 +311,7 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     dbg_center!("after normalize", rgb_f32);
 
     dng_log!("[DNG meta] whiteLevel={:?} black={:.1} maxVal={:.1} bits={} samples={} linear={} cfa={}",
-        white_level, black, max_val, bits, samples, is_linear, is_cfa);
+        white_level, black.mean(), max_val, bits, samples, is_linear, is_cfa);
     dng_log!("[DNG meta] asShotNeutral={:?}", &as_shot_neutral);
     dng_log!("[DNG meta] forwardMatrix len={} colorMatrix len={}", forward_matrix.len(), color_matrix.len());
     if forward_matrix.len() >= 9 {

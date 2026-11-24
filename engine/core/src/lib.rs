@@ -1,3 +1,4 @@
+pub mod black_level;
 pub mod color;
 pub mod colorimetry;
 pub mod space_convert;
