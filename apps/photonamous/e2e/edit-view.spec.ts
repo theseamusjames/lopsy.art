@@ -76,7 +76,7 @@ test.describe('Edit view on a JPEG', () => {
     await expect(before).toHaveAttribute('aria-pressed', 'false');
   });
 
-  test('the bar under the photo: Full, Fit, and a zoom level to type in', async ({ page }) => {
+  test('the bar under the photo: a zoom level to type in, Fit and Full', async ({ page }) => {
     const bar = page.getByRole('group', { name: 'View' });
     const zoom = bar.getByRole('textbox', { name: 'Zoom', exact: true });
     const fit = bar.getByRole('button', { name: 'Fit', exact: true });
@@ -86,6 +86,8 @@ test.describe('Edit view on a JPEG', () => {
     // The bar sits under the photo.
     const stage = (await page.getByRole('group', { name: 'Photo' }).boundingBox())!;
     expect((await bar.boundingBox())!.y).toBeGreaterThanOrEqual(stage.y + stage.height - 1);
+    // The zoom level leads the bar, with Fit and Full after it.
+    expect((await zoom.boundingBox())!.x).toBeLessThan((await fit.boundingBox())!.x);
 
     await bar.getByRole('button', { name: 'Full', exact: true }).click();
     await expect(zoom).toHaveValue('100%');
@@ -352,6 +354,106 @@ test.describe('Colour controls', () => {
     const last = await settledPreview(page, 1);
     const after = await imageStats(page, { kind: 'preview', index: last, which: 'screen' });
     expect(after.blue - after.red).toBeGreaterThan(before.blue - before.red + 10);
+  });
+
+  test('the colour field sets hue and saturation together, and is enlarged for finer control', async ({ page }) => {
+    const before = await imageStats(page, { kind: 'preview', index: 0, which: 'screen' });
+    const group = page.getByRole('region', { name: 'Color Grading' });
+    await group.getByRole('tab', { name: 'Global' }).click();
+    const field = group.getByRole('slider', { name: 'Global color', exact: true });
+    const enlarge = group.getByRole('button', { name: 'Enlarge Global color', exact: true });
+    const hue = group.getByLabel('Hue value');
+    const saturation = group.getByLabel('Saturation value');
+    /** How far the typed value of `box` is from `wanted`. */
+    const offBy = async (box: typeof hue, wanted: number) => Math.abs(Number(await box.inputValue()) - wanted);
+    const steps = () => page.evaluate(() => window.__photosHarness?.steps);
+
+    // A square as wide as the tabs above it, with Enlarge in its bottom left corner.
+    await field.scrollIntoViewIfNeeded();
+    const [small, tabs, button] = await Promise.all([field.boundingBox(), group.getByRole('tablist').boundingBox(), enlarge.boundingBox()]);
+    if (!small || !tabs || !button) throw new Error('no field, tabs or Enlarge');
+    expect(Math.abs(small.width - small.height)).toBeLessThan(1);
+    expect(Math.abs(small.width - tabs.width)).toBeLessThan(1);
+    expect(button.x - small.x).toBeLessThan(8);
+    expect(small.y + small.height - (button.y + button.height)).toBeLessThan(8);
+
+    // A click picks both at once: 60 % across is hue 216, 20 % down is saturation 80. One step.
+    await page.mouse.click(small.x + small.width * 0.6, small.y + small.height * 0.2);
+    await expect.poll(() => offBy(hue, 216)).toBeLessThan(3);
+    await expect.poll(() => offBy(saturation, 80)).toBeLessThan(3);
+    expect(await steps()).toEqual(['Global color']);
+    const last = await settledPreview(page, 1);
+    const after = await imageStats(page, { kind: 'preview', index: last, which: 'screen' });
+    expect(after.blue - after.red).toBeGreaterThan(before.blue - before.red + 10);
+
+    // Over the field the pointer is a ring of the colour under it: here, the one just picked, as the marker is.
+    const ring = field.getByTestId('color-pointer');
+    const fill = (testId: string) => field.getByTestId(testId).evaluate((el) => getComputedStyle(el).backgroundColor);
+    await expect(ring).toBeVisible();
+    expect(await field.evaluate((el) => getComputedStyle(el).cursor)).toBe('none');
+    const picked = await fill('color-marker');
+    expect(await fill('color-pointer')).toBe(picked);
+    // Moved, it shows another colour, and the picked one stays; off the field it is gone.
+    await page.mouse.move(small.x + small.width * 0.1, small.y + small.height * 0.1);
+    await expect.poll(() => fill('color-pointer')).not.toBe(picked);
+    expect(await fill('color-marker')).toBe(picked);
+    await page.mouse.move(small.x - 40, small.y + 20);
+    await expect(ring).toHaveCount(0);
+
+    // Enlarged: about 500 px, out of the panel over the photo, its right edge where the small one's is.
+    await enlarge.click();
+    await expect(enlarge).toHaveAttribute('aria-expanded', 'true');
+    await expect(field).toBeFocused();
+    await expect.poll(async () => (await field.boundingBox())?.width ?? 0).toBeGreaterThan(499);
+    const now = await group.getByRole('tablist').boundingBox();
+    const big = await field.boundingBox();
+    if (!big || !now) throw new Error('no enlarged field');
+    expect(big.width).toBeLessThan(501);
+    expect(Math.abs(big.height - big.width)).toBeLessThan(1);
+    expect(Math.abs(big.x + big.width - (now.x + now.width))).toBeLessThan(1);
+
+    // A click in it picks, as one more step, and puts it back. A pixel of it is 0.72° of hue and 0.2 of
+    // saturation, kept to a tenth: 126 px across is 90.7°, 251 px down is 49.8.
+    await page.mouse.click(big.x + 126, big.y + 251);
+    await expect(enlarge).toHaveAttribute('aria-expanded', 'false');
+    await expect.poll(() => offBy(hue, 90.7)).toBeLessThan(0.8);
+    await expect.poll(() => offBy(saturation, 49.8)).toBeLessThan(0.3);
+    // The boxes show the tenth, so going into one and out again changes nothing.
+    const kept = await hue.inputValue();
+    await hue.focus();
+    await hue.press('Enter');
+    await expect(hue).toHaveValue(kept);
+    await saturation.focus();
+    await saturation.press('Enter');
+    const stored = await page.evaluate(() => (window.__photosHarness?.recipe as { colorGrading: { global: { hue: number; saturation: number } } }).colorGrading.global);
+    expect(String(stored.hue)).toBe(kept);
+    expect(Math.abs(stored.saturation - 49.8)).toBeLessThan(0.3);
+    await expect.poll(async () => (await field.boundingBox())?.width ?? 0).toBeLessThan(small.width + 1);
+    expect(await steps()).toEqual(['Global color', 'Global color']);
+
+    // The wheel puts it back too, and a click elsewhere, picking nothing.
+    await enlarge.click();
+    await expect(enlarge).toHaveAttribute('aria-expanded', 'true');
+    await page.mouse.wheel(0, 40);
+    await expect(enlarge).toHaveAttribute('aria-expanded', 'false');
+    await enlarge.click();
+    await expect(enlarge).toHaveAttribute('aria-expanded', 'true');
+    await page.getByRole('group', { name: 'Photo' }).click({ position: { x: 10, y: 10 } });
+    await expect(enlarge).toHaveAttribute('aria-expanded', 'false');
+
+    // Escape is the field's while it is enlarged: the Edit view stays. The arrow keys move the marker.
+    await enlarge.click();
+    await page.keyboard.press('Escape');
+    await expect(enlarge).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByTestId('edit-view')).toBeVisible();
+    await expect(field).toBeFocused();
+    const was = Number(await saturation.inputValue());
+    await page.keyboard.press('ArrowUp');
+    await expect.poll(() => offBy(saturation, was + 1)).toBeLessThan(0.05);
+    // Alt is the fine step, a tenth.
+    await page.keyboard.press('Alt+ArrowUp');
+    await expect.poll(() => offBy(saturation, was + 1.1)).toBeLessThan(0.05);
+    expect(await steps()).toEqual(['Global color', 'Global color', 'Global color', 'Global color']);
   });
 });
 

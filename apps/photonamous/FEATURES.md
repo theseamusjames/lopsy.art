@@ -19,7 +19,7 @@ is `docs/photonamous-spec.md`; running and setup are in
   only to the one folder it creates in the visitor's Drive. Step 2,
   Upload your photos: RAW, JPG, PNG and other common types, stored in
   their Drive and nowhere else. Step 3, Edit and export. Under them is
-  **Sign in with Google**, which has focus, and a line saying what Google
+  **Continue with Google**, which has focus, and a line saying what Google
   will ask. On a narrow window the steps stack. A failed sign-in is said
   under the button.
 - **The film** on the left is a silent trailer of about 24 seconds, cut
@@ -68,7 +68,16 @@ is `docs/photonamous-spec.md`; running and setup are in
 - **Add from Google Drive…** (the Import menu, Drive libraries only):
   picks photos already in Drive with Google's Picker and adds them to the
   library; Settings chooses whether they are moved into `Originals/` or
-  left where they are.
+  left where they are. The Picker opens in the page. Some browsers keep
+  it from seeing the user's Google account there (those that block
+  cross-site cookies; Brave does), and it then shows Google's sign-in
+  page instead of files. So a prompt under the Picker, "Google asking
+  you to sign in?", offers **Open in a Google window**: the same Picker
+  in a window of Google's own, where the user chooses their account and
+  agrees each time. Taking it is remembered on the device, Brave starts
+  with the window, and Settings > Adding from Google Drive has the
+  choice. Photos picked in another Google account than the library's are
+  refused with a message.
 - **Where the library lives** is named in the header, beside the
   wordmark: "Google Drive", "This browser" or the folder's name. A Drive
   library is called "Google Drive" everywhere (Settings, the import
@@ -84,24 +93,41 @@ is `docs/photonamous-spec.md`; running and setup are in
 ### Grid
 
 - Photos in a virtualised grid, newest first by default. **Order by**
-  Date taken, Date added, Last edited, File name or Rating, each in its
-  natural direction (newest, most recently edited and best first; names A
-  to Z); the arrow beside it reverses the order. **Size** sets the
-  thumbnail size.
-- **Toolbar** groups: *Look at* (one photo large, **Compare**, **Cull**),
-  *Edits* (**Copy edits**, **Paste**, **Presets**), and **More** (New
-  version, Edit in Lopsy, Group bursts), then Details. Button titles give
-  each shortcut, read from the shortcut list.
+  (in the row of filters under the toolbar) Date taken, Date added, Last
+  edited, File name or Rating, each in its natural direction (newest,
+  most recently edited and best first; names A to Z); the arrow beside it
+  reverses the order.
+- **Toolbar**: *Edits* (**Copy edits**, **Paste**, **Presets**,
+  **Reset**), and at the right end Details and **More** (New version,
+  Edit in Lopsy, Group bursts). Button titles give each shortcut, read
+  from the shortcut list.
+- **The bar under the gallery**: **Size** at the left sets the thumbnail
+  size; at the right, the ways of looking, as icons of which the current
+  one is on: **Grid**, **One photo** (Space), **Two up** (C), **Four up**
+  and **Full screen** (F). The same bar, without the size, sits under the photos
+  side by side. The Presets and
+  More menus open lined up with their button's left edge, or its right
+  edge where they would otherwise run off the window (the toolbar wraps
+  to the left when the details panel is open).
+- **Reset** takes the selected photos back to the original: every edit
+  off, crop and rotation included, as one History step for each photo.
+  Photos with no edits are left alone.
 - Tiles show the photo's 512 px preview, its colour label and stars, and
   badges: a version count, **RAW+JPEG** for a pair shot together (shown
   as one photo, the RAW in front, and counted once everywhere: All
   photos, Dates, Imports), a burst count, and a Lopsy-document count.
-  Each badge opens or folds its stack.
+  Each of those opens or folds its stack. An edited photo has a mark
+  that is not a button: a picture with a tick, in green. Under the
+  pointer (and on the tile the keyboard is on, where Tab reaches it) a
+  tile has an **Edit** button at its top right, which selects the photo
+  and opens it in the Edit view.
 - **Previews follow edits.** A preset or pasted edits from the grid, a
   new version, or a change from another device gets new previews in the
   background, one photo at a time, while the Edit view is closed; the
   **Saving and storage** panel shows "Updating N previews". A new
   version with the same edit as another shows that one's preview at once.
+  Until a tile's picture has caught up with its edits a turning ring sits
+  in the middle of it (named "Updating"), from the moment the edit lands.
 - **Stacks.** With **Group bursts** on, shots taken in quick succession
   show as one tile; its badge shows or folds the rest. Lopsy documents
   made from a photo are stacked behind it the same way, behind a
@@ -123,11 +149,11 @@ is `docs/photonamous-spec.md`; running and setup are in
   version's own tile adds just that version, which the album then shows
   as its own tile.
 
-### Single, Compare and Cull
+### Single, side by side and Full screen
 
 - **Single view** (Space, or double-click): one photo large at 2048 px,
   with Previous/Next (← →). Above it, a header of two rows in the bars'
-  colour: **Back** (a link at the left edge, named "Back to the grid"),
+  colour: **Back** (a link at the left edge),
   the file name, centred, and its place in the list; then the colour
   labels at the left, the stars in the centre and **Edit in Lopsy** and
   **Edit** at the right, as icons named for screen readers and in their
@@ -152,8 +178,15 @@ is `docs/photonamous-spec.md`; running and setup are in
   bin of the one it shows. When the
   bar has no room for them, the chips scroll sideways on their own and
   never run under Drop. **New version** is there either way.
-- **Compare** (C): two to four selected photos side by side.
-- **Cull** (F): full screen, one photo at a time, laid out as Single view,
+- **Two up and Four up**: photos side by side, two or up to four (a 2 × 2
+  grid). They show the selected photos; when fewer are selected than the
+  view holds, the ones that come after the first of them in the gallery
+  fill it (with nothing selected, from the focused photo), and those join
+  the selection. C opens Two up for up to two selected photos and Four up
+  for more. With more than two on show each has a tick box: tick
+  two, and **Two up** shows just those. **Four up** from there widens
+  again, and **Grid** goes back.
+- **Full screen** (F): one photo at a time filling the screen, laid out as Single view,
   with the keys' hint beside Drop; rating (1–5) or dropping (X) moves on
   to the next. Escape leaves.
 
@@ -181,11 +214,23 @@ is `docs/photonamous-spec.md`; running and setup are in
   (made by hand, renamed and deleted from the sidebar), **Saved
   searches**, **Dates** (years opening into months), **Imports** (one
   entry per import) and **Keywords**.
-- **Find photos**: a text search over file names, titles, captions and
-  keywords, and filters for rating, label (including *No label*), edits
+- **Long lists stay short.** Albums, Saved searches, Dates (its years),
+  Imports and Keywords each show their first eight rows, and under
+  them **Show all** with the number there are. The row the grid is
+  showing stays in the list when it is further down. Opened out, a
+  list keeps to about nine rows and scrolls in its own room, so one
+  list of eighty albums does not push the others off the sidebar;
+  **Show fewer** folds it again.
+- **Find photos**, one row under the toolbar: a text search over file
+  names, titles, captions and keywords, then filters for rating, label (including *No label*), edits
   (*Edited*, *Not edited*), file type (RAW (Fujifilm), RAW (DNG), JPEG,
-  PNG, WebP, Lopsy document), camera and lens. **Save search** keeps the
-  filters in the sidebar under a name.
+  PNG, WebP, Lopsy document), camera and lens, and at the right end the
+  order. Where the row has not the room for all of that on one line (a
+  small window, the details panel open, or filters whose buttons have
+  grown with what they are set to), the filters are one **Filters** menu, opened by the button beside the search
+  field; it turns blue and counts the filters in use, and **Clear
+  filters** is at its foot. **Save search** keeps the filters in the
+  sidebar under a name.
 
 ### Versions, copying edits and presets
 
@@ -201,8 +246,11 @@ is `docs/photonamous-spec.md`; running and setup are in
 - **Copy edits…** (⇧⌘C) asks which groups to copy; **Paste edits**
   (⇧⌘V) puts them on the selected photos, as one step, changing nothing
   else.
-- **Presets** (grid toolbar): apply one to the selected photos. *Made by
-  Lopsy* presets ship with the app; *Yours* are saved from the Edit view.
+- **Presets** (grid toolbar): apply one to the selected photos. A
+  library starts with five (Cool, Monochrome, Punchy, Soft matte, Warm);
+  they and the ones saved from the Edit view are one list, by name, and
+  any of them can be deleted there. A deleted starter stays deleted, on
+  every device.
   The import sheet can apply a preset to everything it imports.
 
 ### Deleting
@@ -258,12 +306,20 @@ is `docs/photonamous-spec.md`; running and setup are in
 
 ## Edit view
 
-Opened with Enter (in the grid, Single view or Cull) or **Edit** in Single
+Opened with Enter (in the grid, Single view or Full screen) or **Edit** in Single
 view and the tile menu; double-clicking a tile opens Single view, not
 Edit. One photo, a left column, the image and a panel of groups; edits
 are saved to the version as they are made, and previews are rendered when
 the edit settles (never during a slider drag), on leaving, and before the
 filmstrip opens another photo.
+
+The app's header stays on screen above the Edit view, in use: the saving
+panel, Import photos, Export, the shortcut list, Settings and Close this
+library all work from there, and their dialogs open over the Edit view.
+Only the library under the header is out of reach while editing. Export
+is the header's alone (the Edit view has no button of its own) and reads
+"Export 1" here: it takes the photo and version being edited, whatever
+is selected in the grid under it.
 
 A Lopsy document opens here on its flattened render, the PNG Lopsy saves
 beside the `.lopsy`: its edits, versions, presets, copy and paste and
@@ -274,8 +330,7 @@ its previews are rendered again with them. The render is read from
 storage each time a document opens: it is not kept in the device's cache
 of originals. A document without a render opens only in Lopsy: should the
 Edit view be asked for one, it names the document, says it was saved
-without a picture to edit here, and offers **Open in Lopsy** and **Back
-to the library**.
+without a picture to edit here, and offers **Open in Lopsy** and **Back**.
 
 - **Loading and working size.** RAF decodes on a pool of workers into the
   engine's RAW develop stage; DNG through the engine's decoder; 16-bit PNG
@@ -283,39 +338,62 @@ to the library**.
   *working image* sized to the view (at most 4096 px on its long edge),
   so a large photo is editable quickly (DNG loads at full size); zooming
   to 50 % or closer loads the full resolution ("Loading full
-  resolution…"), and full-size exports, Edit in Lopsy and Done always
-  render from it. While it loads, the version's stored preview shows
+  resolution…"), and Edit in Lopsy and Done always render from it. While it loads, the version's stored preview shows
   with "Loading…".
-- **Left column**: **Presets** (apply one, or **Save preset…** from this
-  edit, choosing its groups), **Versions** (switch, rename, **New
+- **Left column**: **Presets** (apply one, delete one, or **Save
+  preset…** from this edit, choosing its groups), **Versions** (switch, rename, **New
   version**) and **History** (every step; clicking one goes back to it).
-  The column folds away with the button at its bottom left, which stays
-  there while it is folded. A **filmstrip** of the photos around this one
+  The button beside Back folds the column into a strip of three icons,
+  one for each; an icon opens the column again with its section unfolded.
+  A **filmstrip** of the photos around this one
   moves between them, in the grid's order: a photo whose stack is open in
   the grid shows each version as a tile of its own (named "<file>
   (<version>)", with that version's preview), which opens that version.
   Lopsy documents are in it too.
-- **Toolbar.** Library (back), Rotate left, Rotate right, Flip, Flip
-  vertical, **Crop**, **Masks**; then Undo / Redo (⌘Z, ⇧⌘Z or ⌘Y) beside
-  Copy edits / Paste edits (⇧⌘C, ⇧⌘V), away from the rotations; **Edit in
-  Lopsy** and **Export**. The image pans by dragging and zooms with the
-  wheel.
-- **The bar under the photo.** On the left, **Fit** (⌘0), **Full** (⌘1:
-  one pixel of the photo to one pixel of the screen) and the zoom level,
-  a field to type in: a percentage from 10 to 400, with or without its
-  sign, taken on Enter or on leaving the field (a level outside the range
-  is held to it, and what is not a number puts the level back). On the
-  right, the two clipping warnings (a moon for shadows, a sun for
-  highlights; see Histogram below), then two icon buttons: **Before** (or
+- **Top bar.** Back, the button that folds the left column, then the
+  tools in four groups with a line between them: the two clipping warnings (a moon for shadows, a
+  sun for highlights; see Histogram below); Rotate left, Rotate right,
+  Flip, Flip vertical and **Crop**; Undo / Redo (⌘Z, ⇧⌘Z or ⌘Y); and
+  Copy edits / Paste edits (⇧⌘C, ⇧⌘V). The image pans by dragging and zooms with the wheel.
+- **Toolbar**, icons down the right edge, as Lopsy's panel toolbar is.
+  **Edit** and **Mask** each open their panel beside it, with the
+  histogram above; the one whose panel is open is blue, and pressing it
+  again closes the panel and gives the photo the room. Under them,
+  **Edit in Lopsy** (the paintbrush) sends this version to Lopsy.
+- **Edit panel.** The profile, then a section for each group of
+  controls: Straighten, White balance, Tone, Curves, Color, Color by
+  hue, Color Grading, Local contrast, Sharpness & noise and Finish. Each
+  is folded to its heading until it is opened, and one is open at a
+  time, as a group's effects are in Lopsy: opening a section folds the
+  one that was open. The one open is remembered on this device. A
+  heading keeps its Reset (and Auto or Level) while
+  folded, and has a dot after its name while its controls are not at
+  their defaults. **Reset all** is at the foot.
+- **A section's eye.** Every section but Straighten has an eye at the
+  right of its heading. It shows the photo without that section, as its
+  Reset would leave it, and changes nothing in the edit: the history,
+  the previews, Export, Done and Edit in Lopsy keep the section. While a
+  section is hidden its eye is blue, its controls wait, and the photo
+  says which are left out ("Without Tone", "Without Tone and Color",
+  "Without 3 sections"). Any number can be hidden at once; they are
+  shown again on another photo or version. A mask has the same eye (see
+  Mask below).
+- **The bar under the photo.** On the left, the zoom level, a field to
+  type in: a percentage from 10 to 400, with or without its sign, taken
+  on Enter or on leaving the field (a level outside the range is held to
+  it, and what is not a number puts the level back). Beside it, **Fit**
+  (⌘0) and **Full** (⌘1: one pixel of the photo to one pixel of the
+  screen). On the
+  right, two icon buttons: **Before** (or
   hold `\`) and **Split** (before and after side by side, with a divider
-  to drag).
+  to drag), each blue while it is on, as Crop is in the top bar.
 - **Pixel readout**: the rendered colour under the pointer (R G B,
   0–255).
 - **Histogram** of the rendered edit, updated as it changes. Its shadow
   and highlight markers light when the photo clips, and clicking them
   shows clipped pixels on the photo (blue at black, red at white; never
   in exports or previews); **J** toggles both. The moon and sun buttons
-  in the bar under the photo are the same two toggles: each lights when
+  in the top bar are the same two toggles: each lights when
   its end clips and is pressed while its warning shows. Holding Alt (Option)
   while dragging Blacks or Whites shows that side's clipping, and while
   dragging a Sharpen slider shows what is being sharpened.
@@ -348,8 +426,24 @@ to the library**.
   dragging points.
 - **Color by hue**: Hue, Saturation and Luminance for eight bands (red,
   orange, yellow, green, aqua, blue, purple, magenta).
-- **Color Grading**: shadows, midtones, highlights and global wheels
-  (hue, saturation, luminance), Blending and Balance.
+- **Color Grading**: a tab each for shadows, midtones, highlights and
+  global, then Blending and Balance. A tab has a **colour field**, a
+  square as wide as the panel with hue running left to right and
+  saturation fading to white at the bottom: a click or a drag sets both
+  at once, as one step ("Shadows color"), and a marker shows the colour.
+  Over the field the pointer is a ring filled with the colour under it,
+  the one a press there would pick.
+  The field keeps hue and saturation to a tenth, finer than the
+  sliders' whole steps, so every pixel across it is a colour of its
+  own. The arrow keys move the marker a step (ten with Shift, a tenth
+  with Alt). Under it are Hue, Saturation and Luminance sliders; the
+  Hue and Saturation boxes show the tenth and take a typed one. The
+  button in the field's bottom left corner **enlarges** it to about
+  500 px, out of the panel and over the photo, which makes it 500
+  colours across in place of the panel's 268; any click (the one that
+  picks included), a turn of the wheel, a scroll or Escape puts it back.
+  An exported XMP sidecar has these values as whole numbers, as
+  Lightroom keeps them.
 - **Local contrast**: Large details, Small details, Haze.
 - **Sharpness & noise**: Sharpen, Radius, Edges only, Noise, Color noise,
   Keep detail. While a slider drags these passes are left out, and they
@@ -381,27 +475,56 @@ to the library**.
   bottom. The next crop on this device opens with them where they were
   put, in the same corner when the window is another size, and the photo
   at its usual size.
-- **Masks** (toolbar): add **Linear** (a gradient across the photo) or
-  **Radial** (an ellipse) masks, up to eight. Each row of the list has
-  the mask's name ("Mask 1" until it has its own), Rename, **Invert** (a
-  toggle: the adjustments go to the rest of the photo) and Delete. Under
-  the list come the selected mask's Amount and its own Exposure,
-  Contrast, Highlights, Shadows, Temperature, Tint and Saturation, then
-  **Position**, closed at first, which opens to the mask's shape
-  sliders. Handles on the image move the selected mask, resize it, turn
-  it and set its feather; each drag or slider release is one history
-  step ("Mask: move"). The selected mask shows in red on screen (never
-  in exports, previews or the histogram) while its shape changes and for
-  a second after, and for a second after it is added, chosen or
-  inverted; it hides while its Amount or an adjustment slider is
-  dragged. **Show mask** (O, in the panel's header) shows it the rest of
-  the time too. The recipe stores masks as `areas`, on the unrotated
-  photo, so they follow rotation, flips, straightening and the crop.
+- **Mask** (its own panel, from the toolbar): linear masks (a gradient
+  across the photo) and radial ones (an ellipse), up to eight. Each mask
+  is a section, as the Edit panel's are: its name ("Mask 1" until it has
+  its own) opens and folds it, a pencil beside the name renames it, and
+  at the right of the heading are Delete and its eye; a dot after the
+  name says its adjustments are in use. One is open at a time, and the
+  open one is the selected one, whose handles are on the photo. Inside:
+  its kind and **Invert** (a toggle: the adjustments go to the rest of
+  the photo), **Amount** and its own Exposure, Contrast, Highlights,
+  Shadows, Temperature, Tint and Saturation, then **Position**, closed
+  at first, which opens to the mask's shape sliders, and at the bottom
+  **Add adjustment**, as Lopsy's adjustments have. It gives the mask a
+  further adjustment of its own, any of the Edit panel's other
+  sections: **Whites & blacks**, **Curves**, **Vibrance**, **Color by
+  hue**, **Color grading**, **Local contrast**, **Sharpness & noise**
+  and **Vignette & grain**, each with the controls it has in the Edit
+  panel (the curve editor, the tabs, the colour field), for that mask
+  alone. They show in the Edit panel's order, each under its name. A
+  further adjustment is drawn as the mask's own layer: the photo with
+  all its other edits is run through the mask's settings and laid over
+  the photo with the mask as its opacity (so Amount and Invert apply to
+  it too), in previews and exports alike. So a mask's noise reduction
+  and local contrast work on the edited photo, after tone and colour.
+  The × beside an adjustment's name takes it off the mask again (back
+  to its defaults, as one step), and a mask that is using one shows it
+  when the panel opens. Sharpening, noise reduction and local contrast
+  of a mask wait while a slider is dragged, as the photo's own do.
+  The **eye** shows the
+  photo without that mask and changes nothing in the edit, as a
+  section's does ("Without Mask 1"). With no mask yet, the middle of
+  the panel has one button, **Add a mask**. A bar at the foot of the panel
+  stays in place while the masks scroll: **New mask** (a menu: Linear,
+  Radial) and **Duplicate mask** (a copy of the open one, in the same
+  place, with its adjustments, Amount and Invert).
+  Handles on the image move the selected mask, resize it, turn it and
+  set its feather; each drag or slider release is one history step
+  ("Mask: move"). The selected mask shows in red on screen (never in
+  exports, previews or the histogram) while its shape changes and for a
+  second after, and for a second after it is added, chosen or inverted,
+  or its eye is turned back on; it hides while its Amount or an
+  adjustment slider is dragged. **O** (Show mask) keeps it shown the
+  rest of the time too; the panel has no button for it. The recipe stores masks
+  as `areas`, on the unrotated photo, so they follow rotation, flips,
+  straightening and the crop.
 
 ## Export
 
-- **Export…** (header, tile menu, Edit view): the selected photos'
-  versions, rendered by the engine at full quality.
+- **Export…** (header, tile menu): the selected photos' versions, or in
+  the Edit view the one being edited, rendered by the engine at full
+  quality.
 - **File type**: JPEG with **Quality**, PNG 16-bit or 8-bit, or TIFF
   16-bit (full size, no EXIF). **Colours**: sRGB or Display P3 (Rec. 2020
   waits for the engine).
@@ -414,8 +537,8 @@ to the library**.
   `{title}` `{version}` `{camera}`, and the first name shown.
 - **Save to**: the library's `Exports/` folder, or a download: one file,
   or for several either **one ZIP** or each file on its own.
-- **Export presets**: *Made by Lopsy* ones and *Yours*, saved, renamed
-  and deleted from the dialog; a saved preset keeps every choice above.
+- **Export presets**: the three a library starts with and the user's
+  own in one list, saved, renamed and deleted from the dialog; a saved preset keeps every choice above.
 - **After an export into the library** (Google Drive): **Show in Drive**
   opens the export's folder, and **Copy share link** shares that folder
   with anyone who has the link, only after a confirmation that says
@@ -481,6 +604,13 @@ never talks to Google. Lopsy's side is in `apps/lopsy-web/FEATURES.md`
 
 ## Devices, offline, sync and settings
 
+- **Setting up your library.** A device that opens a library for the
+  first time reads it from storage after the window opens. Until that
+  first sync has finished, a library with nothing to show says
+  "Setting up your library", not that it is empty; if storage cannot
+  be reached, or needs a sign-in, it says "Your library hasn't loaded
+  yet" and why. "Your library is empty", with Import photos, is said
+  only once the device has synced.
 - **Sync.** Every change is an operation in this device's journal in
   storage; other devices' changes are merged in, in any order, with the
   same result. The header shows the state (saved, changes waiting,
@@ -536,13 +666,13 @@ best-practice rules at each step; the `a11y-*.spec.ts` and
     or the Menu key opens the photo's menu. Escape clears the selection
     and keeps your place.
   - Focus returns to the photo you were on after Single view, Compare,
-    Cull, Edit, a dialog or the menu, and stays on a photo when photos are
+    Full screen, Edit, a dialog or the menu, and stays on a photo when photos are
     deleted, dropped or filtered out.
-  - The large photo in Single view and Cull zooms from the keyboard (Enter
+  - The large photo in Single view and Full screen zooms from the keyboard (Enter
     or Space; the arrow keys pan, Escape fits), and in Compare Left and
     Right choose the marked photo.
   - Screen readers hear the photo count as filters and selections change,
-    the photo and its position in Single view and Cull, import milestones
+    the photo and its position in Single view and Full screen, import milestones
     (failures at once; a clean import's outcome once, as its message), and
     leaving full screen.
   - Below 760 px wide, or at 200 % zoom, the library is one scrolling
@@ -582,11 +712,12 @@ best-practice rules at each step; the `a11y-*.spec.ts` and
     options' grip ("Move crop options", next after the edges) takes the
     arrow keys, 10 px a press or 50 px with Shift, and Enter or Space
     sends the options to the top or the bottom without applying the crop.
-  - *Masks*: under **Position**, a button that opens and closes, the
+  - *Mask*: under **Position**, a button that opens and closes, the
     selected mask's shape sliders set Start and End X and Y (linear), or
     Center X and Y, Width, Height, Turn and Feather (radial), in percent
-    of the photo as shown. Each row has Rename, and Invert says whether
-    it is on.
+    of the photo as shown. Each mask has Rename beside its name, Invert
+    says whether it is on, and New mask is a menu the arrow keys move
+    through.
   - *Curves*: points are sliders. Up and Down change the output, Left and
     Right the input (Shift for ten levels), Delete removes a point, and
     Add point adds one in the widest gap.
@@ -597,8 +728,8 @@ best-practice rules at each step; the `a11y-*.spec.ts` and
     takes what was typed and keeps the field, Up and Down step to the
     next 10 %, and Escape drops what was typed without leaving the
     photo.
-  - The histogram's clipping markers, and the moon and sun under the
-    photo, are outlined, or filled when that end clips; the histogram's
+  - The histogram's clipping markers, and the moon and sun in the top
+    bar, are outlined, or filled when that end clips; the histogram's
     channels are solid, dashed and dotted lines, named in
     a key. The current history step and version are marked by a bar as
     well as by colour.
@@ -621,7 +752,7 @@ Shown in the app with `?`. The one-key shortcuts below (digits, letters,
 | Enter | Edit the photo |
 | Space | One photo large, and back |
 | C | Compare the selected photos |
-| F | Sort through full screen |
+| F | Full screen (marking a photo moves on to the next) |
 | I | Show or hide details |
 | Delete, Backspace | Move to the trash |
 | ⇧⌘C / ⇧⌘V | Copy edits / paste edits |
@@ -630,7 +761,7 @@ Shown in the app with `?`. The one-key shortcuts below (digits, letters,
 
 In the Edit view: ⌘Z undo, ⇧⌘Z or ⌘Y redo, ⌘0 fit, ⌘1 full size (100%), ⇧⌘C and
 ⇧⌘V copy and paste edits, hold `\` for before, J for clipping, R crop,
-M a linear mask, ⇧M a radial mask, O Show mask (with Masks open), ← →
+M a linear mask, ⇧M a radial mask, O Show mask (with the Mask panel open), ← →
 the previous or next photo, Escape back to the library (or out of the
 tool in use), ? the Edit view's shortcuts. With the photo focused, the
 arrow keys move a zoomed photo and + and − zoom.

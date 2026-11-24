@@ -2,6 +2,7 @@ import { chromium, defineConfig, devices } from '@playwright/test';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { withEditSectionsOpen } from '../playwright.config';
 
 /**
  * The Photonamous ⇄ Lopsy round trip, with both apps running: Lopsy's dev
@@ -58,6 +59,7 @@ export default defineConfig({
     baseURL: photosUrl,
     headless: true,
     viewport: { width: 1280, height: 800 },
+    storageState: withEditSectionsOpen(new URL(photosUrl).origin),
   },
   projects: [
     {

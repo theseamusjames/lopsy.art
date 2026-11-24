@@ -1,0 +1,49 @@
+/* Lopsy's panel toolbar: a 44 px column of 28 px buttons at the right edge. */
+.toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  width: 44px;
+  flex-shrink: 0;
+  padding: var(--space-2) 0;
+  background: var(--color-bg-secondary);
+  border-left: 1px solid var(--color-border-subtle);
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.button:hover:not(:disabled, [aria-disabled='true']) {
+  background: var(--color-bg-hover);
+}
+
+/* Its panel is open. */
+.button[aria-pressed='true']:not(:disabled),
+.button[aria-pressed='true']:hover:not(:disabled) {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+}
+
+.button:disabled,
+.button[aria-disabled='true'] {
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 1px;
+}

@@ -6,7 +6,7 @@ import styles from './LoadStatus.module.css';
 export interface LoadStatusProps {
   readonly status: EngineStatus;
   readonly onClose: () => void;
-  /** The error's way out; 'Back to the library' by default. */
+  /** The error's way out; 'Back' by default. */
   readonly closeLabel?: string;
 }
 
@@ -17,7 +17,7 @@ function progressText(progress: LoadProgress | null): string {
 }
 
 /** Covers the image while the engine starts and the photo loads, or when either failed. */
-export function LoadStatus({ status, onClose, closeLabel = 'Back to the library' }: LoadStatusProps) {
+export function LoadStatus({ status, onClose, closeLabel = 'Back' }: LoadStatusProps) {
   if (status.kind === 'ready') return null;
   if (status.kind === 'error') {
     return (

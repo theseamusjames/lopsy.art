@@ -2,6 +2,7 @@ import { writeFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { axeViolations } from './axe';
 import { generatedJpeg, importStrip, tiles, toast } from './library';
+import { newMask } from './masks';
 
 /**
  * Accessibility (WCAG 2.2 AA): axe-core's rules run on every view of the
@@ -81,6 +82,21 @@ test('every view, as a user reaches it', async ({ page }) => {
     await page.keyboard.press('3');
   });
 
+  await step(page, 'Filters menu, one filter on', async () => {
+    await page.getByRole('group', { name: 'Filters' }).getByRole('button', { name: 'Filters', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Filters' }).getByRole('checkbox', { name: 'JPEG' }).check();
+    await expect(page.getByRole('button', { name: 'Clear filters' })).toBeVisible({ timeout: 15_000 });
+  });
+  await page.getByRole('button', { name: 'Clear filters' }).click();
+
+  await step(page, 'the filters in the row, in a wide window', async () => {
+    await page.setViewportSize({ width: 1700, height: 800 });
+    await page.getByRole('group', { name: 'Filters' }).getByRole('button', { name: /^Rating/ }).click();
+    await expect(page.getByRole('dialog', { name: 'Rating' })).toBeVisible({ timeout: 15_000 });
+  });
+  await page.keyboard.press('Escape');
+  await page.setViewportSize({ width: 1280, height: 800 });
+
   await step(page, 'More menu', async () => {
     await page.getByRole('button', { name: 'More', exact: true }).click();
     await expect(page.getByRole('menu', { name: 'More' })).toBeVisible({ timeout: 15_000 });
@@ -133,7 +149,7 @@ test('every view, as a user reaches it', async ({ page }) => {
   await step(page, 'compare view', async () => {
     await tiles(page).nth(0).click();
     await tiles(page).nth(1).click({ modifiers: ['Shift'] });
-    await page.getByRole('button', { name: /^Compare/ }).click();
+    await page.getByRole('button', { name: /^Two up/ }).click();
   });
   await page.keyboard.press('Escape');
 
@@ -156,6 +172,12 @@ test('every view, as a user reaches it', async ({ page }) => {
     }
   });
 
+  await step(page, 'edit view, a section hidden by its eye', async () => {
+    await edit.getByRole('button', { name: 'Hide Tone', exact: true }).click();
+    await expect(page.getByTestId('hidden-badge')).toHaveText('Without Tone');
+  });
+  await edit.getByRole('button', { name: 'Hide Tone', exact: true }).click();
+
   await step(page, 'edit view, crop tool', async () => {
     await page.keyboard.press('r');
   });
@@ -175,14 +197,37 @@ test('every view, as a user reaches it', async ({ page }) => {
   await page.keyboard.press('Escape');
 
   await step(page, 'edit view, masks', async () => {
-    await edit.getByRole('button', { name: 'Masks', exact: true }).click();
-    await edit.getByRole('button', { name: 'Radial' }).click();
+    await edit.getByRole('button', { name: 'Mask', exact: true }).click();
+    await newMask(page, 'Radial');
   });
 
+  await step(page, 'edit view, masks, colour grading added to one', async () => {
+    await edit.getByRole('button', { name: 'Add adjustment', exact: true }).click();
+    await page.getByRole('menu', { name: 'Adjustments' }).getByRole('menuitem', { name: 'Color grading', exact: true }).click();
+    await expect(edit.getByRole('group', { name: 'Mask 1 color grading', exact: true })).toBeVisible();
+  });
+
+  await step(page, 'edit view, masks, one hidden by its eye', async () => {
+    await edit.getByRole('button', { name: 'Hide Mask 1', exact: true }).click();
+    await expect(edit.getByTestId('hidden-badge')).toHaveText('Without Mask 1');
+  });
+  await edit.getByRole('button', { name: 'Hide Mask 1', exact: true }).click();
+
+  await step(page, 'edit view, masks, New mask menu open', async () => {
+    await edit.getByRole('button', { name: 'New mask', exact: true }).click();
+    await expect(page.getByRole('menu', { name: 'New mask' })).toBeVisible();
+  });
+  await page.keyboard.press('Escape');
+
+  await step(page, 'edit view, masks, renaming one', async () => {
+    await edit.getByRole('button', { name: 'Rename Mask 1', exact: true }).click();
+    await expect(edit.getByLabel('Mask name')).toBeFocused();
+  });
+  await page.keyboard.press('Escape');
+
   await step(page, 'edit view, masks, Show mask on', async () => {
-    const showMask = edit.getByRole('button', { name: 'Show mask', exact: true });
-    await showMask.click();
-    await expect(showMask).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('group', { name: 'Photo' }).focus();
+    await page.keyboard.press('o');
   });
 
   await step(page, 'edit view, masks, Position open', async () => {
@@ -196,7 +241,7 @@ test('every view, as a user reaches it', async ({ page }) => {
   });
 
   await step(page, 'library after edit', async () => {
-    await edit.getByRole('button', { name: 'Library', exact: true }).click();
+    await edit.getByRole('button', { name: 'Back', exact: true }).click();
     await expect(tiles(page).first()).toBeVisible({ timeout: 15_000 });
   });
 
@@ -228,7 +273,7 @@ test('every view, as a user reaches it', async ({ page }) => {
 
   await step(page, 'cull view', async () => {
     await page.keyboard.press('f');
-    await expect(page.getByRole('dialog', { name: /^Cull: / })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('dialog', { name: /^Full screen: / })).toBeVisible({ timeout: 15_000 });
   });
   await page.keyboard.press('Escape');
 

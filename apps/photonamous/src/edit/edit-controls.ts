@@ -6,8 +6,11 @@
 import {
   DEFAULT_RECIPE,
   RECIPE_RANGES,
+  areaEffectPath,
+  isAreaEffectPath,
   rangeForPath,
   recipeFromPaths,
+  recipeLeafJson,
   recipeToPaths,
   type QuarterTurns,
   type Recipe,
@@ -114,14 +117,20 @@ export function rangeOf(path: string): RecipeRange {
   return rangeForPath(path) ?? FALLBACK_RANGE;
 }
 
+/** The recipe path an area's own effect mirrors: 'areas.<id>.fx.tone.whites' -> 'tone.whites'. */
+const AREA_EFFECT = /^areas\.[^.]+\.fx\.(.+)$/;
+
 export function numberAt(recipe: Recipe, path: string): number {
   const value = recipeToPaths(recipe)[path];
   return typeof value === 'number' ? value : 0;
 }
 
 export function defaultAt(path: string): number {
-  // A new area applies in full; its other numbers start at 0.
+  // A new area applies in full; its built-in adjustments start at 0.
   if (/^areas\.[^.]+\.amount$/.test(path)) return 100;
+  // One of an area's own effects starts where the recipe setting it mirrors does.
+  const effect = AREA_EFFECT.exec(path)?.[1];
+  if (effect !== undefined) return numberAt(DEFAULT_RECIPE, effect);
   return numberAt(DEFAULT_RECIPE, path);
 }
 
@@ -221,10 +230,22 @@ export function curvesResetChanges(recipe: Recipe): Record<string, Json> {
   return changes;
 }
 
+/** A hue and saturation pair that a tab also shows as a field to pick from (ColorField). */
+export interface ColorFieldDef {
+  /** The field's name ("Shadows color"), and its history step unless `historyLabel` gives another. */
+  readonly label: string;
+  /** How the history names a change when the name alone is ambiguous ("Sky shadows color"). */
+  readonly historyLabel?: string;
+  readonly huePath: string;
+  readonly saturationPath: string;
+}
+
 export interface TabDef {
   readonly id: string;
   readonly label: string;
   readonly controls: readonly ControlDef[];
+  /** Shown above the tab's sliders. */
+  readonly field?: ColorFieldDef;
 }
 
 const HUE_BAND_LABELS: Readonly<Record<HueBand, string>> = {
@@ -271,6 +292,11 @@ export const COLOR_GRADING_TABS: readonly TabDef[] = GRADE_RANGES.map((range) =>
     label: field.label,
     historyLabel: `${GRADE_LABELS[range]} ${field.label.toLowerCase()}`,
   })),
+  field: {
+    label: `${GRADE_LABELS[range]} color`,
+    huePath: `colorGrading.${range}.hue`,
+    saturationPath: `colorGrading.${range}.saturation`,
+  },
 }));
 
 export const COLOR_GRADING_SHARED: readonly ControlDef[] = [
@@ -288,9 +314,144 @@ export function resetChangesFor(recipe: Recipe, controls: readonly ControlDef[])
   return changes;
 }
 
+/** A further adjustment a mask can be given with Add adjustment: the Edit panel's other sections, on the mask's own leaves. */
+export interface AreaExtraDef {
+  readonly key: 'tone' | 'curves' | 'color' | 'colorByHue' | 'colorGrading' | 'localContrast' | 'detail' | 'finish';
+  /** Its name in the menu and over its controls. */
+  readonly label: string;
+  /** Plain sliders (`controls`), sliders under tabs (`tabs` and `shared`), or the curve editor. */
+  readonly kind: 'sliders' | 'tabs' | 'curves';
+  readonly controls: readonly ControlDef[];
+  readonly tabs: readonly TabDef[];
+  readonly shared: readonly ControlDef[];
+  /** Every leaf of the area it owns: what taking it off puts back. */
+  readonly paths: readonly string[];
+}
+
+/** What an area calls the sections it takes only part of, or names differently. */
+const AREA_EXTRA_LABELS: Readonly<Partial<Record<GroupDef['id'], string>>> = {
+  tone: 'Whites & blacks',
+  color: 'Vibrance',
+  finish: 'Vignette & grain',
+};
+
+/**
+ * The further adjustments of area `areaId`, in the Edit panel's order.
+ * `mask` is the mask's name, for the history ("Sky whites +20").
+ */
+export function areaExtras(areaId: string, mask: string): readonly AreaExtraDef[] {
+  const own = (control: ControlDef): ControlDef => ({
+    ...control,
+    path: areaEffectPath(areaId, control.path),
+    historyLabel: `${mask} ${(control.historyLabel ?? control.label).toLowerCase()}`,
+  });
+  const ownTabs = (tabs: readonly TabDef[]): TabDef[] =>
+    tabs.map((tab) => ({
+      id: tab.id,
+      label: tab.label,
+      controls: tab.controls.map(own),
+      ...(tab.field
+        ? {
+            field: {
+              label: tab.field.label,
+              historyLabel: `${mask} ${tab.field.label.toLowerCase()}`,
+              huePath: areaEffectPath(areaId, tab.field.huePath),
+              saturationPath: areaEffectPath(areaId, tab.field.saturationPath),
+            },
+          }
+        : {}),
+    }));
+  const sliders = (group: GroupDef): AreaExtraDef | null => {
+    const controls = group.controls.filter((control) => isAreaEffectPath(control.path)).map(own);
+    if (controls.length === 0 || group.id === 'whiteBalance' || group.id === 'framing') return null;
+    return { key: group.id, label: AREA_EXTRA_LABELS[group.id] ?? group.title, kind: 'sliders', controls, tabs: [], shared: [], paths: controls.map((c) => c.path) };
+  };
+  const tabbed = (key: 'colorByHue' | 'colorGrading', label: string, tabs: readonly TabDef[], shared: readonly ControlDef[]): AreaExtraDef => {
+    const ownedTabs = ownTabs(tabs);
+    const ownedShared = shared.map(own);
+    return { key, label, kind: 'tabs', controls: [], tabs: ownedTabs, shared: ownedShared, paths: [...ownedTabs.flatMap((t) => t.controls), ...ownedShared].map((c) => c.path) };
+  };
+  return GROUPS.flatMap((group): AreaExtraDef[] => {
+    const extra = sliders(group);
+    return [
+      ...(extra ? [extra] : []),
+      ...(group.id === 'tone'
+        ? [{ key: 'curves' as const, label: 'Curves', kind: 'curves' as const, controls: [], tabs: [], shared: [], paths: CURVE_CHANNELS.map((ch) => areaEffectPath(areaId, `curves.${ch}`)) }]
+        : []),
+      ...(group.id === 'color' ? [tabbed('colorByHue', 'Color by hue', COLOR_BY_HUE_TABS, []), tabbed('colorGrading', 'Color grading', COLOR_GRADING_TABS, COLOR_GRADING_SHARED)] : []),
+    ];
+  });
+}
+
+/** The changes that put the given leaves of an area's own effects back to their defaults; empty when they all are. */
+export function areaEffectResetChanges(recipe: Recipe, paths: readonly string[]): Record<string, Json> {
+  const now = recipeToPaths(recipe);
+  const defaults = recipeToPaths(DEFAULT_RECIPE);
+  const changes: Record<string, Json> = {};
+  for (const path of paths) {
+    const effect = AREA_EFFECT.exec(path)?.[1];
+    if (effect === undefined) continue;
+    const def = recipeLeafJson(defaults[effect] ?? null);
+    if (JSON.stringify(recipeLeafJson(now[path] ?? null)) !== JSON.stringify(def)) changes[path] = def;
+  }
+  return changes;
+}
+
 /** The Framing group's Straighten angle, once the recipe has one (framing.angle). */
 export const FRAMING_GROUP: GroupDef | null =
   'framing.angle' in RECIPE_RANGES ? { id: 'framing', title: 'Straighten', controls: [{ path: 'framing.angle', label: 'Angle', unit: 'degrees', historyLabel: 'Straighten' }] } : null;
+
+/** A section of the Edit panel: its id (open-sections.ts), its heading, and the changes that reset it. */
+export interface SectionDef {
+  readonly id: string;
+  readonly title: string;
+  readonly resetChanges: (recipe: Recipe) => Record<string, Json>;
+}
+
+function groupSection(group: GroupDef): SectionDef {
+  return { id: group.id, title: group.title, resetChanges: (recipe) => groupResetChanges(recipe, group) };
+}
+
+/** The Edit panel's sections that change how the photo looks, in the panel's order: each has an eye. Straighten is framing, as Crop is, and has none. */
+export const SECTIONS: readonly SectionDef[] = [
+  ...GROUPS.flatMap((group): SectionDef[] => [
+    groupSection(group),
+    ...(group.id === 'tone' ? [{ id: 'curves', title: 'Curves', resetChanges: curvesResetChanges }] : []),
+    ...(group.id === 'color'
+      ? [
+          { id: 'colorByHue', title: 'Color by hue', resetChanges: (recipe: Recipe) => resetChangesFor(recipe, COLOR_BY_HUE_TABS.flatMap((t) => t.controls)) },
+          {
+            id: 'colorGrading',
+            title: 'Color Grading',
+            resetChanges: (recipe: Recipe) => resetChangesFor(recipe, [...COLOR_GRADING_TABS.flatMap((t) => t.controls), ...COLOR_GRADING_SHARED]),
+          },
+        ]
+      : []),
+  ]),
+];
+
+/**
+ * The recipe as the photo is shown while sections are hidden (a section's
+ * eye): each hidden section as its Reset would leave it, the rest as they
+ * are. Only what is shown: the edit itself keeps every section.
+ */
+export function withoutSections(recipe: Recipe, hidden: ReadonlySet<string>): Recipe {
+  if (hidden.size === 0) return recipe;
+  const changes: Record<string, Json> = {};
+  for (const section of SECTIONS) if (hidden.has(section.id)) Object.assign(changes, section.resetChanges(recipe));
+  return Object.keys(changes).length === 0 ? recipe : applyChanges(recipe, changes);
+}
+
+/**
+ * The recipe the photo is shown with while some masks are hidden (a mask's
+ * eye): the recipe without those areas. Only what is shown: the edit keeps
+ * every mask.
+ */
+export function withoutAreas(recipe: Recipe, hidden: ReadonlySet<string>): Recipe {
+  const areas = recipe.areas ?? {};
+  if (hidden.size === 0 || !Object.keys(areas).some((id) => hidden.has(id))) return recipe;
+  return { ...recipe, areas: Object.fromEntries(Object.entries(areas).filter(([id]) => !hidden.has(id))) };
+}
 
 /** The groups a new preset starts with: the ones this edit changed, framing left out (spec 5.4). */
 export function changedGroups(recipe: Recipe): RecipeGroupId[] {

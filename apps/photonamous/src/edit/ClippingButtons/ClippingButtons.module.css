@@ -28,7 +28,7 @@
   color: var(--color-text-primary);
 }
 
-/* On is blue, as Before and Split are beside them and as a pressed IconButton is. */
+/* On is blue, as Crop is beside them and as a pressed IconButton is. */
 .button[aria-pressed='true']:not(:disabled),
 .button[aria-pressed='true']:hover:not(:disabled) {
   background: var(--color-accent-subtle);

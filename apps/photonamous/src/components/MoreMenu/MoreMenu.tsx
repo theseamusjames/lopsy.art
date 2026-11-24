@@ -2,6 +2,7 @@ import { useCallback, useId, useRef, useState, type ReactNode } from 'react';
 import { Check, MoreHorizontal } from 'lucide-react';
 import { IconButton } from '../IconButton/IconButton';
 import { useMenuKeys } from '@lopsy/ui/a11y/use-menu-keys';
+import { useMenuSide } from '../menu-side';
 import styles from './MoreMenu.module.css';
 
 export interface MoreMenuItem {
@@ -19,6 +20,9 @@ interface MoreMenuProps {
   items: readonly MoreMenuItem[];
 }
 
+/** The menu's width as MoreMenu.module.css sets it, for choosing its side. */
+const MENU_WIDTH = 240;
+
 /** The grid toolbar's less used commands, each with its words. */
 export function MoreMenu({ items }: MoreMenuProps) {
   const [open, setOpen] = useState(false);
@@ -26,6 +30,7 @@ export function MoreMenu({ items }: MoreMenuProps) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
   const { menuRef, onMenuKeyDown, onTriggerKeyDown } = useMenuKeys({ isOpen: open, onClose: close, onOpen: () => setOpen(true), triggerRef });
+  const side = useMenuSide(triggerRef, open, MENU_WIDTH);
   return (
     <div className={styles.anchor}>
       <IconButton
@@ -40,7 +45,7 @@ export function MoreMenu({ items }: MoreMenuProps) {
         onKeyDown={onTriggerKeyDown}
       />
       {open && (
-        <div ref={menuRef} id={menuId} className={styles.menu} role="menu" aria-label="More" tabIndex={-1} onKeyDown={onMenuKeyDown}>
+        <div ref={menuRef} id={menuId} className={styles.menu} data-side={side} role="menu" aria-label="More" tabIndex={-1} onKeyDown={onMenuKeyDown}>
           {items.map((item) => (
             <button
               key={item.label}

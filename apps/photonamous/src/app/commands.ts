@@ -10,9 +10,11 @@ import { isDevelopable } from '../library/develop-source';
 import { itemAssets, itemForVersion, itemVersionId, nextVersionName, parseItem, versionsByAsset, type ItemId } from '../library/items';
 import type { CommandId } from '../shortcuts/registry';
 import { useUi, type ViewMode } from './store';
+import { comparePhotos, type CompareSize } from '../library/compare';
 import { showErrorToast, showToast } from './toasts';
 import { plural } from '../import/import-summary';
 import { findPreset } from '@lopsy/photos-core/library/presets';
+import { DEFAULT_RECIPE, isDefaultRecipe } from '@lopsy/photos-core/library/recipe';
 import { asGroupIds, pasteRecipeValues, pickRecipeValues } from '../library/recipe-copy';
 import { EMPTY_SELECTION, moveFocus, nextAfterRemoval, orderedSelection, selectAll, selectOne, targetIds } from '../library/selection';
 
@@ -49,6 +51,13 @@ export function currentVersions(): { assetId: AssetId; versionId: VersionId }[] 
     if (versionId !== null) out.push({ assetId: parseItem(id).assetId, versionId });
   }
   return out;
+}
+
+/** The versions Export takes: in the Edit view the one being edited, whatever is selected under it; else each selected tile's. */
+export function exportVersions(): VersionId[] {
+  const { editing } = useUi.getState();
+  if (editing !== null) return [editing.versionId];
+  return currentVersions().map((v) => v.versionId);
 }
 
 /**
@@ -130,6 +139,25 @@ export function applyPreset(presetId: string): void {
   if (!preset || versionIds.length === 0) return;
   s.applyRecipeValues(versionIds, preset.values, `Preset: ${preset.name}`);
   showToast(`Applied “${preset.name}” to ${plural(versionIds.length, 'photo')}.`);
+}
+
+/**
+ * Takes every selected tile's version back to the photo as it was shot:
+ * every edit off, the crop and rotation too. One history step for each,
+ * so the Edit view's History can bring any of them back.
+ */
+export function resetEdits(): void {
+  const s = session();
+  const view = s.getView();
+  const edited = currentVersions()
+    .map((v) => view.versions.get(v.versionId))
+    .filter((version) => version !== undefined && !isDefaultRecipe(version.recipe));
+  if (edited.length === 0) {
+    showToast(currentVersions().length === 0 ? 'Select photos to reset first.' : 'Nothing to reset: no edits here.');
+    return;
+  }
+  for (const version of edited) if (version) s.setRecipe(version.id, DEFAULT_RECIPE, 'Reset to original');
+  showToast(`Reset ${plural(edited.length, 'photo')} to the original.`);
 }
 
 /** Pastes the copied edits onto every selected tile's version. */
@@ -322,6 +350,12 @@ export function openEdit(): void {
   useUi.getState().setEditing({ assetId, versionId });
 }
 
+/** Edit from a tile's own button: the tile is selected as a click selects it, then opened. */
+export function editItem(id: ItemId): void {
+  useUi.getState().setSelection(selectOne(id));
+  openEdit();
+}
+
 function enterMode(mode: ViewMode, orderedIds: readonly AssetId[]): void {
   const ui = useUi.getState();
   if (ui.selection.focus === null) {
@@ -341,19 +375,38 @@ export function openCull(orderedIds: readonly AssetId[]): void {
   }
 }
 
-/** Compare needs two to four selected photos; extra ones are left out. */
-export function canCompare(): boolean {
-  return useUi.getState().selection.ids.size >= 2;
+export function openSingle(orderedIds: readonly AssetId[]): void {
+  enterMode('single', orderedIds);
 }
 
-export function openCompare(orderedIds: readonly AssetId[]): void {
-  if (!canCompare()) return;
+/**
+ * Photos side by side: two up, or four up. Without a size it is two up
+ * for up to two selected photos and four up for more. The view shows the
+ * selected photos and, when fewer are selected than it holds, the ones
+ * that follow them in the grid (`comparePhotos`); those join the
+ * selection, so what is on show is what is selected.
+ */
+export function openCompare(orderedIds: readonly AssetId[], size?: CompareSize): void {
   const ui = useUi.getState();
-  const shown = orderedSelection(ui.selection, orderedIds).slice(0, 4);
+  const selected = orderedSelection(ui.selection, orderedIds);
+  const wanted = size ?? (selected.length > 2 ? 4 : 2);
+  const shown = comparePhotos(selected, ui.selection.focus, orderedIds, wanted);
+  if (shown.length < 2) return;
+  const ids = selected.length >= shown.length ? ui.selection.ids : new Set([...ui.selection.ids, ...shown]);
   // The keys act on the focused photo, so it must be one of those shown.
-  if (ui.selection.focus === null || !shown.includes(ui.selection.focus)) {
-    ui.setSelection({ ...ui.selection, focus: shown[0] ?? null });
-  }
+  const focus = ui.selection.focus !== null && shown.includes(ui.selection.focus) ? ui.selection.focus : (shown[0] ?? null);
+  ui.setSelection({ ...ui.selection, ids, focus });
+  ui.setCompareSize(wanted);
+  ui.setMode('compare');
+}
+
+/** From four up to two: the two photos picked there become the ones selected and shown. */
+export function compareTwo(picked: readonly string[]): void {
+  const [first, second] = picked;
+  if (first === undefined || second === undefined) return;
+  const ui = useUi.getState();
+  ui.setSelection({ ids: new Set([first, second]), anchor: first, focus: first });
+  ui.setCompareSize(2);
   ui.setMode('compare');
 }
 

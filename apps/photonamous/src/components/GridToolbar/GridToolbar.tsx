@@ -1,15 +1,14 @@
 import { useMemo } from 'react';
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Columns2, ClipboardCopy, ClipboardPaste, CopyPlus, Info, Layers, Maximize, Paintbrush, ScanEye, Search, Trash2 } from 'lucide-react';
+import { ClipboardCopy, ClipboardPaste, CopyPlus, Info, Layers, Paintbrush, RotateCcw, Trash2 } from 'lucide-react';
 import type { AssetId } from '@lopsy/photos-core/library/types';
-import { THUMB_SIZE, useUi } from '../../app/store';
-import { newVersion, openCompare, openCull, openFocusedInLopsy, runCommand } from '../../app/commands';
+import { useUi } from '../../app/store';
+import { newVersion, openFocusedInLopsy, resetEdits, runCommand } from '../../app/commands';
 import { PresetMenu } from '../PresetMenu/PresetMenu';
 import { itemAssets } from '../../library/items';
 import { plural } from '../../import/import-summary';
 import { MoreMenu } from '../MoreMenu/MoreMenu';
 import { formatChord, SHORTCUTS, type CommandId } from '../../shortcuts/registry';
 import { isMac } from '../../app/hooks';
-import { SORT_DESCENDING, SORT_LABELS, sortDirectionLabel, type SortKey } from '../../library/asset-query';
 import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
 import { useCollectionTitle } from './collection-title';
@@ -24,12 +23,6 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
   const groupBursts = useUi((s) => s.groupBursts);
   const setGroupBursts = useUi((s) => s.setGroupBursts);
   const collection = useUi((s) => s.collection);
-  const sort = useUi((s) => s.sort);
-  const setSort = useUi((s) => s.setSort);
-  const text = useUi((s) => s.text);
-  const setText = useUi((s) => s.setText);
-  const thumbSize = useUi((s) => s.thumbSize);
-  const setThumbSize = useUi((s) => s.setThumbSize);
   const selected = useUi((s) => s.selection.ids.size);
   const focus = useUi((s) => s.selection.focus);
   const single = selected === 1 || (selected === 0 && focus !== null);
@@ -61,75 +54,6 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
       </div>
 
       <div className={styles.controls}>
-        <label className={styles.search}>
-          <Search size={14} />
-          <input
-            type="search"
-            placeholder="Find by name, title, keyword"
-            aria-label="Find photos"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.stopPropagation();
-                if (text !== '') setText('');
-                else e.currentTarget.blur();
-              }
-            }}
-          />
-        </label>
-
-        <label className={styles.sort}>
-          <span className={styles.controlLabel}>Order</span>
-          <select value={sort.key} onChange={(e) => {
-              const key = e.target.value as SortKey;
-              setSort({ key, descending: SORT_DESCENDING[key] });
-            }} aria-label="Order by">
-            {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
-              <option key={k} value={k}>
-                {SORT_LABELS[k]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <IconButton
-          size="sm"
-          label={sortDirectionLabel(sort)}
-          icon={sort.descending ? <ArrowDownWideNarrow size={14} /> : <ArrowUpNarrowWide size={14} />}
-          onClick={() => setSort({ ...sort, descending: !sort.descending })}
-        />
-
-        <label className={styles.size}>
-          <span className={styles.controlLabel}>Size</span>
-          <input
-            type="range"
-            min={THUMB_SIZE.min}
-            max={THUMB_SIZE.max}
-            value={thumbSize}
-            onChange={(e) => setThumbSize(Number(e.target.value))}
-            aria-label="Thumbnail size"
-          />
-        </label>
-
-        <span className={styles.divider} />
-        <span className={styles.views} role="group" aria-label="Look at">
-          <IconButton label={`Look at one photo (${keyOf('open-single')})`} icon={<Maximize size={16} />} onClick={() => runCommand('open-single', orderedIds)} />
-          <Button
-            size="sm"
-            variant="ghost"
-            title={selected >= 2 ? `Compare the selected photos (${keyOf('open-compare')})` : 'Compare: select two to four photos first'}
-            disabled={selected < 2}
-            onClick={() => openCompare(orderedIds)}
-          >
-            <Columns2 size={14} />
-            Compare
-          </Button>
-          <Button size="sm" variant="ghost" title={`Sort through full screen (${keyOf('open-cull')})`} onClick={() => openCull(orderedIds)}>
-            <ScanEye size={14} />
-            Cull
-          </Button>
-        </span>
-        <span className={styles.divider} />
         <span className={styles.views} role="group" aria-label="Edits">
           <Button
             size="sm"
@@ -152,9 +76,24 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
             Paste
           </Button>
           <PresetMenu disabled={selected === 0 && !single} />
+          <Button
+            size="sm"
+            variant="ghost"
+            title={selected === 0 && !single ? 'Reset to the original: select photos first' : 'Take the selected photos back to the original, every edit off'}
+            disabled={selected === 0 && !single}
+            onClick={resetEdits}
+          >
+            <RotateCcw size={14} />
+            Reset
+          </Button>
         </span>
-        <span className={styles.divider} />
-        <span className={styles.views}>
+        <span className={`${styles.views} ${styles.end}`}>
+          <IconButton
+            label={`Details (${keyOf('toggle-info')})`}
+            icon={<Info size={16} />}
+            pressed={infoOpen}
+            onClick={toggleInfo}
+          />
           <MoreMenu
             items={[
               {
@@ -179,12 +118,6 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
                 run: () => setGroupBursts(!groupBursts),
               },
             ]}
-          />
-          <IconButton
-            label={`Details (${keyOf('toggle-info')})`}
-            icon={<Info size={16} />}
-            pressed={infoOpen}
-            onClick={toggleInfo}
           />
         </span>
       </div>

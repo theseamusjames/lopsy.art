@@ -30,8 +30,14 @@
   background: var(--color-bg-secondary);
 }
 
-.back {
+/* Back is grey wherever it is (here, side by side, the Edit view), and comes up to the text's colour under the pointer. */
+button.back {
   justify-self: start;
+  color: var(--color-text-secondary);
+}
+
+button.back:hover {
+  color: var(--color-text-primary);
 }
 
 .name {

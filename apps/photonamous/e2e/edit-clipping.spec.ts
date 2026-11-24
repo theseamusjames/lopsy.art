@@ -3,7 +3,7 @@ import { openGeneratedImage, openHarness, waitForReady } from './harness';
 
 /**
  * Clipping warnings (spec 5.4): the histogram's highlight and shadow
- * indicators, the moon and sun under the photo, and J, paint clipped
+ * indicators, the moon and sun in the top bar, and J, paint clipped
  * pixels on the live frame only.
  */
 
@@ -87,13 +87,29 @@ test('the highlight warning paints blown pixels red on screen, never in the expo
   await expect.poll(() => liveRed(page), { timeout: 15_000 }).toBe(0);
 });
 
-test('the moon and sun under the photo are the same toggles as the histogram markers', async ({ page }) => {
+test('the moon and sun in the top bar are the same toggles as the histogram markers', async ({ page }) => {
   await openHarness(page);
   await openGeneratedImage(page, 640, 480, 'image/jpeg', ['#404040', '#ffffff', '#ffffff']);
   await waitForReady(page);
   await expect(page.getByTestId('histogram')).toHaveAttribute('data-ready', 'true');
-  const sun = page.getByTestId('stage-clip-highlights');
-  const moon = page.getByTestId('stage-clip-shadows');
+  const sun = page.getByTestId('tool-clip-highlights');
+  const moon = page.getByTestId('tool-clip-shadows');
+  // They lead the top bar's tools: moon, sun, then the rotations, flips and Crop, then Undo and Redo, a line between each group.
+  const xOf = async (name: string) => (await page.getByRole('button', { name, exact: true }).boundingBox())?.x ?? 0;
+  const [moonBox, sunBox, stage] = await Promise.all([moon.boundingBox(), sun.boundingBox(), page.getByRole('group', { name: 'Photo' }).boundingBox()]);
+  expect((moonBox?.y ?? 0) + (moonBox?.height ?? 0)).toBeLessThanOrEqual((stage?.y ?? 0) + 1);
+  expect(sunBox?.x ?? 0).toBeGreaterThan(moonBox?.x ?? 0);
+  const order = [sunBox?.x ?? 0, await xOf('Rotate left'), await xOf('Rotate right'), await xOf('Flip'), await xOf('Crop'), await xOf('Undo'), await xOf('Redo')];
+  expect(order).toEqual([...order].sort((a, b) => a - b));
+  expect(order[1]! - order[0]!).toBeGreaterThan(order[2]! - order[1]!);
+  expect(order[5]! - order[4]!).toBeGreaterThan(order[2]! - order[1]!);
+  const lines = await page.getByTestId('tool-divider').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().x));
+  expect(lines.length).toBeGreaterThanOrEqual(2);
+  expect(lines[0]!).toBeGreaterThan(order[0]!);
+  expect(lines[0]!).toBeLessThan(order[1]!);
+  expect(lines[1]!).toBeGreaterThan(order[4]!);
+  expect(lines[1]!).toBeLessThan(order[5]!);
+  await expect(page.getByRole('group', { name: 'View' }).getByRole('button', { name: /clipping/ })).toHaveCount(0);
   // Lit where the photo clips, and saying how much, as the histogram's marker does.
   await expect(sun).toHaveAttribute('data-clipped', 'true');
   await expect(moon).not.toHaveAttribute('data-clipped', 'true');

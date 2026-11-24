@@ -31,6 +31,15 @@
   padding: var(--space-2) var(--space-3);
 }
 
+/* Back is grey wherever it is, and comes up to the text's colour under the pointer. */
+button.back {
+  color: var(--color-text-secondary);
+}
+
+button.back:hover {
+  color: var(--color-text-primary);
+}
+
 .hint {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
@@ -77,6 +86,71 @@
   gap: var(--space-1) var(--space-3);
   padding: var(--space-1) var(--space-2);
   background: var(--color-bg-secondary);
+}
+
+/*
+ * The tick that says "this one" when narrowing four photos to two, at the
+ * caption's right end. Drawn here, not by the browser: an empty box in
+ * the caption's own dark with a visible edge, filled with the
+ * buttons' blue and a white tick when on. The label around it is the 24 px target.
+ */
+.pick {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  cursor: pointer;
+}
+
+.pick input {
+  -webkit-appearance: none;
+  appearance: none;
+  display: grid;
+  place-content: center;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border: 1.5px solid var(--ph-control-edge);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+
+.pick input:hover {
+  border-color: var(--color-text-secondary);
+}
+
+.pick input:checked {
+  border-color: var(--color-primary-bg);
+  background: var(--color-primary-bg);
+}
+
+/* The tick: two sides of a small rotated box. */
+.pick input:checked::before {
+  content: '';
+  width: 5px;
+  height: 9px;
+  margin-top: -2px;
+  border: solid var(--color-primary-text);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.pick input:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  .pick input:checked {
+    background: Highlight;
+    border-color: Highlight;
+  }
+
+  .pick input:checked::before {
+    border-color: HighlightText;
+  }
 }
 
 .name {

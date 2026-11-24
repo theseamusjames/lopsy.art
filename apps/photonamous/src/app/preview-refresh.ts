@@ -45,13 +45,16 @@ export function isStale(version: Version, hash: string): boolean {
   return version.thumb?.recipeHash !== hash || version.screen?.recipeHash !== hash;
 }
 
+/** Whether a version's previews are behind its recipe and can be made again. */
+export function awaitsPreviews(view: LibraryView, version: Version, hashOf: (recipe: Recipe) => string = cachedRecipeHash): boolean {
+  return !version.deleted && renderable(view.assets.get(version.assetId)) && isStale(version, hashOf(version.recipe));
+}
+
 /** Versions whose previews do not show their recipe. */
 export function staleVersions(view: LibraryView, hashOf: (recipe: Recipe) => string = cachedRecipeHash): PreviewTarget[] {
   const targets: PreviewTarget[] = [];
   for (const version of view.versions.values()) {
-    if (version.deleted || !renderable(view.assets.get(version.assetId))) continue;
-    const hash = hashOf(version.recipe);
-    if (isStale(version, hash)) targets.push({ versionId: version.id, hash });
+    if (awaitsPreviews(view, version, hashOf)) targets.push({ versionId: version.id, hash: hashOf(version.recipe) });
   }
   return targets;
 }
@@ -139,6 +142,11 @@ export class PreviewRefresher {
 
   getProgress(): PreviewRefreshProgress {
     return this.progress;
+  }
+
+  /** Whether the render of this version's previews failed for the recipe it has now (it is not tried again until that changes). */
+  hasFailed(versionId: VersionId): boolean {
+    return this.failed.has(versionId);
   }
 
   subscribe(listener: () => void): () => void {

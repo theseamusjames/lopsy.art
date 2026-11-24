@@ -25,9 +25,14 @@ test('Edit in the library: history, versions, presets, copy and paste, filmstrip
   await page.getByRole('button', { name: /^All photos/ }).click();
   await expect(tiles(page)).toHaveCount(2);
 
-  await tiles(page).first().click();
-  await page.keyboard.press('Enter');
+  // A tile's own Edit button is there only under the pointer; it selects the tile and opens it.
+  const firstTile = tiles(page).first();
+  await expect(firstTile.getByRole('button', { name: /^Edit / })).toHaveCSS('opacity', '0');
+  await firstTile.hover();
+  await expect(firstTile.getByRole('button', { name: /^Edit / })).toHaveCSS('opacity', '1');
+  await firstTile.getByRole('button', { name: /^Edit / }).click();
   await waitForReady(page, 60_000);
+  await expect(firstTile).toHaveAttribute('aria-selected', 'true');
   const edit = page.getByTestId('edit-view');
   const firstName = (await edit.getByTitle(/\.jpg$/).first().textContent()) ?? '';
 
@@ -46,6 +51,11 @@ test('Edit in the library: history, versions, presets, copy and paste, filmstrip
   await edit.getByRole('list', { name: 'Presets' }).getByRole('button', { name: 'Punchy', exact: true }).click();
   await expect(edit.getByLabel('Contrast value', { exact: true })).toHaveValue('+25');
   await expect(history.getByRole('button', { name: 'Preset: Punchy' })).toBeVisible();
+  // The presets a library starts with are the user's to delete, like any they save.
+  const presetList = edit.getByRole('list', { name: 'Presets' });
+  await presetList.getByRole('button', { name: 'Delete preset Warm' }).click();
+  await expect(presetList.getByRole('button', { name: 'Warm', exact: true })).toHaveCount(0);
+  await expect(presetList.getByRole('button', { name: 'Cool', exact: true })).toBeVisible();
 
   // Versions: a new one carries the edit and becomes the one shown.
   const versions = edit.getByRole('list', { name: 'Versions' });
@@ -91,7 +101,16 @@ test('Edit in the library: history, versions, presets, copy and paste, filmstrip
   await expect(edit.getByLabel('Exposure value', { exact: true })).toHaveValue('+1.00');
   await expect(edit.getByLabel('Contrast value', { exact: true })).toHaveValue('+25');
 
-  await page.getByTestId('edit-view').getByRole('button', { name: 'Library', exact: true }).click();
+  // Export is the header's alone, and here it takes the photo being edited: not the one selected in the grid under it.
+  await expect(edit.getByRole('button', { name: /^Export/ })).toHaveCount(0);
+  const secondName = ((await edit.getByTitle(/\.jpg$/).first().textContent()) ?? '').replace(/\.jpg$/, '');
+  await page.getByRole('banner').getByRole('button', { name: 'Export 1 photo' }).click();
+  const exporting = page.getByRole('dialog', { name: 'Export 1 photo' });
+  await expect(exporting.getByText(new RegExp(`· ${secondName}\\.`))).toBeVisible();
+  await exporting.getByRole('button', { name: 'Cancel' }).click();
+  await expect(exporting).toHaveCount(0);
+
+  await page.getByTestId('edit-view').getByRole('button', { name: 'Back', exact: true }).click();
   await expect(tiles(page)).toHaveCount(2);
 });
 

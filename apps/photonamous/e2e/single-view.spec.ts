@@ -61,7 +61,7 @@ test('the back link is at the left edge, and labels, stars and edit buttons sit 
   const photo = await box(view.getByRole('button', { name: 'Look closer at layout.jpg' }));
 
   // The back link starts where the bars' content does (its arrow, not a stretched box), and reads as a link: no fill, underlined on hover.
-  const back = view.getByRole('button', { name: 'Back to the grid' });
+  const back = view.getByRole('button', { name: 'Back', exact: true });
   const backBox = await box(back);
   const arrow = await box(back.locator('svg'));
   expect(Math.abs(arrow.left - (frame.left + EDGE))).toBeLessThanOrEqual(1);
@@ -69,7 +69,7 @@ test('the back link is at the left edge, and labels, stars and edit buttons sit 
   expect(await back.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
   await back.hover();
   expect(await back.evaluate((el) => getComputedStyle(el).textDecorationLine)).toBe('underline');
-  // It reads "Back"; its name says where to.
+  // It reads "Back", as every way back in the app does.
   await expect(back).toHaveText('Back');
   // Its row has the marks bar's colour, not the stage's: one header above the photo.
   const rowColour = await back.evaluate((el) => (el.parentElement ? getComputedStyle(el.parentElement).backgroundColor : ''));
@@ -206,7 +206,7 @@ test('the selected version has a box; chips show the others, select them by thei
   await expect(chips).toHaveText(['Original', 'Fourth', 'Fifth, warmer']);
 
   // The grid's tile for the photo is its selected version; the others are the stack's other tiles.
-  await view.getByRole('button', { name: 'Back to the grid' }).click();
+  await view.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(page.locator('[role="gridcell"][title="many.jpg"]')).toBeVisible();
   await expect(page.locator('[role="gridcell"][title="many.jpg (Second)"]')).toHaveCount(0);
   await expect(page.locator('[role="gridcell"][title="many.jpg (Third)"]')).toHaveCount(0);
@@ -303,7 +303,7 @@ test('a Lopsy document has Open in Lopsy, which sends its .lopsy, and Edit, for 
   await expect(lopsy).toHaveTitle('Saved', { timeout: 60_000 });
 
   // The document joins the photo's stack; opened in Single view, it has Open in Lopsy in place of Edit in Lopsy, and Edit.
-  await view.getByRole('button', { name: 'Back to the grid' }).click();
+  await view.getByRole('button', { name: 'Back', exact: true }).click();
   const photo = page.locator('[role="gridcell"][title="source.jpg"]');
   await photo.getByRole('button', { name: '1 Lopsy document', exact: true }).click();
   const documentTile = page.locator('[role="gridcell"][title="Poster.lopsy"]');

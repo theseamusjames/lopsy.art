@@ -39,7 +39,7 @@ test('new version, edit it, copy its edits onto another photo', async ({ page })
   await waitForReady(page, 60_000);
   await raiseExposure(page, 5);
   await expect(page.getByLabel('Exposure value')).toHaveValue('+0.50');
-  await page.getByTestId('edit-view').getByRole('button', { name: 'Library', exact: true }).click();
+  await page.getByTestId('edit-view').getByRole('button', { name: 'Back', exact: true }).click();
   await expect(first).toHaveAttribute('data-edited', 'true');
   await expect(original).toHaveAttribute('data-edited', 'false');
 

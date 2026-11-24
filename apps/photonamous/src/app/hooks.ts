@@ -5,7 +5,8 @@ import type { Asset, AssetId, LibrarySession, LibraryView, PreviewRef, SyncStatu
 import type { ImportItemState, ImportJob, ImportProgress } from '@lopsy/photos-core/import/types';
 import type { ExportJob, ExportProgress } from './backend';
 import type { DownloadProgress, OriginalsDownload } from '@lopsy/photos-core/cache/keep-originals';
-import type { PreviewRefresher, PreviewRefreshProgress } from './preview-refresh';
+import { awaitsPreviews, type PreviewRefresher, type PreviewRefreshProgress } from './preview-refresh';
+import { getBackend } from './backend-registry';
 import { useUi } from './store';
 import { listExportPresets, listPresets } from '../library/presets-list';
 import type { ExportPreset, Preset } from '@lopsy/photos-core/library/types';
@@ -197,6 +198,25 @@ export function usePreviewRefresh(refresher: PreviewRefresher | null): PreviewRe
     refresher ? (l) => refresher.subscribe(l) : noSubscribe,
     () => (refresher ? refresher.getProgress() : null),
   );
+}
+
+/**
+ * Whether the picture a tile shows is behind the version's edits and a new
+ * one is on its way: after a paste or a preset from the grid, a new
+ * version, a change from another device. It is known from the library
+ * itself the moment the edit lands, before the background render has even
+ * been queued, so the tile says so at once. False where nothing redraws
+ * previews (the fake library), and once a render has failed.
+ */
+export function useAwaitsPreviews(version: Version | undefined): boolean {
+  const session = useUi((s) => s.connection?.session ?? null);
+  const view = useLibraryView();
+  const refresher = session ? getBackend().getPreviewRefresh(session) : null;
+  const failed = useSyncExternalStore(
+    refresher ? (l) => refresher.subscribe(l) : noSubscribe,
+    () => (refresher && version ? refresher.hasFailed(version.id) : false),
+  );
+  return refresher !== null && version !== undefined && !failed && awaitsPreviews(view, version);
 }
 
 /** The All download's progress (Keep originals), or null when it is not running for this library. */

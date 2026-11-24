@@ -52,7 +52,7 @@ test('opening a photo titles the page, focuses its heading and gives it landmark
   await contrast.press('Enter');
   await expect(main.getByRole('img', { name: 'harbour.jpg, edited', exact: true })).toBeVisible();
 
-  await edit.getByRole('button', { name: 'Library', exact: true }).click();
+  await edit.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(edit).toHaveCount(0);
   await expect(page).toHaveTitle(libraryTitle);
 });
@@ -157,16 +157,21 @@ test('a radial mask is added, shaped and renamed by keyboard', async ({ page }) 
   await openFlatImage(page);
   await waitForReady(page);
 
-  await page.getByRole('button', { name: 'Masks', exact: true }).focus();
+  await page.getByRole('button', { name: 'Mask', exact: true }).focus();
   await page.keyboard.press('Enter');
-  const panel = page.getByRole('region', { name: 'Masks' });
-  await expect(panel.getByRole('button', { name: 'Linear' })).toBeFocused();
-  await page.keyboard.press('Tab');
-  await expect(panel.getByRole('button', { name: 'Radial' })).toBeFocused();
+  const panel = page.getByRole('region', { name: 'Mask', exact: true });
+  // Focus is on Add a mask, in the middle of the empty panel: its menu opens and is chosen from by keyboard.
+  const add = panel.getByRole('button', { name: 'Add a mask', exact: true });
+  await expect(add).toBeFocused();
   await page.keyboard.press('Enter');
-  const row = panel.getByRole('list', { name: 'Mask list' }).getByRole('button', { name: /^Radial\s*Mask 1$/ });
+  const kinds = page.getByRole('menu', { name: 'New mask' });
+  await expect(kinds.getByRole('menuitem', { name: /^Linear/ })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(kinds.getByRole('menuitem', { name: /^Radial/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  const row = panel.getByRole('button', { name: 'Mask 1', exact: true });
   await expect(row).toBeFocused();
-  await expect(row).toHaveAttribute('aria-current', 'true');
+  await expect(row).toHaveAttribute('aria-expanded', 'true');
 
   // The shape sliders wait under Position, closed until it is pressed; Tab goes on into them.
   const position = panel.getByRole('button', { name: 'Position', exact: true });
@@ -207,7 +212,7 @@ test('a radial mask is added, shaped and renamed by keyboard', async ({ page }) 
   await expect(panel.getByLabel('Mask name')).toBeFocused();
   await page.keyboard.type('Sky');
   await page.keyboard.press('Enter');
-  await expect(panel.getByRole('button', { name: /^Radial\s*Sky$/ })).toBeFocused();
+  await expect(panel.getByRole('button', { name: 'Sky', exact: true })).toBeFocused();
 });
 
 test('tabs move with the arrow keys and sections fold from their headings', async ({ page }) => {

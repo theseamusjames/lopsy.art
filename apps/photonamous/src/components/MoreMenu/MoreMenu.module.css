@@ -67,3 +67,9 @@
   color: var(--color-accent);
   margin-top: 2px;
 }
+
+/* Lined up with the button's left edge where there is room (menu-side.ts); with its right edge otherwise. */
+.menu[data-side='start'] {
+  right: auto;
+  left: 0;
+}

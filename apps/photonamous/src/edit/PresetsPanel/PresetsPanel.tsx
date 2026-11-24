@@ -6,7 +6,7 @@ import { changedGroups } from '../edit-controls';
 import styles from './PresetsPanel.module.css';
 
 export interface PresetsPanelProps {
-  /** Built-in and the user's, without deleted ones. */
+  /** The library's presets, without deleted ones: the ones it started with and the user's own, alike. */
   readonly presets: readonly Preset[];
   /** The edit a new preset is saved from. */
   readonly recipe: Recipe;
@@ -77,7 +77,7 @@ export function PresetsPanel({ presets, recipe, isDisabled, onApply, onPreview, 
             >
               {p.name}
             </button>
-            {onDelete && !p.builtIn && (
+            {onDelete && (
               <button type="button" className={styles.icon} aria-label={`Delete preset ${p.name}`} disabled={isDisabled} onClick={() => handleDelete(i)}>
                 <Trash2 size={13} aria-hidden />
               </button>

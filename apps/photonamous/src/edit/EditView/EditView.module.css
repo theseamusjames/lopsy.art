@@ -41,6 +41,14 @@
   gap: var(--space-1);
 }
 
+/* The line between two groups of tools. */
+.toolDivider {
+  flex-shrink: 0;
+  width: 1px;
+  height: 16px;
+  background: var(--color-border);
+}
+
 .toolButton,
 .iconButton,
 .primaryButton {
@@ -75,6 +83,13 @@
   background: var(--color-bg-active);
   border-color: var(--color-border);
   color: var(--color-text-primary);
+}
+
+/* Before and Split are on or off: on is blue, as a pressed IconButton is here and in Lopsy. */
+.iconButton[aria-pressed='true']:not(:disabled),
+.iconButton[aria-pressed='true']:hover:not(:disabled) {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
 }
 
 .toolButton:disabled,
@@ -188,6 +203,13 @@
   pointer-events: none;
 }
 
+/* The panel that is open, if one is, and the toolbar at the right edge. */
+.side {
+  display: flex;
+  flex-shrink: 0;
+  min-height: 0;
+}
+
 .panel {
   width: 300px;
   flex-shrink: 0;
@@ -198,6 +220,17 @@
      longest label ("Large details") and the widest readout ("50000 K"). */
   --slider-label-width: 72px;
   --slider-value-width: 56px;
+}
+
+/* With the masks open the column does not scroll as a whole: the histogram stays, the masks scroll under it, and the Mask panel's bar stays at the foot. */
+.panel[data-panel='mask'] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel[data-panel='mask'] > :first-child {
+  flex-shrink: 0;
 }
 
 .panelFooter {
@@ -279,7 +312,7 @@
   outline-offset: 2px;
 }
 
-/* Under the photo: Fit, Full and the zoom level at the left; the clipping warnings, Before and Split, evenly spaced, at the right. */
+/* Under the photo: the zoom level, Fit and Full at the left; Before and Split at the right. */
 .stageBar {
   display: flex;
   align-items: center;

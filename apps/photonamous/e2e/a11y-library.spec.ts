@@ -4,7 +4,7 @@ import { generatedJpeg, importFiles } from './library';
 /**
  * The library by keyboard and screen reader (WCAG 2.2 AA), through the UI:
  * the grid is one tab stop whose keys move focus and the selection; Single
- * view, Compare, Cull, the Edit view, dialogs and the photo actions menu
+ * view, Compare, Full screen, the Edit view, dialogs and the photo actions menu
  * (opened from the keyboard, outside the grid) give focus back to the tile
  * they came from; focus survives filters and scrolling; landmarks; the
  * sidebar's date tree; one h1 and a page title naming each view; and the
@@ -48,8 +48,8 @@ test('the grid is one tab stop: arrows move and select, Home and End, Single vie
   test.setTimeout(180_000);
   await openLibraryWithPhotos(page);
 
-  // Tab from the last filter lands on the first photo, focused but not selected.
-  await page.getByRole('group', { name: 'Filters' }).getByRole('button', { name: /^Edits/ }).focus();
+  // Tab from the end of the row of filters (the order's direction; Save search is off with no filter) lands on the first photo, focused but not selected.
+  await page.getByRole('group', { name: 'Filters' }).getByRole('button', { name: /\(click to reverse\)$/ }).focus();
   await page.keyboard.press('Tab');
   await expect(cell(page, 'a.jpg')).toBeFocused();
   await expect(cell(page, 'a.jpg')).toHaveAttribute('aria-selected', 'false');
@@ -80,10 +80,13 @@ test('the grid is one tab stop: arrows move and select, Home and End, Single vie
   await page.keyboard.press('ControlOrMeta+a');
   await expect(page.locator('[role="gridcell"][aria-selected="true"]')).toHaveCount(NAMES.length);
 
-  // Only one tile is a tab stop: Tab leaves the grid.
+  // Only one tile is a tab stop. Tab from it goes to its own Edit button, which shows for the keyboard as it does under the pointer.
   expect(await page.locator('[role="gridcell"][tabindex="0"]').count()).toBe(1);
   await page.keyboard.press('Tab');
   expect(await focusedRole(page)).not.toBe('gridcell');
+  const editB = cell(page, 'b.jpg').getByRole('button', { name: 'Edit b.jpg' });
+  await expect(editB).toBeFocused();
+  await expect(editB).toHaveCSS('opacity', '1');
   await page.keyboard.press('Shift+Tab');
   await expect(cell(page, 'b.jpg')).toBeFocused();
 
@@ -266,24 +269,24 @@ test('Enter edits the focused photo, and closing the Edit view gives focus back 
   await expect(edit).toBeVisible({ timeout: 60_000 });
   // The library behind the Edit view is out of reach.
   await expect.poll(() => page.locator('nav').first().evaluate((el) => el.closest('[inert]') !== null)).toBe(true);
-  await edit.getByRole('button', { name: 'Library', exact: true }).click();
+  await edit.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(edit).toHaveCount(0);
   await expect(cell(page, 'c.jpg')).toBeFocused();
   await expect(page).toHaveTitle('All photos – Photonamous');
 });
 
-test('Cull is a full-screen dialog; leaving it is announced and focus returns to the photo', async ({ page }) => {
+test('Full screen is a dialog; leaving it is announced and focus returns to the photo', async ({ page }) => {
   test.setTimeout(180_000);
   await openLibraryWithPhotos(page);
   await cell(page, 'b.jpg').click();
   await page.keyboard.press('f');
-  const cull = page.getByRole('dialog', { name: 'Cull: b.jpg' });
+  const cull = page.getByRole('dialog', { name: 'Full screen: b.jpg' });
   await expect(cull).toBeVisible();
   await expect(cull).toBeFocused();
-  await expect(page).toHaveTitle('b.jpg – Cull – Photonamous');
+  await expect(page).toHaveTitle('b.jpg – Full screen – Photonamous');
   // Marking moves on, and the next photo is said.
   await page.keyboard.press('3');
-  await expect(page.getByRole('dialog', { name: 'Cull: c.jpg' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Full screen: c.jpg' })).toBeVisible();
   await expect(page.getByRole('status').filter({ hasText: 'c.jpg, 3 of 5' })).toBeAttached();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -299,7 +302,7 @@ test('focus stays on a tile when a filter takes the focused photo away, and whil
   await page.keyboard.press('2');
   await cell(page, 'c.jpg').click();
   await page.keyboard.press('2');
-  await page.getByRole('group', { name: 'Filters' }).getByRole('button', { name: /^Rating/ }).click();
+  await page.getByRole('group', { name: 'Filters' }).getByRole('button', { name: 'Filters', exact: true }).click();
   await page.getByRole('checkbox', { name: /^2 stars or more/ }).check();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('gridcell')).toHaveCount(2);
@@ -309,7 +312,10 @@ test('focus stays on a tile when a filter takes the focused photo away, and whil
   await page.keyboard.press('0');
   await expect(cell(page, 'b.jpg')).toHaveCount(0);
   await expect(cell(page, 'c.jpg')).toBeFocused();
+  // Clear filters is in the menu; it closes the menu and gives focus back to its button.
+  await page.getByRole('group', { name: 'Filters' }).getByRole('button', { name: 'Filters, 1 on' }).click();
   await page.getByRole('button', { name: 'Clear filters' }).click();
+  await expect(page.getByRole('group', { name: 'Filters' }).getByRole('button', { name: 'Filters', exact: true })).toBeFocused();
 
   // Big tiles: only a few rows are rendered. Scrolling the grid away keeps the focused tile, and focus.
   await page.getByRole('slider', { name: 'Thumbnail size' }).fill('360');

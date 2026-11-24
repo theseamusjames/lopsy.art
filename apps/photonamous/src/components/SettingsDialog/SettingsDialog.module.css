@@ -26,6 +26,13 @@
   border-radius: var(--radius-sm);
 }
 
+.subheading {
+  margin-top: var(--space-2);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-ui);
+  color: var(--color-text-secondary);
+}
+
 .facts {
   display: grid;
   grid-template-columns: auto 1fr;

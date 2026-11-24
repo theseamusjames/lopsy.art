@@ -248,6 +248,10 @@ export class FakeBackend implements PhotosBackend {
     return false;
   }
 
+  canPickDriveInPage(): boolean {
+    return false;
+  }
+
   async addFromDrive(): Promise<ImportJob | null> {
     return null;
   }

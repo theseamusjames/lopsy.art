@@ -120,7 +120,13 @@ data on a device apart from another's.
    - `https://photonamous.com`
    - `http://localhost:5174` (the Photonamous dev server)
 
-   No redirect URIs: the token model uses a popup. Copy the **client ID**.
+   Authorized redirect URIs, for **Add from Google Drive** in a Google
+   window (sign-in itself needs none: the token model uses a popup):
+   - `https://photonamous.com/drive-picked`
+   - `http://localhost:5174/drive-picked`
+
+   Copy the **client ID**. The client secret Google shows is never used:
+   keep it out of the app and the repository.
 5. **Picker API key.** Credentials > Create credentials > API key, then
    edit it:
    - Application restrictions: **Websites (HTTP referrers)**:
@@ -149,10 +155,31 @@ is a trailer recorded from the app itself, not edited by hand.
 `docs/photonamous-demo-reel.md` says how it is made, what each of its
 files is, and how to record it again or change it.
 
-**Add from Google Drive** (the Picker) is offered when both
-`VITE_GOOGLE_API_KEY` and `VITE_GOOGLE_APP_ID` are set. The app ID is
-required with the `drive.file` scope: it is what grants the app the files
-the user picks.
+**Add from Google Drive** shows Google's Picker in one of two ways
+(`apps/photonamous/src/import/drive-picker.ts` chooses):
+
+- **In the page**, when both `VITE_GOOGLE_API_KEY` and
+  `VITE_GOOGLE_APP_ID` are set (`picker.ts` in photos-core). The app ID
+  is required with the `drive.file` scope: it is what grants the app the
+  files the user picks. This is the quick way: it opens straight onto the
+  user's Drive. But the Picker is a frame on docs.google.com that needs
+  Google's cookies there, and a browser that blocks cross-site cookies
+  gives it none: it shows "Sign in to your Google Account" and no files.
+  Brave does this as it comes (seen 2026-11-22).
+- **In a Google window** (`picker-window.ts`), always available: a pop-up
+  on Google's authorization page with `trigger_onepick=true`, asking for
+  `drive.file` alone. The user chooses an account, agrees, and picks;
+  Google sends the pop-up to `/drive-picked` with the picked file IDs,
+  and that page tells the app's window and closes. Picking is what grants
+  the files, so the token the library already has reads them, and the
+  authorization code Google also sends is never used. It works in every
+  browser and costs the account chooser and consent screen each time.
+
+The page is used first, except in Brave. While the Picker is open in the
+page a prompt under it offers the window ("Google asking you to sign
+in?"), and taking it is remembered on the device; Settings has the same
+choice. **The window is not yet tried against Google** as of 2026-11-22:
+it is tested against a stand-in for Google's page.
 
 **What was checked, and how (2026-11-18).** Google's documentation sites
 (developers.google.com, .cn) were not reachable from the build machine, so
@@ -197,6 +224,14 @@ these were checked against what was:
   and the callback's `picked`, `cancel` and `error` actions. Its example CSP
   adds `frame-src https://drive.google.com` and `font-src
   https://fonts.gstatic.com`, which `public/_headers` now has.
+- *The Picker in a window*, on 2026-11-22, against Google's guide
+  "Integrate the Google Picker into desktop and mobile apps"
+  (developers.google.com/workspace/drive/picker/guides/desktop-mobile-picker):
+  the authorization URL takes `prompt=consent` and `trigger_onepick=true`
+  (both required), `allow_multiple`, `mimetypes`, `file_ids` and
+  `allow_folder_selection`; only `drive.file` is permitted, combined with
+  no other scope; the answer at the redirect URI carries
+  `picked_file_ids`, `code`, `scope`, or `error` when the user cancels.
 
 Still to check with a real account (section 6): `permissions.create` with
 `type: anyone` on an app-created folder under `drive.file`, and that files
@@ -238,7 +273,8 @@ once, in this order:
    Edit** permission is for every Pages project in the account, so it
    covers the new one.
 4. **Google.** Section 3, with `https://photonamous.com` as the JavaScript
-   origin and the API key's referrer.
+   origin and the API key's referrer, and
+   `https://photonamous.com/drive-picked` as a redirect URI.
 5. **GitHub variables.** GitHub > the repository > Settings > Secrets and
    variables > Actions > **Variables** > New repository variable:
    - `DEPLOY_PHOTONAMOUS` = `true`
@@ -362,8 +398,11 @@ These still need a real account, in a real browser, before Phase 1
   `getToken` tries a silent refresh (`prompt: 'none'`) in the last five
   minutes, which is untested against Google.
 - **S3, `drive.file` and the Picker.** What picking a file or a folder
-  grants, and whether a picked file can be moved into the library. Needs
-  the Picker wired into the UI first (section 3).
+  grants, and whether a picked file can be moved into the library. Also
+  that the Picker in a window (section 3) comes back to `/drive-picked`
+  as Google's guide says, for a web client with no code exchange, and
+  what Google's own "Sign in" button in the page's Picker does in a
+  browser that blocks cross-site cookies.
 - **Appendix A facts:** `sha256Checksum` on Drive files (the app compares
   it with its own checksum); the `appProperties` limits (30 per file,
   124 bytes per key plus value; the adapters enforce them); the

@@ -11,11 +11,11 @@ export interface ClippingButtonsProps {
 }
 
 /**
- * The clipping warning's two toggles for the bar under the photo: a moon
- * for shadows at black, a sun for highlights at white. They are the
- * histogram's corner markers again, where the other view toggles are: an
- * icon is filled when that end of the photo clips, and blue, as Before
- * and Split are, while its warning is painted on the photo.
+ * The clipping warning's two toggles, first of the Edit view's top bar
+ * tools: a moon for shadows at black, a sun for highlights at white. They
+ * are the histogram's corner markers again, where the tools are: an icon
+ * is filled when that end of the photo clips, and blue, as Crop is beside
+ * them, while its warning is painted on the photo.
  */
 export function ClippingButtons({ bins, isDisabled = false }: ClippingButtonsProps) {
   const clip = useMemo(() => {
@@ -31,7 +31,7 @@ export function ClippingButtons({ bins, isDisabled = false }: ClippingButtonsPro
         className={styles.button}
         data-side="shadows"
         data-clipped={isClipped(clip.shadows) || undefined}
-        data-testid="stage-clip-shadows"
+        data-testid="tool-clip-shadows"
         aria-pressed={warning.shadows}
         aria-label="Show shadow clipping"
         aria-keyshortcuts="J"
@@ -46,7 +46,7 @@ export function ClippingButtons({ bins, isDisabled = false }: ClippingButtonsPro
         className={styles.button}
         data-side="highlights"
         data-clipped={isClipped(clip.highlights) || undefined}
-        data-testid="stage-clip-highlights"
+        data-testid="tool-clip-highlights"
         aria-pressed={warning.highlights}
         aria-label="Show highlight clipping"
         aria-keyshortcuts="J"

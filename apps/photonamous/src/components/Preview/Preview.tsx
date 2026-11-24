@@ -83,7 +83,8 @@ export function Preview({ itemId, zoom = null, onZoom }: PreviewProps) {
       tabIndex={zoomable ? 0 : undefined}
       aria-pressed={zoomable ? zoom !== null : undefined}
       aria-label={zoomable ? `Look closer at ${name}` : undefined}
-      title={zoomable ? (zoom ? 'Click to fit' : 'Click to look closer') : undefined}
+      // No tooltip while zoomed in: the pointer is then moving over the photo to look around it, and a tooltip sits on what is being looked at.
+      title={zoomable && !zoom ? 'Click to look closer' : undefined}
     >
       {url ? (
         <img

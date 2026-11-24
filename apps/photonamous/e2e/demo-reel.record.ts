@@ -88,7 +88,7 @@ function stageScript(fontUrl: string): string {
       html, body { overflow: hidden !important; background: #000 !important; }
       #reel-pointer { position: fixed; left: 0; top: 0; width: 22px; height: 22px; z-index: 2147483647; pointer-events: none; transform: translate(-100px, -100px); }
       #reel-title { position: fixed; inset: 0; z-index: 2147483646; pointer-events: none; display: grid; place-items: center; background: rgba(0, 0, 0, 0); transition: background 140ms linear; }
-      #reel-title span { display: block; max-width: 1300px; font: 900 136px/0.92 'Reel', system-ui, sans-serif; letter-spacing: -0.05em; text-transform: uppercase; text-align: center; color: #fff; text-shadow: 0 6px 40px rgba(0, 0, 0, 0.65); opacity: 0; transform: scale(1.22); transition: transform 520ms cubic-bezier(0.16, 1, 0.3, 1), opacity 120ms linear; }
+      #reel-title span { display: block; max-width: 1300px; font: 900 136px/0.92 'Reel', system-ui, sans-serif; letter-spacing: -0.015em; text-transform: uppercase; text-align: center; color: #fff; text-shadow: 0 6px 40px rgba(0, 0, 0, 0.65); opacity: 0; transform: scale(1.22); transition: transform 520ms cubic-bezier(0.16, 1, 0.3, 1), opacity 120ms linear; }
       #reel-title.on { background: rgba(0, 0, 0, var(--dim, 0.5)); }
       #reel-title.on span { opacity: 1; transform: scale(1); }
       #reel-title.cut, #reel-title.cut span { transition: none; }
@@ -335,7 +335,7 @@ const END_TITLE_OUT_MS = 650;
 const END_CARD_CSS = `
     .dark { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.62); transition: opacity 800ms linear; }
     .title { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; }
-    .title span { display: block; max-width: 1300px; font: 900 136px/0.92 Inter, system-ui, sans-serif; letter-spacing: -0.05em; text-transform: uppercase; text-align: center; color: #fff; text-shadow: 0 6px 40px rgba(0, 0, 0, 0.65); opacity: 0; transform: scale(1.22); transition: transform 520ms cubic-bezier(0.16, 1, 0.3, 1), opacity 120ms linear; }
+    .title span { display: block; max-width: 1300px; font: 900 136px/0.92 Inter, system-ui, sans-serif; letter-spacing: -0.015em; text-transform: uppercase; text-align: center; color: #fff; text-shadow: 0 6px 40px rgba(0, 0, 0, 0.65); opacity: 0; transform: scale(1.22); transition: transform 520ms cubic-bezier(0.16, 1, 0.3, 1), opacity 120ms linear; }
     .said .title span { opacity: 1; transform: scale(1); }
     .card { position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 14px; pointer-events: none; }
     .card img { width: 880px; height: auto; opacity: 0; transform: scale(1.06); transition: transform 1500ms cubic-bezier(0.16, 1, 0.3, 1), opacity 750ms linear; }
@@ -521,7 +521,7 @@ test('record the demo reel', async ({ page, baseURL }) => {
   // Off camera: sign in, fill the library, make the tiles small, give it some ratings.
   await page.goto('/');
   await page.getByRole('button', { name: 'Try it now' }).click();
-  await page.getByRole('button', { name: 'Sign in with Google' }).click();
+  await page.getByRole('button', { name: 'Continue with Google' }).click();
   await expect(page.getByText('Your library is empty')).toBeVisible({ timeout: 60_000 });
   console.log('Signed in');
   await page.getByRole('button', { name: /Import photos/ }).first().click();

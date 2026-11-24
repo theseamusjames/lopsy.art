@@ -1,5 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
-import { chromiumExecutable } from './playwright.config';
+import { chromiumExecutable, withEditSectionsOpen } from './playwright.config';
 
 /**
  * Photonamous' production build at `/` on its own origin, as on
@@ -17,7 +17,7 @@ export default defineConfig({
   expect: { timeout: 30_000 },
   workers: 1,
   retries: 0,
-  use: { baseURL: `http://127.0.0.1:${port}`, headless: true },
+  use: { baseURL: `http://127.0.0.1:${port}`, headless: true, storageState: withEditSectionsOpen(`http://127.0.0.1:${port}`) },
   projects: [
     {
       name: 'chromium',

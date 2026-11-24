@@ -1,6 +1,7 @@
 /** Settings that belong to this device, kept in localStorage. */
 
 import { parseKeepOriginals, type KeepOriginals } from '@lopsy/photos-core/cache/keep-originals';
+import type { DrivePicker } from '../import/drive-picker';
 
 export type DriveAddMode = 'move' | 'leave';
 
@@ -40,6 +41,29 @@ export function loadDriveAddMode(): DriveAddMode {
 export function saveDriveAddMode(mode: DriveAddMode): void {
   try {
     localStorage.setItem(DRIVE_ADD_KEY, mode);
+  } catch {
+    // Blocked storage: the choice lasts for this page only.
+  }
+}
+
+export const DRIVE_PICKER_KEY = 'photonamous.drive-picker';
+
+/** Where the user chose to see Google's Picker on this device; null when they have not chosen. */
+export function parseDrivePicker(raw: string | null): DrivePicker | null {
+  return raw === 'page' || raw === 'window' ? raw : null;
+}
+
+export function loadDrivePicker(): DrivePicker | null {
+  try {
+    return parseDrivePicker(localStorage.getItem(DRIVE_PICKER_KEY));
+  } catch {
+    return null;
+  }
+}
+
+export function saveDrivePicker(picker: DrivePicker): void {
+  try {
+    localStorage.setItem(DRIVE_PICKER_KEY, picker);
   } catch {
     // Blocked storage: the choice lasts for this page only.
   }

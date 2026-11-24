@@ -23,14 +23,33 @@ test('find photos by text, camera, saved search and date', async ({ page }) => {
   await page.getByRole('searchbox', { name: 'Find photos' }).fill('');
   await expect(tiles(page)).toHaveCount(3);
 
-  // A facet, with its count.
-  await page.getByRole('group', { name: 'Filters' }).getByRole('button', { name: /^Camera/ }).click();
-  const xt5 = page.getByRole('checkbox', { name: /X-T5/ });
-  await expect(page.locator('label', { has: xt5 })).toContainText('1');
+  // A facet, with its count. Beside the details panel the row is too narrow for the filters: they are one menu.
+  const filters = page.getByRole('group', { name: 'Filters' });
+  await expect(filters.getByRole('button', { name: /^Camera/ })).toHaveCount(0);
+  await filters.getByRole('button', { name: 'Filters', exact: true }).click();
+  const menu = page.getByRole('dialog', { name: 'Filters' });
+  for (const facet of ['Camera', 'Lens', 'Rating', 'Label', 'File type', 'Edits']) await expect(menu.getByRole('group', { name: facet })).toBeAttached();
+  const xt5 = menu.getByRole('group', { name: 'Camera' }).getByRole('checkbox', { name: /X-T5/ });
+  await expect(menu.locator('label').filter({ has: page.getByRole('checkbox', { name: /X-T5/ }) })).toContainText('1');
   await xt5.check();
   await page.keyboard.press('Escape');
   await expect(tiles(page)).toHaveCount(1);
   await expect(tiles(page).first()).toHaveAttribute('title', 'market.jpg');
+  // The button says how many filters are on, and has focus again.
+  await expect(filters.getByRole('button', { name: 'Filters, 1 on' })).toBeFocused();
+
+  // With room for them, each filter is its own button in the row, the one in use saying what it is set to.
+  await page.setViewportSize({ width: 1700, height: 800 });
+  await expect(filters.getByRole('button', { name: /^Camera ?: X-T5$/ })).toBeVisible();
+  await expect(filters.getByRole('button', { name: /^Filters/ })).toHaveCount(0);
+  await filters.getByRole('button', { name: 'Clear filters' }).click();
+  await expect(tiles(page)).toHaveCount(3);
+  await filters.getByRole('button', { name: /^Camera/ }).click();
+  await page.getByRole('checkbox', { name: /X-T5/ }).check();
+  await page.keyboard.press('Escape');
+  await expect(tiles(page)).toHaveCount(1);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(filters.getByRole('button', { name: 'Filters, 1 on' })).toBeVisible();
 
   // Saved as a search, then found again from the sidebar.
   await page.getByRole('button', { name: 'Save search' }).click();

@@ -39,7 +39,7 @@ import {
   type RecipeGroupId,
 } from '@lopsy/photos-core/library/recipe';
 import { exportSettingsFromJson, exportSettingsProblem, type ExportSettings } from '@lopsy/photos-core/export/types';
-import { BUILT_IN_PREFIX } from '@lopsy/photos-core/library/presets';
+import { BUILT_IN_EXPORT_PRESETS, BUILT_IN_PRESETS } from '@lopsy/photos-core/library/presets';
 import type { StorageAdapter, StorageKind } from '@lopsy/photos-core/storage/types';
 
 let counter = 0;
@@ -487,14 +487,14 @@ export class FakeSession implements LibrarySession {
   }
 
   renamePreset(presetId: PresetId, name: string): void {
-    const p = this.presets.get(presetId);
-    if (!p || presetId.startsWith(BUILT_IN_PREFIX)) return;
+    const p = this.presets.get(presetId) ?? BUILT_IN_PRESETS.find((starter) => starter.id === presetId);
+    if (!p) return;
     this.presets.set(presetId, { ...p, name });
     this.changed();
   }
 
   deletePreset(presetId: PresetId): void {
-    const p = this.presets.get(presetId);
+    const p = this.presets.get(presetId) ?? BUILT_IN_PRESETS.find((starter) => starter.id === presetId);
     if (!p) return;
     this.presets.set(presetId, { ...p, deleted: true });
     this.changed();
@@ -516,14 +516,14 @@ export class FakeSession implements LibrarySession {
   }
 
   renameExportPreset(presetId: ExportPresetId, name: string): void {
-    const p = this.exportPresets.get(presetId);
+    const p = this.exportPresets.get(presetId) ?? BUILT_IN_EXPORT_PRESETS.find((starter) => starter.id === presetId);
     if (!p) return;
     this.exportPresets.set(presetId, { ...p, name });
     this.changed();
   }
 
   deleteExportPreset(presetId: ExportPresetId): void {
-    const p = this.exportPresets.get(presetId);
+    const p = this.exportPresets.get(presetId) ?? BUILT_IN_EXPORT_PRESETS.find((starter) => starter.id === presetId);
     if (!p) return;
     this.exportPresets.set(presetId, { ...p, deleted: true });
     this.changed();

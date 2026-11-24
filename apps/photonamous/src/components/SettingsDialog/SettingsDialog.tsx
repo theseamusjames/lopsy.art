@@ -6,7 +6,8 @@ import type { DeviceInfo } from '../../app/backend';
 import { useSession } from '../../app/hooks';
 import { useUi } from '../../app/store';
 import { clearPreviewCache } from '../../app/preview-cache';
-import { describeHealth, loadDriveAddMode, saveDriveAddMode, type DriveAddMode } from '../../app/device-settings';
+import { describeHealth, loadDriveAddMode, loadDrivePicker, saveDriveAddMode, saveDrivePicker, type DriveAddMode } from '../../app/device-settings';
+import { blocksCrossSiteCookies, chooseDrivePicker, type DrivePicker } from '../../import/drive-picker';
 import { formatBytes, plural } from '../../import/import-summary';
 import { Button } from '../Button/Button';
 import { CharacterKeysToggle } from '../CharacterKeysToggle/CharacterKeysToggle';
@@ -40,7 +41,17 @@ export function SettingsDialog() {
   const [cleared, setCleared] = useState('');
   const checkRef = useRef<HTMLButtonElement>(null);
   const driveHeadingId = useId();
+  const pickerHeadingId = useId();
   const isDrive = session.adapter.kind === 'google-drive';
+  /** Offered only where there is a choice: a build that can show Google's Picker in the page. */
+  const canPickInPage = getBackend().canPickDriveInPage(session);
+  const [drivePicker, setDrivePicker] = useState<DrivePicker>(() =>
+    chooseDrivePicker({ pageAvailable: canPickInPage, remembered: loadDrivePicker(), blocksCrossSiteCookies: blocksCrossSiteCookies() }),
+  );
+  const choosePicker = (picker: DrivePicker) => {
+    setDrivePicker(picker);
+    saveDrivePicker(picker);
+  };
   const [keep, setKeep] = useState<KeepOriginals | null>(() => getBackend().getKeepOriginals(session));
   const chooseKeep = (mode: KeepOriginals) => {
     setKeep(mode);
@@ -187,6 +198,27 @@ export function SettingsDialog() {
                 Leave them where they are in Drive
               </label>
             </div>
+            {canPickInPage && (
+              <>
+                <h4 className={styles.subheading} id={pickerHeadingId}>
+                  Google’s file picker opens
+                </h4>
+                <div className={styles.group} role="radiogroup" aria-labelledby={pickerHeadingId}>
+                  <label className={styles.option}>
+                    <input type="radio" name="drive-picker" checked={drivePicker === 'page'} onChange={() => choosePicker('page')} />
+                    Here, in the page
+                  </label>
+                  <label className={styles.option}>
+                    <input type="radio" name="drive-picker" checked={drivePicker === 'window'} onChange={() => choosePicker('window')} />
+                    In a Google window
+                  </label>
+                </div>
+                <p className={styles.muted}>
+                  In the page is quicker. If Google asks you to sign in there, your browser is blocking it: use a Google window, where
+                  you choose your account each time.
+                </p>
+              </>
+            )}
           </section>
         )}
 

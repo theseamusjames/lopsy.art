@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getBackend } from './app/backend-registry';
 import { ConnectCancelled, type ConnectOptions, type ReconnectOffer, type StorageChoice } from './app/backend';
 import { useUi } from './app/store';
+import { dialogCovers, useInert } from './app/use-inert';
 import { LibraryBusyError } from '@lopsy/photos-core/library/lock';
 import { Toasts } from './components/Toasts/Toasts';
 import { isReceivePage, startReceiving } from './app/lopsy-handoff';
@@ -19,6 +20,9 @@ export function App() {
   const connectError = useUi((s) => s.connectError);
   const editing = useUi((s) => s.editing);
   const setEditing = useUi((s) => s.setEditing);
+  // A dialog opened from the header while editing covers the Edit view as it covers the library.
+  const editFrame = useRef<HTMLDivElement>(null);
+  useInert(editFrame, useUi((s) => dialogCovers(s.dialog)));
   const [offer, setOffer] = useState<ReconnectOffer | null>(null);
   const [busyKind, setBusyKind] = useState<StorageChoice | null>(null);
 
@@ -97,7 +101,7 @@ export function App() {
     <div className={styles.app}>
       <LibraryScreen />
       {editing && (
-        <div className={styles.edit}>
+        <div ref={editFrame} className={styles.edit}>
           <EditSlot assetId={editing.assetId} versionId={editing.versionId} onClose={() => setEditing(null)} />
         </div>
       )}

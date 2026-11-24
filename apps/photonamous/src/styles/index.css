@@ -34,6 +34,8 @@ body,
   --ph-focus-ring: var(--color-focus-ring);
   /* Error text (Lopsy's --color-error is 4.2:1 on a dialog): 4.5:1 on every surface. */
   --ph-error-text: #ff8a80;
+  /* The app's header, which stays on screen over the library and the Edit view alike: the Edit view starts under it. */
+  --ph-header-height: 48px;
   /* The edge of a control with no text of its own (a text box, an empty star): 3:1 on every surface. */
   --ph-control-edge: var(--color-control-edge);
 }

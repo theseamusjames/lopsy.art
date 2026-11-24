@@ -33,7 +33,7 @@ async function drivePaths(drive: FakeDrive): Promise<string[]> {
 async function signIn(page: Page): Promise<void> {
   await page.goto('/');
   await page.getByRole('button', { name: 'Try it now' }).click();
-  await page.getByRole('button', { name: 'Sign in with Google' }).click();
+  await page.getByRole('button', { name: 'Continue with Google' }).click();
 }
 
 test('Google Drive: the library in Drive, and a second device sees it', async ({ page, browser }) => {

@@ -1,16 +1,21 @@
-/** Edit and export presets as the UI lists them: Lopsy's own first, then the user's. Pure. */
+/** Edit and export presets as the UI lists them: one list, by name. Pure. */
 
 import type { ExportPreset, LibraryView, Preset } from '@lopsy/photos-core/library/types';
-import { BUILT_IN_EXPORT_PRESETS, BUILT_IN_PRESETS } from '@lopsy/photos-core/library/presets';
+import { allExportPresets, allPresets } from '@lopsy/photos-core/library/presets';
 
 function byName<T extends { readonly name: string }>(a: T, b: T): number {
   return a.name.localeCompare(b.name);
 }
 
+/**
+ * The library's edit presets: the ones every library starts with and the
+ * ones the user saved, together. The starters are the user's to rename
+ * and delete like the rest, so nothing marks them out.
+ */
 export function listPresets(view: Pick<LibraryView, 'presets'>): Preset[] {
-  return [...BUILT_IN_PRESETS, ...[...view.presets.values()].filter((p) => !p.deleted).sort(byName)];
+  return allPresets(view.presets).sort(byName);
 }
 
 export function listExportPresets(view: Pick<LibraryView, 'exportPresets'>): ExportPreset[] {
-  return [...BUILT_IN_EXPORT_PRESETS, ...[...view.exportPresets.values()].filter((p) => !p.deleted).sort(byName)];
+  return allExportPresets(view.exportPresets).sort(byName);
 }

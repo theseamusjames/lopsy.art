@@ -1,14 +1,16 @@
 import { memo, type MouseEvent } from 'react';
 import { Copy, Images, Layers, Paintbrush, SlidersHorizontal, TriangleAlert } from 'lucide-react';
 import type { AssetId } from '@lopsy/photos-core/library/types';
-import { useFindResult, useLibraryView, usePreviewUrl, usePairPartners, useVersionCounts } from '../../app/hooks';
+import { useAwaitsPreviews, useFindResult, useLibraryView, usePreviewUrl, usePairPartners, useVersionCounts } from '../../app/hooks';
 import { useUi } from '../../app/store';
+import { editItem } from '../../app/commands';
 import { writeDraggedIds } from '../../app/drag';
 import { isEdited } from '../../library/asset-query';
 import { parseItem } from '../../library/items';
 import { isDefaultRecipe } from '@lopsy/photos-core/library/recipe';
 import { LABEL_NAMES } from '../LabelPicker/LabelPicker';
 import { Stars } from '../Stars/Stars';
+import { ImageCheck } from '../../icons/ImageCheck';
 import styles from './PhotoTile.module.css';
 
 const ORIGINAL_STATUS_WORDS = {
@@ -47,6 +49,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, column, sele
   const asset = view.assets.get(assetId);
   const version = asset ? view.versions.get(ownVersionId ?? asset.primaryVersionId) : undefined;
   const url = usePreviewUrl(version?.thumb ?? null, 'thumb');
+  const updating = useAwaitsPreviews(version);
   if (!asset || !version) return null;
   const isVersionTile = ownVersionId !== null;
   const edited = isVersionTile ? !isDefaultRecipe(version.recipe) : isEdited(asset, view);
@@ -70,6 +73,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, column, sele
     paired ? 'RAW+JPEG' : null,
     isVersionTile ? version.name : versions > 1 ? `${versions} versions` : null,
     edited ? 'Edited' : null,
+    updating ? 'Updating' : null,
     asset.setAside ? 'Dropped' : null,
   ]
     .filter((part): part is string => part !== null)
@@ -90,6 +94,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, column, sele
       data-item-id={itemId}
       data-rating={asset.rating}
       data-edited={edited}
+      data-updating={updating}
       data-preview-hash={version?.thumb?.recipeHash ?? ''}
       title={isVersionTile ? `${asset.fileName} (${version.name})` : asset.fileName}
       draggable
@@ -109,7 +114,16 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, column, sele
         ) : (
           <div className={styles.placeholder} />
         )}
+        {updating && (
+          <span className={styles.updating} role="img" aria-label="Updating" title="Updating this picture to show its edits">
+            <span className={styles.spinner} />
+          </span>
+        )}
       </div>
+      {/* Under the pointer, or on the tile the keyboard is on: the Edit view in one click. */}
+      <button type="button" className={styles.edit} tabIndex={inner} aria-label={`Edit ${asset.fileName}`} title="Edit (Enter)" {...press(() => editItem(itemId))}>
+        <SlidersHorizontal size={14} />
+      </button>
       <div className={styles.overlay}>
         <span className={styles.marks}>
           {asset.label && labelWords && (
@@ -187,8 +201,8 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, column, sele
             )
           )}
           {edited && (
-            <span className={styles.badge} role="img" aria-label="Edited" title="Edited">
-              <SlidersHorizontal size={11} />
+            <span className={`${styles.badge} ${styles.edited}`} role="img" aria-label="Edited" title="Edited">
+              <ImageCheck size={13} />
             </span>
           )}
         </span>
@@ -197,12 +211,17 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, column, sele
   );
 });
 
-/**
- * A stack badge's handlers. The press is kept from the tile, which is
- * draggable and selects on click, so the badge opens and folds its stack
- * every time instead of now and then starting a drag or a selection.
- */
+/** A stack badge's handlers: it opens and folds its stack. */
 function stackToggle(assetId: string) {
+  return press(() => useUi.getState().toggleBurst(assetId));
+}
+
+/**
+ * The handlers of a button on a tile. The press is kept from the tile,
+ * which is draggable and selects on click, so the button does its own
+ * thing every time instead of now and then starting a drag or a selection.
+ */
+function press(run: () => void) {
   return {
     draggable: false,
     onMouseDown: (e: React.MouseEvent) => {
@@ -216,7 +235,7 @@ function stackToggle(assetId: string) {
     onDoubleClick: (e: React.MouseEvent) => e.stopPropagation(),
     onClick: (e: React.MouseEvent) => {
       e.stopPropagation();
-      useUi.getState().toggleBurst(assetId);
+      run();
     },
   };
 }

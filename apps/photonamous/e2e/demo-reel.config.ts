@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { withEditSectionsOpen } from '../playwright.config';
 
 /**
  * Records the start screen's demo reel (src/components/DemoReel). Not a
@@ -42,7 +43,8 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   // A step that cannot be done stops the recording soon, not at the end of its 45 minutes.
-  use: { baseURL: `http://localhost:${port}`, headless: true, actionTimeout: 30_000 },
+  // The Edit panel's sections open, as the film shows them.
+  use: { baseURL: `http://localhost:${port}`, headless: true, actionTimeout: 30_000, storageState: withEditSectionsOpen(`http://localhost:${port}`) },
   projects: [
     {
       name: 'chromium',

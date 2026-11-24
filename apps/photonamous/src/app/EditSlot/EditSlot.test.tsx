@@ -164,7 +164,7 @@ describe('a Lopsy document saved without a render, asked for in the Edit view', 
 
   it('goes back with its button or Escape', () => {
     showPoster();
-    const back = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Back to the library');
+    const back = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Back');
     act(() => back?.click());
     act(() => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));

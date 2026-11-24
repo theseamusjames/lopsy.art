@@ -144,7 +144,7 @@ test('a Lopsy document is edited on its flattened render, and goes to Lopsy as i
   // An edit on it is kept, and its tile shows it.
   await raiseExposure(page, 5);
   await expect(page.getByLabel('Exposure value')).toHaveValue('+0.50');
-  await edit.getByRole('button', { name: 'Library', exact: true }).click();
+  await edit.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(documentTile).toHaveAttribute('data-edited', 'true');
   await expect(documentTile).not.toHaveAttribute('data-preview-hash', unedited, { timeout: 60_000 });
 });

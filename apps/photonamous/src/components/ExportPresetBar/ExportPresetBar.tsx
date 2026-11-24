@@ -20,8 +20,9 @@ interface ExportPresetBarProps {
 }
 
 /**
- * Export presets: Lopsy's and the user's, pick one, save the current
- * settings as one, rename or delete your own. When naming ends, or the
+ * Export presets, the ones a library starts with and the user's own in
+ * one list: pick one, save the current settings as one, rename or delete
+ * any of them. When naming ends, or the
  * chosen preset is deleted, focus goes back to the select.
  */
 export function ExportPresetBar({ presets, selectedId, disabled, onPick, onSave, onRename, onDelete, id }: ExportPresetBarProps) {
@@ -40,7 +41,6 @@ export function ExportPresetBar({ presets, selectedId, disabled, onPick, onSave,
     if (focusedElement() === null) selectRef.current?.focus();
   }, [mode]);
   const selected = presets.find((p) => p.id === selectedId) ?? null;
-  const own = selected !== null && !selected.builtIn;
 
   const finish = () => {
     const name = text.trim();
@@ -99,29 +99,14 @@ export function ExportPresetBar({ presets, selectedId, disabled, onPick, onSave,
         <option value="" disabled>
           Your own settings
         </option>
-        <optgroup label="Made by Lopsy">
-          {presets
-            .filter((p) => p.builtIn)
-            .map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-        </optgroup>
-        {presets.some((p) => !p.builtIn) && (
-          <optgroup label="Yours">
-            {presets
-              .filter((p) => !p.builtIn)
-              .map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-          </optgroup>
-        )}
+        {presets.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
       </select>
       <IconButton size="sm" label="Save these settings as a preset" icon={<Save size={13} />} disabled={disabled} onClick={() => setMode('saving')} />
-      {own && selected && (
+      {selected && (
         <>
           <IconButton
             size="sm"

@@ -1,4 +1,4 @@
-/* The sections scroll; the fold button stays at the bottom left, open or folded. */
+/* The sections scroll inside the column. */
 .column {
   width: 220px;
   flex-shrink: 0;
@@ -9,11 +9,13 @@
   border-right: 1px solid var(--color-border-subtle);
 }
 
-.collapsed {
+/* Folded: an icon for each section, from the top. */
+.strip {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-1);
   padding: var(--space-2) var(--space-1);
   background: var(--color-bg-secondary);
   border-right: 1px solid var(--color-border-subtle);
@@ -25,22 +27,12 @@
   overflow-y: auto;
 }
 
-.footer {
-  display: flex;
-  justify-content: flex-start;
-}
-
-.column .footer {
-  padding: var(--space-1) var(--space-2);
-  border-top: 1px solid var(--color-border-subtle);
-}
-
 .iconButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   background: transparent;
   border: none;

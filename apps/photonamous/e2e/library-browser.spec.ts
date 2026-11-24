@@ -32,7 +32,7 @@ test('This browser: import, rate, edit, reload, delete', async ({ page }) => {
   await waitForReady(page, 60_000);
   await raiseExposure(page, 5);
   await expect(page.getByLabel('Exposure value')).toHaveValue('+0.50');
-  await page.getByTestId('edit-view').getByRole('button', { name: 'Library', exact: true }).click();
+  await page.getByTestId('edit-view').getByRole('button', { name: 'Back', exact: true }).click();
   await expect(tile).toHaveAttribute('data-edited', 'true');
   await expect(tile).not.toHaveAttribute('data-preview-hash', importedHash, { timeout: 60_000 });
   const editedHash = (await tile.getAttribute('data-preview-hash')) ?? '';

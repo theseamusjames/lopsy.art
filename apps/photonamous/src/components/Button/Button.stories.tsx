@@ -21,7 +21,7 @@ export const Link: Story = {
     children: (
       <>
         <ArrowLeft size={14} />
-        Back to the grid
+        Back
       </>
     ),
   },

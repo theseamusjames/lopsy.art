@@ -36,6 +36,31 @@ async function expectEdge(bar: Locator, edge: keyof Edges, expected: number): Pr
     .toBeLessThanOrEqual(1);
 }
 
+/**
+ * The crop frame once the photo has taken its place. Crop opens with the
+ * photo where it was, in the middle of the stage; a moment later, once the
+ * options have been measured, it moves up to leave them room. How long
+ * that takes varies (the first photo of a run is slow), so this waits for
+ * the move, then for the frame to be still.
+ */
+async function settledFrame(page: Page, stage: Edges): Promise<Edges> {
+  const frame = page.getByTestId('crop-rect');
+  await expect.poll(async () => (await edgesOf(frame)).centreY, { message: 'the photo moves up to leave the options room' }).toBeLessThan(stage.centreY - 1);
+  let last = await edgesOf(frame);
+  await expect
+    .poll(
+      async () => {
+        const next = await edgesOf(frame);
+        const isStill = next.top === last.top && next.left === last.left;
+        last = next;
+        return isStill;
+      },
+      { message: 'the crop frame comes to rest', intervals: [100] },
+    )
+    .toBe(true);
+  return last;
+}
+
 const steps = (page: Page) => page.evaluate(() => window.__photosHarness?.steps ?? []);
 
 async function openPhoto(page: Page): Promise<void> {
@@ -73,7 +98,7 @@ test('the options start below the photo, and dragging the grip moves them by the
   // A fresh profile: the bar's own place, centred, 12 px above the stage's bottom.
   await expectEdge(bar, 'centreX', stage.centreX);
   await expectEdge(bar, 'bottom', stage.bottom - OWN_MARGIN);
-  const frame = await edgesOf(page.getByTestId('crop-rect'));
+  const frame = await settledFrame(page, stage);
   const start = await edgesOf(bar);
   // The photo leaves them room: the crop's bottom edge, its handle included (12 px below it), is clear of them.
   expect(frame.bottom + 12).toBeLessThanOrEqual(start.top);
@@ -132,7 +157,7 @@ test('from the keyboard the arrow keys move the options, Enter and Space send th
   // The four edges come first, then the grip.
   for (let i = 0; i < 4; i++) await page.keyboard.press('Tab');
   await expect(grip).toBeFocused();
-  const frame = await edgesOf(page.getByTestId('crop-rect'));
+  const frame = await settledFrame(page, stage);
   const start = await edgesOf(bar);
 
   await page.keyboard.press('ArrowLeft');

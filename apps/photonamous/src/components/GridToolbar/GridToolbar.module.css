@@ -46,121 +46,12 @@
 .views {
   display: flex;
   align-items: center;
+  /* A group wider than a narrow window (the edits, at 320 px) goes on to a second line rather than off the edge. */
+  flex-wrap: wrap;
   gap: var(--space-1);
 }
 
-.controlLabel {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-}
-
-.search {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  height: 26px;
-  padding: 0 var(--space-2);
-  background: var(--color-input-bg);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-secondary);
-}
-
-.search:focus-within {
-  border-color: var(--color-accent);
-  outline: 2px solid var(--ph-focus-ring);
-  outline-offset: 1px;
-}
-
-.search input {
-  width: clamp(110px, 14vw, 180px);
-  border: none;
-  background: transparent;
-  color: var(--color-text-primary);
-  font-family: var(--font-ui);
-  font-size: var(--font-size-sm);
-  outline: none;
-}
-
-.sort {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-/* Longhands: the right padding and background image are the arrow (styles/index.css). */
-.sort select {
-  height: 26px;
-  padding-left: var(--space-2);
-  background-color: var(--color-input-bg);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-primary);
-  font-family: var(--font-ui);
-  font-size: var(--font-size-sm);
-}
-
-.sort select:focus-visible,
-.size input:focus-visible {
-  outline: 2px solid var(--ph-focus-ring);
-  outline-offset: 1px;
-}
-
-.size {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-/* A 24 px tall control (2.5.8) drawing a 4 px track. */
-.size input {
-  width: 80px;
-  height: 24px;
-  -webkit-appearance: none;
-  appearance: none;
-  background: transparent;
-  cursor: pointer;
-}
-
-.size input::-webkit-slider-runnable-track {
-  height: 4px;
-  border-radius: var(--radius-round);
-  background: var(--color-bg-active);
-}
-
-.size input::-moz-range-track {
-  height: 4px;
-  border-radius: var(--radius-round);
-  background: var(--color-bg-active);
-}
-
-.size input::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 14px;
-  height: 14px;
-  margin-top: -5px;
-  border-radius: var(--radius-round);
-  background: var(--color-text-primary);
-  border: none;
-}
-
-.size input::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border-radius: var(--radius-round);
-  background: var(--color-text-primary);
-  border: none;
-}
-
-.divider {
-  width: 1px;
-  height: 20px;
-  background: var(--color-border);
-  margin: 0 var(--space-1);
-}
-
-/* Placeholders carry instructions: the browser's grey is 2.4:1 on the field. */
-.search input::placeholder {
-  color: var(--ph-text-muted);
+/* Details and More, at the right end of their line: beside the edits, or alone under them when the row wraps. */
+.end {
+  margin-left: auto;
 }

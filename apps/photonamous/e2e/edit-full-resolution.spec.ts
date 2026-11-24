@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Download, type Page } from '@playwright/test';
-import { waitForReady } from './harness';
+import { openHarness, waitForReady } from './harness';
 import { generatedJpeg, importFiles, tiles } from './library';
+import { setMaskValue } from './masks';
 
 /**
  * The Edit view edits a working image (spec 6.10) and loads the full size
@@ -26,10 +27,15 @@ async function setValue(page: Page, label: string, value: string): Promise<void>
   await expect(readout).not.toBeFocused();
 }
 
-async function setMaskValue(page: Page, label: string, value: string): Promise<void> {
-  const readout = page.getByRole('group', { name: 'Mask 1 adjustments' }).getByLabel(`${label} value`, { exact: true });
-  await readout.fill(value);
-  await readout.press('Enter');
+/** Sized in pixels: a mask and sharpening at its largest radius. */
+async function makeEdits(page: Page): Promise<void> {
+  await page.keyboard.press('m');
+  await setMaskValue(page, 'Mask 1', 'Exposure', '-1.5');
+  // The mask has its own panel: back to the Edit panel for sharpening.
+  await page.getByRole('toolbar', { name: 'Tools' }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await setValue(page, 'Sharpen', '150');
+  await setValue(page, 'Radius', '3');
+  await expect(page.getByTestId('edit-view').getByTestId('history-list').getByRole('button', { name: /^Sharpen radius/ })).toBeVisible();
 }
 
 async function bytesOf(download: Download): Promise<string> {
@@ -120,28 +126,16 @@ test('a full-size export from the working image matches the export renderer’s'
   test.setTimeout(480_000);
   const started = Date.now();
   const log = (what: string) => console.log(`${what}: ${((Date.now() - started) / 1000).toFixed(1)} s`);
-  await page.goto('/');
-  await page.getByRole('button', { name: /This browser/ }).click();
-  await expect(page.getByText('Your library is empty')).toBeVisible();
-  await importFiles(page, [{ name: 'large.jpg', buffer: await generatedJpeg(page, 200, WIDTH, HEIGHT) }]);
-  await page.getByRole('button', { name: /^All photos/ }).click();
-  await expect(tiles(page)).toHaveCount(1);
-
-  await tiles(page).first().click();
-  await page.keyboard.press('Enter');
+  // The Edit view's own export is the Edit harness's (in the app, Export is the header's): the same photo, the same edits.
+  await openHarness(page);
+  const photo = await generatedJpeg(page, 200, WIDTH, HEIGHT);
+  await page.getByTestId('harness-file').setInputFiles({ name: 'large.jpg', mimeType: 'image/jpeg', buffer: photo });
   await waitForReady(page, 120_000);
   log('ready');
-  const edit = page.getByTestId('edit-view');
+  await makeEdits(page);
 
-  // Sized in pixels: a mask and sharpening at its largest radius.
-  await page.keyboard.press('m');
-  await setMaskValue(page, 'Exposure', '-1.5');
-  await setValue(page, 'Sharpen', '150');
-  await setValue(page, 'Radius', '3');
-  await expect(edit.getByTestId('history-list').getByRole('button', { name: /^Sharpen radius/ })).toBeVisible();
-
-  // The Edit view's Export, from the working image: it loads the full size first.
-  await expect(edit.getByTestId('loading-badge')).toHaveCount(0);
+  // From the working image: it loads the full size first.
+  await expect(page.getByTestId('loading-badge')).toHaveCount(0);
   await page.evaluate(() => {
     const seen = { isLoadingFull: false };
     (window as unknown as { __loadedFull: typeof seen }).__loadedFull = seen;
@@ -149,17 +143,31 @@ test('a full-size export from the working image matches the export renderer’s'
       if (document.querySelector('[data-testid="loading-badge"]')?.textContent === 'Loading full resolution…') seen.isLoadingFull = true;
     }).observe(document.body, { subtree: true, childList: true, characterData: true });
   });
-  const fromEdit = page.waitForEvent('download', { timeout: 300_000 });
-  await edit.getByRole('button', { name: 'Export', exact: true }).click();
-  const editBytes = await bytesOf(await fromEdit);
+  await page.getByTestId('edit-view').getByRole('button', { name: 'Export', exact: true }).click();
+  await page.waitForFunction(() => (window.__photosHarness?.exports.length ?? 0) > 0, undefined, { timeout: 300_000 });
+  const editBytes = await page.evaluate(async () => {
+    const blob = window.__photosHarness?.exports[0]?.blob;
+    if (!blob) throw new Error('no export');
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(binary);
+  });
   log('Edit view export');
   expect(await page.evaluate(() => (window as unknown as { __loadedFull: { isLoadingFull: boolean } }).__loadedFull.isLoadingFull)).toBe(true);
 
-  // The export renderer: the library's Export, the same JPEG quality, full size.
-  await edit.getByRole('button', { name: 'Library', exact: true }).click();
+  // The export renderer: the library's Export, from the Edit view, the same JPEG quality, full size.
+  await page.goto('/');
+  await page.getByRole('button', { name: /This browser/ }).click();
+  await expect(page.getByText('Your library is empty')).toBeVisible();
+  await importFiles(page, [{ name: 'large.jpg', buffer: photo }]);
+  await page.getByRole('button', { name: /^All photos/ }).click();
   await expect(tiles(page)).toHaveCount(1);
   await tiles(page).first().click();
-  await page.getByRole('button', { name: /^Export 1/ }).click();
+  await page.keyboard.press('Enter');
+  await waitForReady(page, 120_000);
+  await makeEdits(page);
+  await page.getByRole('banner').getByRole('button', { name: /^Export 1/ }).click();
   await page.getByRole('radio', { name: /^JPEG/ }).check();
   await page.getByRole('slider', { name: /Quality/ }).fill('92');
   await page.getByRole('combobox', { name: 'Size' }).selectOption({ label: 'Original size' });

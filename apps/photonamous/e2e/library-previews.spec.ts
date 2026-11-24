@@ -41,7 +41,11 @@ test('a preset from the grid and a new version get their own thumbnails', async 
 
   // ...and its own after a preset from the grid, rendered in the background.
   await applyPreset(page, first, 'Punchy');
+  // While it is being made the tile says so, and stops saying so when the picture has caught up.
+  await expect(first).toHaveAttribute('data-updating', 'true');
+  await expect(first.getByRole('img', { name: 'Updating' })).toBeVisible();
   await expect(first).not.toHaveAttribute('data-preview-hash', imported, { timeout: 60_000 });
+  await expect(first).toHaveAttribute('data-updating', 'false');
   const firstHash = (await first.getAttribute('data-preview-hash')) ?? '';
   expect(firstHash).not.toBe('');
   await expect.poll(() => shownImage(first), { timeout: 30_000 }).toBe(true);

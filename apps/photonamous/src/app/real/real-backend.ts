@@ -24,6 +24,9 @@ import { repairLibrary, type RepairReport } from '@lopsy/photos-core/library/rep
 import { trashLeftoverOriginals } from './trash-assets';
 import { startImportFromStorage } from '@lopsy/photos-core/import/from-storage';
 import { pickDriveFiles } from '@lopsy/photos-core/storage/google-drive/picker';
+import { pickDriveFilesInWindow } from '@lopsy/photos-core/storage/google-drive/picker-window';
+import type { DrivePicker } from '../../import/drive-picker';
+import { drivePickRedirectUri } from './drive-pick-return';
 import { budgetFor, OriginalsDownload, type KeepOriginals } from '@lopsy/photos-core/cache/keep-originals';
 import { PREVIEWS_DEFAULT_BUDGET } from '@lopsy/photos-core/cache/preview-cache';
 
@@ -100,6 +103,13 @@ export function cacheAccountId(kind: StorageChoice, owner: string, rootId: strin
     return id.slice(0, 128);
   }
   return /^[A-Za-z0-9_-]{1,128}$/.test(owner) ? owner : null;
+}
+
+/** Whether the library's sign-in can see a file that was just picked. A new grant can take a moment to show, so it looks twice. */
+async function canSee(adapter: StorageAdapter, id: FileId): Promise<boolean> {
+  if (await adapter.getFile(id)) return true;
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  return (await adapter.getFile(id)) !== null;
 }
 
 /** Refuses a token for a different Google account than the library's. The app knows the accounts only by Drive's ID, so it cannot name them. */
@@ -338,30 +348,51 @@ export class RealBackend implements PhotosBackend {
   }
 
   canAddFromDrive(session: LibrarySession): boolean {
-    return (
-      session.adapter.kind === 'google-drive' &&
-      Boolean(import.meta.env.VITE_GOOGLE_API_KEY) &&
-      Boolean(import.meta.env.VITE_GOOGLE_APP_ID)
-    );
+    return session.adapter.kind === 'google-drive' && Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
   }
 
-  async addFromDrive(session: LibrarySession, options: { readonly move: boolean }): Promise<ImportJob | null> {
-    const extras = this.extras.get(session);
+  canPickDriveInPage(session: LibrarySession): boolean {
+    return this.canAddFromDrive(session) && Boolean(import.meta.env.VITE_GOOGLE_API_KEY) && Boolean(import.meta.env.VITE_GOOGLE_APP_ID);
+  }
+
+  async addFromDrive(
+    session: LibrarySession,
+    options: { readonly move: boolean; readonly picker: DrivePicker; readonly signal?: AbortSignal },
+  ): Promise<ImportJob | null> {
+    const tokenSource = this.extras.get(session)?.tokenSource;
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     const developerKey = import.meta.env.VITE_GOOGLE_API_KEY;
     const appId = import.meta.env.VITE_GOOGLE_APP_ID;
-    if (!extras?.tokenSource || !developerKey || !appId) throw new Error('Adding from Google Drive is not available here.');
-    const ids = await pickDriveFiles({
-      developerKey,
-      appId,
-      oauthToken: await extras.tokenSource.getToken(),
-      mimeTypes: DRIVE_PICK_TYPES,
-      title: 'Choose photos to add to your library',
-    });
-    if (ids.length === 0) return null;
+    if (!tokenSource || !clientId) throw new Error('Adding from Google Drive is not available here.');
+    let picking: Promise<string[]>;
+    if (options.picker === 'window' || !developerKey || !appId) {
+      // Before anything is awaited: Google's window is a pop-up, which a browser allows only straight from the click.
+      picking = pickDriveFilesInWindow({ clientId, redirectUri: drivePickRedirectUri(), mimeTypes: DRIVE_PICK_TYPES });
+    } else {
+      picking = tokenSource.getToken().then((oauthToken) =>
+        pickDriveFiles({
+          developerKey,
+          appId,
+          oauthToken,
+          mimeTypes: DRIVE_PICK_TYPES,
+          title: 'Choose photos to add to your library',
+          ...(options.signal ? { signal: options.signal } : {}),
+        }),
+      );
+    }
+    const ids = await picking;
+    const first = ids[0];
+    if (first === undefined) return null;
+    // Google lets the user choose any account. Picking grants the files to that account's sign-in, so files
+    // picked in another account are ones this library's cannot see.
+    if (!(await canSee(session.adapter, first))) {
+      throw new Error('Those files are in a different Google account than this library. Choose the library’s account in Google’s window.');
+    }
+    const extras = this.extras.get(session);
     return startImportFromStorage(ids, {
       session: unguarded(session),
       previewRenderer: this.previewRenderer,
-      ...(extras.caches ? { originalsCache: extras.caches.originals } : {}),
+      ...(extras?.caches ? { originalsCache: extras.caches.originals } : {}),
       options: { move: options.move },
     });
   }

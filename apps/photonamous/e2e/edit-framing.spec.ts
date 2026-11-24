@@ -72,10 +72,10 @@ test.describe('Straighten, flip vertical, presets and detail', () => {
     await openGeneratedImage(page);
     await waitForReady(page);
     const presets = page.getByRole('list', { name: 'Presets' });
-    await presets.getByRole('button', { name: 'Punchy' }).hover();
+    await presets.getByRole('button', { name: 'Punchy', exact: true }).hover();
     // Hovering changes nothing in the edit.
     await expect(page.getByLabel('Contrast value', { exact: true })).toHaveValue('0');
-    await presets.getByRole('button', { name: 'Punchy' }).click();
+    await presets.getByRole('button', { name: 'Punchy', exact: true }).click();
     await expect(page.getByLabel('Contrast value', { exact: true })).toHaveValue('+25');
     expect(await page.evaluate(() => window.__photosHarness?.steps)).toEqual(['Preset: Punchy']);
 

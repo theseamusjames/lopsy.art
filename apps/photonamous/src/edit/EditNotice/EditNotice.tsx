@@ -22,7 +22,7 @@ export interface EditNoticeProps {
   readonly action?: EditNoticeAction;
   /** Back: the button, and Escape. */
   readonly onClose: () => void;
-  /** The Back button's words; 'Back to the library' by default. */
+  /** The Back button's words; 'Back' by default. */
   readonly closeLabel?: string;
 }
 
@@ -31,7 +31,7 @@ export interface EditNoticeProps {
  * heading, which takes focus so a screen reader starts there, a sentence,
  * and the way on. Escape goes back, as it does from the Edit view.
  */
-export function EditNotice({ heading, documentTitle, children, action, onClose, closeLabel = 'Back to the library' }: EditNoticeProps) {
+export function EditNotice({ heading, documentTitle, children, action, onClose, closeLabel = 'Back' }: EditNoticeProps) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const headingId = useId();
   useDocumentTitle(documentTitle);

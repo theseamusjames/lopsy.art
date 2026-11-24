@@ -3,7 +3,7 @@ import { axeViolations } from './axe';
 
 /**
  * Accessibility of what only a build with Google sign-in shows: the start
- * screen's "Try it now", and the three steps with Sign in with Google it
+ * screen's "Try it now", and the three steps with Continue with Google it
  * opens. The rest of the app is in accessibility.spec.ts.
  */
 test('the start screen and the three steps', async ({ page }) => {
@@ -20,7 +20,7 @@ test('the start screen and the three steps', async ({ page }) => {
     'Step 3Edit and export',
   ]);
   // The way in has focus, so Enter signs in.
-  await expect(steps.getByRole('button', { name: 'Sign in with Google' })).toBeFocused();
+  await expect(steps.getByRole('button', { name: 'Continue with Google' })).toBeFocused();
   expect(await axeViolations(page), 'the three steps').toEqual([]);
 
   await page.keyboard.press('Escape');

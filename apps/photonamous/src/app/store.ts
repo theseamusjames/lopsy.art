@@ -13,6 +13,9 @@ import type { Collection, SortOrder } from '../library/asset-query';
 import { NO_FACETS, type FacetFilter } from '../library/finding';
 import type { CopiedEdits } from '../library/recipe-copy';
 
+import type { CompareSize } from '../library/compare';
+
+/** `cull` is the view users know as Full screen: one photo filling the screen, where marking moves on. */
 export type ViewMode = 'grid' | 'single' | 'compare' | 'cull';
 export type DialogName = 'import' | 'export' | 'delete' | 'help' | 'sync' | 'settings' | 'copy-edits' | 'new-version' | null;
 
@@ -36,6 +39,8 @@ export interface UiState {
   readonly thumbSize: number;
   readonly selection: Selection;
   readonly mode: ViewMode;
+  /** How many photos the side-by-side view holds: two up, or four up. */
+  readonly compareSize: CompareSize;
   readonly infoOpen: boolean;
   readonly dialog: DialogName;
   readonly editing: EditTarget | null;
@@ -62,6 +67,7 @@ export interface UiState {
   setThumbSize(size: number): void;
   setSelection(selection: Selection): void;
   setMode(mode: ViewMode): void;
+  setCompareSize(size: CompareSize): void;
   toggleInfo(): void;
   openDialog(dialog: DialogName): void;
   setEditing(target: EditTarget | null): void;
@@ -88,6 +94,7 @@ export const useUi = create<UiState>()((set) => ({
   thumbSize: THUMB_SIZE.initial,
   selection: EMPTY_SELECTION,
   mode: 'grid',
+  compareSize: 2,
   infoOpen: true,
   dialog: null,
   editing: null,
@@ -128,6 +135,7 @@ export const useUi = create<UiState>()((set) => ({
   setThumbSize: (thumbSize) => set({ thumbSize }),
   setSelection: (selection) => set({ selection }),
   setMode: (mode) => set({ mode }),
+  setCompareSize: (compareSize) => set({ compareSize }),
   toggleInfo: () => set((s) => ({ infoOpen: !s.infoOpen })),
   openDialog: (dialog) => set({ dialog }),
   setEditing: (editing) => set({ editing }),

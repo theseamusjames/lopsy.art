@@ -23,7 +23,7 @@ import {
 } from '../../library/export-size';
 import { ExportPresetBar } from '../ExportPresetBar/ExportPresetBar';
 import { useUi } from '../../app/store';
-import { currentVersions } from '../../app/commands';
+import { exportVersions } from '../../app/commands';
 import { plural } from '../../import/import-summary';
 import { Button } from '../Button/Button';
 import { Modal } from '../Modal/Modal';
@@ -68,7 +68,7 @@ export function ExportDialog() {
   const job = useUi((s) => s.exportJob);
   const setExportJob = useUi((s) => s.setExportJob);
   const progress = useExportProgress(job);
-  const [versionIds] = useState<VersionId[]>(() => currentVersions().map((v) => v.versionId));
+  const [versionIds] = useState<VersionId[]>(exportVersions);
   const presets = useExportPresets();
   const [presetId, setPresetId] = useState<string | null>(null);
   const [state, setState] = useState(() => fit({ ...DEFAULT_EXPORT_SETTINGS, colorSpace: 'srgb' }, DEFAULT_EXTRAS));

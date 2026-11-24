@@ -58,6 +58,20 @@ const gpuArgs = [
   '--ignore-gpu-blocklist',
 ];
 
+/**
+ * The Edit panel's sections start folded, and which ones are open is kept
+ * in the browser. The tests run as a user who has opened them all, so a
+ * test of one slider need not unfold its section first; the tests of the
+ * folding itself start from empty storage.
+ */
+export const EDIT_SECTIONS = ['framing', 'whiteBalance', 'tone', 'curves', 'color', 'colorByHue', 'colorGrading', 'localContrast', 'detail', 'finish'];
+export function withEditSectionsOpen(...origins: string[]) {
+  return {
+    cookies: [],
+    origins: origins.map((origin) => ({ origin, localStorage: [{ name: 'photonamous.edit-sections', value: JSON.stringify(EDIT_SECTIONS) }] })),
+  };
+}
+
 export default defineConfig({
   testDir: './e2e',
   testIgnore: OWN_CONFIG_SPECS,
@@ -69,6 +83,7 @@ export default defineConfig({
     baseURL: `http://localhost:${port}`,
     headless: true,
     viewport: { width: 1280, height: 800 },
+    storageState: withEditSectionsOpen(`http://localhost:${port}`, `http://localhost:${drivePort}`),
   },
   projects: [
     {
@@ -103,7 +118,8 @@ export default defineConfig({
       port: drivePort,
       reuseExistingServer: false,
       timeout: 120_000,
-      env: { VITE_GOOGLE_CLIENT_ID: 'e2e-client.apps.googleusercontent.com' },
+      // A Picker key and app ID, so the build offers Google's Picker in the page as well as in a window.
+      env: { VITE_GOOGLE_CLIENT_ID: 'e2e-client.apps.googleusercontent.com', VITE_GOOGLE_API_KEY: 'e2e-picker-key', VITE_GOOGLE_APP_ID: '123456789012' },
     },
   ],
 });

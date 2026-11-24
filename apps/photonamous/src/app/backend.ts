@@ -6,6 +6,7 @@
  * double. `backend-registry.ts` picks one.
  */
 
+import type { DrivePicker } from '../import/drive-picker';
 import type { Asset, AssetId, LibrarySession, PreviewRef, VersionId } from '@lopsy/photos-core/library/types';
 import type { KeepOriginals, OriginalsDownload } from '@lopsy/photos-core/cache/keep-originals';
 import type { PreviewRefresher } from './preview-refresh';
@@ -133,11 +134,23 @@ export interface PhotosBackend {
   /** Starts importing files into the library. Each photo appears in the view as soon as it is read. */
   startImport(files: readonly File[], session: LibrarySession, options?: Partial<ImportOptions>): ImportJob;
 
-  /** Whether "Add from Google Drive" can be offered (Drive storage and a Picker key in this build). */
+  /** Whether "Add from Google Drive" can be offered (Drive storage). */
   canAddFromDrive(session: LibrarySession): boolean;
 
-  /** Opens the Google Picker (call from a click) and imports the picked files; null when nothing was picked. */
-  addFromDrive(session: LibrarySession, options: { readonly move: boolean }): Promise<ImportJob | null>;
+  /** Whether Google's Picker can be shown in the page (a Picker key in this build). In a window of its own it always can. */
+  canPickDriveInPage(session: LibrarySession): boolean;
+
+  /**
+   * Opens Google's Picker, in the page or in a window of its own
+   * (`src/import/drive-picker.ts`), and imports the picked files; null
+   * when nothing was picked. Call it straight from a click: the window is
+   * a pop-up, which a browser allows only then. `signal` closes the
+   * Picker in the page.
+   */
+  addFromDrive(
+    session: LibrarySession,
+    options: { readonly move: boolean; readonly picker: DrivePicker; readonly signal?: AbortSignal },
+  ): Promise<ImportJob | null>;
 
   /** Checks every original against storage and marks the ones that are missing, trashed or changed. */
   checkLibrary(session: LibrarySession): Promise<RepairReport>;

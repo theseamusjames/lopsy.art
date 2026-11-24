@@ -19,7 +19,7 @@ import styles from './SingleView.module.css';
 
 interface SingleViewProps {
   orderedIds: readonly AssetId[];
-  /** Cull mode: full screen, and marking moves to the next photo. */
+  /** Full screen (`cull` in the code, the name it had): it fills the screen, and marking moves to the next photo. */
   cull?: boolean;
 }
 
@@ -44,7 +44,7 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
       // Cull covers the whole screen and the library behind it is inert: a modal dialog.
       role={cull ? 'dialog' : 'region'}
       aria-modal={cull ? true : undefined}
-      aria-label={cull ? `Cull: ${asset?.fileName ?? 'no photo'}` : undefined}
+      aria-label={cull ? `Full screen: ${asset?.fileName ?? 'no photo'}` : undefined}
       aria-labelledby={cull ? undefined : headingId}
       aria-describedby={cull ? hintId : undefined}
     >
@@ -54,8 +54,7 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
           size="sm"
           className={styles.back}
           onClick={backOut}
-          aria-label={cull ? undefined : 'Back to the grid'}
-          title={cull ? undefined : 'Back to the grid (Esc)'}
+          title={cull ? undefined : 'Back (Esc)'}
         >
           <ArrowLeft size={14} />
           {cull ? 'Leave full screen' : 'Back'}

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { RotateCcw } from 'lucide-react';
 import type { Recipe } from '@lopsy/photos-core/library/recipe';
 import { EditSlider, type SliderReadout } from '../EditSlider/EditSlider';
+import { EditSection, type SectionHide } from '../EditSection/EditSection';
 import { defaultAt, isGroupDefault, numberAt, rangeOf, type ControlDef, type GroupDef } from '../edit-controls';
 import styles from './ControlGroup.module.css';
 
@@ -10,6 +11,11 @@ export interface ControlGroupProps {
   /** The recipe the sliders show, including a drag in progress. */
   readonly recipe: Recipe;
   readonly isDisabled: boolean;
+  /** Folded to its heading or open (EditSection). */
+  readonly isOpen: boolean;
+  readonly onToggle: () => void;
+  /** The section's eye (EditSection). The Edit view disables the controls while it is hidden. */
+  readonly hide?: SectionHide | undefined;
   readonly onChange: (control: ControlDef, value: number) => void;
   readonly onCommit: (control: ControlDef, value: number) => void;
   readonly onReset: (group: GroupDef) => void;
@@ -27,37 +33,35 @@ export interface ControlGroupProps {
   readonly children?: ReactNode;
 }
 
-export function ControlGroup({ group, recipe, isDisabled, onChange, onCommit, onReset, onAuto, autoTitle, autoLabel = 'Auto', displays, note, children }: ControlGroupProps) {
+export function ControlGroup({ group, recipe, isDisabled, isOpen, onToggle, hide, onChange, onCommit, onReset, onAuto, autoTitle, autoLabel = 'Auto', displays, note, children }: ControlGroupProps) {
   const isDefault = isGroupDefault(recipe, group);
   return (
-    <section className={styles.group} aria-label={group.title}>
-      <header className={styles.header}>
-        <h2 className={styles.title}>{group.title}</h2>
-        {onAuto && (
-          <div className={styles.actions}>
-            <button
-              type="button"
-              className={styles.actionButton}
-              aria-label={`${autoLabel} ${group.title}`}
-              title={autoTitle}
-              disabled={isDisabled}
-              onClick={onAuto}
-            >
+    <EditSection
+      title={group.title}
+      isOpen={isOpen}
+      onToggle={onToggle}
+      isChanged={!isDefault}
+      hide={hide}
+      actions={
+        <>
+          {onAuto && (
+            <button type="button" className={styles.actionButton} aria-label={`${autoLabel} ${group.title}`} title={autoTitle} disabled={isDisabled} onClick={onAuto}>
               {autoLabel}
             </button>
-          </div>
-        )}
-        <button
-          type="button"
-          className={styles.reset}
-          aria-label={`Reset ${group.title}`}
-          title={`Reset ${group.title}`}
-          disabled={isDisabled || isDefault}
-          onClick={() => onReset(group)}
-        >
-          <RotateCcw size={14} aria-hidden />
-        </button>
-      </header>
+          )}
+          <button
+            type="button"
+            className={styles.reset}
+            aria-label={`Reset ${group.title}`}
+            title={`Reset ${group.title}`}
+            disabled={isDisabled || isDefault}
+            onClick={() => onReset(group)}
+          >
+            <RotateCcw size={14} aria-hidden />
+          </button>
+        </>
+      }
+    >
       {note && (
         <p className={styles.note} role="status">
           {note}
@@ -85,6 +89,6 @@ export function ControlGroup({ group, recipe, isDisabled, onChange, onCommit, on
           );
         })}
       </div>
-    </section>
+    </EditSection>
   );
 }

@@ -4,13 +4,17 @@ import { usePresets } from '../../app/hooks';
 import { applyPreset } from '../../app/commands';
 import { Button } from '../Button/Button';
 import { useMenuKeys } from '@lopsy/ui/a11y/use-menu-keys';
+import { useMenuSide } from '../menu-side';
 import styles from './PresetMenu.module.css';
+
+/** The menu's width as PresetMenu.module.css sets it, for choosing its side. */
+const MENU_WIDTH = 220;
 
 interface PresetMenuProps {
   disabled: boolean;
 }
 
-/** Applies an edit preset (Lopsy's or the user's own) to the selected photos. */
+/** Applies one of the library's edit presets to the selected photos. They are made, renamed and deleted in the Edit view. */
 export function PresetMenu({ disabled }: PresetMenuProps) {
   const [open, setOpen] = useState(false);
   const presets = usePresets();
@@ -18,8 +22,7 @@ export function PresetMenu({ disabled }: PresetMenuProps) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const { menuRef, onMenuKeyDown, onTriggerKeyDown } = useMenuKeys({ isOpen: open, onClose: close, onOpen: () => setOpen(true), triggerRef });
   const id = useId();
-  const builtIn = presets.filter((p) => p.builtIn);
-  const own = presets.filter((p) => !p.builtIn);
+  const side = useMenuSide(triggerRef, open, MENU_WIDTH);
 
   const row = (p: (typeof presets)[number]) => (
     <button
@@ -55,25 +58,14 @@ export function PresetMenu({ disabled }: PresetMenuProps) {
         Presets
       </Button>
       {open && (
-        <div ref={menuRef} id={`${id}-menu`} className={styles.menu} role="menu" aria-label="Presets" tabIndex={-1} onKeyDown={onMenuKeyDown}>
-          <div className={styles.group} role="group" aria-labelledby={`${id}-lopsy`}>
-            <span className={styles.heading} id={`${id}-lopsy`} aria-hidden="true">
-              Made by Lopsy
-            </span>
-            {builtIn.map(row)}
-          </div>
-          <div className={styles.group} role="group" aria-labelledby={`${id}-own`}>
-            <span className={styles.heading} id={`${id}-own`} aria-hidden="true">
-              Yours
-            </span>
-            {own.length === 0 ? (
-              <button type="button" role="menuitem" aria-disabled="true" tabIndex={-1} className={`${styles.item} ${styles.none}`}>
-                Save your own from the Edit view.
-              </button>
-            ) : (
-              own.map(row)
-            )}
-          </div>
+        <div ref={menuRef} id={`${id}-menu`} className={styles.menu} data-side={side} role="menu" aria-label="Presets" tabIndex={-1} onKeyDown={onMenuKeyDown}>
+          {presets.length === 0 ? (
+            <button type="button" role="menuitem" aria-disabled="true" tabIndex={-1} className={`${styles.item} ${styles.none}`}>
+              No presets. Save one from the Edit view.
+            </button>
+          ) : (
+            presets.map(row)
+          )}
         </div>
       )}
     </div>

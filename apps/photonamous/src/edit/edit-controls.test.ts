@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_RECIPE, RECIPE_RANGES, type Recipe } from '@lopsy/photos-core/library/recipe';
+import { DEFAULT_RECIPE, RECIPE_RANGES, addArea, liveAreas, type Recipe } from '@lopsy/photos-core/library/recipe';
 import {
   GROUPS,
   applyChanges,
@@ -18,6 +18,9 @@ import {
   changedGroups,
   curvesResetChanges,
   resetChangesFor,
+  SECTIONS,
+  withoutAreas,
+  withoutSections,
 } from './edit-controls';
 
 function group(id: string) {
@@ -129,6 +132,62 @@ describe('colour controls', () => {
     expect(resetChangesFor(r, controls)).toEqual({ 'colorByHue.aqua.hue': 0, 'colorGrading.blending': 50 });
     expect(curvesResetChanges(r)).toEqual({ 'curves.red': [{ x: 0, y: 0 }, { x: 1, y: 1 }] });
     expect(curvesResetChanges(DEFAULT_RECIPE)).toEqual({});
+  });
+});
+
+describe('hidden sections', () => {
+  const edited = applyChanges(DEFAULT_RECIPE, {
+    'tone.exposure': 1,
+    'color.vibrance': 40,
+    'colorByHue.aqua.hue': 20,
+    'colorGrading.blending': 70,
+    'curves.red': [{ x: 0, y: 0.1 }, { x: 1, y: 1 }],
+    'framing.angle': 3,
+  });
+
+  it('lists the panel’s sections in its order, Straighten left out', () => {
+    expect(SECTIONS.map((s) => s.id)).toEqual(['whiteBalance', 'tone', 'curves', 'color', 'colorByHue', 'colorGrading', 'localContrast', 'detail', 'finish']);
+  });
+
+  it('shows the recipe itself while nothing is hidden, or what is hidden is at its defaults', () => {
+    expect(withoutSections(edited, new Set())).toBe(edited);
+    expect(withoutSections(edited, new Set(['finish']))).toBe(edited);
+  });
+
+  it('puts only the hidden sections back to their defaults', () => {
+    const shown = withoutSections(edited, new Set(['tone', 'curves', 'colorGrading']));
+    expect(shown.tone.exposure).toBe(0);
+    expect(shown.curves.red).toEqual(DEFAULT_RECIPE.curves.red);
+    expect(shown.colorGrading.blending).toBe(50);
+    expect(shown.color.vibrance).toBe(40);
+    expect(shown.colorByHue.aqua.hue).toBe(20);
+    expect(shown.framing.angle).toBe(3);
+    // The edit is not touched.
+    expect(edited.tone.exposure).toBe(1);
+  });
+
+  it('hides white balance as its Reset would: back to as shot', () => {
+    const custom = applyChanges(DEFAULT_RECIPE, sliderChanges('whiteBalance.temperature', 30));
+    expect(withoutSections(custom, new Set(['whiteBalance'])).whiteBalance).toEqual(DEFAULT_RECIPE.whiteBalance);
+  });
+});
+
+describe('withoutAreas', () => {
+  const first = addArea(DEFAULT_RECIPE, 'linear', 'a1');
+  const one = applyChanges(DEFAULT_RECIPE, first?.values ?? {});
+  const second = addArea(one, 'radial', 'a2');
+  const two = applyChanges(one, { ...(second?.values ?? {}), 'tone.exposure': 1 });
+
+  it('shows the recipe itself while no mask of it is hidden', () => {
+    expect(withoutAreas(two, new Set())).toBe(two);
+    expect(withoutAreas(two, new Set(['gone']))).toBe(two);
+  });
+
+  it('leaves out only the hidden masks, and nothing else of the edit', () => {
+    const shown = withoutAreas(two, new Set(['a1']));
+    expect(liveAreas(shown).map((a) => a.id)).toEqual(['a2']);
+    expect(shown.tone.exposure).toBe(1);
+    expect(liveAreas(two).map((a) => a.id)).toEqual(['a1', 'a2']);
   });
 });
 

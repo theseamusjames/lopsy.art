@@ -95,7 +95,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { id: 'open-edit', chords: [{ key: 'Enter' }], description: 'Edit the photo', group: 'Views', contexts: ['grid', 'single', 'cull'] },
   { id: 'open-single', chords: [{ key: ' ' }], description: 'Look at one photo large, and back', group: 'Views', contexts: ['grid', 'single'] },
   { id: 'open-compare', chords: [{ key: 'c' }], description: 'Compare the selected photos', group: 'Views', contexts: ['grid', 'single'] },
-  { id: 'open-cull', chords: [{ key: 'f' }], description: 'Sort through full screen (marking moves on)', group: 'Views', contexts: ['grid', 'single'] },
+  { id: 'open-cull', chords: [{ key: 'f' }], description: 'Full screen (marking a photo moves on to the next)', group: 'Views', contexts: ['grid', 'single'] },
   { id: 'back', chords: [{ key: 'Escape' }], description: 'Go back', group: 'Views', contexts: ALL },
   { id: 'toggle-info', chords: [{ key: 'i' }], description: 'Show or hide details', group: 'Views', contexts: ['grid', 'single', 'compare'] },
   { id: 'select-all', chords: [{ key: 'a', mod: true }], description: 'Select every photo shown', group: 'Selection', contexts: ['grid'] },

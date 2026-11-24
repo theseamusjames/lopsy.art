@@ -31,7 +31,7 @@ test('delete, then Ctrl+Z: the photo and its original come back', async ({ page 
   await gone.click();
   await page.keyboard.press('Enter');
   await waitForReady(page, 60_000);
-  await page.getByTestId('edit-view').getByRole('button', { name: 'Library', exact: true }).click();
+  await page.getByTestId('edit-view').getByRole('button', { name: 'Back', exact: true }).click();
 
   // And nothing is left in the trash.
   await page.getByRole('button', { name: 'Settings' }).click();

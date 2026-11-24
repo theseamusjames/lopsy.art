@@ -151,7 +151,7 @@ app is that second app.
 
 1. The user opens the app at `photonamous.com` and sees a short
    page: what the app does, that photos live in their own Google Drive,
-   and a **Sign in with Google** button.
+   and a **Continue with Google** button.
 2. Google's consent screen asks for one thing, "the specific Google Drive
    files you use with this app": no name, email address or profile. If
    the user refuses it, the app explains why it needs it and offers to
@@ -170,7 +170,7 @@ app is that second app.
 - **Single**: one photo, fit to the window or zoomed.
 - **Compare**: two to four photos side by side, with zoom and pan locked
   together.
-- **Cull mode**: Single view, full screen. Rating or setting a photo
+- **Full screen** (called Cull mode until 2026-11-22, and `cull` in the code): Single view, full screen. Rating or setting a photo
   aside moves to the next one, so a shoot can be sorted with one hand.
 
 **Marks.**
@@ -217,7 +217,9 @@ The other defaults are settled in design review.
 - Drop files or folders anywhere on the window.
 - **Import photos** picks files, or a folder (`showDirectoryPicker` in
   Chromium, `<input webkitdirectory>` in other browsers).
-- **Add from Google Drive** uses the Google Picker with multi-select.
+- **Add from Google Drive** uses the Google Picker with multi-select: in
+  the page where the browser allows it, and as Google's own window
+  where it does not (6.5).
 
 **Before it starts**, a sheet shows:
 - How many photos and their total size, and whether the Drive quota has
@@ -624,6 +626,19 @@ with the app from Drive). The consequences:
   access to the folder, not to the files in it (spike S3 re-checks).
   The Picker needs an API key restricted to the app's origin, and the
   Cloud project number as its app ID.
+- The Picker in the page is a frame on docs.google.com that knows the
+  user by Google's cookies there. A browser that blocks cross-site
+  cookies (Brave as it comes) gives it none, and it shows Google's
+  sign-in page instead of files; the app cannot see into the frame to
+  tell. So the Picker can also be opened as a page of its own, in a
+  pop-up: Google's authorization page with `trigger_onepick=true` and
+  `drive.file` alone, which comes back to `<app URL>/drive-picked` with
+  the picked file IDs. That works in every browser, needs only the
+  redirect URI on the OAuth client, and costs Google's account chooser
+  and consent screen each time. Picking grants the files to the app, so
+  the library's token reads them and the authorization code Google
+  returns is never exchanged. The page is tried first (not in Brave); a
+  prompt under it, and Settings, switch to the window.
 - An app that watched a folder would need the restricted `drive` or
   `drive.readonly` scope, with Google's review and a yearly security
   assessment. That is open question 4.
@@ -1422,7 +1437,7 @@ Nothing user-visible ships in this phase.
 - Sign-in, and creating or finding the library.
 - Import from files, folders and the Picker: duplicates, pairs, embedded
   previews, staging, resumable uploads, checksum verification.
-- Grid, Single, Compare and Cull mode. Ratings, labels, drop,
+- Grid, Single, Compare and Full screen. Ratings, labels, drop,
   keywords, albums, the Info panel.
 - Journal, snapshots and multi-device sync. Delete to trash and restore.
 - The sync panel and the storage display.
@@ -1579,6 +1594,10 @@ The step-by-step version for the proof of concept is `photonamous-setup.md`.
       URI `<app URL>/auth/callback`.
 - [ ] A Picker API key restricted to the app's origin and the Drive and
       Picker APIs. The project number serves as the Picker app ID.
+- [ ] On the OAuth client, the redirect URIs
+      `https://photonamous.com/drive-picked` and
+      `http://localhost:<dev port>/drive-picked`, for the Picker in a
+      Google window.
 - [ ] Before the public beta: brand verification, and the publishing
       status set to In production.
 - [ ] Later: Drive UI integration ("Open with") configuration.
@@ -1611,6 +1630,7 @@ each against the primary source before the phase that depends on it.
 | Resumable uploads work from the browser under CORS; the session URI is in the `Location` header | 6.5, S1 | [googledrive/cors-upload-sample](https://github.com/googledrive/cors-upload-sample). 2026-11-18: a live preflight from `https://lopsy.art` allows `authorization, content-type, x-upload-content-type, x-upload-content-length`; that a successful initiation exposes `Location` (and a 308 `Range`) still needs a signed-in check |
 | Drive v3 parameters and fields the adapter uses (`fields`, `q`, `generateIds`, `changes.list` up to 1000 per page, `permissions`, `sha256Checksum`, `headRevisionId`, `webViewLink`, `trashed` from a trashed parent) | 6.5 | Checked 2026-11-18 against the live [Drive v3 discovery document](https://www.googleapis.com/discovery/v1/apis/drive/v3/rest) |
 | The Picker runs in an iframe on docs.google.com, so its API key's referrers must include `https://docs.google.com/*`; with `drive.file`, `setAppId` (the project number) is required | 5.3, 6.5 | Google's [web Picker guide](https://developers.google.com/workspace/drive/picker/guides/web-picker), seen through search results 2026-11-18; `@types/google.picker` 0.0.52 |
+| The Picker also opens as Google's own page: the OAuth authorization URL with `prompt=consent` and `trigger_onepick=true`, `drive.file` alone, answering at the redirect URI with `picked_file_ids` (or `error`). Used where the frame gets no cookies | 5.3, 6.5 | Google's [desktop and mobile Picker guide](https://developers.google.com/workspace/drive/picker/guides/desktop-mobile-picker), read 2026-11-22. Not yet tried against Google |
 | CSP for sign-in and the Picker: `accounts.google.com/gsi/` (script, frame, connect), `accounts.google.com/gsi/style`, `apis.google.com`, frames on `docs.google.com` and `drive.google.com`, `fonts.gstatic.com`, `*.googleusercontent.com` images, `'unsafe-inline'` styles for the Picker | 6.3, 6.13, S1 | GIS setup guide (search results 2026-11-18); the live `gsi/client` script; the CSP example in Google Workspace's [drive-picker-element](https://www.npmjs.com/package/@googleworkspace/drive-picker-element) README |
 | In Testing status, authorizations (and refresh tokens) expire after seven days, and there is a cap of 100 test users | 6.4, 15 | [Manage app audience](https://support.google.com/cloud/answer/15549945); [Nango's Google OAuth notes](https://nango.dev/docs/api-integrations/google/how-to-register-your-own-google-oauth-app) |
 | WebGPU ships in Chrome and Edge, Safari 26 and Firefox (Windows from 141, Apple-silicon macOS later). Linux Firefox and Firefox for Android are pending, so the WebGL fallback stays. | 6.10 | [web.dev: WebGPU supported in major browsers](https://web.dev/blog/webgpu-supported-major-browsers) |
@@ -1633,8 +1653,8 @@ feature: `apps/photonamous/FEATURES.md`. How the library database works:
 
 | Spec | Built |
 |---|---|
-| 5.1 First run | The start screen is the landing page: a demonstration video beside the wordmark, one line and **Try it now**, which opens three steps (connect, upload, edit) over **Sign in with Google**. Production offers Google Drive only (GIS token model, `drive.file` and no other scope: the app never asks who the user is); a folder on this computer (Chromium) and this browser (OPFS) are offered by development builds, since storage a browser may clear is too easily lost for a photo library. Reconnecting checks it is the same Google account. |
-| 5.2 Library | Grid (sizes, sorting, windowed for large libraries), Single, Compare and Cull. Ratings, labels, drop, titles, captions, keywords, albums (whole photos or single versions), the Info panel. Filters with counts, text search, saved searches, dates, imports, bursts. Stacks of RAW+JPEG pairs, versions and Lopsy documents. Library undo (⌘Z) for marks, keywords, albums, deletes and versions. Delete to trash and restore. Check library: orphans, missing, trashed, changed and left-over files, with repair. |
+| 5.1 First run | The start screen is the landing page: a demonstration video beside the wordmark, one line and **Try it now**, which opens three steps (connect, upload, edit) over **Continue with Google**. Production offers Google Drive only (GIS token model, `drive.file` and no other scope: the app never asks who the user is); a folder on this computer (Chromium) and this browser (OPFS) are offered by development builds, since storage a browser may clear is too easily lost for a photo library. Reconnecting checks it is the same Google account. |
+| 5.2 Library | Grid (sizes, sorting, windowed for large libraries), Single, Compare and Full screen. Ratings, labels, drop, titles, captions, keywords, albums (whole photos or single versions), the Info panel. Filters with counts, text search, saved searches, dates, imports, bursts. Stacks of RAW+JPEG pairs, versions and Lopsy documents. Library undo (⌘Z) for marks, keywords, albums, deletes and versions. Delete to trash and restore. Check library: orphans, missing, trashed, changed and left-over files, with repair. |
 | 5.3, 6.8 Import | Files, folders, and Add from Google Drive (Picker). Duplicates by SHA-256 (named before importing), RAW+JPEG pairs, embedded previews, EXIF, XMP sidecars with their develop settings (`crs:`) mapped (`xmp/crs-mapping.ts`), a preset, album and keywords to apply. Staged in OPFS, resumable uploads with checksum verification, retry with backoff, Retry for parked items. Survives a reload; one tab at a time claims an import. |
 | 5.4, 6.10 Edit | Profile (Standard and the Fujifilm looks from the base curves, Neutral, Monochrome), White balance (As shot, Auto, the camera's presets, picker, Kelvin for RAW), Tone with Auto, Curves (luminance, red, green, blue), Color with Color by hue, Color Grading, Local contrast (large details, small details, haze), Sharpness & noise, Framing (crop with aspect presets, straighten with a Level tool, rotate, flip both ways), Finish (vignette amount, midpoint, roundness, feather; grain), Masks (up to 8 linear or radial gradients with their own tone, white balance and saturation). Histogram with clipping warnings (J, and Alt while dragging Blacks, Whites or sharpening). History with click-back, Versions, Presets (built-in and the user's, previewed on hover), Copy and Paste edits, Before and after (toggle and split), filmstrip. Edits run on a working image of at most 4096 px; full resolution loads at 50 % zoom and for output. |
 | 5.5, 6.11 Export | JPEG, PNG (8 or 16-bit) and TIFF (16-bit, Deflate, ICC), in sRGB or Display P3. Size by long edge, short edge or megapixels, with "Don't enlarge". Metadata all, copyright only or none, with location removed by default. File-name templates. To `Exports/` in the library, a download, or a ZIP. Export presets (built-in and the user's). Show in Drive and share links, only after the user confirms. |

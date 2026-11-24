@@ -1,11 +1,12 @@
 import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent } from 'react';
-import { ArrowLeft, Check, ClipboardPaste, Copy, Crop, Spline, Eye, FlipVertical2, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcwSquare, RotateCwSquare, SplitSquareHorizontal, Undo2, X } from 'lucide-react';
+import { ArrowLeft, Check, ClipboardCopy, ClipboardPaste, Copy, Crop, Spline, Eye, FlipVertical2, Download, FlipHorizontal2, History, Paintbrush, PanelLeftClose, PanelLeftOpen, Redo2, RotateCcwSquare, RotateCwSquare, SlidersHorizontal, SplitSquareHorizontal, Undo2, Wand2, X } from 'lucide-react';
 import { DEFAULT_RECIPE, recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Asset, HistoryStep, Json, Preset, PresetId, Version, VersionId } from '@lopsy/photos-core/library/types';
 import {
   DEFAULT_COPY_GROUPS,
   RECIPE_GROUPS,
   addArea,
+  duplicateArea,
   liveAreas,
   pickGroups,
   removeArea,
@@ -37,6 +38,9 @@ import {
   flipRecipe,
   rotateRecipe,
   groupResetChanges,
+  withoutAreas,
+  withoutSections,
+  SECTIONS,
   sliderChanges,
   toneChanges,
   type ControlDef,
@@ -53,7 +57,10 @@ import { CropTool } from '../CropTool/CropTool';
 import { WhiteBalanceMenu } from '../WhiteBalanceMenu/WhiteBalanceMenu';
 import { WhiteBalancePicker } from '../WhiteBalancePicker/WhiteBalancePicker';
 import { isWhiteBalanceWaiting, kelvinDisplay } from '../../engine/white-balance';
-import { AreasPanel } from '../AreasPanel/AreasPanel';
+import { MaskPanel } from '../MaskPanel/MaskPanel';
+import { EditToolbar, type EditTool, type EditToolbarAction } from '../EditToolbar/EditToolbar';
+import { useOpenSections } from '../open-sections';
+import type { SectionHide } from '../EditSection/EditSection';
 import { AreaHandles } from '../AreaHandles/AreaHandles';
 import { areaLabel } from '../area-edit';
 import { newId } from '@lopsy/photos-core/library/ids';
@@ -87,6 +94,7 @@ export interface EditViewProps {
   readonly onClose: () => void;
   /** 512 px and 2048 px JPEGs of the edit, after edits settle and on leaving. */
   readonly onPreviewRendered?: (previews: { thumb: Blob; screen: Blob; recipeHash: string }) => void;
+  /** An Export button that renders a full-size JPEG. For the Edit harness: in the app, exporting is the header's Export. */
   readonly onExport?: (blob: Blob, fileName: string) => void;
   /**
    * Edit in Lopsy. Called inside the button's click, so the app can open
@@ -126,8 +134,14 @@ export interface EditViewProps {
    * Edit in Lopsy are not offered then.
    */
   readonly onDone?: (renderPng16: () => Promise<ArrayBuffer>, recipe: Recipe) => void;
-  /** The leave button's words; 'Library' by default. */
+  /** The leave button's words; 'Back' by default. */
   readonly closeLabel?: string;
+  /**
+   * The app's own header is on screen above this view (the library's Edit
+   * view). This view's bar of tools is then a named region of the page,
+   * not a second banner beside the app's.
+   */
+  readonly isUnderAppHeader?: boolean;
   /** The page's title while the view is open; "<file name> – Edit – Photonamous" by default. */
   readonly documentTitle?: string;
 }
@@ -137,6 +151,7 @@ const DETAIL_PREFIXES = ['sharpness.', 'noise.', 'localContrast.'];
 
 /** How long the edit must rest before the histogram is read again. */
 const HISTOGRAM_DELAY_MS = 200;
+const NO_SECTIONS: ReadonlySet<string> = new Set();
 const WHEEL_ZOOM_SPEED = 0.0015;
 
 interface Committed {
@@ -181,7 +196,8 @@ export function EditView({
   onSavePreset,
   onDeletePreset,
   onDone,
-  closeLabel = 'Library',
+  closeLabel = 'Back',
+  isUnderAppHeader = false,
   documentTitle,
 }: EditViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -220,8 +236,36 @@ export function EditView({
   const canEdit = isReady;
   const isBefore = isBeforeToggled || isBeforeHeld;
   useFocusKept(isBefore);
-
+  // The sections whose eye is off: the photo is shown without them, and the
+  // edit keeps them. For this photo and version only.
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(NO_SECTIONS);
+  // The masks whose eye is off, by area ID: the same, for masks.
+  const [hiddenMasks, setHiddenMasks] = useState<ReadonlySet<string>>(NO_SECTIONS);
+  useEffect(() => {
+    setHidden(NO_SECTIONS);
+    setHiddenMasks(NO_SECTIONS);
+  }, [asset.id, version.id]);
+  const hideOf = (id: string): SectionHide => ({
+    isHidden: hidden.has(id),
+    isDisabled: !canEdit || isBefore,
+    onToggle: () => {
+      // The picker sets what is about to be hidden.
+      if (id === 'whiteBalance') setIsPickingWb(false);
+      setHidden((prev) => {
+        const next = new Set(prev);
+        if (!next.delete(id)) next.add(id);
+        return next;
+      });
+    },
+  });
   const savedRecipe = committed?.base === version.recipe ? applyChanges(version.recipe, committed.changes) : version.recipe;
+  // A hidden mask that is gone (deleted, or its adding undone) hides nothing.
+  const hiddenMaskTitles = liveAreas(savedRecipe).flatMap((area, i) => (hiddenMasks.has(area.id) ? [areaLabel(area, i)] : []));
+  const hiddenSectionTitles = SECTIONS.filter((section) => hidden.has(section.id)).map((section) => section.title);
+  const hiddenTitles = [...hiddenSectionTitles, ...hiddenMaskTitles];
+  const hiddenNoun = hiddenMaskTitles.length === 0 ? 'sections' : hiddenSectionTitles.length === 0 ? 'masks' : 'edits';
+  const withoutLabel = hiddenTitles.length > 2 ? `Without ${hiddenTitles.length} ${hiddenNoun}` : `Without ${hiddenTitles.join(' and ')}`;
+  const isAnythingHidden = hiddenTitles.length > 0;
   const shownRecipe = useMemo(() => (draft ? applyChanges(savedRecipe, draft) : savedRecipe), [savedRecipe, draft]);
   const [hoverPreset, setHoverPreset] = useState<Preset | null>(null);
   const displayedRecipe = useMemo(
@@ -244,15 +288,18 @@ export function EditView({
     engine?.setInteractive(isDraggingCheapControl);
   }, [engine, isDraggingCheapControl]);
 
-  /** What the canvas shows: the edit (with a hovered preset), or Before. */
-  const engineRecipe = useMemo(() => (isBefore ? beforeRecipe(displayedRecipe) : displayedRecipe), [isBefore, displayedRecipe]);
+  /** What the canvas shows: the edit (with a hovered preset) less the sections and masks hidden by their eyes, or Before. */
+  const engineRecipe = useMemo(
+    () => (isBefore ? beforeRecipe(displayedRecipe) : withoutAreas(withoutSections(displayedRecipe, hidden), hiddenMasks)),
+    [isBefore, displayedRecipe, hidden, hiddenMasks],
+  );
   useEffect(() => {
     engine?.setRecipe(engineRecipe);
   }, [engine, engineRecipe]);
 
   // ---- previews ------------------------------------------------------
 
-  const { refreshPreviews } = usePreviews(engine, version, savedRecipe, isReady && !draft && !isBefore, onPreviewRendered);
+  const { refreshPreviews } = usePreviews(engine, version, savedRecipe, isReady && !draft && !isBefore && !isAnythingHidden, onPreviewRendered);
 
   const handleClose = useCallback(async () => {
     if (isBusy) return;
@@ -328,7 +375,7 @@ export function EditView({
       isCancelled = true;
       clearTimeout(timer);
     };
-  }, [engine, canEdit, status.kind, shownRecipe, isBefore, draft]);
+  }, [engine, canEdit, status.kind, shownRecipe, isBefore, hidden, hiddenMasks, draft]);
 
   const handleAutoTone = useCallback(async () => {
     if (!engine) return;
@@ -550,10 +597,13 @@ export function EditView({
 
   // ---- masks (areas in the recipe) -------------------------------------
 
-  const [isAreasOpen, setIsAreasOpen] = useState(false);
+  /** The panel open beside the toolbar: the edit controls, the masks, or none (the photo has the room). */
+  const [openPanel, setOpenPanel] = useState<'edit' | 'mask' | null>('edit');
+  const isAreasOpen = openPanel === 'mask';
+  const sections = useOpenSections();
   const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
-  const panelRef = useRef<HTMLElement>(null);
-  // Focus for the Masks panel once it has rendered: a new mask's row, or (null) its first button.
+  const panelRef = useRef<HTMLDivElement>(null);
+  // Focus for the Mask panel once it has rendered: a new mask's heading, or (null) its first way to add one.
   const [areaFocus, setAreaFocus] = useState<{ readonly id: string | null } | null>(null);
   useEffect(() => {
     if (!areaFocus) return;
@@ -575,7 +625,9 @@ export function EditView({
 
   // The selected mask in red: with Show mask on, or while its shape changes and a moment after (mask-overlay.ts).
   const [isMaskShown, setIsMaskShown] = useState(false);
-  const { flash: flashMask, endFlash: endMaskFlash } = useMaskOverlay(engine, selectedArea?.id ?? null, isMaskShown, draft);
+  // A mask hidden by its eye is not in what the engine shows, so it has nothing to show in red.
+  const overlayAreaId = selectedArea && !hiddenMasks.has(selectedArea.id) ? selectedArea.id : null;
+  const { flash: flashMask, endFlash: endMaskFlash } = useMaskOverlay(engine, overlayAreaId, isMaskShown, draft);
   const showMask = (isShown: boolean) => {
     setIsMaskShown(isShown);
     endMaskFlash();
@@ -598,10 +650,24 @@ export function EditView({
     setAreaFocus({ id });
   };
 
+  const handleDuplicateArea = (sourceId: string) => {
+    const id = newId();
+    const copied = duplicateArea(savedRecipe, sourceId, id);
+    if (!copied) return;
+    commit(copied.values, `Duplicate ${labelOfArea(sourceId)}`);
+    setSelectedAreaId(id);
+    setAreaFocus({ id });
+  };
+
   const toggleAreas = () => {
     const isOpening = !isAreasOpen;
-    setIsAreasOpen(isOpening);
+    setOpenPanel(isOpening ? 'mask' : null);
     if (isOpening) setAreaFocus({ id: null });
+  };
+  /** A toolbar button: its panel opens in place of the one that was open, or closes if it was the open one. */
+  const selectTool = (id: string) => {
+    if (id === 'mask') toggleAreas();
+    else setOpenPanel((open) => (open === 'edit' ? null : 'edit'));
   };
 
   toolShortcuts.current = (shortcut) => {
@@ -616,7 +682,7 @@ export function EditView({
       if (isAreasOpen) showMask(!isMaskShown);
       return;
     }
-    setIsAreasOpen(true);
+    setOpenPanel('mask');
     handleAddArea(shortcut === 'linearArea' ? 'linear' : 'radial');
   };
 
@@ -734,11 +800,13 @@ export function EditView({
     announce(`Went to ${history.find((s) => s.id === stepId)?.label ?? 'Original'}`);
   };
 
+  const [isLeftOpen, setIsLeftOpen] = useState(true);
   const leftSections: LeftColumnSection[] = [];
   if (versions && onSelectVersion) {
     leftSections.push({
       id: 'versions',
       title: 'Versions',
+      icon: <Copy size={16} aria-hidden />,
       content: (
         <VersionsPanel
           versions={versions}
@@ -756,6 +824,7 @@ export function EditView({
     leftSections.unshift({
       id: 'presets',
       title: 'Presets',
+      icon: <Wand2 size={16} aria-hidden />,
       content: (
         <PresetsPanel
           presets={presets}
@@ -773,6 +842,7 @@ export function EditView({
     leftSections.push({
       id: 'history',
       title: 'History',
+      icon: <History size={16} aria-hidden />,
       content: <HistoryPanel history={history} isDisabled={!canEdit || isCropping} onGoTo={handleGoTo} />,
     });
   }
@@ -780,6 +850,30 @@ export function EditView({
   const handleDone = () => {
     if (engine && onDone && !isBusy) onDone(fullPng16(savedRecipe), savedRecipe);
   };
+
+  const tools: EditTool[] = [
+    { id: 'edit', label: 'Edit', title: 'Edit: light, colour, detail and finish', icon: <SlidersHorizontal size={16} aria-hidden /> },
+    {
+      id: 'mask',
+      label: 'Mask',
+      title: 'Mask: adjust part of the photo (M linear, ⇧M radial)',
+      icon: <Spline size={16} aria-hidden />,
+      isDisabled: !canEdit || isBefore || isCropping,
+    },
+  ];
+  const toolbarActions: EditToolbarAction[] = onEditInLopsy
+    ? [
+        {
+          id: 'lopsy',
+          label: 'Edit in Lopsy',
+          title: 'Edit in Lopsy, with layers, painting and text',
+          icon: <Paintbrush size={16} aria-hidden />,
+          isDisabled: !isReady,
+          isBusy,
+          onClick: handleEditInLopsy,
+        },
+      ]
+    : [];
 
   const isAllDefault = recipeHash(beforeRecipe(savedRecipe)) === recipeHash(savedRecipe);
   // The zoom against the full image, whatever size the working image is.
@@ -795,6 +889,8 @@ export function EditView({
           ? `${asset.fileName} without its edits (Before)`
           : isSplitShown
             ? `${asset.fileName}, before and after side by side`
+            : hiddenTitles.length > 0
+              ? `${asset.fileName}, shown ${withoutLabel.toLowerCase()}`
             : isAllDefault
               ? asset.fileName
               : `${asset.fileName}, edited`;
@@ -825,16 +921,33 @@ export function EditView({
     setProblem(null);
   }, [asset.id]);
 
+  // Alone on the page its bar of tools is the page's header; under the app's header it is a named section, so there is one banner.
+  const Bar = isUnderAppHeader ? 'section' : 'header';
+
   return (
     <div className={styles.editView} data-testid="edit-view" data-status={status.kind}>
-      <header className={styles.toolbar}>
+      <Bar className={styles.toolbar} aria-label={isUnderAppHeader ? 'Photo and tools' : undefined}>
         <button type="button" className={styles.toolButton} onClick={() => void handleClose()} aria-disabled={isBusy || undefined}>
           <ArrowLeft size={16} aria-hidden />
           <span>{closeLabel}</span>
         </button>
+        {leftSections.length > 0 && (
+          <button
+            type="button"
+            className={styles.iconButton}
+            aria-label={isLeftOpen ? 'Hide the left column' : 'Show the left column'}
+            title={isLeftOpen ? 'Hide presets, versions and history' : 'Show presets, versions and history'}
+            onClick={() => setIsLeftOpen((v) => !v)}
+          >
+            {isLeftOpen ? <PanelLeftClose size={16} aria-hidden /> : <PanelLeftOpen size={16} aria-hidden />}
+          </button>
+        )}
         <h1 ref={headingRef} className={styles.fileName} title={asset.fileName} tabIndex={-1}>
           {asset.fileName}
         </h1>
+        {/* The tools, in groups with a line between them: clipping warnings, framing, undo and redo, then copy and paste edits. */}
+        <ClippingButtons bins={histogram} isDisabled={!canEdit} />
+        <span className={styles.toolDivider} aria-hidden data-testid="tool-divider" />
         <div className={styles.toolGroup}>
           <button
             type="button"
@@ -890,18 +1003,8 @@ export function EditView({
           >
             <Crop size={16} aria-hidden />
           </button>
-          <button
-            type="button"
-            className={styles.iconButton}
-            aria-label="Masks"
-            title="Masks (M linear, ⇧M radial)"
-            aria-pressed={isAreasOpen}
-            disabled={!canEdit || isBefore || isCropping}
-            onClick={toggleAreas}
-          >
-            <Spline size={16} aria-hidden />
-          </button>
         </div>
+        <span className={styles.toolDivider} aria-hidden data-testid="tool-divider" />
         <div className={styles.toolGroup}>
           <button type="button" className={styles.iconButton} aria-label="Undo" title="Undo (⌘Z)" aria-keyshortcuts="Meta+Z Control+Z" onClick={handleUndo}>
             <Undo2 size={16} aria-hidden />
@@ -909,29 +1012,30 @@ export function EditView({
           <button type="button" className={styles.iconButton} aria-label="Redo" title="Redo (⇧⌘Z)" aria-keyshortcuts="Meta+Shift+Z Control+Shift+Z" onClick={handleRedo}>
             <Redo2 size={16} aria-hidden />
           </button>
-            {onCopyEdits && (
-              <button type="button" className={styles.iconButton} aria-label="Copy edits" title="Copy edits (⇧⌘C)" disabled={!canEdit || isCropping} onClick={() => handleCopyPaste('copyEdits')}>
-                <Copy size={16} aria-hidden />
-              </button>
-            )}
-            {onPasteEdits && (
-              <button
-                type="button"
-                className={styles.iconButton}
-                aria-label="Paste edits"
-                title="Paste edits (⇧⌘V)"
-                disabled={!canEdit || isCropping || !canPasteEdits}
-                onClick={() => handleCopyPaste('pasteEdits')}
-              >
-                <ClipboardPaste size={16} aria-hidden />
-              </button>
-            )}
         </div>
-        {onEditInLopsy && (
-          <button type="button" className={styles.toolButton} onClick={handleEditInLopsy} disabled={!isReady} aria-disabled={isBusy || undefined}>
-            <SquarePen size={16} aria-hidden />
-            <span>Edit in Lopsy</span>
-          </button>
+        {(onCopyEdits || onPasteEdits) && (
+          <>
+            <span className={styles.toolDivider} aria-hidden data-testid="tool-divider" />
+            <div className={styles.toolGroup}>
+              {onCopyEdits && (
+                <button type="button" className={styles.iconButton} aria-label="Copy edits" title="Copy edits (⇧⌘C)" disabled={!canEdit || isCropping} onClick={() => handleCopyPaste('copyEdits')}>
+                  <ClipboardCopy size={16} aria-hidden />
+                </button>
+              )}
+              {onPasteEdits && (
+                <button
+                  type="button"
+                  className={styles.iconButton}
+                  aria-label="Paste edits"
+                  title="Paste edits (⇧⌘V)"
+                  disabled={!canEdit || isCropping || !canPasteEdits}
+                  onClick={() => handleCopyPaste('pasteEdits')}
+                >
+                  <ClipboardPaste size={16} aria-hidden />
+                </button>
+              )}
+            </div>
+          </>
         )}
         {onDone && (
           <button type="button" className={styles.primaryButton} onClick={handleDone} disabled={!isReady} aria-disabled={isBusy || undefined}>
@@ -945,9 +1049,9 @@ export function EditView({
             <span>Export</span>
           </button>
         )}
-      </header>
+      </Bar>
       <div className={styles.body}>
-        <LeftColumn sections={leftSections} />
+        <LeftColumn sections={leftSections} isOpen={isLeftOpen} onOpen={() => setIsLeftOpen(true)} />
         <main className={styles.main}>
           <div
             ref={stageRef}
@@ -1000,7 +1104,12 @@ export function EditView({
               />
             )}
             {isBefore && canEdit && <span className={styles.beforeBadge}>Before</span>}
-            {!(storedPreviewUrl && status.kind !== 'error' && !canEdit) && <LoadStatus status={status} onClose={onClose} {...(closeLabel === 'Library' ? {} : { closeLabel })} />}
+            {!isBefore && canEdit && hiddenTitles.length > 0 && (
+              <span className={styles.beforeBadge} data-testid="hidden-badge">
+                {withoutLabel}
+              </span>
+            )}
+            {!(storedPreviewUrl && status.kind !== 'error' && !canEdit) && <LoadStatus status={status} onClose={onClose} closeLabel={closeLabel} />}
             {problem && (
               <div key={problem.id} className={styles.problem} role="alert" data-testid="edit-problem">
                 <span>{problem.text}</span>
@@ -1012,6 +1121,13 @@ export function EditView({
           </div>
           <div className={styles.stageBar} role="group" aria-label="View">
             <div className={styles.toolGroup}>
+              <ZoomField
+                zoom={view ? view.zoom * workingScale : 1}
+                onZoom={(next) => engine?.setZoom(next / workingScale)}
+                isDisabled={!canEdit}
+                hint={view?.isFit ? 'Zoom: the whole photo fits. Type a level from 10 to 400% and press Enter' : "Zoom, of the photo's full size. Type a level from 10 to 400% and press Enter"}
+                data-testid="zoom-readout"
+              />
               <button
                 type="button"
                 className={styles.toolButton}
@@ -1032,16 +1148,8 @@ export function EditView({
               >
                 Full
               </button>
-              <ZoomField
-                zoom={view ? view.zoom * workingScale : 1}
-                onZoom={(next) => engine?.setZoom(next / workingScale)}
-                isDisabled={!canEdit}
-                hint={view?.isFit ? 'Zoom: the whole photo fits. Type a level from 10 to 400% and press Enter' : "Zoom, of the photo's full size. Type a level from 10 to 400% and press Enter"}
-                data-testid="zoom-readout"
-              />
             </div>
             <div className={styles.toolGroup}>
-              <ClippingButtons bins={histogram} isDisabled={!canEdit} />
               <button
                 type="button"
                 className={styles.iconButton}
@@ -1073,14 +1181,18 @@ export function EditView({
             {news && <span key={news.id}>{news.text}</span>}
           </p>
         </main>
-        <aside ref={panelRef} className={styles.panel} aria-label="Edits">
+        {/* One landmark for the toolbar and the panel it opens. */}
+        <aside className={styles.side} aria-label="Edits">
+        {openPanel !== null && (
+        <div ref={panelRef} className={styles.panel} data-testid="edit-panel" data-panel={openPanel}>
           <Histogram bins={histogram} />
           {isAreasOpen && (
-            <AreasPanel
+            <MaskPanel
               recipe={shownRecipe}
               selectedId={selectedAreaId}
               isDisabled={!canEdit || isBefore || isCropping}
               onAdd={handleAddArea}
+              onDuplicate={handleDuplicateArea}
               onSelect={setSelectedAreaId}
               onRename={(id, name) => commit({ [`areas.${id}.name`]: name }, 'Rename mask')}
               onInvert={(id, isInverted) => {
@@ -1097,13 +1209,27 @@ export function EditView({
                 handleSliderChange(control, value);
               }}
               onCommit={handleSliderCommit}
+              onDraftChanges={(changes) => {
+                endMaskFlash();
+                setDraft(changes);
+              }}
+              onCommitChanges={commit}
+              hiddenIds={hiddenMasks}
+              onToggleHidden={(id) =>
+                setHiddenMasks((prev) => {
+                  const next = new Set(prev);
+                  if (!next.delete(id)) next.add(id);
+                  return next;
+                })
+              }
+              isHideDisabled={!canEdit || isBefore}
               shapeFrame={areaFrame && docSize ? { frame: areaFrame, doc: docSize } : null}
               onShapeChange={draftShape}
               onShapeCommit={commitShape}
-              isMaskShown={isMaskShown}
-              onShowMask={showMask}
             />
           )}
+          {openPanel === 'edit' && (
+          <>
           {photoInfo && (
             <ProfileMenu
               profiles={photoInfo.profiles}
@@ -1115,6 +1241,8 @@ export function EditView({
           {FRAMING_GROUP && (
             <ControlGroup
               group={FRAMING_GROUP}
+              isOpen={sections.isOpen(FRAMING_GROUP.id)}
+              onToggle={() => sections.toggle(FRAMING_GROUP?.id ?? 'framing')}
               recipe={shownRecipe}
               isDisabled={!canEdit || isBefore || isCropping}
               onChange={handleSliderChange}
@@ -1129,8 +1257,11 @@ export function EditView({
             <Fragment key={group.id}>
             <ControlGroup
               group={group}
+              isOpen={sections.isOpen(group.id)}
+              onToggle={() => sections.toggle(group.id)}
+              hide={hideOf(group.id)}
               recipe={shownRecipe}
-              isDisabled={!canEdit || isBefore || (group.id === 'whiteBalance' && isWhiteBalancePending)}
+              isDisabled={!canEdit || isBefore || hidden.has(group.id) || (group.id === 'whiteBalance' && isWhiteBalancePending)}
               {...(group.id === 'whiteBalance' && canEdit && isWhiteBalancePending ? { note: 'Reading the camera’s white balance…' } : {})}
               onChange={handleSliderChange}
               onCommit={group.id === 'whiteBalance' ? handleWhiteBalanceCommit : handleSliderCommit}
@@ -1148,7 +1279,7 @@ export function EditView({
                   recipe={shownRecipe}
                   auto={autoWhiteBalance}
                   presets={whiteBalancePresets}
-                  isDisabled={!canEdit || isBefore || isWhiteBalancePending}
+                  isDisabled={!canEdit || isBefore || isWhiteBalancePending || hidden.has('whiteBalance')}
                   onCommit={commit}
                   isPicking={isPickingWb}
                   onTogglePicker={() => setIsPickingWb((v) => !v)}
@@ -1156,28 +1287,44 @@ export function EditView({
               )}
             </ControlGroup>
             {group.id === 'tone' && (
-              <CurvesGroup recipe={shownRecipe} isDisabled={!canEdit || isBefore} onDraft={setDraft} onCommit={commit} />
+              <CurvesGroup
+                isOpen={sections.isOpen('curves')}
+                onToggle={() => sections.toggle('curves')}
+                hide={hideOf('curves')}
+                recipe={shownRecipe}
+                isDisabled={!canEdit || isBefore || hidden.has('curves')}
+                onDraft={setDraft}
+                onCommit={commit}
+              />
             )}
             {group.id === 'color' && (
               <>
                 <TabbedGroup
                   title="Color by hue"
+                  isOpen={sections.isOpen('colorByHue')}
+                  onToggle={() => sections.toggle('colorByHue')}
+                  hide={hideOf('colorByHue')}
                   tabs={COLOR_BY_HUE_TABS}
                   recipe={shownRecipe}
-                  isDisabled={!canEdit || isBefore}
+                  isDisabled={!canEdit || isBefore || hidden.has('colorByHue')}
                   onChange={handleSliderChange}
                   onCommit={handleSliderCommit}
                   onReset={commit}
                 />
                 <TabbedGroup
                   title="Color Grading"
+                  isOpen={sections.isOpen('colorGrading')}
+                  onToggle={() => sections.toggle('colorGrading')}
                   tabs={COLOR_GRADING_TABS}
                   sharedControls={COLOR_GRADING_SHARED}
+                  hide={hideOf('colorGrading')}
                   recipe={shownRecipe}
-                  isDisabled={!canEdit || isBefore}
+                  isDisabled={!canEdit || isBefore || hidden.has('colorGrading')}
                   onChange={handleSliderChange}
                   onCommit={handleSliderCommit}
                   onReset={commit}
+                  onFieldChange={setDraft}
+                  onFieldCommit={commit}
                 />
               </>
             )}
@@ -1193,6 +1340,11 @@ export function EditView({
               Reset all
             </button>
           </div>
+          </>
+          )}
+        </div>
+        )}
+        <EditToolbar tools={tools} activeId={openPanel} onSelect={selectTool} actions={toolbarActions} />
         </aside>
       </div>
       {isHelpOpen && (

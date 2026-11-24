@@ -16,7 +16,6 @@ import { useLibraryView, useSession } from '../hooks';
 import { openInLopsy } from '../lopsy-handoff';
 import { showErrorToast, showToast } from '../toasts';
 import { formatBytes } from '../../import/import-summary';
-import { downloadBlob } from '../download';
 import styles from './EditSlot.module.css';
 import { isDevelopable } from '../../library/develop-source';
 
@@ -180,8 +179,9 @@ export function EditSlot({ assetId, versionId, onClose }: EditSlotProps) {
         onUndo={onUndo}
         onRedo={onRedo}
         onClose={onClose}
+        isUnderAppHeader
+        onEditInLopsy={() => openInLopsy(session, assetId, versionId)}
         onPreviewRendered={onPreviewRendered}
-        onExport={downloadBlob}
         storedPreviewUrl={storedPreviewUrl}
         history={history}
         versions={versions}

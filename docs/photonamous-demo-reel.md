@@ -34,7 +34,7 @@ Committed, in `apps/photonamous/`:
 
 | File | What it is |
 |---|---|
-| `src/components/DemoReel/demo-reel.av1.mp4` | The film, AV1 (1.4 MB). What most browsers play. |
+| `src/components/DemoReel/demo-reel.av1.mp4` | The film, AV1 (1.5 MB). What most browsers play. |
 | `src/components/DemoReel/demo-reel.h264.mp4` | The same, H.264 (1.7 MB), for browsers without AV1. |
 | `src/components/DemoReel/demo-reel-poster.jpg` | The film's first frame (121 KB), shown before it plays and in place of it. |
 | `src/components/DemoReel/DemoReel.tsx` | The player: autoplay, the Pause button, reduced motion and Save-Data, and the film's text alternative. **Its hidden paragraph repeats the titles: change it when they change.** |
@@ -92,7 +92,7 @@ done
 |---|---|
 | A title's words | The `title(...)` calls in `demo-reel.record.ts`; then the hidden paragraph in `DemoReel.tsx` and the film's entry in `FEATURES.md`. |
 | The end card's line | `TAGLINE` in `demo-reel.record.ts`; then the same two places. |
-| The titles' look | `#reel-title` in `stageScript` (Inter 900, 136 px, upper case, tight). The last title is not on the app's page: it is `.title` in `END_CARD_CSS`, set the same way. |
+| The titles' look | `#reel-title` in `stageScript` (Inter 900, 136 px, upper case, letters set just closer than normal: at -0.05em they touched). The last title is not on the app's page: it is `.title` in `END_CARD_CSS`, set the same way. |
 | The last title, its hold and the dissolve | The last shot in the script: the words are passed to `endPage`, the hold is the wait before `end` is added, and the dissolve is the `.end` rules in `END_CARD_CSS`. The wordmark waits `END_TITLE_OUT_MS` for the title to go; the space between the wordmark and the line is `.card`'s `gap`. |
 | The photograph behind the last shot | Replace `e2e/demo-reel-end.jpg`, or name another with `REEL_END`. |
 | A shot's length | The number passed to `shot(page, id, seconds, ...)`. |
