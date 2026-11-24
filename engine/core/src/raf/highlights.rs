@@ -293,7 +293,12 @@ impl ChromaGrid {
     /// between cell centres and held at the outer ones.
     pub fn chroma_at(&self, x: usize, y: usize) -> [f32; 3] {
         let (cols, rows) = (self.cols as usize, self.rows as usize);
-        if cols == 0 || rows == 0 || self.chroma.len() < cols * rows * 3 {
+        // The grid comes from the render params a host sends, so its size
+        // is checked without overflow: on 32-bit wasm `cols * rows * 3`
+        // wraps for a crafted size, passes a plain comparison, and the
+        // index below then reads past the end.
+        let needed = cols.checked_mul(rows).and_then(|n| n.checked_mul(3));
+        if cols == 0 || rows == 0 || needed.is_none_or(|n| self.chroma.len() < n) {
             return [0.0; 3];
         }
         let cell = self.cell.max(1) as f32;
@@ -484,6 +489,17 @@ mod tests {
         let back: ChromaGrid = serde_json::from_str(&serde_json::to_string(&g).unwrap()).unwrap();
         assert_eq!(back.chroma.iter().map(|v| v.to_bits()).collect::<Vec<_>>(), g.chroma.iter().map(|v| v.to_bits()).collect::<Vec<_>>());
         assert_eq!(back, g);
+    }
+
+    /// A grid whose size does not fit its values reads as no chroma, with
+    /// sizes whose product overflows: 2^31 × 2 × 3 wraps to 0 on 32-bit
+    /// wasm, and u32::MAX × u32::MAX × 3 overflows a 64-bit usize too.
+    #[test]
+    fn a_grid_too_large_for_its_values_reads_as_no_chroma() {
+        for (cols, rows) in [(1u32 << 31, 2u32), (u32::MAX, u32::MAX), (2, 2)] {
+            let g = ChromaGrid { cols, rows, cell: 6, clip: CLIP, chroma: vec![0.5; 6] };
+            assert_eq!(g.chroma_at(1_000_000, 7), [0.0; 3], "{cols}×{rows}");
+        }
     }
 
     /// A plain array standing for a white-balanced mosaic: an orange light

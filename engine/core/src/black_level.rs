@@ -3,6 +3,13 @@
 //! with several samples a pixel), plus, in DNG, a delta per column and per
 //! row. Decoders subtract the level of each sample's own position.
 
+/// The largest tile side accepted, in positions. Black levels repeat with
+/// the CFA, whose largest pattern in real files is X-Trans' 6×6 (DNG's
+/// `BlackLevelRepeatDim` is 1×1, 2×2 or the CFA's repeat in practice);
+/// 64 leaves room for any pattern a sensor might use and keeps a crafted
+/// size from asking for billions of values.
+pub const MAX_TILE: usize = 64;
+
 /// Black levels over a `rows`×`cols` tile that repeats from the raw
 /// image's top-left corner, `samples` values per position.
 #[derive(Debug, Clone, PartialEq)]
@@ -25,9 +32,16 @@ impl BlackLevels {
     }
 
     /// A tile of `rows`×`cols` positions with `samples` values each. None
-    /// when the number of values does not fill the tile exactly.
+    /// when the number of values does not fill the tile exactly, or the
+    /// tile is more than `MAX_TILE` positions either way.
     pub fn tile(rows: usize, cols: usize, samples: usize, values: Vec<f64>) -> Option<Self> {
-        if rows == 0 || cols == 0 || samples == 0 || values.len() != rows * cols * samples {
+        if rows == 0 || cols == 0 || samples == 0 || rows > MAX_TILE || cols > MAX_TILE {
+            return None;
+        }
+        // The sizes come from the file, so the product is checked: on
+        // 32-bit wasm a crafted size wraps to the number of values given,
+        // and `at` then indexes past the end.
+        if rows.checked_mul(cols).and_then(|n| n.checked_mul(samples)) != Some(values.len()) {
             return None;
         }
         Some(Self { rows, cols, samples, values, delta_h: Vec::new(), delta_v: Vec::new() })
@@ -137,6 +151,22 @@ mod tests {
         assert_eq!(BlackLevels::from_raf(&[1020]).unwrap(), BlackLevels::uniform(1020.0));
         assert_eq!(BlackLevels::from_raf(&[1, 2, 3]).unwrap(), BlackLevels::uniform(2.0));
         assert!(BlackLevels::from_raf(&[]).is_none());
+    }
+
+    /// A crafted DNG's `BlackLevelRepeatDim` of 2 × 2147483649 with two
+    /// values: on 32-bit wasm 2 × 2147483649 wraps to 2, and the tile was
+    /// accepted. It is rejected, and so are a product that overflows a
+    /// 64-bit usize and a tile past the cap, so the file's first value is
+    /// used for every sample.
+    #[test]
+    fn oversized_tiles_are_rejected() {
+        assert!(BlackLevels::tile(2, 2_147_483_649, 1, vec![1.0, 2.0]).is_none());
+        assert!(BlackLevels::tile(2, usize::MAX / 2 + 2, 1, vec![1.0, 2.0]).is_none());
+        assert!(BlackLevels::tile(MAX_TILE + 1, 1, 1, vec![0.0; MAX_TILE + 1]).is_none());
+        assert!(BlackLevels::tile(MAX_TILE, 1, 1, vec![0.0; MAX_TILE]).is_some());
+        let b = BlackLevels::from_dng(Some((2, 2_147_483_649)), &[1.0, 2.0], 1);
+        assert_eq!(b, BlackLevels::uniform(1.0));
+        assert_eq!(b.at(1, 2_147_483_648, 0), 1.0);
     }
 
     /// What the sample RAFs record: 36 equal values, which are uniform
