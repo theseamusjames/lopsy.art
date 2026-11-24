@@ -262,6 +262,12 @@ impl<'a> GpuRef<'a> {
         self.ctx.present();
     }
 
+    /// Whether [`Target::Screen`] is a canvas. A headless context
+    /// (`GpuContext::headless`) has none.
+    pub fn has_screen(self) -> bool {
+        self.ctx.screen_size().is_some()
+    }
+
     /// Size of the canvas [`Target::Screen`] draws to, in device pixels.
     pub fn screen_size(self) -> Result<(i32, i32), String> {
         let (width, height) = self.ctx.screen_size().ok_or("This engine has no screen")?;

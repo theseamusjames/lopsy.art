@@ -549,7 +549,15 @@ pub fn export_tiff_16(engine: &mut EngineInner, color_space: u8) -> Read<Vec<u8>
 /// transform. On its own this is the whole frame when only screen-space
 /// state changed (pan, zoom, channel visibility): the composite texture
 /// still holds the current document, so no layer is re-blended.
+///
+/// A headless engine has no canvas, so there is nothing to draw: the
+/// composite texture is the frame, and what reads the live frame (the
+/// develop histogram, the screen-only views) reads that texture.
 pub fn present(engine: &mut EngineInner) -> Result<(), String> {
+    if !engine.gpu().has_screen() {
+        engine.needs_present = false;
+        return Ok(());
+    }
     let (screen_w, screen_h) = engine.gpu().screen_size()?;
     let channel_mask = engine.overlays.channel_mask;
     engine

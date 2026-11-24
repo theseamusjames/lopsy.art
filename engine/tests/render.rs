@@ -10,8 +10,8 @@
 //! A machine with no GPU adapter (a CI runner without a software Vulkan)
 //! skips them: every test returns early with a note on stderr.
 
+use std::cell::RefCell;
 use std::future::Future;
-use std::sync::Mutex;
 use std::task::{Context, Poll, Waker};
 
 use lopsy_core::geometry::Rect;
@@ -25,13 +25,20 @@ use lopsy_engine::gpu::texture_pool::TextureHandle;
 use lopsy_engine::imaging::adjustments::{self, ImageAdjustmentState, OverWhite};
 use lopsy_engine::{commands, document::compositor, host, task};
 
-/// Everything the engine logged as an error: GPU validation errors arrive
-/// here through the device's uncaptured-error handler.
-static ERRORS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+thread_local! {
+    /// Everything the engine logged as an error on this thread: GPU
+    /// validation errors arrive here through the device's uncaptured-error
+    /// handler. Each test runs on its own thread and drives its engine only
+    /// from it, and a native device reports an error from inside the call
+    /// that caused it, so one test's errors never reach another's log. A
+    /// `RefCell` cannot be poisoned by a failed assertion, as a shared
+    /// `Mutex` was, taking every later test down with it.
+    static ERRORS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+}
 
 fn record(level: host::LogLevel, message: &str) {
     if level == host::LogLevel::Error {
-        ERRORS.lock().unwrap().push(message.to_string());
+        ERRORS.with_borrow_mut(|errors| errors.push(message.to_string()));
     }
 }
 
@@ -52,6 +59,9 @@ fn block_on<F: Future>(future: F) -> F::Output {
 /// no GPU to make one on.
 fn engine(width: u32, height: u32) -> Option<EngineInner> {
     host::install(host::Host { log: record, now_ms: || 0.0, gpu_lost: |_| {} });
+    // With `--test-threads=1` the tests share one thread, so a new engine
+    // starts with an empty log.
+    ERRORS.with_borrow_mut(Vec::clear);
     let ctx = match block_on(GpuContext::headless()) {
         Ok(ctx) => ctx,
         Err(reason) => {
@@ -72,7 +82,7 @@ fn now<T: 'static>(read: Read<T>) -> T {
 
 /// Fails the test if the GPU reported a validation error.
 fn assert_no_gpu_errors() {
-    let errors = ERRORS.lock().unwrap();
+    let errors = ERRORS.with_borrow(Vec::clone);
     assert!(errors.is_empty(), "the engine logged errors: {errors:#?}");
 }
 
@@ -714,6 +724,377 @@ fn the_develop_histogram_counts_the_displayed_pixels() {
     assert_eq!((h[256], h[256 + 128]), (16, 16), "green channel");
     assert_eq!((h[768 + 54], h[768 + 128]), (16, 16), "luminance");
     assert_no_gpu_errors();
+}
+
+// ---------------------------------------------------------------------------
+// The develop stages against their CPU references
+// ---------------------------------------------------------------------------
+//
+// Each test below develops one picture through one stage on the GPU and
+// through the stage's reference in `lopsy-core`, and compares them in
+// 16-bit steps (1/65535).
+//
+// Every texture is half float, which keeps 11 significant bits: one unit
+// in the last place (ulp) is 32 steps for a value in 0.5..1, 16 in
+// 0.25..0.5, and so on. The stage's output is stored that way, and so is
+// every blur a stage makes, pass by pass, before the combining shader
+// reads it. How a GPU rounds when it stores is its own: the Apple GPU these
+// were written on rounds toward zero (the comparison below says which
+// fits), others to nearest. Fed blurs that are not
+// rounded, the reference is off by a bias of up to an ulp per store, which
+// the combining shaders multiply by their gain. So the CPU side here
+// stores its blurs and its result as the GPU does, both ways, and the
+// comparison takes the rounding that fits better. What is left is the
+// rounding of values that sit on either side of an ulp boundary after the
+// two sides' f32 maths, and the GPU's own `exp`, `pow` and bilinear
+// weights; the mean difference is then about a step.
+
+/// How a value is rounded when it is stored in a half-float texture.
+#[derive(Clone, Copy, Debug)]
+enum HalfRounding {
+    Nearest,
+    TowardZero,
+}
+
+impl HalfRounding {
+    fn store(self, values: &mut [f32]) {
+        use lopsy_core::half::{f16_to_f32, f32_to_f16};
+        for v in values {
+            *v = match self {
+                Self::Nearest => f16_to_f32(f32_to_f16(*v)),
+                // Dropping the 13 low mantissa bits of an f32 is a half's
+                // rounding toward zero wherever the half is normal (above
+                // 6.1e-5); below that it keeps a little more than a half
+                // would, far under a 16-bit step.
+                Self::TowardZero => f32::from_bits(v.to_bits() & !0x1fff),
+            };
+        }
+    }
+}
+
+/// A `w`×`h` picture that gives every stage something to do: 8-pixel
+/// blocks with hard edges in both directions, ramps across and down, a
+/// fine texture, per-pixel noise, and a grey ramp from 0 to 1 along the
+/// top rows. Opaque, straight RGBA f32.
+fn develop_test_picture(w: u32, h: u32) -> Vec<f32> {
+    let noise = |x: u32, y: u32, k: u32| lopsy_core::finish::hash(x, y, k) - 0.5;
+    (0..w * h)
+        .flat_map(|i| {
+            let (x, y) = (i % w, i / w);
+            let (fx, fy) = (x as f32 / (w - 1) as f32, y as f32 / (h - 1) as f32);
+            if y < 4 {
+                return [fx, fx, fx, 1.0];
+            }
+            let block = if (x / 8 + y / 8) % 2 == 0 { 0.25 } else { 0.7 };
+            let texture = (x as f32 * 0.9).sin() * (y as f32 * 0.7).cos();
+            let r = 0.5 * block + 0.4 * fx + 0.05 * texture + 0.08 * noise(x, y, 1);
+            let g = 0.6 * block + 0.3 * fy + 0.08 * texture + 0.08 * noise(x, y, 2);
+            let b = 0.35 + 0.5 * (1.0 - fx) * fy - 0.2 * block + 0.1 * texture + 0.08 * noise(x, y, 3);
+            [r.clamp(0.0, 1.0), g.clamp(0.0, 1.0), b.clamp(0.0, 1.0), 1.0]
+        })
+        .collect()
+}
+
+/// The size of every stage comparison's document: big enough for the
+/// pyramid blurs to have several texels each way.
+const STAGE_W: u32 = 96;
+const STAGE_H: u32 = 64;
+
+/// The composite a stage reads and what the stage made of it.
+struct StageRun {
+    /// The composite before the stage. The 16-bit read is within half a
+    /// step of each half-float texel, so the nearest half to it is that
+    /// texel wherever halves are more than a step apart (above 1/32).
+    input: Vec<f32>,
+    /// The 16-bit export with the stage on.
+    output: Vec<u16>,
+}
+
+/// `develop_test_picture` as a document, exported at 16 bits before and
+/// after `set` turns a stage on. `None` with no GPU.
+fn run_stage(set: &dyn Fn(&mut EngineInner)) -> Option<StageRun> {
+    let (w, h) = (STAGE_W, STAGE_H);
+    let mut engine = engine(w, h)?;
+    commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, w, h, 1.0)).expect("layer");
+    commands::layer::upload_layer_pixels_f32_rect(&mut engine, "art", w, h, 0, 0, w, h, &develop_test_picture(w, h))
+        .expect("pixels");
+    let mut input: Vec<f32> =
+        now(compositor::composite_for_export_u16(&mut engine)).iter().map(|&v| f32::from(v) / 65535.0).collect();
+    HalfRounding::Nearest.store(&mut input);
+    set(&mut engine);
+    let output = now(compositor::composite_for_export_u16(&mut engine));
+    assert_no_gpu_errors();
+    Some(StageRun { input, output })
+}
+
+/// Differences between `gpu` and `expected` in 16-bit steps, colour
+/// channels only (every stage keeps alpha), with `expected` clipped to
+/// 0..1 as the 16-bit read clips.
+fn step_differences(gpu: &[u16], expected: &[f32]) -> Vec<(usize, f32)> {
+    assert_eq!(gpu.len(), expected.len());
+    gpu.iter()
+        .zip(expected)
+        .enumerate()
+        .filter(|(i, _)| i % 4 != 3)
+        .map(|(i, (&g, &e))| (i, (f32::from(g) - e.clamp(0.0, 1.0) * 65535.0).abs()))
+        .collect()
+}
+
+/// Most a stage may be off on average, in 16-bit steps, once the reference
+/// rounds as the GPU does: about a step is the half-float rounding of
+/// values that straddle an ulp boundary. A formula that is wrong moves far
+/// more pixels than that, by far more.
+const MEAN_TOLERANCE: f32 = 4.0;
+
+/// Compares a stage's output with `reference`, which makes the expected
+/// image with its blurs stored at `HalfRounding`; the expected image is
+/// stored the same way, as the stage's output is. Fails if the mean
+/// difference is over `MEAN_TOLERANCE` or any value is more than
+/// `tolerance` steps, plus `allowance(i)` for value `i`, off; the message
+/// names the pixel.
+fn assert_matches_reference(
+    what: &str,
+    run: &StageRun,
+    reference: &dyn Fn(HalfRounding) -> Vec<f32>,
+    tolerance: f32,
+    allowance: &dyn Fn(usize, HalfRounding) -> f32,
+) {
+    let (rounding, expected, diffs) = [HalfRounding::Nearest, HalfRounding::TowardZero]
+        .into_iter()
+        .map(|rounding| {
+            let mut expected = reference(rounding);
+            rounding.store(&mut expected);
+            let diffs = step_differences(&run.output, &expected);
+            (rounding, expected, diffs)
+        })
+        .min_by(|a, b| {
+            let mean = |d: &[(usize, f32)]| d.iter().map(|(_, v)| v).sum::<f32>();
+            mean(&a.2).total_cmp(&mean(&b.2))
+        })
+        .unwrap();
+    let mean = diffs.iter().map(|(_, d)| d).sum::<f32>() / diffs.len() as f32;
+    let (i, worst) = diffs
+        .iter()
+        .map(|&(i, d)| (i, d - allowance(i, rounding)))
+        .max_by(|a, b| a.1.total_cmp(&b.1))
+        .unwrap();
+    let (x, y, channel) = ((i / 4) as u32 % STAGE_W, (i / 4) as u32 / STAGE_W, i % 4);
+    eprintln!("{what}: rounding {rounding:?}, mean {mean:.2} steps, worst {worst:.1} beyond its allowance at ({x}, {y}) channel {channel}");
+    assert!(mean <= MEAN_TOLERANCE, "{what}: off by {mean:.2} 16-bit steps on average (rounding {rounding:?})");
+    assert!(
+        worst <= tolerance,
+        "{what}: {worst:.1} 16-bit steps beyond its allowance at ({x}, {y}) channel {channel}: GPU {} against reference {:.1} (rounding {rounding:?})",
+        run.output[i],
+        expected[i].clamp(0.0, 1.0) * 65535.0,
+    );
+}
+
+const NO_ALLOWANCE: &dyn Fn(usize, HalfRounding) -> f32 = &|_, _| 0.0;
+
+/// What `develop::detail`'s blur leaves in the texture a combining shader
+/// samples, on the CPU: the two passes of a Gaussian of `sigma` working
+/// pixels, or, above `PYRAMID_SIGMA`, `thumbnail_box.wgsl`'s box downscale
+/// by `ceil(σ / 2)`, the Gaussian of what is left of σ, and the shader's
+/// bilinear read at each pixel's centre. Each texture it fills is stored
+/// with `rounding`. Returns the image at full size.
+fn engine_blur(img: &[f32], w: usize, h: usize, sigma: f32, rounding: HalfRounding) -> Vec<f32> {
+    use lopsy_core::detail;
+    let gaussian = |img: &[f32], w: usize, h: usize, sigma: f32| {
+        let mut across = detail::blur_axis(img, w, h, true, sigma);
+        rounding.store(&mut across);
+        let mut down = detail::blur_axis(&across, w, h, false, sigma);
+        rounding.store(&mut down);
+        down
+    };
+    if sigma <= detail::PYRAMID_SIGMA {
+        return gaussian(img, w, h, sigma);
+    }
+    let factor = (sigma / 2.0).ceil().max(2.0) as usize;
+    let (lw, lh) = (w.div_ceil(factor).max(1), h.div_ceil(factor).max(1));
+    // A clamped, bilinear read of `img` (`iw`×`ih`) at texel coordinates
+    // (`qx`, `qy`), texel centres on integers.
+    let bilinear = |img: &[f32], iw: usize, ih: usize, qx: f32, qy: f32, c: usize| {
+        let at = |x: i32, y: i32| img[(y.clamp(0, ih as i32 - 1) as usize * iw + x.clamp(0, iw as i32 - 1) as usize) * 4 + c];
+        let (x0, y0) = (qx.floor(), qy.floor());
+        let (fx, fy) = (qx - x0, qy - y0);
+        let (x0, y0) = (x0 as i32, y0 as i32);
+        let top = at(x0, y0) + fx * (at(x0 + 1, y0) - at(x0, y0));
+        let bottom = at(x0, y0 + 1) + fx * (at(x0 + 1, y0 + 1) - at(x0, y0 + 1));
+        top + fy * (bottom - top)
+    };
+    // The box downscale: each output texel averages 2×2 bilinear taps
+    // spread over its footprint. The picture is opaque, so the shader's
+    // premultiplied and straight averages are the same.
+    let footprint = (w as f32 / lw as f32, h as f32 / lh as f32);
+    let taps = ((footprint.0 * 0.5).ceil().clamp(1.0, 64.0) as usize, (footprint.1 * 0.5).ceil().clamp(1.0, 64.0) as usize);
+    let step = (footprint.0 / taps.0 as f32, footprint.1 / taps.1 as f32);
+    let mut low = vec![0.0f32; lw * lh * 4];
+    for oy in 0..lh {
+        for ox in 0..lw {
+            for c in 0..4 {
+                let mut sum = 0.0;
+                for j in 0..taps.1 {
+                    for i in 0..taps.0 {
+                        let qx = ox as f32 * footprint.0 + (i as f32 + 0.5) * step.0 - 0.5;
+                        let qy = oy as f32 * footprint.1 + (j as f32 + 0.5) * step.1 - 0.5;
+                        sum += bilinear(img, w, h, qx, qy, c);
+                    }
+                }
+                low[(oy * lw + ox) * 4 + c] = sum / (taps.0 * taps.1) as f32;
+            }
+        }
+    }
+    rounding.store(&mut low);
+    let low = gaussian(&low, lw, lh, sigma / factor as f32);
+    // The combining shader's linear, clamped read at uv = (x + 0.5) / w.
+    let mut out = vec![0.0f32; w * h * 4];
+    for y in 0..h {
+        for x in 0..w {
+            let qx = (x as f32 + 0.5) / w as f32 * lw as f32 - 0.5;
+            let qy = (y as f32 + 0.5) / h as f32 * lh as f32 - 0.5;
+            for c in 0..4 {
+                out[(y * w + x) * 4 + c] = bilinear(&low, lw, lh, qx, qy, c);
+            }
+        }
+    }
+    out
+}
+
+#[test]
+fn noise_reduction_matches_its_cpu_reference() {
+    use lopsy_core::detail::{self, DetailSettings};
+    let (w, h) = (STAGE_W as usize, STAGE_H as usize);
+    // At full resolution the colour blur (σ 6) goes through the box
+    // downscale; at half resolution (σ 3) it is a plain Gaussian.
+    for (name, values) in [
+        ("noise reduction, full size", [0.0, 1.0, 0.0, 70.0, 80.0, 30.0, 1.0]),
+        ("noise reduction, half size", [0.0, 1.0, 0.0, 40.0, 100.0, 0.0, 0.5]),
+    ] {
+        let Some(run) = run_stage(&|e| commands::develop::set_image_detail(e, &values).expect("detail")) else { return };
+        let s = DetailSettings::from_values(&values).unwrap();
+        let reference = |rounding| {
+            let chroma = engine_blur(&run.input, w, h, detail::NR_CHROMA_SIGMA * s.pixel_scale, rounding);
+            detail::noise_reduce_reference(&run.input, &chroma, w, h, &s)
+        };
+        // An ulp of the output (32) for a value that straddles a boundary,
+        // and one more for the colour blur's: the edge guard
+        // `exp(-((yb - yc) / 0.08)²)` has a slope of up to 11, and the
+        // chroma it swaps in is up to the colour amount times the blur.
+        assert_matches_reference(name, &run, &reference, 64.0, NO_ALLOWANCE);
+    }
+}
+
+#[test]
+fn haze_and_local_contrast_match_their_cpu_reference() {
+    use lopsy_core::detail::{self, LocalContrastSettings};
+    let (w, h) = (STAGE_W as usize, STAGE_H as usize);
+    // Both directions of each control. The large blur (σ 50 or 25) always
+    // goes through the box downscale; the small one (σ 3 or 1.5) never.
+    for (name, values) in [
+        ("local contrast and dehaze, full size", [60.0, 50.0, 40.0, 1.0]),
+        ("local contrast and added haze, half size", [-50.0, -40.0, -60.0, 0.5]),
+    ] {
+        let Some(run) = run_stage(&|e| commands::develop::set_image_local_contrast(e, &values).expect("local contrast")) else { return };
+        let s = LocalContrastSettings::from_values(&values).unwrap();
+        let reference = |rounding| {
+            let small = engine_blur(&run.input, w, h, detail::LC_SMALL_SIGMA * s.pixel_scale, rounding);
+            let large = engine_blur(&run.input, w, h, detail::LC_LARGE_SIGMA * s.pixel_scale, rounding);
+            detail::local_contrast_reference(&run.input, &small, &large, w, h, &s)
+        };
+        // Where an ulp of either blur flips (32 steps for a blur in
+        // 0.5..1), the large and small details' gains (up to 1.5 · amount
+        // / 100 each) and dehazing's 1 / (1 − k) (up to 1.5 at 40) carry it
+        // into the luminance, and the result scales the pixel by y2 / y.
+        // A dark pixel beside light ones, as in the rows under the grey
+        // ramp, takes the most: about three ulps of the blur, measured.
+        // Four are allowed, since another GPU's bilinear weights differ.
+        assert_matches_reference(name, &run, &reference, 128.0, NO_ALLOWANCE);
+    }
+}
+
+#[test]
+fn sharpening_matches_its_cpu_reference() {
+    use lopsy_core::detail::{self, DetailSettings};
+    let (w, h) = (STAGE_W as usize, STAGE_H as usize);
+    for (name, values) in [
+        ("sharpening, no edge mask", [120.0, 1.2, 0.0, 0.0, 0.0, 0.0, 1.0]),
+        ("sharpening, edge mask", [150.0, 2.0, 40.0, 0.0, 0.0, 0.0, 1.0]),
+    ] {
+        let Some(run) = run_stage(&|e| commands::develop::set_image_detail(e, &values).expect("detail")) else { return };
+        let s = DetailSettings::from_values(&values).unwrap();
+        let blurs = [HalfRounding::Nearest, HalfRounding::TowardZero].map(|r| engine_blur(&run.input, w, h, s.sharpen_sigma(), r));
+        let blurred = |rounding| match rounding {
+            HalfRounding::Nearest => &blurs[0],
+            HalfRounding::TowardZero => &blurs[1],
+        };
+        let reference = |rounding| detail::sharpen_reference(&run.input, blurred(rounding), w, h, &s);
+        let luma = |img: &[f32], x: i32, y: i32| {
+            let i = (y.clamp(0, h as i32 - 1) as usize * w + x.clamp(0, w as i32 - 1) as usize) * 4;
+            detail::LUMA[0] * img[i] + detail::LUMA[1] * img[i + 1] + detail::LUMA[2] * img[i + 2]
+        };
+        // An ulp of the output (32) for a value that straddles a boundary,
+        // and the unsharp mask adds `amount` (1.5 at most) times an ulp of
+        // the blur where one flips: 80 in all.
+        //
+        // Where the edge mask is on its ramp, an ulp of the blur (4.9e-4)
+        // that flips moves the gradient the mask is measured on by up to
+        // √2 times that, and the smoothstep's slope (up to 1.5 / (0.025 ·
+        // edges / 100)) turns it into a change of the mask that no
+        // tolerance of a few ulps covers. That part is allowed per pixel:
+        // the mask on either side of the reference's gradient.
+        let allowance = |i: usize, rounding| {
+            if s.edges <= 0.0 {
+                return 0.0;
+            }
+            let blurred = blurred(rounding);
+            let (x, y) = ((i / 4 % w) as i32, (i / 4 / w) as i32);
+            let gx = 0.5 * (luma(blurred, x + 1, y) - luma(blurred, x - 1, y));
+            let gy = 0.5 * (luma(blurred, x, y + 1) - luma(blurred, x, y - 1));
+            let mag = (gx * gx + gy * gy).sqrt();
+            let mask = detail::edge_mask(s.edges, mag);
+            let moved = (detail::edge_mask(s.edges, mag + 7e-4) - mask)
+                .abs()
+                .max((detail::edge_mask(s.edges, (mag - 7e-4).max(0.0)) - mask).abs());
+            s.amount / 100.0 * moved * (luma(&run.input, x, y) - luma(blurred, x, y)).abs() * 65535.0
+        };
+        assert_matches_reference(name, &run, &reference, 80.0, &allowance);
+    }
+}
+
+#[test]
+fn the_built_in_area_adjustments_match_their_cpu_reference() {
+    let (w, h) = (STAGE_W as usize, STAGE_H as usize);
+    // A linear area with every adjustment raised, and an inverted, rotated
+    // radial one with every adjustment lowered, over the first.
+    let mut values = [0.0f32; 32];
+    values[..16].copy_from_slice(&[0.0, 0.0, 0.9, 10.0, 5.0, 80.0, 50.0, 0.0, 0.0, 1.2, 40.0, 50.0, 40.0, 60.0, -30.0, 50.0]);
+    values[16..].copy_from_slice(&[1.0, 1.0, 0.8, 50.0, 30.0, 30.0, 18.0, 0.6, 0.5, -0.8, -50.0, -60.0, -40.0, -50.0, 40.0, -70.0]);
+    let Some(run) = run_stage(&|e| commands::develop::set_image_areas(e, &values).expect("areas")) else { return };
+    let (areas, _) = lopsy_core::areas::parse_areas(&values).expect("parse");
+    let reference = |_| lopsy_core::areas::areas_reference(&run.input, w, h, &areas);
+    // No blur: an ulp of the output for a value that straddles a boundary,
+    // which the GPU's `pow` and `exp2` can push it across.
+    assert_matches_reference("areas", &run, &reference, 40.0, NO_ALLOWANCE);
+}
+
+#[test]
+fn finish_matches_its_cpu_reference() {
+    use lopsy_core::finish::{self, FinishSettings};
+    let (w, h) = (STAGE_W as usize, STAGE_H as usize);
+    for (name, values) in [
+        // A darkening, rounded vignette and coarse grain, as in an export.
+        ("finish, full size", [-60.0, 40.0, 50.0, 60.0, 50.0, 60.0, 40.0, 7.0, 1.0]),
+        // A lightening, rectangular vignette and the working image's grain.
+        ("finish, working size", [50.0, 20.0, -70.0, 30.0, 80.0, 20.0, 70.0, 11.0, 0.4]),
+    ] {
+        let Some(run) = run_stage(&|e| commands::develop::set_image_finish(e, &values).expect("finish")) else { return };
+        let s = FinishSettings::from_values(&values).unwrap();
+        let reference = |_| finish::finish_reference(&run.input, w, h, &s);
+        // No blur, and the grain's hash is exact integer arithmetic on
+        // both sides: an ulp of the output for a value that straddles a
+        // boundary, which the vignette's `pow` can push it across.
+        assert_matches_reference(name, &run, &reference, 40.0, NO_ALLOWANCE);
+    }
 }
 
 #[test]

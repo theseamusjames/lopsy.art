@@ -189,6 +189,12 @@ impl<'a> GpuRef<'a> {
     /// drawing buffer without being asked.
     pub fn finish_frame(self) {}
 
+    /// Whether [`Target::Screen`] is a canvas. A WebGL context is always
+    /// made from one.
+    pub fn has_screen(self) -> bool {
+        true
+    }
+
     /// Size of the canvas [`Target::Screen`] draws to, in device pixels.
     pub fn screen_size(self) -> Result<(i32, i32), String> {
         let canvas = self.gl.canvas().ok_or("WebGL canvas missing")?;
