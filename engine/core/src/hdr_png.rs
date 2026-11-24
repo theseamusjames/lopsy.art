@@ -68,7 +68,9 @@ pub fn light_level(pixels: &[f32], sdr_white_nits: f32) -> LightLevel {
     let scale = sdr_white_nits as f64;
     let (mut peak, mut sum, mut n) = (0.0f64, 0.0f64, 0usize);
     for px in pixels.chunks_exact(4) {
-        let m = px[0].max(px[1]).max(px[2]).max(0.0) as f64 * scale;
+        // A channel that is not finite encodes as black, so it adds no light.
+        let finite = |v: f32| if v.is_finite() { v } else { 0.0 };
+        let m = finite(px[0]).max(finite(px[1])).max(finite(px[2])).max(0.0) as f64 * scale;
         let m = m.min(PQ_PEAK_NITS);
         peak = peak.max(m);
         sum += m;
@@ -113,8 +115,10 @@ impl PqTable {
     /// Luminance as a fraction of 10000 cd/m² to a 16-bit PQ code value.
     #[inline]
     fn code(&self, y: f32) -> u16 {
-        // NaN and negatives fail this test and encode as black.
-        if !(y > 0.0) {
+        // NaN, infinities and negatives encode as black. An infinity is a
+        // computation that overflowed, not light: clipping it to the peak
+        // would put a 10000 cd/m² dot in the file.
+        if !(y > 0.0 && y.is_finite()) {
             return PQ_BLACK_CODE;
         }
         if y >= 1.0 {
@@ -189,7 +193,7 @@ pub fn pq_png_chunks(level: LightLevel, sdr_white_nits: f32) -> Vec<PngChunk> {
 /// 1.0 at SDR reference white, which lands at `sdr_white_nits` cd/m²
 /// (`DEFAULT_SDR_WHITE_NITS` is BT.2408's 203). Anything brighter than
 /// 10000 cd/m² clips there; negative components (outside Rec. 2020's
-/// gamut) and NaN clip to black. Alpha is straight (not premultiplied),
+/// gamut), NaN and infinities (of either sign) clip to black. Alpha is straight (not premultiplied),
 /// 0..1, and stored linearly; when every pixel is opaque the file is RGB.
 pub fn encode_pq_png(pixels: &[f32], width: u32, height: u32, sdr_white_nits: f32) -> Result<Vec<u8>, String> {
     if width == 0 || height == 0 {
@@ -319,6 +323,30 @@ mod tests {
         assert_eq!(t.code(f32::NAN), 0);
         assert_eq!(t.code(1.0), 65535);
         assert_eq!(t.code(7.0), 65535);
+    }
+
+    /// An infinite channel encodes as black like NaN, and neither counts
+    /// toward the light levels.
+    #[test]
+    fn non_finite_channels_are_black() {
+        let t = PqTable::new();
+        assert_eq!(t.code(f32::INFINITY), 0);
+        assert_eq!(t.code(f32::NEG_INFINITY), 0);
+        let px = [
+            2.0, 1.0, 1.0, 1.0, //
+            f32::INFINITY, 0.5, 0.5, 1.0, //
+            f32::NAN, f32::NEG_INFINITY, 0.25, 1.0,
+        ];
+        let l = light_level(&px, 100.0);
+        assert!((l.max_cll - 200.0).abs() < 1e-9, "{l:?}");
+        assert!((l.max_fall - (200.0 + 50.0 + 25.0) / 3.0).abs() < 1e-9, "{l:?}");
+        let png = encode_pq_png(&px, 3, 1, 100.0).unwrap();
+        let mut reader = png::Decoder::new(std::io::Cursor::new(&png)).read_info().unwrap();
+        let mut buf = vec![0; reader.output_buffer_size()];
+        reader.next_frame(&mut buf).unwrap();
+        let code = |i: usize, c: usize| u16::from_be_bytes([buf[i * 6 + c * 2], buf[i * 6 + c * 2 + 1]]);
+        assert_eq!((code(1, 0), code(2, 0), code(2, 1)), (0, 0, 0));
+        assert_eq!(code(1, 1), t.code(0.5 * 100.0 / 10000.0));
     }
 
     #[test]

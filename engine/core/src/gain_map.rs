@@ -155,6 +155,7 @@ fn luminance_weights(primaries: &[(f64, f64); 3]) -> [f32; 3] {
 ///   `width * height * 4` values; linear light in Rec. 2020 primaries with
 ///   1.0 at SDR reference white. Alpha is ignored. Negative components
 ///   count toward luminance as they are; a negative luminance counts as 0.
+///   A pixel with a colour channel that is NaN or infinite gets gain 0.
 /// - `sdr`: RGBA, four u8 per pixel, the same size: the picture as an
 ///   ordinary screen shows it, encoded in `sdr_space` (sRGB or Display
 ///   P3; any space `colorimetry::rgb_space` knows works). Alpha is ignored.
@@ -201,11 +202,17 @@ pub fn compute_gain_map(
         let row = (y / d) * mw;
         for x in 0..w {
             let i = (y * w + x) * 4;
+            // A pixel the HDR picture has no number for (NaN or infinite)
+            // shows its SDR rendition: gain 0. Its luminance would
+            // otherwise count as black, a gain of about -6 stops that
+            // drags gain_map_min down and wastes most of the 8-bit range.
+            if !(hdr[i].is_finite() && hdr[i + 1].is_finite() && hdr[i + 2].is_finite()) {
+                continue;
+            }
             let yh = (hdr_weights[0] * hdr[i] + hdr_weights[1] * hdr[i + 1] + hdr_weights[2] * hdr[i + 2]).max(0.0);
             let ys = sdr_weights[0] * decode[sdr[i] as usize]
                 + sdr_weights[1] * decode[sdr[i + 1] as usize]
                 + sdr_weights[2] * decode[sdr[i + 2] as usize];
-            // NaN in the HDR picture would poison the range; it counts as no gain.
             let g = ((yh + k_hdr) / (ys + k_sdr)).log2();
             gains[row + x / d] += if g.is_finite() { g } else { 0.0 };
         }
@@ -451,6 +458,25 @@ mod tests {
                 let quant = (want + DEFAULT_OFFSET) * step + 2e-6;
                 assert!((y(got) - want).abs() <= quant, "{boost}: pixel {i}: luminance {} vs {want}", y(got));
             }
+        }
+    }
+
+    /// A NaN or infinite HDR pixel gets gain 0, not the gain of black, so
+    /// the range is the one the rest of the picture needs.
+    #[test]
+    fn non_finite_hdr_pixels_get_no_gain() {
+        let s = scene();
+        let mut hdr = scaled(&s, 1.0);
+        for (p, v) in [(5usize, f32::NAN), (70, f32::INFINITY), (200, f32::NEG_INFINITY)] {
+            hdr[p * 4 + 1] = v;
+        }
+        let map = compute_gain_map(&hdr, &s.sdr, s.w as u32, s.h as u32, ColorSpace::Srgb, GainMapScale::Full).unwrap();
+        let m = map.metadata;
+        assert!(m.gain_map_min > -0.01 && m.gain_map_max < 0.02, "{m:?}");
+        for p in [5usize, 70, 200] {
+            let code = map.rgba[p * 4] as f64 / 255.0;
+            let g = m.gain_map_min + code * (m.gain_map_max - m.gain_map_min);
+            assert!(g.abs() <= (m.gain_map_max - m.gain_map_min) / 255.0, "pixel {p}: gain {g}");
         }
     }
 
