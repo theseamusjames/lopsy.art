@@ -285,6 +285,10 @@ pub struct EngineInner {
     /// With the working space: the curves (`setDevelopCurves`), in the look
     /// pass. `None` by default.
     pub develop_curves: Option<crate::develop::look::CurvesState>,
+    /// While `commands::develop::read_scene_statistics` renders a frame: the
+    /// small float texture the chain box-downscales the scene image into,
+    /// before the tone pass. `None` otherwise.
+    pub scene_capture: Option<TextureHandle>,
     /// The area whose mask the live frame shows in red, or −1. Never in exports.
     pub area_overlay: i32,
     /// (shadows, highlights) clipping warnings on the live frame only.
@@ -421,6 +425,7 @@ impl EngineInner {
             develop_tone: None,
             develop_look: None,
             develop_curves: None,
+            scene_capture: None,
             area_overlay: -1,
             clipping_warning: (false, false),
             detail_mask_view: false,

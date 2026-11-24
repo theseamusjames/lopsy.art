@@ -67,6 +67,29 @@ pub fn auto_tone(histogram: &[u32], current_json: &str) -> Result<String, JsErro
     lopsy_core::develop_stats::auto_tone_json(histogram, current_json).map_err(|e| JsError::new(&e))
 }
 
+readback_export! {
+    /// Scene statistics for `autoToneScene`, with the working space: a
+    /// `Float32Array` of 8, the share of pixels counted, then the 1st, 5th,
+    /// 25th, 50th, 75th, 95th and 99th percentiles of scene luminance in
+    /// stops from middle grey (0.18), of the scene image before the tone
+    /// pass with the photo's current exposure applied, read at 256 pixels
+    /// on its long edge. Renders a live frame. Wrap with `'any-time'`.
+    #[wasm_bindgen(js_name = "readSceneStatistics")]
+    pub fn read_scene_statistics(engine) -> Result<Vec<f32>> {
+        read(lopsy_engine::commands::develop::read_scene_statistics(engine))
+    }
+}
+
+/// Auto tone from scene statistics (`readSceneStatistics`) and the current
+/// `{exposure, contrast, highlights, shadows, whites, blacks}` as JSON, the
+/// recipe's units; returns the new values as the same JSON
+/// (`lopsy_core::scene_stats`). With the working space this replaces
+/// `autoTone`, which reads the displayed histogram.
+#[wasm_bindgen(js_name = "autoToneScene")]
+pub fn auto_tone_scene(stats: &[f32], current_json: &str) -> Result<String, JsError> {
+    lopsy_core::scene_stats::auto_tone_scene_json(stats, current_json).map_err(|e| JsError::new(&e))
+}
+
 /// Grey-world white balance of linear camera RGB (RGBA f32 from
 /// `rafRenderBinnedLinear` or `rafRenderLinearBand`): `[r, g, b]` wbRatio
 /// multipliers relative to as shot, green = 1.

@@ -39,6 +39,7 @@ pub mod finish;
 pub mod working_space;
 pub mod tone;
 pub mod scene_tone;
+pub mod scene_stats;
 pub mod look;
 pub mod output;
 pub mod psd;

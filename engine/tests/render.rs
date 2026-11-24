@@ -1781,3 +1781,30 @@ fn with_the_working_space_lopsys_adjustments_do_nothing_and_the_new_stages_do() 
     assert_ne!(now(compositor::composite_for_export_u16(&mut engine)), with_old, "the new contrast does");
     assert_no_gpu_errors();
 }
+
+#[test]
+fn scene_statistics_are_read_before_tone_with_the_exposure_applied() {
+    let Some(mut engine) = engine(64, 32) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, 64, 32, 1.0)).expect("layer");
+    // Left half middle grey (sRGB 118 is linear 0.181), right half 2 stops
+    // darker (sRGB 63 is 0.0497, about −1.86 stops).
+    let texels: Vec<[u8; 4]> = (0..64 * 32).map(|i| if i % 64 < 32 { [118, 118, 118, 255] } else { [63, 63, 63, 255] }).collect();
+    commands::layer::upload_layer_pixels(&mut engine, "art", texels.as_flattened(), 64, 32, 0, 0).expect("pixels");
+    assert!(block_on(commands::develop::read_scene_statistics(&mut engine)).is_err(), "no working space, no statistics");
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    let plain = now(commands::develop::read_scene_statistics(&mut engine));
+    assert_eq!(plain.len(), lopsy_core::scene_stats::SCENE_STATS_LEN);
+    assert_eq!(plain[0], 1.0);
+    let grey = (0.181_f32 / 0.18).log2();
+    assert!((plain[7] - grey).abs() < 0.02 && (plain[1] + 1.86).abs() < 0.03, "{plain:?}");
+    // The tone sliders act after the read; the exposure is added.
+    commands::develop::set_develop_tone(&mut engine, &[1.0, 0.0, 0.0, 80.0, -100.0, 50.0, 0.0, 0.0]).expect("tone");
+    let brighter = now(commands::develop::read_scene_statistics(&mut engine));
+    for k in 1..8 {
+        assert!((brighter[k] - plain[k] - 1.0).abs() < 1e-5, "{plain:?} {brighter:?}");
+    }
+    assert!(engine.scene_capture.is_none());
+    let tone = lopsy_core::scene_stats::auto_tone_scene(&brighter, &lopsy_core::develop_stats::ToneSettings { exposure: 1.0, ..Default::default() });
+    assert!((tone.exposure - (1.0 - brighter[4])).abs() < 0.051, "the median goes to middle grey: {tone:?}");
+    assert_no_gpu_errors();
+}

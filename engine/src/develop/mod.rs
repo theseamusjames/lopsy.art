@@ -101,7 +101,13 @@
 //! - `sampleNeutralWhiteBalance(engine, x, y, radius)` (readback): the picker.
 //! - `readDevelopHistogram(engine)` (readback): 4 × 256 bins of the displayed result; with the working space, of the sRGB output.
 //! - `sampleColor(engine, x, y, size)` (readback, `drawing.rs`): the pixel readout; with the working space, of the sRGB output.
-//! - `autoTone(histogram, currentJson)`.
+//! - `autoTone(histogram, currentJson)`: Auto tone from the displayed
+//!   histogram (`develop_stats::auto_tone`), kept until the app has moved.
+//! - `readSceneStatistics(engine)` (readback, working space only): 8 floats,
+//!   the share counted and seven luminance percentiles in stops of the scene
+//!   before the tone pass, current exposure applied; with
+//!   `autoToneScene(stats, currentJson)`, Auto tone on linear statistics
+//!   (`lopsy_core::scene_stats`), the one to use with the working space.
 //!
 //! Tone, colour and curves with the working space (`develop.rs`; all zeros
 //! is the identity, and each acts only with the working space):

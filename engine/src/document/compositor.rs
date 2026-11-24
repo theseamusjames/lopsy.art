@@ -2128,15 +2128,32 @@ fn conversion_between(from: StageSpace, to: StageSpace) -> crate::develop::worki
 /// runs it only when that has something to do.
 fn enter_working_space(engine: &EngineInner) {
     match (&engine.raw_develop, engine.working_space) {
-        (Some(state), _) => apply_tone(engine, Some(state)),
+        (Some(state), _) => {
+            capture_scene(engine);
+            apply_tone(engine, Some(state));
+        }
         (None, Some(ws)) => {
             convert_composite(engine, crate::develop::working_space::Conversion::Input(ws.source));
+            capture_scene(engine);
             if crate::develop::tone::scene_is_active(engine) {
                 apply_tone(engine, None);
             }
         }
         (None, None) => {}
     }
+}
+
+/// The scene image, before the tone pass, box-downscaled into
+/// `engine.scene_capture` when a statistics read asked for it.
+fn capture_scene(engine: &EngineInner) {
+    let Some(target) = engine.scene_capture else { return };
+    let Some((tw, th)) = engine.texture_pool.get_size(target) else { return };
+    let params = crate::gpu::params::core::ThumbnailBoxParams { dst_size: [tw as f32, th as f32], channel: -1 };
+    engine
+        .pass(&engine.shaders.thumbnail_box, params)
+        .texture("u_tex", engine.composite_texture)
+        .draw(Target::Texture(target));
+    engine.gpu().unbind_textures(1);
 }
 
 /// `pass`, which reads the composite, drawn into scratch A over the

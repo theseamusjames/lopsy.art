@@ -521,6 +521,42 @@ pub fn set_develop_area_look(engine: &mut EngineInner, index: u32, values: &[f32
     Ok(())
 }
 
+/// The scene image's luminance statistics for Auto tone
+/// (`lopsy_core::scene_stats`): the scene linear Rec. 2020 image after the
+/// RAW or input step, before the tone pass, box-downscaled to
+/// `SCENE_STATS_EDGE` on its long edge, measured as
+/// `scene_stats::scene_statistics` says. For a photo that is not RAW the
+/// photo's own exposure (`set_develop_tone`) is added, so for either kind
+/// the statistics are of the scene with the current exposure applied.
+/// Renders a live frame to read it. Fails without the working space.
+pub fn read_scene_statistics(engine: &mut EngineInner) -> Read<Vec<f32>> {
+    use lopsy_core::scene_stats::{scene_statistics, SCENE_STATS_EDGE};
+    if engine.working_space.is_none() {
+        return Read::failed("The document has no working space".to_string());
+    }
+    let (tw, th) = thumbnail_gpu::thumbnail_size(engine.doc_width, engine.doc_height, SCENE_STATS_EDGE);
+    let texture = match engine.texture_pool.acquire(tw, th) {
+        Ok(t) => t,
+        Err(e) => return Read::failed(e),
+    };
+    engine.scene_capture = Some(texture);
+    engine.needs_recomposite = true;
+    compositor::render(engine);
+    engine.scene_capture = None;
+    let shift = if engine.raw_develop.is_some() { 0.0 } else { engine.develop_tone.map_or(0.0, |t| t.exposure) };
+    let read = engine.gpu().read_rgba_f32(texture, 0, 0, tw, th).map(move |pixels| {
+        let mut stats = scene_statistics(&pixels);
+        if stats[0] > 0.0 {
+            for v in &mut stats[1..] {
+                *v += shift;
+            }
+        }
+        stats.to_vec()
+    });
+    engine.texture_pool.release(texture);
+    read
+}
+
 /// Area `index`'s curves with the working space, in `set_develop_curves`'
 /// layout. On failure the area's curves are off.
 pub fn set_develop_area_curves(engine: &mut EngineInner, index: u32, values: &[f32]) -> Result<(), String> {
