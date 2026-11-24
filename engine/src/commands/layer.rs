@@ -886,6 +886,11 @@ pub fn live_gpu_snapshot_count(engine: &EngineInner) -> u32 {
     engine.snapshot_textures.iter().filter(|s| s.is_some()).count() as u32
 }
 
+/// The engine's id, which the host's lost-device announcement names it by.
+pub fn engine_id(engine: &EngineInner) -> u32 {
+    engine.gpu_ctx.engine_id()
+}
+
 /// Lose the GPU device on purpose, to rehearse recovery. Returns `false`
 /// on a backend that cannot: WebGL, where the page uses the
 /// `WEBGL_lose_context` extension instead.

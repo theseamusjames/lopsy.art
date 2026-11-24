@@ -6,6 +6,7 @@ use web_sys::HtmlCanvasElement;
 use super::framebuffer::FramebufferPool;
 use super::program::{LinkedProgram, Linker, QUAD_SIZE};
 use super::texture_pool::{self, TexturePool};
+use crate::gpu::loss::{self, LossWatch};
 use crate::host::{self, LogLevel};
 
 pub struct GpuContext {
@@ -19,6 +20,9 @@ pub struct GpuContext {
     pub(in crate::gpu) draw: DrawState,
     pub has_half_float: bool,
     pub has_float_blend: bool,
+    /// The engine's id, and whether it is being freed. The device-lost
+    /// callback holds the same watch.
+    loss: Arc<LossWatch>,
 }
 
 /// What every pass on the device draws with.
@@ -181,7 +185,8 @@ impl GpuContext {
             })
             .await
             .map_err(|e| format!("WebGPU adapter: {e}"))?;
-        let (device, queue) = request_device(&adapter).await?;
+        let loss = Arc::new(LossWatch::new());
+        let (device, queue) = request_device(&adapter, &loss).await?;
 
         let (width, height) = canvas_size(canvas);
         let mut config = surface
@@ -214,7 +219,7 @@ impl GpuContext {
             can_be_float,
             frame: RefCell::new(None),
         };
-        Self::on_device(device, queue, Some(screen))
+        Self::on_device(device, queue, Some(screen), loss)
     }
 
     /// A context with no canvas: it draws into textures and reads them
@@ -226,11 +231,17 @@ impl GpuContext {
             .request_adapter(&wgpu::RequestAdapterOptions::default())
             .await
             .map_err(|e| format!("GPU adapter: {e}"))?;
-        let (device, queue) = request_device(&adapter).await?;
-        Self::on_device(device, queue, None)
+        let loss = Arc::new(LossWatch::new());
+        let (device, queue) = request_device(&adapter, &loss).await?;
+        Self::on_device(device, queue, None, loss)
     }
 
-    fn on_device(device: wgpu::Device, queue: wgpu::Queue, screen: Option<Screen>) -> Result<Self, String> {
+    fn on_device(
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+        screen: Option<Screen>,
+        loss: Arc<LossWatch>,
+    ) -> Result<Self, String> {
         let draw = DrawState::new(&device, &queue)?;
         Ok(Self {
             device,
@@ -241,7 +252,13 @@ impl GpuContext {
             // filterable, so there is nothing to probe.
             has_half_float: true,
             has_float_blend: true,
+            loss,
         })
+    }
+
+    /// The id the host's lost-device announcement names this engine by.
+    pub fn engine_id(&self) -> u32 {
+        self.loss.engine_id()
     }
 
     /// The texture and framebuffer pools for this context.
@@ -296,8 +313,10 @@ impl GpuContext {
     }
 
     /// Destroy the device, as losing it would: every operation after this
-    /// does nothing and the host is told through `host::gpu_lost`. WebGPU
-    /// offers no other way to rehearse a loss.
+    /// does nothing and the host is told through `host::gpu_lost`, with
+    /// the reason `"destroyed"`. WebGPU offers no other way to rehearse a
+    /// loss, so the reason cannot tell a rehearsal from an engine being
+    /// freed; the engine's `LossWatch` does.
     pub fn lose_device(&self) -> bool {
         self.device.destroy();
         true
@@ -371,9 +390,21 @@ fn canvas_surface(_instance: &wgpu::Instance, _canvas: &HtmlCanvasElement) -> Re
     Err("A canvas surface exists only in the browser".into())
 }
 
+impl Drop for GpuContext {
+    /// Freeing an engine is not losing its device. The browser may settle
+    /// `device.lost` once the device is gone, with the same reason a
+    /// rehearsed loss gives, and the page would then rebuild every engine
+    /// it holds. The flag is set before any field, the device among them,
+    /// is dropped.
+    fn drop(&mut self) {
+        self.loss.mark_freed();
+    }
+}
+
 /// Ask for a device with everything the adapter offers that the engine
-/// uses beyond WebGPU's defaults, and route its errors to the host.
-async fn request_device(adapter: &wgpu::Adapter) -> Result<(wgpu::Device, wgpu::Queue), String> {
+/// uses beyond WebGPU's defaults, and route its errors to the host. A lost
+/// device is announced with the engine's id, unless the engine was freed.
+async fn request_device(adapter: &wgpu::Adapter, loss: &Arc<LossWatch>) -> Result<(wgpu::Device, wgpu::Queue), String> {
     // WebGPU's default texture limit is 8192, below what the same GPU
     // allows through WebGL.
     let (device, queue) = adapter
@@ -389,9 +420,12 @@ async fn request_device(adapter: &wgpu::Adapter) -> Result<(wgpu::Device, wgpu::
     device.on_uncaptured_error(Arc::new(|error| {
         host::log(LogLevel::Error, &format!("[Lopsy GPU] {error}"));
     }));
-    device.set_device_lost_callback(|reason, message| {
-        host::log(LogLevel::Error, &format!("[Lopsy GPU] device lost ({reason:?}): {message}"));
-        host::gpu_lost(&message);
+    let watch = Arc::clone(loss);
+    device.set_device_lost_callback(move |reason, message| {
+        let Some(engine_id) = watch.to_announce() else { return };
+        let reason = loss::reason_name(reason == wgpu::DeviceLostReason::Destroyed);
+        host::log(LogLevel::Error, &format!("[Lopsy GPU] engine {engine_id}: device lost ({reason}): {message}"));
+        host::gpu_lost(engine_id, reason, &message);
     });
     Ok((device, queue))
 }
@@ -399,4 +433,64 @@ async fn request_device(adapter: &wgpu::Adapter) -> Result<(wgpu::Device, wgpu::
 /// A surface cannot be zero-sized, which a canvas is while it is hidden.
 fn canvas_size(canvas: &HtmlCanvasElement) -> (u32, u32) {
     (canvas.width().max(1), canvas.height().max(1))
+}
+
+/// On a real GPU: `cargo test -p lopsy-engine --features native`. Native
+/// wgpu settles a destroyed device's loss on the next poll, with the same
+/// reason the browser gives, so this runs the callback the page relies on.
+#[cfg(all(test, feature = "native"))]
+mod tests {
+    use std::future::Future;
+    use std::sync::Mutex;
+    use std::task::{Context, Poll};
+
+    use super::*;
+
+    /// Every loss the host was told of: engine id, reason.
+    static LOSSES: Mutex<Vec<(u32, String)>> = Mutex::new(Vec::new());
+
+    fn block_on<F: Future>(future: F) -> F::Output {
+        let mut future = std::pin::pin!(future);
+        let mut cx = Context::from_waker(std::task::Waker::noop());
+        loop {
+            if let Poll::Ready(value) = future.as_mut().poll(&mut cx) {
+                return value;
+            }
+            std::thread::yield_now();
+        }
+    }
+
+    fn losses_of(engine_id: u32) -> Vec<String> {
+        let losses = LOSSES.lock().unwrap();
+        losses.iter().filter(|(id, _)| *id == engine_id).map(|(_, reason)| reason.clone()).collect()
+    }
+
+    #[test]
+    fn a_rehearsed_loss_is_announced_and_a_freed_engine_is_not() {
+        host::install(host::Host {
+            log: |_, _| {},
+            now_ms: || 0.0,
+            gpu_lost: |engine_id, reason, _| LOSSES.lock().unwrap().push((engine_id, reason.to_string())),
+        });
+        let (Ok(edit), Ok(export)) = (block_on(GpuContext::headless()), block_on(GpuContext::headless())) else {
+            eprintln!("skipped: no GPU for a lost-device test");
+            return;
+        };
+        assert_ne!(edit.engine_id(), export.engine_id());
+
+        // The export engine is freed, and its device is destroyed after:
+        // the order a browser that settles `device.lost` on release sees.
+        let export_id = export.engine_id();
+        // Native wgpu settles a loss only while the device's queue lives.
+        let (export_device, _export_queue) = (export.device.clone(), export.queue.clone());
+        drop(export);
+        export_device.destroy();
+        let _ = export_device.poll(wgpu::PollType::wait_indefinitely());
+        assert_eq!(losses_of(export_id), Vec::<String>::new());
+
+        // The hook the e2e tests use still announces, naming the engine.
+        assert!(edit.lose_device());
+        let _ = edit.device.poll(wgpu::PollType::wait_indefinitely());
+        assert_eq!(losses_of(edit.engine_id()), ["destroyed"]);
+    }
 }

@@ -19,11 +19,13 @@ pub struct Host {
     /// Milliseconds since some fixed moment. Only differences and the low
     /// bits (as a seed) are used.
     pub now_ms: fn() -> f64,
-    /// The GPU device was lost: every texture the engine held is gone and
-    /// the engine has to be created again. The argument is the reason the
-    /// backend gave. A WebGL host hears of a lost context from its canvas
-    /// and is never called here.
-    pub gpu_lost: fn(&str),
+    /// The GPU device of the engine with this id was lost: every texture
+    /// that engine held is gone and it has to be created again. The other
+    /// arguments are WebGPU's reason (`"destroyed"` or `"unknown"`) and the
+    /// backend's message. An engine that is being freed is never reported.
+    /// A WebGL host hears of a lost context from its canvas and is never
+    /// called here.
+    pub gpu_lost: fn(engine_id: u32, reason: &str, message: &str),
 }
 
 static HOST: OnceLock<Host> = OnceLock::new();
@@ -44,8 +46,8 @@ pub fn now_ms() -> f64 {
     HOST.get().map_or(0.0, |host| (host.now_ms)())
 }
 
-pub fn gpu_lost(reason: &str) {
+pub fn gpu_lost(engine_id: u32, reason: &str, message: &str) {
     if let Some(host) = HOST.get() {
-        (host.gpu_lost)(reason);
+        (host.gpu_lost)(engine_id, reason, message);
     }
 }

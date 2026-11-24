@@ -2,6 +2,7 @@
 //! allocates through the pools; which graphics API that reaches is the
 //! backend's business.
 
+pub mod loss;
 pub mod params;
 pub mod pass;
 pub mod read;

@@ -84,7 +84,7 @@ fn start_engine() -> Result<EngineInner, String> {
             }
         },
         now_ms: || STARTED.get().map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0),
-        gpu_lost: |reason| eprintln!("lopsy: the GPU was lost: {reason}"),
+        gpu_lost: |_, reason, message| eprintln!("lopsy: the GPU was lost ({reason}): {message}"),
     });
     let context = block_on(GpuContext::headless())?;
     let shaders = ShaderPrograms::compile_all(&context)?;

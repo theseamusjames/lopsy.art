@@ -58,7 +58,7 @@ fn block_on<F: Future>(future: F) -> F::Output {
 /// An engine with a `width` by `height` document, or `None` where there is
 /// no GPU to make one on.
 fn engine(width: u32, height: u32) -> Option<EngineInner> {
-    host::install(host::Host { log: record, now_ms: || 0.0, gpu_lost: |_| {} });
+    host::install(host::Host { log: record, now_ms: || 0.0, gpu_lost: |_, _, _| {} });
     // With `--test-threads=1` the tests share one thread, so a new engine
     // starts with an empty log.
     ERRORS.with_borrow_mut(Vec::clear);

@@ -45,7 +45,7 @@ fn block_on<F: Future>(future: F) -> F::Output {
 }
 
 fn engine(width: u32, height: u32) -> Option<EngineInner> {
-    host::install(host::Host { log: record, now_ms: || 0.0, gpu_lost: |_| {} });
+    host::install(host::Host { log: record, now_ms: || 0.0, gpu_lost: |_, _, _| {} });
     ERRORS.with_borrow_mut(Vec::clear);
     let ctx = match block_on(GpuContext::headless()) {
         Ok(ctx) => ctx,

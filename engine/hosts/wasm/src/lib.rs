@@ -45,22 +45,35 @@ pub fn renderer_name() -> String {
     if cfg!(feature = "wgpu") { "wgpu" } else { "webgl" }.to_string()
 }
 
-/// The event the window receives when the wgpu device is lost. The page
-/// answers it by creating the engine again (`useCanvasRendering.ts`).
+/// The event the window receives when an engine's wgpu device is lost.
+/// The page answers it by creating that engine again
+/// (`useCanvasRendering.ts`, `develop-engine.ts`).
+///
+/// It is a `CustomEvent` whose `detail` is `{ engineId, reason, message }`:
+/// `engineId` is the number `engineId(engine)` returns for the engine that
+/// lost its device, `reason` is WebGPU's (`"destroyed"` or `"unknown"`)
+/// and `message` is the browser's text. A page with several engines
+/// rebuilds only the one named. An engine being freed never fires it.
 #[cfg(feature = "wgpu")]
 const GPU_LOST_EVENT: &str = "lopsy-gpu-lost";
 
 #[cfg(feature = "wgpu")]
-fn announce_gpu_lost(_reason: &str) {
+fn announce_gpu_lost(engine_id: u32, reason: &str, message: &str) {
     let Some(window) = web_sys::window() else { return };
-    if let Ok(event) = web_sys::Event::new(GPU_LOST_EVENT) {
+    let detail = js_sys::Object::new();
+    let _ = js_sys::Reflect::set(&detail, &"engineId".into(), &engine_id.into());
+    let _ = js_sys::Reflect::set(&detail, &"reason".into(), &reason.into());
+    let _ = js_sys::Reflect::set(&detail, &"message".into(), &message.into());
+    let init = web_sys::CustomEventInit::new();
+    init.set_detail(&detail);
+    if let Ok(event) = web_sys::CustomEvent::new_with_event_init_dict(GPU_LOST_EVENT, &init) {
         let _ = window.dispatch_event(&event);
     }
 }
 
 /// A WebGL canvas fires `webglcontextlost` itself.
 #[cfg(not(feature = "wgpu"))]
-fn announce_gpu_lost(_reason: &str) {}
+fn announce_gpu_lost(_engine_id: u32, _reason: &str, _message: &str) {}
 
 #[cfg(not(feature = "wgpu"))]
 #[wasm_bindgen(js_name = "createEngine")]
@@ -78,6 +91,16 @@ pub async fn create_engine(canvas: HtmlCanvasElement) -> Result<Engine, JsError>
     host::install(host::Host { log: console_log, now_ms: js_sys::Date::now, gpu_lost: announce_gpu_lost });
     let gpu_ctx = GpuContext::new(&canvas).await.map_err(|e| JsError::new(&e))?;
     engine_on(gpu_ctx)
+}
+
+/// This engine's id: a number no other engine in the page has, the same
+/// for the engine's whole life. On wgpu the `lopsy-gpu-lost` event's
+/// `detail.engineId` is it, so a page with several engines can tell which
+/// one lost its device. WebGL engines have one too, though their losses
+/// arrive as `webglcontextlost` on their own canvas.
+#[wasm_bindgen(js_name = "engineId")]
+pub fn engine_id(engine: &Engine) -> u32 {
+    lopsy_engine::commands::layer::engine_id(&engine.inner)
 }
 
 fn engine_on(gpu_ctx: GpuContext) -> Result<Engine, JsError> {

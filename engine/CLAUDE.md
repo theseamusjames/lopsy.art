@@ -87,6 +87,7 @@ engine/
         program.rs      # Shader compilation, linking, uniform upload
         pass.rs         # What a pass does to the WebGL context
       read.rs         # `Read<T>`: a readback the backend completes when it can
+      loss.rs         # Engine ids, and why a freed engine never reports a lost device
       wgpu/           # The wgpu backend, compiled in place of webgl/ by
                       # `--features wgpu`: the same modules as webgl/, plus
         read.rs         # texture -> buffer -> mapped bytes, as a `Read`
