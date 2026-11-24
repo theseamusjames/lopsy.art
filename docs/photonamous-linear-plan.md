@@ -669,6 +669,22 @@ was.
   colour grading and curves on linear data in one look pass, masks on
   the new maths, Auto tone from scene statistics.
 
+- **Phase 4**: the linear decode keeps values above white and below
+  black, records each channel's clip level, and reconstructs clipped
+  channels on the mosaic before the demosaic
+  (`engine/core/src/raf/highlights.rs`); the grey-out is gone from the
+  working-space path; white-balance measurements skip clipped pixels.
+  Before/after pictures: `samples/linear-pipeline-review/highlight-reconstruction/`
+  (git-ignored).
+- **Phase 5**: Large and Small details on log luminance after tone
+  (`engine/core/src/linear_detail.rs`), haze on scene data, noise
+  reduction moved before tone. On the plan's test (a 4.6-stop horizon
+  at +50) the halo fell from 0.41 stops to 0.08.
+- **Phase 7, engine**: HDR targets for the output step, the live frame
+  in HDR with a headroom (`setDevelopHdr`, `screenIsHdr`), float reads
+  for HDR files (`readHdrOutputF32`) and a histogram of the HDR
+  rendering.
+
 ### Decided
 
 1. **The work that was uncommitted when the run began was committed
@@ -752,3 +768,45 @@ was.
     adjustments are now part of the develop chain proper.
 24. **Auto tone sets Exposure, Whites, Highlights, Blacks and
     Shadows, and leaves Contrast alone.** Pressing it twice converges.
+25. **Highlight reconstruction runs once, on the CPU, in the decode**,
+    not as a GPU stage: which samples clipped is fixed by the file,
+    and the user's white balance is a gain applied afterwards. It works
+    on the mosaic, so the demosaic never sees a false colour edge.
+26. **The white level is still the bit depth's.** No tag recording it
+    was found in the sample RAFs, and in every clipped sample the
+    brightest value is exactly the 14-bit maximum.
+27. **Values below black are kept negative**, so shadow noise averages
+    to zero. The underexposed night sample got slightly darker
+    shadows, which is the unbiased result.
+28. **Reconstruction fades in from 90% to 98% of a channel's clip
+    level** and never lowers a value. On one sample (DSCF7912) the
+    step in brightness where it starts is about a quarter larger than
+    the file's own. **Worth a look by eye.**
+29. **Removing the grey-out moved bright colours a long way** (it
+    acted on anything brighter than sRGB white, not only on clipped
+    pixels): a pale speckled band in one sky became smooth blue.
+30. **Local contrast is a Wiener/Lee filter in log space** (detail
+    shrunk by the neighbourhood's variance) rather than a guided
+    blur. +100 makes a radius's detail 2.5 times as large in stops;
+    −100 removes it.
+31. **Haze at +100 removes the whole veil**, with exposure pivoting on
+    the veil plus middle grey, and never brightens a channel.
+32. **Noise reduction's thresholds are divided by 1.25 for RAW
+    photos**, measured on the samples so a given slider value removes
+    about what it did after the tone curve.
+33. **The HDR knee is at SDR white**, so the HDR and SDR views differ
+    only above white (and for bright saturated colours the SDR view
+    has to pale). At the default peak of 4, a rendered value of 4
+    shows at 2.5 and 16 at 3.5.
+34. **The headroom is a linear peak in units of SDR white** (4.0 is
+    two stops), from 1 to 64.
+35. **The HDR canvas is given extended-range sRGB-curve values** in
+    sRGB or Display P3 primaries, which is what wgpu's WebGPU backend
+    configures (`toneMapping: extended`). **Unverified in a browser
+    on an HDR display.**
+36. **The gain-map JPEG's base is sRGB** for now; a Display P3 base
+    needs an 8-bit export with a colour space argument.
+37. **Phase 6 was started only where it needs no camera data**: the
+    DNG specification's two-illuminant method as engine code, and DNG
+    files joining the RAW pipeline with their own matrices. RAF colour
+    is untouched until the data source is decided.
