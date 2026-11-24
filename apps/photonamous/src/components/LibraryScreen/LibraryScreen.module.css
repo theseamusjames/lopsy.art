@@ -21,6 +21,11 @@
     'sidebar main info';
 }
 
+/* Holds everything under the header for `inert`; the grid places its children as its own. */
+.body {
+  display: contents;
+}
+
 .main {
   grid-area: main;
   display: flex;

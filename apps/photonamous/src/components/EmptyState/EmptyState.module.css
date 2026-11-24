@@ -13,6 +13,17 @@
   color: var(--color-text-disabled);
 }
 
+.spinner {
+  color: var(--color-text-secondary);
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .title {
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-ui);

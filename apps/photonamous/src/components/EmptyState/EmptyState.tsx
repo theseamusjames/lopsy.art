@@ -1,5 +1,6 @@
-import { Images } from 'lucide-react';
+import { Images, LoaderCircle } from 'lucide-react';
 import type { Collection } from '../../library/asset-query';
+import type { LibrarySetup } from '../../library/library-setup';
 import { ImportButton } from '../ImportButton/ImportButton';
 import styles from './EmptyState.module.css';
 
@@ -8,6 +9,8 @@ interface EmptyStateProps {
   libraryEmpty: boolean;
   collection: Collection;
   searching: boolean;
+  /** An empty library that has not finished its first sync on this device is being set up, not empty. */
+  setup?: LibrarySetup;
 }
 
 function message(collection: Collection, searching: boolean): string {
@@ -32,7 +35,18 @@ function message(collection: Collection, searching: boolean): string {
   }
 }
 
-export function EmptyState({ libraryEmpty, collection, searching }: EmptyStateProps) {
+export function EmptyState({ libraryEmpty, collection, searching, setup }: EmptyStateProps) {
+  if (libraryEmpty && setup && setup.kind !== 'ready') {
+    return (
+      <div className={styles.empty} role="status" data-testid="library-setup">
+        {setup.kind === 'setting-up' ? <LoaderCircle size={40} className={styles.spinner} aria-hidden /> : <Images size={40} className={styles.icon} aria-hidden />}
+        <h2 className={styles.title}>{setup.kind === 'setting-up' ? 'Setting up your library' : 'Your library hasn’t loaded yet'}</h2>
+        <p className={styles.hint}>
+          {setup.kind === 'setting-up' ? 'Reading it from your storage. The first time on a device this can take a moment.' : setup.reason}
+        </p>
+      </div>
+    );
+  }
   if (libraryEmpty) {
     return (
       <div className={styles.empty}>

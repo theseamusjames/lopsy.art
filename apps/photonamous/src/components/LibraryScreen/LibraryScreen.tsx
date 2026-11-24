@@ -1,6 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useLibraryView, useOrderedIds } from '../../app/hooks';
+import { useEffect, useRef, useState } from 'react';
+import { useLibraryView, useOrderedIds, useSyncStatus } from '../../app/hooks';
 import { useUi } from '../../app/store';
+import { dialogCovers, useInert } from '../../app/use-inert';
 import { copyEdits, copySource, createNamedVersion, runCommand, suggestedVersionName } from '../../app/commands';
 import { NewVersionDialog } from '../NewVersionDialog/NewVersionDialog';
 import { COPY_GROUPS, DEFAULT_COPY_GROUP_IDS } from '../../library/recipe-copy';
@@ -8,6 +9,7 @@ import { CopyEditsDialog } from '../CopyEditsDialog/CopyEditsDialog';
 import { isTypingTarget, matchShortcut, type ShortcutContext } from '../../shortcuts/registry';
 import { pruneSelection } from '../../library/selection';
 import { parseItem } from '../../library/items';
+import { librarySetup } from '../../library/library-setup';
 import { CompareView } from '../CompareView/CompareView';
 import { DeleteDialog } from '../DeleteDialog/DeleteDialog';
 import { DropZone } from '../DropZone/DropZone';
@@ -24,6 +26,7 @@ import { PhotoGrid } from '../PhotoGrid/PhotoGrid';
 import { Sidebar } from '../Sidebar/Sidebar';
 import { SettingsDialog } from '../SettingsDialog/SettingsDialog';
 import { SingleView } from '../SingleView/SingleView';
+import { ViewBar } from '../ViewBar/ViewBar';
 import { isControlKey } from './control-keys';
 import styles from './LibraryScreen.module.css';
 
@@ -47,30 +50,22 @@ export function LibraryScreen() {
   const [announcement, setAnnouncement] = useState('');
 
   /*
-   * While a dialog, the Edit view or Cull covers the library, the rest of it
-   * is out of reach (aria-modal made true). Inert comes a frame after the
-   * layer on top has taken focus and noted where focus was, to give it back
-   * there (a focused element turning inert would lose focus first), and goes
-   * before that layer gives focus back.
+   * While a dialog or Full screen covers the library, all of it is out of
+   * reach (aria-modal made true). The Edit view covers everything but the
+   * header, which stays in use above it: then only what is under the
+   * header is out of reach.
    */
-  const covered = editing || mode === 'cull' || (dialog !== null && dialog !== 'help' && dialog !== 'sync');
-  useLayoutEffect(() => {
-    if (!covered && layout.current) layout.current.inert = false;
-  }, [covered]);
-  useEffect(() => {
-    if (!covered) return;
-    const frame = requestAnimationFrame(() => {
-      if (layout.current) layout.current.inert = true;
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [covered]);
+  const dialogOpen = useUi((s) => dialogCovers(s.dialog));
+  const body = useRef<HTMLDivElement>(null);
+  useInert(layout, mode === 'cull' || dialogOpen);
+  useInert(body, editing);
   const shown = focus === null ? undefined : view.assets.get(parseItem(focus).assetId);
 
   // The page title names the view; the Edit view names itself.
   useEffect(() => {
     if (editing) return;
     const name = shown?.fileName ?? 'No photo';
-    const words = mode === 'compare' ? 'Compare' : mode === 'single' ? name : mode === 'cull' ? `${name} – Cull` : title;
+    const words = mode === 'compare' ? 'Compare' : mode === 'single' ? name : mode === 'cull' ? `${name} – Full screen` : title;
     document.title = `${words} – Photonamous`;
   }, [editing, mode, title, shown?.fileName]);
 
@@ -142,6 +137,7 @@ export function LibraryScreen() {
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, []);
 
+  const syncStatus = useSyncStatus();
   let libraryEmpty = true;
   for (const a of view.assets.values()) {
     if (!a.deleted) {
@@ -154,6 +150,8 @@ export function LibraryScreen() {
     <div className={styles.screen}>
       <div ref={layout} className={styles.layout} data-info={infoOpen}>
         <Header />
+        {/* Everything under the header: one element to put out of reach, which the grid lays out as if it were not there. */}
+        <div ref={body} className={styles.body}>
         <Sidebar />
         <main className={styles.main}>
           {libraryEmpty && <h1 className={styles.visuallyHidden}>{title}</h1>}
@@ -166,15 +164,17 @@ export function LibraryScreen() {
               {!libraryEmpty && <GridToolbar orderedIds={orderedIds} />}
               {!libraryEmpty && <FilterBar />}
               {orderedIds.length === 0 ? (
-                <EmptyState libraryEmpty={libraryEmpty} collection={collection} searching={text.trim() !== ''} />
+                <EmptyState libraryEmpty={libraryEmpty} collection={collection} searching={text.trim() !== ''} setup={librarySetup(libraryEmpty, syncStatus)} />
               ) : (
                 <PhotoGrid orderedIds={orderedIds} />
               )}
+              {orderedIds.length > 0 && <ViewBar orderedIds={orderedIds} />}
             </>
           )}
           <ImportStrip />
         </main>
         {infoOpen && <InfoPanel />}
+        </div>
       </div>
       <p className={styles.visuallyHidden} role="status">
         {announcement}
