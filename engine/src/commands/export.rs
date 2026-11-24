@@ -7,7 +7,9 @@
 //! and convert them on the CPU (`lopsy_core::space_convert`) before the
 //! file is encoded, for a composite in sRGB written as Display P3 or
 //! Rec. 2020. With the two spaces the same they write what
-//! `compositor::export_png_16` and `export_tiff_16` write.
+//! `compositor::export_png_16` and `export_tiff_16` write. A document with
+//! the working space on (`setDevelopWorkingSpace`) needs no conversion
+//! here: its output step renders into the file's space.
 
 use lopsy_core::color::ColorSpace;
 
@@ -46,6 +48,13 @@ fn export_16_to(engine: &mut EngineInner, pixels_in: u8, file_in: u8, encode: En
         (Err(e), _) | (_, Err(e)) => return Read::failed(e),
     };
     let (doc_w, doc_h) = (engine.doc_width, engine.doc_height);
+    // With the working space on, the output step renders straight into the
+    // file's space on the GPU, so the composite is already `to` and a
+    // second conversion here would be wrong.
+    if engine.working_space.is_some() {
+        let target = lopsy_core::output::OutputTarget::from_code(file_in).unwrap_or(lopsy_core::output::OutputTarget::Srgb);
+        return compositor::composite_for_export_u16_to(engine, target).and_then(move |pixels| encode(&pixels, doc_w, doc_h, to));
+    }
     compositor::composite_for_export_u16(engine).and_then(move |mut pixels| {
         lopsy_core::space_convert::convert_rgba16(&mut pixels, from, to);
         encode(&pixels, doc_w, doc_h, to)
