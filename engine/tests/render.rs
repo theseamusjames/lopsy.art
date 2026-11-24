@@ -2225,3 +2225,36 @@ fn values_that_are_not_curves_leave_the_old_curves_in_place() {
     assert_eq!(textures_in_use(&engine), baseline, "every curves texture went back to the pool");
     assert_no_gpu_errors();
 }
+
+/// A grade with a balance exponent of 0 and a crossover width of 0 (or
+/// below) draws finite values on the GPU, as the CPU reference does: both
+/// are raised to `lopsy_core::look::MIN_GRADE_SHAPE` when parsed, for the
+/// photo's look and an area's.
+#[test]
+fn a_zero_grade_exponent_or_width_draws_finite_values() {
+    let Some(mut engine) = engine(16, 3) else { return };
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    let rendered = working_space_picture();
+    let min = lopsy_core::look::MIN_GRADE_SHAPE;
+    for (e, w) in [(0.0f32, 0.0f32), (-2.0, 0.2), (1.0, -0.3)] {
+        let mut look = vec![0.0f32; 44];
+        look[26] = 0.1; // shadows red
+        look[36] = -0.05; // global red
+        look[42] = e;
+        look[43] = w;
+        commands::develop::set_develop_look(&mut engine, &look).expect("look");
+        let gpu = gpu_look(&mut engine, &rendered);
+        assert!(gpu.iter().all(|v| v.is_finite()), "exponent {e}, width {w}: {gpu:?}");
+        let g = engine.develop_look.and_then(|l| l.grading).expect("a grade");
+        assert_eq!((g[16], g[17]), (e.max(min), w.max(min)));
+        let mut area = vec![0.0f32; commands::develop::AREA_LOOK_LEN];
+        let n = area.len();
+        area[n - 18] = 0.1;
+        area[n - 2] = e;
+        area[n - 1] = w;
+        commands::develop::set_develop_area_look(&mut engine, 0, &area).expect("area look");
+        let ag = engine.area_layers[0].as_ref().and_then(|a| a.look.as_ref()).and_then(|l| l.settings.grading).expect("an area grade");
+        assert_eq!((ag[16], ag[17]), (e.max(min), w.max(min)));
+    }
+    assert_no_gpu_errors();
+}

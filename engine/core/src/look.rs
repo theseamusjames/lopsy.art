@@ -49,6 +49,10 @@ pub const CURVE_ENTRIES: usize = 4096;
 pub const CURVES_LEN: usize = 4 * CURVE_ENTRIES;
 /// Floats of a colour grade (`setImageColorGrading`'s layout).
 pub const GRADING_LEN: usize = 18;
+
+/// The smallest balance exponent and crossover width (grading values 16
+/// and 17) a grade is given.
+pub const MIN_GRADE_SHAPE: f32 = 1e-3;
 /// Floats in `setDevelopLook`: vibrance, saturation, Color by hue, grading.
 pub const LOOK_LEN: usize = 2 + MIXER_LEN + GRADING_LEN;
 
@@ -157,6 +161,13 @@ impl LookSettings {
         }
         let mut g = [0.0f32; GRADING_LEN];
         g.copy_from_slice(grading);
+        // The balance exponent and the crossover width must be positive:
+        // `pow(0, e)` for e ≤ 0 is undefined on a GPU, and a width of 0
+        // makes the smoothstep divide 0 by 0. Either gives NaN, which the
+        // blurs after the look pass then spread. The CPU reference and the
+        // uniforms both read these parsed values.
+        g[16] = g[16].max(MIN_GRADE_SHAPE);
+        g[17] = g[17].max(MIN_GRADE_SHAPE);
         let has_grade = g[..16].iter().any(|&v| v != 0.0);
         Ok(Self {
             vibrance: vibrance.clamp(-100.0, 100.0),
@@ -401,6 +412,30 @@ mod tests {
         assert!((srgb_encode(out[1]) - 0.9).abs() < 1e-5);
         let e4 = srgb_encode(4.0);
         assert!((srgb_encode(out[2]) - (0.9 + 0.8 * (e4 - 1.0))).abs() < 1e-4);
+    }
+
+    /// A balance exponent of 0 or below and a width of 0 or below are
+    /// raised to `MIN_GRADE_SHAPE` when parsed, for the photo's look and an
+    /// area's, and the grade then gives finite values.
+    #[test]
+    fn a_zero_exponent_or_width_grades_to_finite_values() {
+        for (e, w) in [(0.0, 0.2), (-1.0, 0.2), (1.0, 0.0), (0.0, 0.0), (1.0, -0.5)] {
+            let mut values = [0.0f32; LOOK_LEN];
+            let grading = &mut values[2 + MIXER_LEN..];
+            grading[0] = 0.1;
+            grading[10] = -0.05;
+            grading[16] = e;
+            grading[17] = w;
+            let grading = grading.to_vec();
+            for s in [LookSettings::parse(&values).unwrap(), LookSettings::parse_parts(0.0, 0.0, &[0.0; MIXER_LEN], &grading).unwrap()] {
+                let g = s.grading.expect("a grade");
+                assert_eq!((g[16], g[17]), (e.max(MIN_GRADE_SHAPE), w.max(MIN_GRADE_SHAPE)));
+                for c in [[0.0, 0.0, 0.0], [0.01, 0.02, 0.03], [0.18, 0.18, 0.18], [1.0, 1.0, 1.0], [4.0, 0.5, 0.1]] {
+                    let out = grade_pixel(c, &g);
+                    assert!(out.iter().all(|v| v.is_finite()), "exponent {e}, width {w}: {c:?} gave {out:?}");
+                }
+            }
+        }
     }
 
     #[test]
