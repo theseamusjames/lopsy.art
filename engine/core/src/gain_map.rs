@@ -143,6 +143,28 @@ pub struct GainMap {
     pub metadata: GainMapMetadata,
 }
 
+impl GainMap {
+    /// The map as an 8-bit greyscale PNG. The browser encodes JPEGs from
+    /// pictures it has decoded itself, so the host hands it this file and
+    /// encodes the JPEG from the decoded bitmap, with no pixel work of its
+    /// own.
+    pub fn to_png(&self) -> Result<Vec<u8>, String> {
+        let pixels = (self.width as usize).checked_mul(self.height as usize).ok_or("The gain map is too large")?;
+        if self.rgba.len() != pixels.checked_mul(4).ok_or("The gain map is too large")? {
+            return Err("The gain map's pixels do not match its size".to_string());
+        }
+        let grey: Vec<u8> = self.rgba.chunks_exact(4).map(|px| px[0]).collect();
+        let mut out = Vec::new();
+        let mut encoder = png::Encoder::new(&mut out, self.width, self.height);
+        encoder.set_color(png::ColorType::Grayscale);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header().map_err(|e| e.to_string())?;
+        writer.write_image_data(&grey).map_err(|e| e.to_string())?;
+        writer.finish().map_err(|e| e.to_string())?;
+        Ok(out)
+    }
+}
+
 /// The luminance row (Y of XYZ) of a space with D65 white.
 fn luminance_weights(primaries: &[(f64, f64); 3]) -> [f32; 3] {
     let m = rgb_to_xyz_matrix(primaries, &xy_to_xyz(D65_XY.0, D65_XY.1));
@@ -260,6 +282,26 @@ pub fn compute_gain_map(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_map_as_a_png_decodes_to_its_grey_values() {
+        let map = GainMap {
+            width: 3,
+            height: 2,
+            rgba: [0u8, 40, 80, 120, 200, 255].iter().flat_map(|&v| [v, v, v, 255]).collect(),
+            metadata: GainMapMetadata::from_values(&[0.0, 1.0, 1.0, 1.0 / 64.0, 1.0 / 64.0, 0.0, 1.0]).unwrap(),
+        };
+        let png_bytes = map.to_png().unwrap();
+        let mut reader = png::Decoder::new(std::io::Cursor::new(&png_bytes)).read_info().unwrap();
+        let mut pixels = vec![0u8; reader.output_buffer_size()];
+        let info = reader.next_frame(&mut pixels).unwrap();
+        assert_eq!((info.width, info.height), (3, 2));
+        assert_eq!(info.color_type, png::ColorType::Grayscale);
+        assert_eq!(&pixels[..6], &[0, 40, 80, 120, 200, 255]);
+
+        let wrong = GainMap { rgba: vec![0; 8], ..map };
+        assert!(wrong.to_png().is_err());
+    }
     use crate::colorimetry::{mat_vec, rgb_to_rgb_matrix};
 
     /// What a reader does: SDR decoded to linear in its own primaries, the

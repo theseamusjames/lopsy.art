@@ -13,8 +13,9 @@
 //!    picture as an ordinary screen shows it (8-bit sRGB or Display P3).
 //! 2. Draw the SDR picture on a canvas in its colour space and encode it
 //!    with `convertToBlob({ type: 'image/jpeg' })`: the base JPEG.
-//! 3. Draw `GainMapResult.rgba` (`width`×`height`, grey) on a canvas and
-//!    encode it the same way: the gain map JPEG.
+//! 3. Decode `GainMapResult.toPng()` (`width`×`height`, grey) with
+//!    `createImageBitmap`, draw it on a canvas and encode it the same way:
+//!    the gain map JPEG. (`takeRgba` gives the same pixels raw.)
 //! 4. `assembleGainMapJpeg(base, gainMap, result.metadata, sdrSpace)`
 //!    gives the file.
 
@@ -65,6 +66,16 @@ impl GainMapResult {
     #[wasm_bindgen(js_name = "takeRgba")]
     pub fn take_rgba(&mut self) -> Vec<u8> {
         std::mem::take(&mut self.rgba)
+    }
+
+    /// The gain map as an 8-bit greyscale PNG file, for a host that may not
+    /// handle pixels itself: decode it with `createImageBitmap`, draw it on
+    /// a canvas and encode that as the gain map JPEG. Call it before
+    /// `takeRgba`, which empties the map.
+    #[wasm_bindgen(js_name = "toPng")]
+    pub fn to_png(&self) -> Result<Vec<u8>, JsError> {
+        let map = gain_map::GainMap { width: self.width, height: self.height, rgba: self.rgba.clone(), metadata: self.metadata.clone() };
+        map.to_png().map_err(|e| JsError::new(&e))
     }
 
     /// Seven numbers (a `Float64Array`) to pass to `assembleGainMapJpeg`
