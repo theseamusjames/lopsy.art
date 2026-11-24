@@ -8,7 +8,9 @@ import { applyChanges } from '../../edit/edit-controls';
 import { harnessAsset, harnessVersion } from '../../edit/EditHarness/harness-asset';
 import { pushStep, redoStep, startHistory, undoStep, type RecipeHistory } from '../../edit/EditHarness/recipe-history';
 import { useDocumentTitle } from '../../edit/edit-page';
-import { LOPSY_LAYER_MIME } from '../../engine/develop-engine';
+import { LOPSY_LAYER_MIME } from '../../engine/lopsy-layer';
+import { showErrorToast } from '../../app/toasts';
+import { Toasts } from '../../components/Toasts/Toasts';
 import styles from './GradeScreen.module.css';
 
 interface GradeScreenProps {
@@ -89,38 +91,62 @@ export function GradeScreen({ session, onFinished }: GradeScreenProps) {
     if (!isGrading) headingRef.current?.focus();
   }, [isGrading]);
 
-  const handleCancel = useCallback(() => {
-    session.cancel();
-    setPhase({ kind: 'finished', message: 'Cancelled. The layer in Lopsy is unchanged.' });
-    onFinished();
-  }, [session, onFinished]);
-
   /**
    * Set while Done renders the grade. The Edit view stays mounted until the
    * render has answered: its engine draws it, and on WebGPU the read answers
-   * a frame or more later, after an unmounted view would have freed it.
+   * a frame or more later, after an unmounted view would have freed it. So
+   * Cancel during the render waits for it, and then sends nothing.
    */
-  const isSending = useRef(false);
+  const sending = useRef<Promise<void> | null>(null);
+  const isCancelled = useRef(false);
+
+  const handleCancel = useCallback(() => {
+    if (isCancelled.current) return;
+    isCancelled.current = true;
+    const finish = () => {
+      session.cancel();
+      setPhase({ kind: 'finished', message: 'Cancelled. The layer in Lopsy is unchanged.' });
+      onFinished();
+    };
+    const pending = sending.current;
+    // The render's own handler catches everything, so this always runs.
+    if (pending) void pending.then(finish);
+    else finish();
+  }, [session, onFinished]);
+
   const handleDone = useCallback(
     (renderPng16: () => Promise<ArrayBuffer>, recipe: Recipe) => {
-      if (isSending.current) return;
-      isSending.current = true;
-      renderPng16().then(
-        (png) => {
+      if (sending.current || isCancelled.current) return;
+      const send = async (): Promise<void> => {
+        let png: ArrayBuffer;
+        try {
+          png = await renderPng16();
+        } catch (err) {
+          if (isCancelled.current) return;
+          session.fail(`The grade could not be rendered: ${describe(err)}`);
+          setPhase({ kind: 'failed', message: `The grade could not be rendered: ${describe(err)}` });
+          return;
+        }
+        // Cancel was chosen while the render was out: nothing goes back to Lopsy.
+        if (isCancelled.current) return;
+        try {
           if (!session.done(png, recipeJson(recipe))) {
             // Lopsy has been told why; this tab stays open to say so too.
             setPhase({ kind: 'failed', message: 'The graded layer could not be sent back to Lopsy (it is too large or the wrong size).' });
             return;
           }
-          setPhase({ kind: 'finished', message: 'Sent to Lopsy. You can close this tab.' });
-          onFinished();
-        },
-        (err: unknown) => {
-          isSending.current = false;
-          session.fail(`The grade could not be rendered: ${describe(err)}`);
-          setPhase({ kind: 'failed', message: `The grade could not be rendered: ${describe(err)}` });
-        },
-      );
+        } catch (err) {
+          // The Edit view stays, so Done can be tried again or the grade cancelled.
+          console.error('Photonamous: the grade could not be sent', err);
+          showErrorToast(`The graded layer could not be sent back to Lopsy: ${describe(err)}`);
+          return;
+        }
+        setPhase({ kind: 'finished', message: 'Sent to Lopsy. You can close this tab.' });
+        onFinished();
+      };
+      sending.current = send().finally(() => {
+        sending.current = null;
+      });
     },
     [session, onFinished],
   );
@@ -141,6 +167,7 @@ export function GradeScreen({ session, onFinished }: GradeScreenProps) {
           onDone={handleDone}
           documentTitle={`${phase.layer.name} – Grade – Photonamous`}
         />
+        <Toasts />
       </div>
     );
   }

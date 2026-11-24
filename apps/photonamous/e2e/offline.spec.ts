@@ -95,6 +95,52 @@ test('the engine build the page runs is kept for offline, and only that one', as
   await context.setOffline(false);
 });
 
+test('the Edit view opens offline though no photo was opened since the engine left the cache', async ({ page, context }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: /This browser/ }).click();
+  await expect(page.getByText('Your library is empty')).toBeVisible();
+  await importFiles(page, [{ name: 'update.jpg', buffer: await generatedJpeg(page, 40) }]);
+  await page.getByRole('button', { name: /^All photos/ }).click();
+  await expect(tiles(page)).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /Saved/ })).toBeVisible({ timeout: 30_000 });
+  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
+
+  const cachedWasm = () =>
+    page.evaluate(async () => {
+      const found: string[] = [];
+      for (const name of await caches.keys()) {
+        const cache = await caches.open(name);
+        found.push(...(await cache.keys()).map((request) => new URL(request.url).pathname).filter((path) => path.endsWith('.wasm')));
+      }
+      return found;
+    });
+  // What a new version's cache holds after its install: the shell without either engine build.
+  await page.evaluate(async () => {
+    for (const name of await caches.keys()) {
+      const cache = await caches.open(name);
+      for (const request of await cache.keys()) if (request.url.endsWith('.wasm')) await cache.delete(request);
+    }
+  });
+  expect(await cachedWasm()).toEqual([]);
+  // A fresh worker, as after the browser stopped the idle one, so nothing it remembers stands in for the cache.
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('ServiceWorker.enable');
+  await cdp.send('ServiceWorker.stopAllWorkers');
+
+  // The page starts on the library and no photo is opened: the engine's wasm is kept all the same.
+  await page.reload();
+  await expect(tiles(page)).toHaveCount(1, { timeout: 30_000 });
+  await expect.poll(cachedWasm, { timeout: 30_000 }).toHaveLength(1);
+
+  await context.setOffline(true);
+  await page.reload();
+  await expect(tiles(page)).toHaveCount(1, { timeout: 30_000 });
+  await tiles(page).first().click();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('edit-view')).toHaveAttribute('data-status', 'ready', { timeout: 60_000 });
+  await context.setOffline(false);
+});
+
 test('a cached file that another script on the origin changed is not served', async ({ page, context }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Photonamous' })).toBeVisible();

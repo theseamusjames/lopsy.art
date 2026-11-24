@@ -824,3 +824,18 @@ refuses them from the glue. In dev, `performance` resource entries ending
 downloads of the wasm. Edits under `apps/photonamous/src` or its Vite
 config while a Playwright run is going reload or restart its dev server
 and fail tests at random: wait for the run to end.
+
+## Decoding a Display P3 PNG for a P3 canvas
+In Chromium, `createImageBitmap(p3Png)` with the default
+`colorSpaceConversion` keeps the file's P3 colours when the bitmap is drawn
+into a `display-p3` canvas (checked for an 8-bit iCCP PNG and a 16-bit cICP
+PNG: P3 red stays 255, 0, 0). `colorSpaceConversion: 'none'` is wrong
+there: the numbers are taken as sRGB and converted (P3 red became 234, 51,
+35). Keep 'none' for data that is not colour, such as the gain map.
+
+## Photonamous' screen-only views and reads
+With the working space, `sampleColor`, `readDevelopHistogram` and
+`readHdrHistogram` read the kept rendered image, taken before the area
+overlay and the clipping warning are drawn, so they need no views-off scope.
+The sharpening mask view is drawn inside the live develop chain, before the
+image is kept, so it does reach those reads.

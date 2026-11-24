@@ -81,6 +81,7 @@ import { useGrainSeed } from '../grain-seed';
 import { useAltDragViews } from '../alt-drag-views';
 import { editPageTitle, useDocumentTitle, useFocusKept, useFocusOnOpen, useFocusReturn } from '../edit-page';
 import { useEditSizes } from './use-edit-sizes';
+import { CoalescedReads } from './coalesced-reads';
 import styles from './EditView.module.css';
 import { NO_INSETS } from '../../engine/viewport';
 
@@ -366,16 +367,23 @@ export function EditView({
   // With the HDR view on an HDR canvas the histogram draws the HDR rendering, white marked; otherwise the ordinary one.
   const engineStatus = useSyncExternalStore(onStatusChange, currentStatus);
   const isHdrHistogram = showsHdr(engineStatus);
+  // One histogram read in flight at most: commits that land while one is out are read once, after it.
+  const histogramReads = useRef<CoalescedReads | null>(null);
   useEffect(() => {
     if (!engine || !canEdit || draft) return;
     let isCancelled = false;
+    const reads = (histogramReads.current ??= new CoalescedReads());
     const timer = setTimeout(() => {
-      const read = isHdrHistogram ? engine.readHdrHistogram() : engine.readHistogram();
-      read
-        .then((bins) => {
+      reads.request(async () => {
+        // A newer state's read has replaced this one; nothing to read for it.
+        if (isCancelled) return;
+        try {
+          const bins = await (isHdrHistogram ? engine.readHdrHistogram() : engine.readHistogram());
           if (!isCancelled && bins) setHistogram({ bins, hdrWhiteBin: isHdrHistogram ? engine.hdrWhiteBin() : null });
-        })
-        .catch((err: unknown) => console.warn('Photonamous: the histogram could not be read', err));
+        } catch (err) {
+          console.warn('Photonamous: the histogram could not be read', err);
+        }
+      });
     }, HISTOGRAM_DELAY_MS);
     return () => {
       isCancelled = true;

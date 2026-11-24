@@ -34,6 +34,12 @@ function start(): void {
   );
 
   registerServiceWorker();
+  // The build this page runs is chosen at start-up, so the worker keeps its wasm even if no photo is opened before going offline.
+  if (import.meta.env.PROD) {
+    import('./engine/develop-engine')
+      .then((engine) => engine.prepareEngineForOffline())
+      .catch((err: unknown) => console.warn('Photonamous: the engine could not be prepared for offline use', err));
+  }
 }
 
 // The pop-up of Add from Google Drive, back from Google: it reports what was picked and closes. No app in it.

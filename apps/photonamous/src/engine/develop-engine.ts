@@ -79,6 +79,7 @@ import initWasm, {
   setDevelopHdr,
   screenIsHdr,
   encodePqPng,
+  engineId,
   computeGainMap,
   assembleGainMapJpeg,
   hdrHistogramWhiteBin,
@@ -144,6 +145,11 @@ import { cropPixels, inverseRotation, isFullCrop, rotatedBounds, straightenedCro
 import { detailKey, detailValues, localContrastValues } from './detail-controls';
 import { finishKey, finishValues } from './finish-controls';
 import { renderCounts, type RenderKind } from './render-counts';
+import { ScreenViews } from './screen-views';
+import { UpgradeSlot } from './upgrade-slot';
+import { LOPSY_LAYER_MIME } from './lopsy-layer';
+
+export { LOPSY_LAYER_MIME };
 import { areaLayerKey, areaLayerValues, areaValues, linearAreaLayerKey, linearAreaLayerValues, type AreaFrame } from './areas';
 import { developPathFor, developStages, type DevelopPath, type LegacyStages, type LinearStages } from './develop-stages';
 import { NO_INSETS, clampZoom, fitView, limitSize, panBy, zoomAround, type Insets, type Size, type View } from './viewport';
@@ -155,8 +161,11 @@ export { DecodeAbortedError };
 
 declare global {
   interface Window {
-    /** Development builds: the build the last engine started on, and a way to lose its GPU, for e2e tests. */
-    __photonamousEngine?: { rendererName: () => Renderer; loseDevice: () => boolean };
+    /**
+     * Development builds: the build the last engine started on, a way to lose its GPU, and whether it is
+     * the Edit view's (not an export or preview engine's), for e2e tests.
+     */
+    __photonamousEngine?: { rendererName: () => Renderer; loseDevice: () => boolean; isScreen: boolean };
   }
 }
 
@@ -322,19 +331,21 @@ export interface DevelopEngine {
 
 /**
  * The window event the wgpu engine raises when its device is lost
- * (engine/hosts/wasm/src/lib.rs). It does not say which engine's: every
- * wgpu engine in the page takes it as its own. A WebGL canvas fires
- * `webglcontextlost` itself.
+ * (engine/hosts/wasm/src/lib.rs). Its `detail.engineId` says which
+ * engine's (`engineId`); an event without one is taken by every wgpu
+ * engine as its own. A WebGL canvas fires `webglcontextlost` itself.
  */
 export const GPU_LOST_EVENT = 'lopsy-gpu-lost';
 
-/**
- * The MIME type of a Lopsy layer handed over to be graded: the engine's
- * 16-bit layer blob (`readLayerPixelsLz4U16`), uploaded as it is. It loads
- * through the non-RAW pipeline with a transparent background, so the
- * layer's transparency survives the grade.
- */
-export const LOPSY_LAYER_MIME = 'application/x-lopsy-layer16';
+/** The engine a lost-device event names; null when it names none. */
+export function lostEngineId(event: Event): number | null {
+  if (!(event instanceof CustomEvent)) return null;
+  const detail: unknown = event.detail;
+  if (typeof detail !== 'object' || detail === null || !('engineId' in detail)) return null;
+  const id: unknown = detail.engineId;
+  return typeof id === 'number' ? id : null;
+}
+
 
 /** Largest Lopsy layer the engine loads, at 8 bytes a pixel (the handoff's own limit too). */
 const MAX_LOPSY_LAYER_BYTES = 1024 * 1024 * 1024;
@@ -424,6 +435,22 @@ function ensureWasm(): Promise<unknown> {
   return wasmReady;
 }
 
+/**
+ * Chooses the build this page load runs and initializes it, ahead of any
+ * engine, so the service worker is asked at start-up to keep that build's
+ * wasm. The install leaves both builds out (scripts/vite-plugin-service-worker.ts),
+ * so without this a new version activated while the user stays on the
+ * library has no engine to start the Edit view with once offline.
+ * Production builds only, where the worker exists.
+ */
+export function prepareEngineForOffline(): Promise<void> {
+  if (!import.meta.env.PROD) return Promise.resolve();
+  return ensureWasm().then(
+    () => undefined,
+    (err: unknown) => console.warn('Photonamous: the engine could not be prepared for offline use', err),
+  );
+}
+
 function layerDesc(id: string, width: number, height: number, isVisible: boolean, x = 0, y = 0): string {
   return JSON.stringify({
     id,
@@ -504,7 +531,10 @@ async function changeToWebgl(): Promise<boolean> {
   markWgpuFailed();
   await Promise.allSettled([...wgpuStarts]);
   if (hasStartedWgpu) return false;
-  return fallBackToWebgl();
+  const changed = await fallBackToWebgl();
+  // The page runs the WebGL build from now on: that one's wasm is what offline use needs.
+  if (changed) keepForOffline(wasmUrlFor(rendererName()));
+  return changed;
 }
 
 /**
@@ -555,16 +585,31 @@ export interface DevelopEngineOptions {
  */
 export async function createDevelopEngine(canvas: HTMLCanvasElement, options: DevelopEngineOptions = {}): Promise<DevelopEngine> {
   const engine = await startEngine(canvas);
-  setBackgroundColor(engine, 0, 0, 0, 1);
-  const hasFloat = hasFloatTargets(canvas);
-  // Set once for the engine's life, before the first render. Photos that are
-  // not RAW reach the engine as sRGB: the browser's decode into an sRGB 2D
-  // canvas converts them, and the engine's PNG and DNG decoders and a Lopsy
-  // layer give sRGB-encoded values. On an 8-bit pool linear data would band,
-  // so there the working space stays off (plan section 5, decision 9).
-  setDevelopWorkingSpace(engine, hasFloat, SRGB);
-  noteEngineStarted(hasFloat);
-  return new PhotoEngine(engine, canvas, hasFloat, options.isScreen === true);
+  try {
+    setBackgroundColor(engine, 0, 0, 0, 1);
+    const hasFloat = hasFloatTargets(canvas);
+    // Set once for the engine's life, before the first render. Photos that are
+    // not RAW reach the engine as sRGB: the browser's decode into an sRGB 2D
+    // canvas converts them, and the engine's PNG and DNG decoders and a Lopsy
+    // layer give sRGB-encoded values. On an 8-bit pool linear data would band,
+    // so there the working space stays off (plan section 5, decision 9).
+    setDevelopWorkingSpace(engine, hasFloat, SRGB);
+    noteEngineStarted(hasFloat);
+    return new PhotoEngine(engine, canvas, hasFloat, options.isScreen === true);
+  } catch (err) {
+    // Nothing else holds the engine yet: freed here, or its GPU device would stay with the page.
+    freeQuietly(engine);
+    throw err;
+  }
+}
+
+/** Frees an engine whose start failed; a second failure while freeing it must not hide the first. */
+function freeQuietly(engine: Engine): void {
+  try {
+    engine.free();
+  } catch (err) {
+    console.warn('Photonamous: an engine that failed to start could not be freed', err);
+  }
 }
 
 class PhotoEngine implements DevelopEngine {
@@ -603,8 +648,18 @@ class PhotoEngine implements DevelopEngine {
   private areaLayerKeys: readonly string[] = [];
   /** The area the Edit view asks to show in red; it shows while no read holds the screen-only views off. */
   private overlayAreaId: string | null = null;
-  /** Reads under way with the screen-only views off (withScreenViewsOff). */
-  private screenReads = 0;
+  /** The clipping warning and the sharpening mask view, held off while any read that draws the frame is out. */
+  private readonly views = new ScreenViews({
+    send: ({ shadows, highlights, detailMask }) => {
+      if (this.isDisposed) return;
+      engineSetClippingWarning(this.engine, shadows, highlights);
+      setImageDetailMaskView(this.engine, detailMask);
+      this.invalidate();
+    },
+    holdChanged: () => {
+      if (!this.isDisposed) this.applyAreas();
+    },
+  });
   /** The working image's width over the full image's: 1 at full resolution. */
   private pixelScale = 1;
   /** The document and layer placement last pushed, to skip unchanged layouts. */
@@ -626,8 +681,7 @@ class PhotoEngine implements DevelopEngine {
   private cssSize: Size = { width: 0, height: 0 };
   private pixelRatio = 1;
   private loadAbort: AbortController | null = null;
-  private upgradeAbort: AbortController | null = null;
-  private upgrade: Promise<void> | null = null;
+  private readonly upgrade = new UpgradeSlot();
   /** The original, kept to load the full size on demand. */
   private loaded: { source: Blob; format: ImageFormat } | null = null;
   /** The full image's oriented size, before framing. */
@@ -649,11 +703,16 @@ class PhotoEngine implements DevelopEngine {
   private readonly stopDisplay: () => void;
 
   private hasLostGpu = false;
+  /** The engine's id in the page, which a lost-device event names (`lostEngineId`). */
+  private readonly id: number;
   private readonly lostListeners = new Set<() => void>();
   private readonly handleGpuLost = (event: Event) => {
     // Lets the browser restore the WebGL context, which the Edit view waits for.
     if (event.type === 'webglcontextlost') event.preventDefault();
     if (this.hasLostGpu || this.isDisposed) return;
+    // Another engine's device: the export and preview engines have their own.
+    const lost = lostEngineId(event);
+    if (lost !== null && lost !== this.id) return;
     this.hasLostGpu = true;
     for (const listener of [...this.lostListeners]) listener();
     this.lostListeners.clear();
@@ -661,6 +720,7 @@ class PhotoEngine implements DevelopEngine {
 
   constructor(engine: Engine, canvas: HTMLCanvasElement, hasFloat: boolean, isScreen: boolean) {
     this.engine = engine;
+    this.id = engineId(engine);
     this.canvas = canvas;
     this.hasFloat = hasFloat;
     this.isScreen = isScreen;
@@ -675,7 +735,7 @@ class PhotoEngine implements DevelopEngine {
     });
     if (rendererName() === 'wgpu') window.addEventListener(GPU_LOST_EVENT, this.handleGpuLost);
     else canvas.addEventListener('webglcontextlost', this.handleGpuLost);
-    if (import.meta.env.DEV) window.__photonamousEngine = { rendererName, loseDevice: () => this.loseDevice() };
+    if (import.meta.env.DEV) window.__photonamousEngine = { rendererName, loseDevice: () => this.loseDevice(), isScreen };
     this.resizeObserver = new ResizeObserver((entries) => this.handleResize(entries));
     try {
       this.resizeObserver.observe(canvas, { box: 'device-pixel-content-box' });
@@ -689,7 +749,8 @@ class PhotoEngine implements DevelopEngine {
 
   async load(source: Blob, format: ImageFormat, onProgress?: (progress: LoadProgress) => void, options: LoadOptions = {}): Promise<Size> {
     this.loadAbort?.abort();
-    this.upgradeAbort?.abort();
+    // The old photo's full-size load ends here: a full-size request for the new photo starts its own.
+    this.upgrade.cancel();
     const abort = new AbortController();
     this.loadAbort = abort;
     const report = (stage: LoadProgress['stage'], fraction: number | null) => {
@@ -726,27 +787,22 @@ class PhotoEngine implements DevelopEngine {
 
   ensureFullResolution(): Promise<void> {
     if (this.isFullResolution() || !this.loaded || !this.sourceSize) return Promise.resolve();
-    if (this.upgrade) return this.upgrade;
-    const abort = new AbortController();
-    this.upgradeAbort = abort;
+    const running = this.upgrade.current();
+    if (running) return running;
     const { source, format } = this.loaded;
-    const run = async () => {
-      try {
-        if (format === 'raf') await this.decodeRaf(source, abort.signal, () => undefined, 'upgrade');
-        else await this.upgradeImage(source, abort.signal, format);
-      } finally {
-        if (this.upgradeAbort === abort) this.upgradeAbort = null;
-        this.upgrade = null;
-        for (const listener of this.viewListeners) listener(this.view);
-      }
+    const notify = () => {
+      for (const listener of this.viewListeners) listener(this.view);
     };
-    this.upgrade = run();
-    for (const listener of this.viewListeners) listener(this.view);
-    return this.upgrade;
+    const upgrade = this.upgrade.start(async (signal) => {
+      if (format === 'raf') await this.decodeRaf(source, signal, () => undefined, 'upgrade');
+      else await this.upgradeImage(source, signal, format);
+    }, notify);
+    notify();
+    return upgrade;
   }
 
   isLoadingFullResolution(): boolean {
-    return this.upgrade !== null;
+    return this.upgrade.isRunning();
   }
 
   private async decode(
@@ -1217,7 +1273,7 @@ class PhotoEngine implements DevelopEngine {
     if (!frame) return;
     const out = areaValues(this.recipe, frame);
     // A read under way keeps the overlay off; the last one to end shows what was asked for meanwhile.
-    const overlay = this.screenReads > 0 ? null : this.overlayAreaId;
+    const overlay = this.views.isHeld() ? null : this.overlayAreaId;
     // Each area's own layer (its further effects), by its place among the areas.
     const layerOptions = { pixelScale: this.pixelScale, grainSeed: this.grainSeedValue, isInteractive: this.isInteractive };
     const areas = out ? liveAreas(this.recipe) : [];
@@ -1308,53 +1364,37 @@ class PhotoEngine implements DevelopEngine {
     this.invalidate();
   }
 
-  private clippingWarning = { shadows: false, highlights: false };
   private grainSeedValue = 0;
   private finishKeyApplied: string | null = null;
 
-  private isDetailMaskView = false;
-
   setDetailMaskView(on: boolean): void {
-    this.isDetailMaskView = on;
-    if (this.isDisposed) return;
-    setImageDetailMaskView(this.engine, on);
-    this.invalidate();
+    this.views.set({ detailMask: on });
   }
 
   /**
    * Runs `work` with the screen-only views (clipping warning, sharpening
-   * mask, the selected mask's red overlay) off, for anything that reads the
-   * rendered frame: exports and previews draw it, and the histogram and
-   * Auto tone count it. The overlay stays off until the last read ends,
-   * even when the Edit view shows or hides it meanwhile (it does on a
-   * timer), and then follows the last request. Costs nothing while no view
-   * is on.
+   * mask, the selected mask's red overlay) off, for anything that draws or
+   * counts the rendered frame: exports and previews draw it, and on the
+   * legacy path the histogram, the readout and Auto tone count it. Reads
+   * overlap, so the views come back only when the last one ends, and then
+   * as last asked for (screen-views.ts). Costs nothing while no view is on.
    */
-  private async withScreenViewsOff<T>(work: () => Promise<T>): Promise<T> {
-    const { shadows, highlights } = this.clippingWarning;
-    const isMask = this.isDetailMaskView;
-    const isOverlay = this.overlayAreaId !== null;
-    const isAnyOn = shadows || highlights || isMask || isOverlay;
-    this.screenReads += 1;
-    if (isAnyOn) {
-      this.isFrameCurrent = false;
-      if (shadows || highlights) engineSetClippingWarning(this.engine, false, false);
-      if (isMask) setImageDetailMaskView(this.engine, false);
-      if (isOverlay) this.applyAreas();
-    }
-    try {
-      return await work();
-    } finally {
-      this.screenReads -= 1;
-      if (!this.isDisposed) {
-        if (isAnyOn) {
-          engineSetClippingWarning(this.engine, this.clippingWarning.shadows, this.clippingWarning.highlights);
-          setImageDetailMaskView(this.engine, this.isDetailMaskView);
-          this.invalidate();
-        }
-        if (this.screenReads === 0 && (isOverlay || this.overlayAreaId !== null)) this.applyAreas();
-      }
-    }
+  private withScreenViewsOff<T>(work: () => Promise<T>): Promise<T> {
+    return this.views.hold(work);
+  }
+
+  /**
+   * As `withScreenViewsOff`, for the readout and the histograms. With the
+   * working space they read the kept rendered image through an sRGB (or
+   * HDR) output of their own, taken before the area overlay and the
+   * clipping warning are drawn, so those need not be turned off and the
+   * screen's frame is not drawn without them. The sharpening mask view is
+   * drawn into the rendered image itself (the engine's live sharpening
+   * pass), so while it is on the views are held off as on the legacy path.
+   */
+  private withStatisticsViewsOff<T>(work: () => Promise<T>): Promise<T> {
+    if (this.path === 'linear' && !this.views.wanted().detailMask) return work();
+    return this.views.hold(work);
   }
 
   setGrainSeed(seed: number): void {
@@ -1377,10 +1417,7 @@ class PhotoEngine implements DevelopEngine {
   }
 
   setClippingWarning(shadows: boolean, highlights: boolean): void {
-    this.clippingWarning = { shadows, highlights };
-    if (this.isDisposed) return;
-    engineSetClippingWarning(this.engine, shadows, highlights);
-    this.invalidate();
+    this.views.set({ shadows, highlights });
   }
 
   setInteractive(isInteractive: boolean): void {
@@ -1475,9 +1512,9 @@ class PhotoEngine implements DevelopEngine {
   async sampleAt(x: number, y: number): Promise<readonly [number, number, number] | null> {
     const size = this.imageSize();
     if (!size || this.isDisposed || x < 0 || y < 0 || x >= size.width || y >= size.height) return null;
-    // One pixel of the composite, which holds the developed, adjusted image:
-    // the photo, not the clipping colours, the sharpening mask or a mask's red.
-    return this.withScreenViewsOff(async () => {
+    // One pixel of the developed, adjusted image: the photo, not the
+    // clipping colours, the sharpening mask or a mask's red.
+    return this.withStatisticsViewsOff(async () => {
       this.renderFrameNow();
       const rgba: unknown = await sampleColor(this.engine, Math.floor(x), Math.floor(y), 1);
       if (!(rgba instanceof Uint8Array) || rgba.length < 3) return null;
@@ -1495,7 +1532,7 @@ class PhotoEngine implements DevelopEngine {
   }
   async readHdrHistogram(): Promise<Uint32Array | null> {
     if (!this.sourceSize || this.isDisposed || !this.hasFloat) return null;
-    return this.withScreenViewsOff(async () => {
+    return this.withStatisticsViewsOff(async () => {
       this.renderFrameNow();
       const bins: unknown = await readHdrHistogram(this.engine, HDR_PEAK);
       return bins instanceof Uint32Array && bins.length === 1024 ? bins : null;
@@ -1509,7 +1546,7 @@ class PhotoEngine implements DevelopEngine {
   async readHistogram(): Promise<Uint32Array | null> {
     if (!this.sourceSize || this.isDisposed) return null;
     // The histogram counts the photo, not the clipping colours or the sharpening mask.
-    return this.withScreenViewsOff(async () => {
+    return this.withStatisticsViewsOff(async () => {
       this.renderFrameNow();
       renderCounts.histogramReads += 1;
       const bins: unknown = await readDevelopHistogram(this.engine);
@@ -1941,7 +1978,7 @@ class PhotoEngine implements DevelopEngine {
     this.canvas.removeEventListener('webglcontextlost', this.handleGpuLost);
     this.lostListeners.clear();
     this.loadAbort?.abort();
-    this.upgradeAbort?.abort();
+    this.upgrade.cancel();
     this.resizeObserver.disconnect();
     if (this.frameRequest !== null) cancelAnimationFrame(this.frameRequest);
     this.viewListeners.clear();

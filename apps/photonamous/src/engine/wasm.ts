@@ -50,9 +50,14 @@ const readbacks = createReadbackQueue<Engine>(resumeTask, isFreed);
  * so it need not wait its turn.
  */
 export const sampleColor = readbacks.asyncReadback(rawSampleColor, 'any-time');
-/** The histogram (4 × 256 bins) of the composite as last rendered. */
-export const readDevelopHistogram = readbacks.asyncReadback(rawReadDevelopHistogram);
-export const sampleNeutralWhiteBalance = readbacks.asyncReadback(rawSampleNeutralWhiteBalance);
+/**
+ * The histogram (4 × 256 bins) of the composite as last rendered. It
+ * changes nothing in the document, so it need not wait its turn (the
+ * engine's doc comment says to wrap it with 'any-time').
+ */
+export const readDevelopHistogram = readbacks.asyncReadback(rawReadDevelopHistogram, 'any-time');
+/** The white balance picker's answer. It reads the source and changes nothing, so it need not wait its turn. */
+export const sampleNeutralWhiteBalance = readbacks.asyncReadback(rawSampleNeutralWhiteBalance, 'any-time');
 /**
  * Auto tone's scene statistics (8 floats). It renders a live frame of the
  * engine's current state and changes nothing in the document, so it need
@@ -75,3 +80,12 @@ export const exportTiff16 = readbacks.asyncReadback(rawExportTiff16);
 export function parkedReadbackCount(): number {
   return readbacks.parkedCount();
 }
+
+declare global {
+  interface Window {
+    /** Development builds: `parkedReadbackCount`, for e2e tests that act while a read is out. */
+    __photonamousParkedReads?: () => number;
+  }
+}
+
+if (import.meta.env.DEV && typeof window !== 'undefined') window.__photonamousParkedReads = parkedReadbackCount;
