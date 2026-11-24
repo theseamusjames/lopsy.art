@@ -659,6 +659,16 @@ was.
   container (`assembleGainMapJpeg`) in `lopsy-core`. Not yet wired to
   the export dialog.
 
+- **Phase 1, items 1, 2 and 5**: WebGPU by default with WebGL in the
+  same page load when no adapter is offered or the wgpu engine fails
+  to start; every read awaited; lost-device recovery; one wasm
+  downloaded, not two; the browser suite runs on either renderer
+  (`PHOTONAMOUS_RENDERER=webgl` for WebGL).
+- **Phase 3, engine**: tone on scene data in stops
+  (`engine/core/src/scene_tone.rs`), colour in OkLab, Color by hue,
+  colour grading and curves on linear data in one look pass, masks on
+  the new maths, Auto tone from scene statistics.
+
 ### Decided
 
 1. **The work that was uncommitted when the run began was committed
@@ -712,3 +722,33 @@ was.
     reads every field back under the right name and rebuilds the HDR
     picture; Chrome and Android are untested. **Needs a person with an
     HDR display.**
+16. **A wgpu engine that fails to start falls back to WebGL in the
+    same page**, without a reload (the plan said next load, as Lopsy
+    does). The tab remembers it in sessionStorage; the Privacy Policy
+    says so.
+17. **The renderer selector is shared by options on Lopsy's plugin**,
+    not by a new workspace package (which would have meant an npm
+    install). Photonamous reaches it through an alias into
+    `lopsy-web`.
+18. **The tone map is six knots in stops** (blacks −5.5, shadows −2.5,
+    middle grey, highlights +1.5, white, white + 3) joined by a
+    monotone cubic. Slider strengths are first guesses, named at the
+    top of `scene_tone.rs`: Highlights −100 pulls white down 1.2 stops
+    and three stops above white down 3.2; Shadows +100 lifts shadows
+    1.2; Whites and Blacks move their ends by 1 to 2 stops; Contrast
+    ±100 changes the slope by ×1.32 or ×0.76. **To be tuned by eye.**
+19. **Temperature and Tint on a photo that is not RAW, and on a
+    mask, now have the RAW step's strengths** (0.6 and 0.4 stops at
+    ±100). Masks were weaker before (0.3 and 0.25).
+20. **A mask's sliders add to the photo's own with no cap**; the tone
+    map stays monotonic whatever the total.
+21. **Vibrance at +100 doubles a grey-ish colour's chroma** and fades
+    out by OkLab chroma 0.2; Saturation −100 is exactly grey.
+22. **Color by hue no longer stops at the sRGB gamut edge**; the
+    output step maps the gamut. This is most of why the golden set
+    with colour edits moved (median cell 458 to 2191 of 65535).
+23. **8-bit exports and Flatten now include tone and colour.** They
+    used to skip Lopsy's adjustment pass; for Photonamous those
+    adjustments are now part of the develop chain proper.
+24. **Auto tone sets Exposure, Whites, Highlights, Blacks and
+    Shadows, and leaves Contrast alone.** Pressing it twice converges.
