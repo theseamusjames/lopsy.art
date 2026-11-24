@@ -857,18 +857,32 @@ was.
     hue/saturation maps, the profile's tone curve, DefaultCrop,
     highlight reconstruction. Files the new path cannot take fall back
     to today's decode with a reason.
-44. **HDR exports are always full size**, as TIFF is: the engine's
-    HDR and SDR reads are at the document's own size, and a resized
-    export is a canvas copy. Resized HDR files need engine reads at an
-    output size.
+44. **HDR exports take the Size choices, smaller but never larger
+    than the photo.** At the original size they are made as before. At
+    a smaller size the engine's sized reads (`readHdrOutputF32Sized`,
+    `compositeForExportSized`) reduce the rendered image on the GPU
+    before the output step, so the PQ PNG and the gain map's SDR picture
+    are the same picture at that size; neither read enlarges, so Don't
+    enlarge is not offered for HDR and a smaller photo stays at its own
+    size. The gain-map JPEG's base is still the ordinary sRGB JPEG
+    export at that size, a canvas copy, since the engine has no encoder
+    for an RGBA8 picture: measured against `compositeForExportSized` on
+    DSCF8005 and DSCF7795, the mean difference is 0.75 and 0.95 8-bit
+    steps at a 2000 px long edge and 0.52 and 0.64 at 3000 px (the same
+    on WebGPU and WebGL), with isolated pixels at fine detail up to 119
+    steps apart (0.1 to 2.5 % of values more than 4 steps apart). That
+    is within the JPEG's own error on average; an engine encoder for the
+    RGBA8 picture would make the base exactly the gain map's picture.
 45. **The HDR switch is on by default and kept only for the session**
     (nothing stored). No keyboard shortcut.
 46. **An HDR export is allowed for any photo**, including one with
     nothing above white: the file simply has no headroom.
 47. **The gain-map JPEG's base is the ordinary sRGB JPEG export**, and
     one quality setting covers the base and the map.
-48. **Auto tone moves Exposure by at most 2 EV a press.** A very dark
-    photo therefore needs two presses; the cap is `AUTO_MAX_EV` in
+48. **Auto tone moves Exposure by up to 4 EV a press**, and by 2 EV
+    when the frame cannot be measured reliably, so a photo within four
+    stops of the target converges in one press. The caps are
+    `AUTO_MAX_EV` and `AUTO_GUARDED_MAX_EV` in
     `engine/core/src/scene_stats.rs`.
 49. **Checked on this Mac's own GPU and display** (not only the tests'
     software renderer): a RAF renders the same on WebGPU and WebGL with
@@ -889,28 +903,51 @@ was.
     production**, not at the first photo, so the app works offline
     straight after an update. The cost is the engine's download and
     compile on every start, photo or not.
-53. **The histogram and pixel readout include the sharpening mask view
-    while it is held** (it takes the sharpening stage's place in the
-    chain); the app turns it off around those reads. The engine's doc
-    comments now say so.
+53. **The histogram and pixel readout read the photo while the
+    sharpening mask view is held.** The view takes the sharpening
+    stage's place in the chain, and the engine's `readDevelopHistogram`,
+    `readHdrHistogram` and `sampleColor` read the photo under it (their
+    doc comments say so), so on the linear path the app no longer turns
+    any view off around those reads; the legacy path still does.
 54. **Three of Lopsy's composition specs fail, and failed before this
     work** (`composition-export-roundtrip`, `composition-painting`,
     `composition-zen-enclaves`): they fail identically on the commit
     the run started from. Not touched.
 
+55. **Speed was measured on this Mac's GPU (M4 Max), new chain against
+    old in the same build** (`?develop=legacy`, development builds
+    only; `e2e/edit-speed.spec.ts`, `PHOTONAMOUS_GPU=hardware`). A
+    slider drag's frame at working size takes 5 to 11 ms on the new
+    chain, inside 60 fps, and 1.3 to 1.9 times the old chain. Zoomed to
+    100% on a 40-megapixel photo the whole chain takes 56 ms on WebGPU
+    and 87 ms on WebGL (old: 29 and 47), because every pass renders
+    the whole image, not the visible part. **That is the one speed
+    problem left**; the numbers are in
+    `samples/linear-pipeline-review/speed.md`.
+56. **16-bit TIFF export was 23 to 25 s in the browser, on the old
+    chain too**: Deflate at its default level. It now uses the fast
+    level in 1 MB strips (natively 1.2 s instead of 10.2 s for 40
+    megapixels; the file decodes to the same samples and is 5% to 27%
+    larger). libtiff and macOS ImageIO read it back exactly. Not timed
+    again in the browser.
+57. **HDR exports use up to 7 GB across the browser's processes** on a
+    40-megapixel photo at full size. A smaller size is now offered
+    (decision 44).
+
 ### Verified at the end
 
-- Engine: `cargo test`, the native GPU suite (62 render, 9 HDR, 2
+- Engine: `cargo test`, the native GPU suite (62 render, 17 HDR, 2
   golden tests on the eight sample RAFs), both wasm targets, and all
   118 shaders in Chromium's WebGPU validator.
-- Photonamous browser suite: 165 passed on WebGPU and 163 on WebGL;
+- Photonamous browser suite: 170 passed on WebGPU and 168 on WebGL;
   the only failures are the three known before the run (`a11y-edit`
   "holding \ for Before", `export-share.drive`, and on WebGL
   `edit-in-app` "Loading…").
 - The production-site tests (service worker, offline, CSP): 15 passed.
   The Lopsy round trip: passed on both renderers. Storybook builds.
 - Lopsy: type-check, lint, 3293 unit tests, and its browser specs that
-  touch the engine.
+  touch the engine, on WebGL (136 tests; only the three of decision
+  54 fail) and on its WebGPU build (93 passed).
 - By eye, on this Mac's GPU and HDR display: a RAF in the Edit view on
   WebGPU and on WebGL; the HDR canvas configuration.
 
@@ -921,11 +958,15 @@ was.
 - **DNGs in the app**: the engine can develop a DNG as a RAW photo,
   but the app still edits one as before (decisions 42 and 43).
 - **AVIF, 10-bit PQ** (Phase 7): needs an encoder the browser lacks.
-- **Resized HDR exports, and a Display P3 base for the gain-map JPEG.**
+- **A Display P3 base for the gain-map JPEG**, and a resized gain-map
+  JPEG whose base is exactly the engine's sized SDR picture (decision
+  44: it needs an engine encoder for an RGBA8 picture). Resized HDR
+  exports themselves are done.
 - **The golden renders in CI**: they need the sample RAF files and a
   software GPU there; the tolerance is unmeasured on one.
 - **A Bayer RAF's pattern from the file** (decision 39), and the white
   level from a file tag (decision 26).
-- **Speed** has not been measured against the old chain.
+- **Frames at 100% on a full-resolution photo** miss 30 fps
+  (decision 55): the chain needs to render the visible part only.
 - **Saving the pipeline version** with edits and previews: before
   launch, as section 4 says.
