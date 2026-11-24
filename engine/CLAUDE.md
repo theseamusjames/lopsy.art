@@ -42,7 +42,7 @@ engine/
     cli/            # lopsy-cli: the `lopsy` binary, the engine on a native GPU with no browser
   Cargo.toml        # The workspace, and the lopsy-engine crate
   build.rs          # Translates the shaders and embeds the built-in brushes
-  tests/            # Render tests on a native GPU (`--features native`)
+  tests/            # Render tests and golden renders on a native GPU (`--features native`)
   src/              # lopsy-engine: the engine. No #[wasm_bindgen] anywhere
     commands/         # What a host can ask for: plain Rust in, Result<_, String> out
     host.rs           # Logging, clock and "the GPU is gone", installed by the host
@@ -132,9 +132,38 @@ JS API, and the deviations from `docs/photonamous-spec.md` 6.10. Rules:
 - Screen-only views (overlays, clipping warning, mask view) run only in the
   live `compositor::composite`, never on an export path, and a test checks
   that exports are byte-identical with them on.
+- `tests/render.rs` compares every stage's shader with its reference on
+  a real GPU (`--features native`), with a tolerance each test explains.
+  The CPU side stores its blurs and results as half floats, both ways a
+  GPU may round them, so a mean difference of more than a few 16-bit
+  steps is a real disagreement: fix the side that is wrong, do not widen
+  the tolerance.
 - A decoder checks header sizes before allocating from them
   (`lopsy_core::decode::DecodeLimits`: `PNG_LIMITS`, `RAW_LIMITS`), and
   allocates large buffers with `try_reserve`.
+
+### Golden renders
+
+`tests/golden.rs` develops real RAF files through the whole chain on a
+native GPU (decoded as Photonamous decodes its working image, binned to a
+512-pixel long edge) with a fixed set of settings, and compares a
+fingerprint of each result, the mean R, G and B of a 12 × 8 grid of
+cells, with the one stored in `tests/golden/<file>.txt`. A cell channel
+more than 256 of 65535 off fails, and the message names the file, the
+settings and each cell that moved. The RAF files are not in this
+repository: point `LOPSY_RAF_SAMPLES` at a clone of
+`theseamusjames/sample-raf-images`; without it the test notes that and
+passes.
+
+```bash
+cd engine
+LOPSY_RAF_SAMPLES=/path/to/sample-raf-images cargo test -p lopsy-engine --features native --test golden
+# Rendering changed on purpose: make the fingerprints again
+LOPSY_RAF_SAMPLES=/path/to/sample-raf-images LOPSY_GOLDEN_UPDATE=1 cargo test -p lopsy-engine --features native --test golden
+```
+
+A change that moves how a photo renders must come with its new
+fingerprints, in the same commit.
 
 ### Adding an engine function JS can call
 
