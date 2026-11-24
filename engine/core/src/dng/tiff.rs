@@ -208,7 +208,7 @@ impl<'a> TiffReader<'a> {
 
     fn parse_ifd_at(&self, offset: u32) -> Result<Vec<IfdEntry>, String> {
         let pos = offset as usize;
-        if pos + 2 > self.data.len() {
+        if pos.saturating_add(2) > self.data.len() {
             return Err("IFD offset out of bounds".into());
         }
 
@@ -223,7 +223,11 @@ impl<'a> TiffReader<'a> {
             let tag = self.read_u16(entry_pos);
             let typ = self.read_u16(entry_pos + 2);
             let count = self.read_u32(entry_pos + 4);
-            let value_size = type_size(typ) * count as usize;
+            // The count is the file's: on a 32-bit target the size can
+            // overflow, so an entry whose size does not fit is skipped.
+            let Some(value_size) = type_size(typ).checked_mul(count as usize) else {
+                continue;
+            };
 
             let raw_bytes = if value_size <= 4 {
                 // Value fits inline in the 4-byte value/offset field
@@ -236,7 +240,7 @@ impl<'a> TiffReader<'a> {
                 bytes
             } else {
                 let data_offset = self.read_u32(entry_pos + 8) as usize;
-                if data_offset + value_size > self.data.len() {
+                if data_offset.checked_add(value_size).is_none_or(|end| end > self.data.len()) {
                     continue;
                 }
                 let mut bytes = self.data[data_offset..data_offset + value_size].to_vec();
