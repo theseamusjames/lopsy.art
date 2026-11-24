@@ -522,17 +522,24 @@ pub fn set_develop_look(engine: &mut EngineInner, values: &[f32]) -> Result<(), 
     Ok(())
 }
 
-/// Four curve tables as a texture, reusing `existing` when there is one.
-/// Returns `None` when every table is the identity, and releases `existing`
-/// then.
+/// Which of the four tables in `values` are not the identity, or why
+/// `values` are not curves. Setters call it before touching the curves in
+/// effect, so values that are not curves leave those in place.
+fn curves_on(values: &[f32]) -> Result<[bool; 4], String> {
+    Ok(lopsy_core::look::parse_curves(values)?.map(|t| t.is_some()))
+}
+
+/// Four curve tables (`values`, already checked by `curves_on`) as a
+/// texture, reusing `existing` when there is one. Returns `None` when every
+/// table is the identity, and releases `existing` then. A failed upload
+/// releases the texture and returns the error: the curves are off then.
 fn upload_curves(
     engine: &mut EngineInner,
     existing: Option<crate::develop::look::CurvesState>,
     values: &[f32],
+    on: [bool; 4],
 ) -> Result<Option<crate::develop::look::CurvesState>, String> {
     use crate::develop::look::{curve_texels, CurvesState, CURVE_ROWS};
-    let tables = lopsy_core::look::parse_curves(values)?;
-    let on = [0, 1, 2, 3].map(|k| tables[k].is_some());
     let reusable = existing.map(|c| c.texture).filter(|&t| engine.texture_pool.get(t).is_some());
     if !on.iter().any(|&o| o) {
         if let Some(old) = reusable {
@@ -552,12 +559,14 @@ fn upload_curves(
 }
 
 /// Curves on rendered linear data: 4 × 4096 floats, master, red, green,
-/// blue, each table over encoded 0..1 (`lopsy_core::look`). On failure the
-/// curves are off.
+/// blue, each table over encoded 0..1 (`lopsy_core::look`). Values that
+/// are not curves (the wrong length, or not finite) are an error and leave
+/// the curves in effect as they were; a failed upload turns them off.
 pub fn set_develop_curves(engine: &mut EngineInner, values: &[f32]) -> Result<(), String> {
+    let on = curves_on(values)?;
     let existing = engine.develop_curves.take();
     engine.needs_recomposite = true;
-    engine.develop_curves = upload_curves(engine, existing, values)?;
+    engine.develop_curves = upload_curves(engine, existing, values, on)?;
     Ok(())
 }
 
@@ -632,10 +641,12 @@ pub fn read_scene_statistics(engine: &mut EngineInner) -> Read<Vec<f32>> {
 }
 
 /// Area `index`'s curves with the working space, in `set_develop_curves`'
-/// layout. On failure the area's curves are off.
+/// layout, and as it does: values that are not curves leave the area's
+/// curves as they were, a failed upload turns them off.
 pub fn set_develop_area_curves(engine: &mut EngineInner, index: u32, values: &[f32]) -> Result<(), String> {
+    let on = curves_on(values)?;
     let existing = area_layer(engine, index)?.look_curves.take();
-    let curves = upload_curves(engine, existing, values)?;
+    let curves = upload_curves(engine, existing, values, on)?;
     area_layer(engine, index)?.look_curves = curves;
     Ok(())
 }

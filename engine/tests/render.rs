@@ -2187,3 +2187,41 @@ fn with_the_working_space_noise_reduction_runs_before_tone_and_keeps_colours_out
     assert_ne!(with_nr, without, "the scene statistics are taken after noise reduction");
     assert_no_gpu_errors();
 }
+
+/// Textures the pool has lent out and not had back.
+fn textures_in_use(engine: &EngineInner) -> usize {
+    engine.texture_pool.live_entry_count() - engine.texture_pool.free_entry_count()
+}
+
+/// Curves of the wrong length or with a NaN are an error that leaves the
+/// curves in effect, for the photo and for an area, and no texture is
+/// lost from the pool.
+#[test]
+fn values_that_are_not_curves_leave_the_old_curves_in_place() {
+    let Some(mut engine) = engine(16, 3) else { return };
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    let curves = curve_table(0.05, 0.55, 0.95).repeat(4);
+    let baseline = textures_in_use(&engine);
+    commands::develop::set_develop_curves(&mut engine, &curves).expect("curves");
+    commands::develop::set_develop_area_curves(&mut engine, 0, &curves).expect("area curves");
+    let before = textures_in_use(&engine);
+    let photo = engine.develop_curves.expect("curves on").texture;
+    let area = |e: &EngineInner| e.area_layers[0].as_ref().and_then(|a| a.look_curves).map(|c| c.texture);
+    let area_texture = area(&engine).expect("area curves on");
+    let mut nan = curves.clone();
+    nan[7] = f32::NAN;
+    for bad in [&curves[..100], &nan[..]] {
+        assert!(commands::develop::set_develop_curves(&mut engine, bad).is_err());
+        assert!(commands::develop::set_develop_area_curves(&mut engine, 0, bad).is_err());
+    }
+    assert_eq!(textures_in_use(&engine), before, "no texture leaked");
+    assert_eq!(engine.develop_curves.map(|c| c.texture), Some(photo), "the photo's curves stay");
+    assert_eq!(area(&engine), Some(area_texture), "the area's curves stay");
+    assert!(engine.texture_pool.get(photo).is_some() && engine.texture_pool.get(area_texture).is_some());
+    // Turning both off gives both textures back: none was dropped held.
+    commands::develop::clear_develop_curves(&mut engine);
+    let identity = curve_table(0.0, 0.5, 1.0).repeat(4);
+    commands::develop::set_develop_area_curves(&mut engine, 0, &identity).expect("area curves off");
+    assert_eq!(textures_in_use(&engine), baseline, "every curves texture went back to the pool");
+    assert_no_gpu_errors();
+}
