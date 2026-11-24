@@ -15,14 +15,27 @@
   white-space: nowrap;
 }
 
+.emphasized {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-ui);
+}
+
 .number {
   font-family: var(--font-mono);
   color: var(--color-text-primary);
 }
 
-.colorMode {
-  color: var(--color-text-primary);
-  font-weight: var(--font-weight-ui);
+/* Said, not shown: the value already reads as what it is to a sighted user. */
+.name {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .spacer {
@@ -34,4 +47,3 @@
   height: 12px;
   background: var(--color-border);
 }
-

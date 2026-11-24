@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { ZoomReadout } from '@lopsy/ui/ZoomReadout';
+import { STATUS_ITEM_CLASS, StatusBar as Bar, StatusDivider, StatusItem, StatusNumber, StatusSpacer } from '@lopsy/ui/StatusBar';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { canvasColorSpace } from '../../engine/color-space';
@@ -7,7 +8,6 @@ import { getWasmMemoryBytes } from '../../engine-wasm/wasm-bridge';
 import { runningRenderer, type Renderer } from '../../engine-wasm/renderer-choice';
 import { isScreenHdr, onScreenHdrChange } from '../../engine-wasm/screen-output';
 import { colorModeLabel } from '../../utils/color-mode';
-import styles from './StatusBar.module.css';
 
 const colorSpaceLabel = canvasColorSpace === 'display-p3' ? 'Display P3' : 'sRGB';
 const RENDERER_LABELS: Record<Renderer, string> = { webgl: 'WebGL', wgpu: 'WebGPU' };
@@ -50,45 +50,43 @@ export function StatusBar() {
   }, []);
 
   return (
-    <footer className={styles.bar} role="status" aria-label="Status bar">
+    <Bar>
       {/* #671: drag left or right on it to zoom (1 % a pixel, 10 to 400 %); the readout is shared with Photonamous. */}
       <ZoomReadout
         zoom={zoom}
         onZoom={(next) => useEditorStore.getState().setZoom(next)}
         onReset={handleZoomDoubleClick}
-        className={styles.item}
+        className={STATUS_ITEM_CLASS}
         hint="Drag left or right to zoom; double-click for 100% and to centre the canvas"
       />
-      <span className={styles.divider} />
-      <span className={styles.item}>
-        X: <span className={styles.number}>{cursorX}</span> Y:{' '}
-        <span className={styles.number}>{cursorY}</span>
-      </span>
-      <span className={styles.divider} />
-      <span className={styles.item}>
-        <span className={styles.number}>{docWidth}</span> x{' '}
-        <span className={styles.number}>{docHeight}</span> px
-      </span>
-      <span className={styles.spacer} />
+      <StatusDivider />
+      <StatusItem>
+        X: <StatusNumber>{cursorX}</StatusNumber> Y: <StatusNumber>{cursorY}</StatusNumber>
+      </StatusItem>
+      <StatusDivider />
+      <StatusItem>
+        <StatusNumber>{docWidth}</StatusNumber> x <StatusNumber>{docHeight}</StatusNumber> px
+      </StatusItem>
+      <StatusSpacer />
       {memoryUsage && (
         <>
-          <span className={styles.item}>{memoryUsage}</span>
-          <span className={styles.divider} />
+          <StatusItem>{memoryUsage}</StatusItem>
+          <StatusDivider />
         </>
       )}
       {colorMode !== 'rgb' && (
         <>
-          <span className={`${styles.item} ${styles.colorMode}`}>{colorModeLabel(colorMode)}</span>
-          <span className={styles.divider} />
+          <StatusItem isEmphasized>{colorModeLabel(colorMode)}</StatusItem>
+          <StatusDivider />
         </>
       )}
       {renderer && (
         <>
-          <span className={styles.item}>{RENDERER_LABELS[renderer]}</span>
-          <span className={styles.divider} />
+          <StatusItem>{RENDERER_LABELS[renderer]}</StatusItem>
+          <StatusDivider />
         </>
       )}
-      <span className={styles.item}>{isHdr ? `${colorSpaceLabel} HDR` : colorSpaceLabel}</span>
-    </footer>
+      <StatusItem>{isHdr ? `${colorSpaceLabel} HDR` : colorSpaceLabel}</StatusItem>
+    </Bar>
   );
 }

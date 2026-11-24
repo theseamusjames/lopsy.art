@@ -9,6 +9,7 @@
     "./Slider": "./src/Slider/Slider.tsx",
     "./Menu": "./src/Menu/Menu.tsx",
     "./ZoomReadout": "./src/ZoomReadout/ZoomReadout.tsx",
+    "./StatusBar": "./src/StatusBar/StatusBar.tsx",
     "./a11y/*": "./src/a11y/*.ts"
   },
   "scripts": {

@@ -19,6 +19,7 @@ load this package's stories) and tests, following
 | `@lopsy/ui/styles/fonts.css` | The `@font-face` rules for Inter and Jersey 10 |
 | `@lopsy/ui/Slider` | The slider: label, range, value box with an optional suffix, double-click reset, and a fill along the track from its origin to the thumb (0 when the range runs both sides of it, else the left end, or `fillFrom`); `format`, `parse`, `unit`, `disabled`, `fillFrom` |
 | `@lopsy/ui/ZoomReadout` | The zoom level, as a button: drag left or right on it to zoom (1 % a pixel, 10 % to 400 %), double-click it or press Enter for 100 %, and the arrow keys step to the next 10 % |
+| `@lopsy/ui/StatusBar` | The 24 px bar along the bottom of a window: `StatusBar` (a labelled footer, a polite live region unless `isLive` is false), `StatusItem` (a reading; `name` is said before it and not shown, `isEmphasized` for a state worth noticing), `StatusNumber`, `StatusDivider`, `StatusSpacer`, and `STATUS_ITEM_CLASS` for a control that sits in the bar as an item |
 | `@lopsy/ui/Menu` | A dropdown or context menu: `Menu`, `MenuItem` (accent icon, title, detail line), `MenuSeparator`, `MenuGroup` |
 | `@lopsy/ui/a11y/arrow-keys` | `HANDLES_ARROW_KEYS_ATTR`, which marks a control that handles the arrow keys itself, for a shortcut handler that listens in the capture phase (Lopsy's) |
 | `@lopsy/ui/a11y/focus-trap` | Tab stops inside a dialog, wrapping Tab, handing focus back when it closes |
