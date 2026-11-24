@@ -122,10 +122,9 @@ readback_export! {
     /// 1024 bins of the displayed result: red 0..=255, green, blue, then
     /// Rec. 709 luminance of the encoded values. With the working space,
     /// of the image rendered for sRGB whatever the screen is, without the
-    /// area overlay or the clipping warning. The sharpening mask view is
-    /// part of the image while it is on (it takes the sharpening stage's
-    /// place in the chain), so a host that wants the photo's histogram
-    /// then turns the view off first. Wrap with `'any-time'`.
+    /// screen-only views (the area overlay, the clipping warning and the
+    /// sharpening mask view: while that is on, the photo is counted as
+    /// sharpened, not the mask). Wrap with `'any-time'`.
     #[wasm_bindgen(js_name = "readDevelopHistogram")]
     pub fn read_develop_histogram(engine) -> Result<Vec<u32>> {
         read(lopsy_engine::commands::develop::read_develop_histogram(engine))
@@ -138,8 +137,8 @@ readback_export! {
     /// (sRGB primaries, the sRGB curve continued past 1) with highlights up
     /// to `peak` (units of SDR white, as `setDevelopHdr` and
     /// `readHdrOutputF32` take it), whatever the screen is, without the
-    /// area overlay or the clipping warning (the sharpening mask view, as
-    /// for `readDevelopHistogram`). Red 0..=255, green, blue, then Rec. 709
+    /// screen-only views (the sharpening mask view included, as for
+    /// `readDevelopHistogram`). Red 0..=255, green, blue, then Rec. 709
     /// luminance of the encoded values; bin 0 is black, bin 255 the peak,
     /// and white is at `hdrHistogramWhiteBin(peak)` (139.7 for 4). Fails
     /// without the working space. `readDevelopHistogram` and Auto tone are

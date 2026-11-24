@@ -746,3 +746,72 @@ fn without_the_working_space_the_sized_8bit_read_is_the_export_averaged() {
     }
     assert_no_gpu_errors();
 }
+
+/// `hdr_document` sharpened, with grain and a vignette after sharpening, so
+/// both the stage the mask view replaces and one after it change pixels.
+fn sharpened_document(w: u32, h: u32) -> Option<EngineInner> {
+    let mut engine = hdr_document(w, h)?;
+    commands::develop::set_image_detail(&mut engine, &[120.0, 1.0, 20.0, 0.0, 0.0, 0.0, 1.0]).expect("detail");
+    commands::develop::set_image_finish(&mut engine, &[-30.0, 50.0, 0.0, 50.0, 25.0, 30.0, 50.0, 7.0, 1.0]).expect("finish");
+    Some(engine)
+}
+
+/// Everything the statistics read: the histogram, the HDR histogram, a
+/// sampled colour at each end of the ramp, and the kept rendered image.
+fn statistics(engine: &mut EngineInner) -> (Vec<u32>, Vec<u32>, Vec<u8>, Vec<u8>, Vec<f32>) {
+    let histogram = now(commands::develop::read_develop_histogram(engine));
+    let hdr = now(commands::develop::read_hdr_histogram(engine, 4.0));
+    let dark = now(commands::drawing::sample_color(engine, 3.0, 4.0, 3));
+    let bright = now(commands::drawing::sample_color(engine, 28.0, 4.0, 3));
+    let rendered = now(commands::develop::read_rendered_f32(engine));
+    (histogram, hdr, dark, bright, rendered)
+}
+
+#[test]
+fn the_statistics_read_the_photo_while_the_sharpening_mask_view_is_on() {
+    let (w, h) = (32u32, 8u32);
+    let Some(mut engine) = sharpened_document(w, h) else { return };
+    let off = statistics(&mut engine);
+    compositor::render(&mut engine);
+    let screen_off = now(engine.gpu().read_rgba_f32(engine.composite_texture, 0, 0, w, h));
+
+    commands::develop::set_image_detail_mask_view(&mut engine, true);
+    compositor::render(&mut engine);
+    let screen_on = now(engine.gpu().read_rgba_f32(engine.composite_texture, 0, 0, w, h));
+    assert_ne!(screen_on, screen_off, "the mask shows on screen");
+    // The photo, not the mask: the same reads as with the view off. The
+    // kept image is the chain with real sharpening, so they are equal.
+    let on = statistics(&mut engine);
+    assert_eq!(on.0, off.0, "readDevelopHistogram");
+    assert_eq!(on.1, off.1, "readHdrHistogram");
+    assert_eq!((&on.2, &on.3), (&off.2, &off.3), "sampleColor");
+    assert_eq!(on.4, off.4, "readRenderedF32");
+
+    // The screen is the frame it always was: an engine that keeps no
+    // rendered image (so never splits the chain) draws the same mask view.
+    let Some(mut plain) = sharpened_document(w, h) else { return };
+    commands::develop::set_image_detail_mask_view(&mut plain, true);
+    compositor::render(&mut plain);
+    assert!(plain.working_space.is_some_and(|ws| !ws.keep_rendered));
+    assert_eq!(now(plain.gpu().read_rgba_f32(plain.composite_texture, 0, 0, w, h)), screen_on, "the mask view on screen");
+
+    // Off again, the statistics and the screen are as before.
+    commands::develop::set_image_detail_mask_view(&mut engine, false);
+    compositor::render(&mut engine);
+    assert_eq!(now(engine.gpu().read_rgba_f32(engine.composite_texture, 0, 0, w, h)), screen_off);
+    assert_eq!(statistics(&mut engine), off);
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn the_mask_view_split_holds_no_texture_after_the_frame() {
+    let (w, h) = (32u32, 8u32);
+    let Some(mut engine) = sharpened_document(w, h) else { return };
+    let _ = now(commands::develop::read_develop_histogram(&mut engine));
+    compositor::render(&mut engine);
+    let in_use = textures_in_use(&engine);
+    commands::develop::set_image_detail_mask_view(&mut engine, true);
+    compositor::render(&mut engine);
+    assert_eq!(textures_in_use(&engine), in_use, "the split borrows only scratch B");
+    assert_no_gpu_errors();
+}

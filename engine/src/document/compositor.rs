@@ -467,11 +467,8 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
     // 4. The develop chain: a RAW composite developed, then the image
     // adjustments (exposure, contrast, etc.) and the develop stages that
     // are active; with the working space, the output step for the screen.
-    run_develop_chain(engine, ChainRun::Live);
+    run_live_develop_chain(engine);
     if engine.working_space.is_some() {
-        if let Err(e) = keep_rendered(engine) {
-            crate::host::log(crate::host::LogLevel::Error, &format!("Rendered image: {e}"));
-        }
         // For the HDR canvas when the screen is HDR and the HDR view is on,
         // otherwise for the screen's SDR space. No dither here: the final
         // blit dithers an 8-bit screen.
@@ -2184,6 +2181,10 @@ fn apply_raw_develop(engine: &EngineInner) {
 enum ChainRun {
     /// The live frame: sharpening may show its mask instead.
     Live,
+    /// The live frame's photo while the sharpening mask view is on: as
+    /// `Live`, with real sharpening in place of the mask. What the
+    /// statistics keep (`run_live_develop_chain`).
+    LivePhoto,
     /// An export. The 16-bit exports apply the image adjustments; the 8-bit
     /// export and Flatten never have in Lopsy, and still do not.
     Export { with_adjustments: bool },
@@ -2303,13 +2304,10 @@ const MIDDLE_STAGES: [MiddleStage; 9] = [
     },
     MiddleStage {
         space: StageSpace::Display,
-        draws: |e, run| match run {
-            ChainRun::Live => e.detail.is_some_and(|d| d.sharpens() || e.detail_mask_view),
-            ChainRun::Export { .. } => e.detail.is_some_and(|d| d.sharpens()),
-        },
+        draws: sharpening_draws,
         apply: |e, run| match run {
             ChainRun::Live => crate::develop::detail::apply_sharpening_live(e),
-            ChainRun::Export { .. } => crate::develop::detail::apply_sharpening(e),
+            ChainRun::LivePhoto | ChainRun::Export { .. } => crate::develop::detail::apply_sharpening(e),
         },
     },
     MiddleStage {
@@ -2337,21 +2335,95 @@ pub fn look_draws(e: &EngineInner) -> bool {
 /// rendered linear Rec. 2020 afterwards; without it, everything is as it
 /// always was.
 fn run_develop_chain(engine: &mut EngineInner, run: ChainRun) {
+    enter_develop_chain(engine);
+    let space = run_middle_stages(engine, run, &MIDDLE_STAGES, StageSpace::Rendered);
+    back_to_rendered(engine, space);
+}
+
+/// The chain's start: the RAW step, and with the working space its entry
+/// (`enter_working_space`), after which the composite is rendered data.
+fn enter_develop_chain(engine: &mut EngineInner) {
     apply_raw_develop(engine);
-    let has_working_space = engine.working_space.is_some();
-    if has_working_space {
+    if engine.working_space.is_some() {
         enter_working_space(engine);
     }
-    let mut space = StageSpace::Rendered;
-    for stage in &MIDDLE_STAGES {
+}
+
+/// `stages` over the composite, which is in `space` when they start; with
+/// the working space each stage that draws is converted into its own space
+/// first. Returns the space the composite is left in.
+fn run_middle_stages(engine: &mut EngineInner, run: ChainRun, stages: &[MiddleStage], mut space: StageSpace) -> StageSpace {
+    let has_working_space = engine.working_space.is_some();
+    for stage in stages {
         if has_working_space && stage.space != space && (stage.draws)(engine, run) {
             convert_composite(engine, conversion_between(space, stage.space));
             space = stage.space;
         }
         (stage.apply)(engine, run);
     }
+    space
+}
+
+/// The composite, in `space` after the middle stages, back to rendered data.
+fn back_to_rendered(engine: &EngineInner, space: StageSpace) {
     if space != StageSpace::Rendered {
         convert_composite(engine, conversion_between(space, StageSpace::Rendered));
+    }
+}
+
+/// Where sharpening (stage 8) is in `MIDDLE_STAGES`.
+const SHARPENING_STAGE: usize = 7;
+
+/// Whether sharpening draws in `run`: in the live frame its mask draws in
+/// its place while the mask view is on, whether or not it sharpens.
+fn sharpening_draws(e: &EngineInner, run: ChainRun) -> bool {
+    match run {
+        ChainRun::Live => e.detail.is_some_and(|d| d.sharpens() || e.detail_mask_view),
+        ChainRun::LivePhoto | ChainRun::Export { .. } => e.detail.is_some_and(|d| d.sharpens()),
+    }
+}
+
+/// The live frame's develop chain, and with the working space its rendered
+/// image kept for the statistics (`keep_rendered`). The kept image is the
+/// photo, never a screen-only view. While the sharpening mask view draws
+/// and the image is kept, the chain splits at sharpening: the composite
+/// there is set aside in scratch B (which nothing else holds across these
+/// stages), sharpening and the stages after it run for real and that result
+/// is kept, then the set-aside composite comes back and the same stages run
+/// with the mask for the screen. Sharpening and finish run twice then, and
+/// only then: with the view off, or with nothing asking for the kept image,
+/// the frame is the chain once, as it always was.
+fn run_live_develop_chain(engine: &mut EngineInner) {
+    let keeps = engine.working_space.is_some_and(|ws| ws.keep_rendered);
+    let splits = keeps && engine.detail_mask_view && sharpening_draws(engine, ChainRun::Live);
+    if !splits {
+        run_develop_chain(engine, ChainRun::Live);
+        if engine.working_space.is_some() {
+            log_kept(keep_rendered(engine));
+        }
+        return;
+    }
+    enter_develop_chain(engine);
+    let (before, after) = MIDDLE_STAGES.split_at(SHARPENING_STAGE);
+    let space = run_middle_stages(engine, ChainRun::Live, before, StageSpace::Rendered);
+    doc_pass(engine, &engine.shaders.copy_exact, ())
+        .texture("u_tex", engine.composite_texture)
+        .draw(Target::Framebuffer(engine.scratch_fbo_b));
+    engine.gpu().unbind_textures(1);
+    let photo = run_middle_stages(engine, ChainRun::LivePhoto, after, space);
+    back_to_rendered(engine, photo);
+    log_kept(keep_rendered(engine));
+    doc_pass(engine, &engine.shaders.copy_exact, ())
+        .texture("u_tex", engine.scratch_texture_b)
+        .draw(Target::Framebuffer(engine.composite_fbo));
+    engine.gpu().unbind_textures(1);
+    let screen = run_middle_stages(engine, ChainRun::Live, after, space);
+    back_to_rendered(engine, screen);
+}
+
+fn log_kept(result: Result<(), String>) {
+    if let Err(e) = result {
+        crate::host::log(crate::host::LogLevel::Error, &format!("Rendered image: {e}"));
     }
 }
 
@@ -2886,7 +2958,13 @@ fn apply_adjustments_to_texture(engine: &EngineInner, target: DocTarget, adj: &I
 
 #[cfg(test)]
 mod tests {
-    use super::reduction_steps;
+    use super::{reduction_steps, sharpening_draws, ChainRun, EngineInner, MIDDLE_STAGES, SHARPENING_STAGE};
+
+    #[test]
+    fn the_sharpening_stage_index_names_sharpening() {
+        let at_index: fn(&EngineInner, ChainRun) -> bool = MIDDLE_STAGES[SHARPENING_STAGE].draws;
+        assert!(std::ptr::fn_addr_eq(at_index, sharpening_draws as fn(&EngineInner, ChainRun) -> bool));
+    }
 
     #[test]
     fn a_reduction_within_one_box_footprint_is_one_step() {

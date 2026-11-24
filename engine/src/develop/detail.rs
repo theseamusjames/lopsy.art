@@ -170,7 +170,9 @@ pub fn apply_sharpening(engine: &mut EngineInner) {
 /// The live frame's sharpening: as `apply_sharpening`, or, while
 /// `engine.detail_mask_view` is on and detail settings are set, the
 /// sharpening edge mask as grey (white where it sharpens fully) in place of
-/// the image. Exports call `apply_sharpening` and never show the mask.
+/// the image. Exports, and the live frame's photo that the statistics keep
+/// while the view is on (`compositor::run_live_develop_chain`), call
+/// `apply_sharpening` and never show the mask.
 pub fn apply_sharpening_live(engine: &mut EngineInner) {
     if !engine.detail_mask_view {
         apply_sharpening(engine);

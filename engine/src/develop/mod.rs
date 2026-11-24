@@ -109,7 +109,12 @@
 //! dither (`compositor::statistics_image`), whatever the screen is and
 //! without stage 10. The HDR histogram (`readHdrHistogram`) reads it through
 //! stage 11 for the HDR canvas in sRGB primaries with the peak it is given
-//! (`compositor::hdr_statistics_image`), the same way. `readRenderedF32` reads it as it is. The white balance
+//! (`compositor::hdr_statistics_image`), the same way. `readRenderedF32` reads it as it is. The kept image is
+//! always the photo: while the sharpening mask view (stage 10) draws, the
+//! live chain splits at stage 8, keeps the result of real sharpening and
+//! the stages after it, and then draws the mask for the screen from the
+//! same point (`compositor::run_live_develop_chain`); with the view off the
+//! frame runs the chain once. The white balance
 //! picker (`sampleNeutralWhiteBalance`) reads stage 1, as before.
 //!
 //! **Lazily compiled.** Every shader under `gpu/shaders/develop/` (raw

@@ -57,6 +57,19 @@ pub fn compute_radial_gradient_t(px: f64, py: f64, cx: f64, cy: f64, radius: f64
 }
 
 readback_export! {
+    /// The pixel readout: `[r, g, b, a]`, 8-bit sRGB, the average of the
+    /// `sampleSize × sampleSize` square of document pixels centred on
+    /// (`x`, `y`). With the develop working space, of the last live frame's
+    /// rendered image through the output step for sRGB with no dither,
+    /// whatever the screen is, and without the screen-only views (the area
+    /// overlay, the clipping warning and the sharpening mask view: while
+    /// that is on, the photo as sharpened); the first read draws the frame
+    /// again so there is one, and an export never replaces that image.
+    /// Without the working space, of the composite as the last frame drew
+    /// it (the quick mask and mask-edit tints included) or as an export
+    /// since then left it until the next frame, decoded from a Lab
+    /// document's encoding. Changes nothing in the document: wrap with
+    /// `'any-time'`.
     #[wasm_bindgen(js_name = "sampleColor")]
     pub fn sample_color(engine, x: f64, y: f64, sample_size: u32) -> Vec<u8> {
         read(lopsy_engine::commands::drawing::sample_color(engine, x, y, sample_size))
