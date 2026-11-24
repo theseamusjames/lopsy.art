@@ -517,7 +517,61 @@ fn build_desc_tag(name: &[u8; 4]) -> Vec<u8> {
     data
 }
 
-/// Encode u16 RGBA pixel data as a 16-bit PNG with an embedded ICC profile.
+/// One PNG chunk to write between `IHDR` and `IDAT`: its type and data.
+/// The writer adds the length and CRC.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PngChunk {
+    pub kind: [u8; 4],
+    pub data: Vec<u8>,
+}
+
+/// The chunks that say what colour space a PNG's numbers are in, in the
+/// order they are written, all before `IDAT` as the PNG specification
+/// requires of `sRGB`, `cICP` and `iCCP`.
+///
+/// sRGB has the one-byte `sRGB` chunk, which every reader understands and
+/// which must not appear beside `iCCP`. Display P3 and Rec. 2020 have
+/// `cICP` (which readers that know it prefer) and then `iCCP` with the
+/// space's profile for those that do not. Later chunks that describe the
+/// same image (`mDCV`, `cLLI` for HDR) belong in this list too.
+pub fn png_color_chunks(color_space: ColorSpace) -> Vec<PngChunk> {
+    match color_space {
+        ColorSpace::DisplayP3 | ColorSpace::Rec2020 => {
+            let mut chunks: Vec<PngChunk> = cicp(color_space).into_iter().collect();
+            let name: &[u8] = match color_space {
+                ColorSpace::DisplayP3 => b"Display P3",
+                _ => b"Rec. 2020",
+            };
+            chunks.push(PngChunk {
+                kind: *b"iCCP",
+                data: build_iccp_chunk_payload(name, &build_icc_profile(color_space)),
+            });
+            chunks
+        }
+        // Rendering intent 0, perceptual.
+        ColorSpace::Srgb | ColorSpace::LinearSrgb => vec![PngChunk { kind: *b"sRGB", data: vec![0] }],
+    }
+}
+
+/// The `cICP` chunk for a space that has code points (ITU-T H.273):
+/// colour primaries, transfer characteristics, matrix coefficients (0,
+/// RGB) and full range (1). Display P3 is primaries 12 (SMPTE EG 432-1)
+/// with transfer 13 (the sRGB curve). Rec. 2020 is primaries 9 with
+/// transfer 1, the BT.709 OETF its pixels are encoded with
+/// (`colorimetry::Transfer::Bt709`); H.273 defines 1, 14 and 15 by the
+/// same formula.
+fn cicp(color_space: ColorSpace) -> Option<PngChunk> {
+    let (primaries, transfer) = match color_space {
+        ColorSpace::DisplayP3 => (12, 13),
+        ColorSpace::Rec2020 => (9, 1),
+        _ => return None,
+    };
+    Some(PngChunk { kind: *b"cICP", data: vec![primaries, transfer, 0, 1] })
+}
+
+/// Encode u16 RGBA pixel data as a 16-bit PNG tagged as `color_space`
+/// (`png_color_chunks`). The pixels must already be in that space: this
+/// only labels them (`space_convert` converts).
 pub fn encode_png_16(
     pixels: &[u16],
     width: u32,
@@ -539,25 +593,14 @@ pub fn encode_png_16(
         encoder.set_color(png::ColorType::Rgba);
         encoder.set_depth(png::BitDepth::Sixteen);
 
-        match color_space {
-            ColorSpace::DisplayP3 => {
-                // P3 needs an iCCP chunk — written manually after header
-            }
-            _ => {
-                encoder.set_source_srgb(png::SrgbRenderingIntent::Perceptual);
-            }
-        }
-
         let mut writer = encoder
             .write_header()
             .map_err(|e| format!("PNG header: {e}"))?;
 
-        // For Display P3, inject iCCP chunk before image data
-        if matches!(color_space, ColorSpace::DisplayP3) {
-            let icc_data = build_icc_profile(color_space);
-            let iccp_payload = build_iccp_chunk_payload(b"Display P3", &icc_data);
-            writer.write_chunk(png::chunk::iCCP, &iccp_payload)
-                .map_err(|e| format!("PNG iCCP: {e}"))?;
+        for chunk in png_color_chunks(color_space) {
+            writer
+                .write_chunk(png::chunk::ChunkType(chunk.kind), &chunk.data)
+                .map_err(|e| format!("PNG {}: {e}", String::from_utf8_lossy(&chunk.kind)))?;
         }
 
         let mut be_bytes = Vec::with_capacity(expected * 2);
@@ -921,6 +964,76 @@ mod tests {
         assert_eq!(read_u32(&p3, 8), 0x0240_0000);
         for sig in [b"desc", b"cprt", b"wtpt", b"chad", b"rXYZ", b"gXYZ", b"bXYZ", b"rTRC", b"gTRC", b"bTRC"] {
             p.tag(sig);
+        }
+    }
+
+    // ------------------------------------------------------------
+    // PNG chunks
+    // ------------------------------------------------------------
+
+    /// Every chunk of a PNG: type and data, each CRC checked.
+    fn png_chunks(png: &[u8]) -> Vec<([u8; 4], Vec<u8>)> {
+        assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
+        let mut out = Vec::new();
+        let mut i = 8;
+        while i < png.len() {
+            let len = read_u32(png, i) as usize;
+            let kind: [u8; 4] = png[i + 4..i + 8].try_into().unwrap();
+            let data = &png[i + 8..i + 8 + len];
+            let mut crc = flate2::Crc::new();
+            crc.update(&png[i + 4..i + 8 + len]);
+            assert_eq!(crc.sum(), read_u32(png, i + 8 + len), "{} CRC", String::from_utf8_lossy(&kind));
+            out.push((kind, data.to_vec()));
+            i += 12 + len;
+        }
+        assert_eq!(i, png.len());
+        out
+    }
+
+    fn kinds(chunks: &[([u8; 4], Vec<u8>)]) -> Vec<String> {
+        chunks.iter().map(|(k, _)| String::from_utf8_lossy(k).into_owned()).collect()
+    }
+
+    fn sample_png(cs: ColorSpace) -> Vec<u8> {
+        let px: Vec<u16> = (0..3 * 2 * 4).map(|i| (i * 2731) as u16).collect();
+        encode_png_16(&px, 3, 2, cs).unwrap()
+    }
+
+    #[test]
+    fn png_chunks_are_in_a_legal_order_with_correct_crcs() {
+        let srgb = png_chunks(&sample_png(ColorSpace::Srgb));
+        assert_eq!(kinds(&srgb), ["IHDR", "sRGB", "IDAT", "IEND"]);
+        assert_eq!(srgb[1].1, [0]);
+
+        for (cs, cicp, name) in [
+            (ColorSpace::DisplayP3, [12u8, 13, 0, 1], &b"Display P3"[..]),
+            (ColorSpace::Rec2020, [9, 1, 0, 1], &b"Rec. 2020"[..]),
+        ] {
+            let chunks = png_chunks(&sample_png(cs));
+            assert_eq!(kinds(&chunks), ["IHDR", "cICP", "iCCP", "IDAT", "IEND"], "{cs:?}");
+            assert_eq!(chunks[1].1, cicp);
+            // iCCP: name, NUL, method 0, then the zlib'd profile.
+            let iccp = &chunks[2].1;
+            assert_eq!(&iccp[..name.len()], name);
+            assert_eq!(&iccp[name.len()..name.len() + 2], &[0, 0]);
+            let mut profile = Vec::new();
+            std::io::Read::read_to_end(&mut flate2::read::ZlibDecoder::new(&iccp[name.len() + 2..]), &mut profile).unwrap();
+            assert_eq!(profile, build_icc_profile(cs));
+        }
+    }
+
+    /// A PNG reader reads each back with its pixels and colour information.
+    #[test]
+    fn png_reader_reads_the_tags() {
+        for cs in [ColorSpace::Srgb, ColorSpace::DisplayP3, ColorSpace::Rec2020] {
+            let png = sample_png(cs);
+            let mut reader = png::Decoder::new(std::io::Cursor::new(&png)).read_info().unwrap();
+            let mut buf = vec![0; reader.output_buffer_size()];
+            reader.next_frame(&mut buf).unwrap();
+            let info = reader.info();
+            assert_eq!(info.icc_profile.is_some(), cs != ColorSpace::Srgb, "{cs:?}");
+            assert_eq!(info.srgb.is_some(), cs == ColorSpace::Srgb, "{cs:?}");
+            assert_eq!(u16::from_be_bytes([buf[2], buf[3]]), 2731);
         }
     }
 }
