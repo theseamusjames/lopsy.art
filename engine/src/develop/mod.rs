@@ -84,8 +84,9 @@
 //! # The JS API (wasm exports)
 //!
 //! RAW develop (`hosts/wasm/src/api/raf.rs`, `develop.rs`):
-//! - `rafRenderLinearBand(src, paramsJson, y0, y1, srcY0, srcY1)`: a band in linear camera RGB, unclamped.
-//! - `rafRenderBinnedLinear(src, paramsJson, minLongEdge)` and `RafPrepared.binnedLinear(minLongEdge)`: the binned first view, no demosaic.
+//! - `rafRenderLinearBand(src, paramsJson, y0, y1, srcY0, srcY1)`: a band in linear camera RGB, unclamped, clipped channels reconstructed.
+//! - `rafRenderBinnedLinear(src, paramsJson, minLongEdge)` and `RafPrepared.binnedLinear(minLongEdge)`: the binned first view, no demosaic, reconstructed the same way.
+//! - `rafPrepare(bytes)`: its `paramsJson` and `metaJson` carry `clipLevels`, each channel's clip level `[r, g, b]` in those renders' units (linear camera RGB at the as-shot balance); `paramsJson` also carries `whiteLevel` (raw units) and `highlightChroma` (what the renders reconstruct with; `lopsy_core::raf::highlights`).
 //! - `rafDevelopDefaults(paramsJson)`: the settings that reproduce Lopsy's import look.
 //! - `rafDevelopProfiles(paramsJson)`: the Profile menu (camera, the film-simulation looks, neutral, monochrome).
 //! - `setRawDevelop(engine, json)`, `clearRawDevelop(engine)`.
@@ -97,8 +98,9 @@
 //!
 //! White balance and statistics:
 //! - `rafAutoWhiteBalance(linearRgba)`: near-neutral-pixel white balance, as `wbRatio`.
+//! - `rafAutoWhiteBalanceClipped(linearRgba, clipLevels)`: the same, leaving out clipped and reconstructed pixels.
 //! - `rafWhiteBalancePresets(rafBytes)`, `rafWhiteBalanceKelvin(rafBytes)`: the body's presets in recipe units, and the Kelvin scale.
-//! - `sampleNeutralWhiteBalance(engine, x, y, radius)` (readback): the picker.
+//! - `sampleNeutralWhiteBalance(engine, x, y, radius)` (readback): the picker; leaves out clipped and reconstructed pixels when `setRawDevelop`'s JSON has `clipLevels`.
 //! - `readDevelopHistogram(engine)` (readback): 4 × 256 bins of the displayed result; with the working space, of the sRGB output.
 //! - `sampleColor(engine, x, y, size)` (readback, `drawing.rs`): the pixel readout; with the working space, of the sRGB output.
 //! - `autoTone(histogram, currentJson)`: Auto tone from the displayed
@@ -186,8 +188,10 @@
 //!   axis (`lopsy_core::output`), not a perceptual mapping.
 //! - The camera matrix does not follow the white balance (no dual-
 //!   illuminant interpolation, so no true Kelvin; the Kelvin readout is a
-//!   fit to the body's presets), and highlights are desaturated, not
-//!   reconstructed.
+//!   fit to the body's presets). Clipped channels are reconstructed on the
+//!   CPU, once, in the linear decode (`lopsy_core::raf::highlights`), not
+//!   by a GPU stage: which samples clipped is fixed by the file, and the
+//!   RAW stage's white balance is a gain on the reconstructed data.
 //! - Without the working space, noise reduction and local contrast run on
 //!   encoded values before the tone controls, because tone, colour and
 //!   curves are one pass (stage 5), and areas apply their own adjustments

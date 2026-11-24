@@ -243,6 +243,17 @@ pub fn auto_tone_json(histogram: &[u32], current_json: &str) -> Result<String, S
 /// Mapping these to the Photonamous temperature / tint sliders is the app's
 /// side of the white balance model.
 pub fn auto_white_balance(linear_rgba: &[f32]) -> [f32; 3] {
+    auto_white_balance_clipped(linear_rgba, None)
+}
+
+/// [`auto_white_balance`] that also skips every pixel with a channel at or
+/// above `crate::raf::highlights::RAMP_START` of its clip level (`clip`, the
+/// photo's `clipLevels`): a clipped or reconstructed pixel is not a
+/// measurement of a neutral. Reconstruction lifts highlights far above the
+/// clip level, so the 5 % of the peak `auto_white_balance` skips no longer
+/// covers them.
+pub fn auto_white_balance_clipped(linear_rgba: &[f32], clip: Option<[f32; 3]>) -> [f32; 3] {
+    let limit = clip.map_or([f32::INFINITY; 3], |c| c.map(|v| crate::raf::highlights::RAMP_START * v));
     let peak = linear_rgba
         .chunks_exact(4)
         .map(|p| p[0].max(p[1]).max(p[2]))
@@ -263,7 +274,7 @@ pub fn auto_white_balance(linear_rgba: &[f32]) -> [f32; 3] {
         .filter(|c| {
             let max = c[0].max(c[1]).max(c[2]);
             let min = c[0].min(c[1]).min(c[2]);
-            max.is_finite() && max < hi && min > lo
+            max.is_finite() && max < hi && min > lo && (0..3).all(|k| c[k] < limit[k])
         })
         .collect();
     if usable.is_empty() {
@@ -326,10 +337,22 @@ pub const ENCODED_TINT_STOPS: f32 = 0.35;
 /// when the patch is empty or has a channel at 0. Mirrors the app's
 /// `temperatureTintFor`.
 pub fn neutral_temperature_tint(rgba16: &[u16], is_raw: bool) -> [f32; 2] {
+    neutral_temperature_tint_clipped(rgba16, is_raw, None)
+}
+
+/// [`neutral_temperature_tint`] that skips every pixel with a channel at or
+/// above `crate::raf::highlights::RAMP_START` of its clip level (`clip`, in
+/// the patch's linear units; values above 1 read as 65535, so a level above
+/// 1 is taken as 1): a clipped or reconstructed pixel is not a measurement
+/// of a neutral. `[0, 0]` when every pixel is skipped.
+pub fn neutral_temperature_tint_clipped(rgba16: &[u16], is_raw: bool, clip: Option<[f32; 3]>) -> [f32; 2] {
+    let limit = clip.map_or([u32::MAX; 3], |c| {
+        c.map(|v| ((crate::raf::highlights::RAMP_START * v).clamp(0.0, 1.0) * 65535.0) as u32)
+    });
     let mut sum = [0.0f64; 3];
     let mut n = 0u32;
     for p in rgba16.chunks_exact(4) {
-        if p[3] == 0 {
+        if p[3] == 0 || (0..3).any(|k| u32::from(p[k]) >= limit[k]) {
             continue;
         }
         for c in 0..3 {
@@ -511,5 +534,44 @@ mod tests {
         assert!((wb[0] - 1.0 / 1.3).abs() < 1e-3 && wb[1] == 1.0 && (wb[2] - 1.0 / 0.7).abs() < 1e-3, "{wb:?}");
         assert_eq!(auto_white_balance(&[]), [1.0, 1.0, 1.0]);
         assert_eq!(auto_white_balance(&[0.0, 0.0, 0.0, 1.0]), [1.0, 1.0, 1.0]);
+    }
+
+    #[test]
+    fn auto_white_balance_skips_clipped_and_reconstructed_pixels() {
+        // A grey wall at the as-shot balance, and a green-clipped highlight
+        // reconstructed far above its clip level: near-neutral, it would
+        // count as a measurement and pull red and blue.
+        let clip = [1.7f32, 1.0, 1.8];
+        let mut px = Vec::new();
+        for _ in 0..1000 {
+            px.extend_from_slice(&[0.30, 0.30, 0.30, 1.0]);
+        }
+        for _ in 0..3000 {
+            px.extend_from_slice(&[1.62, 1.45, 1.35, 1.0]);
+        }
+        for _ in 0..10 {
+            px.extend_from_slice(&[9.0, 9.0, 9.0, 1.0]);
+        }
+        let plain = auto_white_balance(&px);
+        let skipping = auto_white_balance_clipped(&px, Some(clip));
+        assert!((skipping[0] - 1.0).abs() < 1e-4 && (skipping[2] - 1.0).abs() < 1e-4, "{skipping:?}");
+        assert!((plain[0] - 1.0).abs() > 0.05, "the test needs the plain measure to be fooled: {plain:?}");
+        assert_eq!(auto_white_balance_clipped(&px, None), plain);
+    }
+
+    #[test]
+    fn the_picker_skips_clipped_pixels() {
+        let grey = [20000u16, 21000, 22000, 65535];
+        let clipped = [60000u16, 65535, 62000, 65535];
+        let mut patch = Vec::new();
+        for _ in 0..4 {
+            patch.extend_from_slice(&grey);
+            patch.extend_from_slice(&clipped);
+        }
+        let only_grey: Vec<u16> = grey.repeat(4);
+        let clip = Some([1.7f32, 1.0, 1.8]);
+        assert_eq!(neutral_temperature_tint_clipped(&patch, true, clip), neutral_temperature_tint(&only_grey, true));
+        assert_ne!(neutral_temperature_tint(&patch, true), neutral_temperature_tint(&only_grey, true));
+        assert_eq!(neutral_temperature_tint_clipped(&clipped.repeat(3), true, clip), [0.0, 0.0]);
     }
 }

@@ -98,6 +98,18 @@ pub fn raf_auto_white_balance(linear_rgba: &[f32]) -> Vec<f32> {
     lopsy_core::develop_stats::auto_white_balance(linear_rgba).to_vec()
 }
 
+/// `rafAutoWhiteBalance` that leaves out every pixel with a channel at or
+/// above 90 % of its clip level: clipped and reconstructed highlights are
+/// not measurements of a neutral. `clipLevels` is the three floats
+/// `[r, g, b]` of the render params' `clipLevels` (linear camera RGB at the
+/// as-shot balance, the units of the pixels); any other length measures
+/// every pixel, as `rafAutoWhiteBalance` does.
+#[wasm_bindgen(js_name = "rafAutoWhiteBalanceClipped")]
+pub fn raf_auto_white_balance_clipped(linear_rgba: &[f32], clip_levels: &[f32]) -> Vec<f32> {
+    let clip = <[f32; 3]>::try_from(clip_levels).ok();
+    lopsy_core::develop_stats::auto_white_balance_clipped(linear_rgba, clip).to_vec()
+}
+
 /// Color by hue: 24 floats, (hue, saturation, luminance) per band in
 /// −100..100, bands red, orange, yellow, green, aqua, blue, purple, magenta.
 #[wasm_bindgen(js_name = "setImageColorMixer")]

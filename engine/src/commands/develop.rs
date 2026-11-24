@@ -341,7 +341,9 @@ pub fn set_clipping_warning(engine: &mut EngineInner, shadows: bool, highlights:
 /// The patch is read from the document's layers composited without the
 /// RAW develop stage or any adjustment: for a RAW document, camera RGB at
 /// the as-shot balance, so the answer is absolute; otherwise the encoded
-/// pixels, so it is the shift that neutralizes them. Changes nothing in
+/// pixels, so it is the shift that neutralizes them. A RAW photo whose
+/// settings carry `clipLevels` has its clipped and reconstructed pixels
+/// left out of the measurement. Changes nothing in
 /// the document; the next frame rebuilds the live composite.
 pub fn sample_neutral_white_balance(engine: &mut EngineInner, x: f32, y: f32, radius: f32) -> Read<Vec<f32>> {
     let (w, h) = (engine.doc_width as i32, engine.doc_height as i32);
@@ -356,11 +358,13 @@ pub fn sample_neutral_white_balance(engine: &mut EngineInner, x: f32, y: f32, ra
         return Read::failed(e);
     }
     let is_raw = engine.raw_develop.is_some();
+    // A RAW photo's clipped and reconstructed pixels are not measurements.
+    let clip = engine.raw_develop.as_ref().and_then(|state| state.settings.clip_levels);
     let (pw, ph) = ((x1 - x0 + 1) as u32, (y1 - y0 + 1) as u32);
     engine
         .gpu()
         .read_rgba_u16(engine.composite_texture, x0, y0, pw, ph)
-        .map(move |px| develop_stats::neutral_temperature_tint(&px, is_raw).to_vec())
+        .map(move |px| develop_stats::neutral_temperature_tint_clipped(&px, is_raw, clip).to_vec())
 }
 
 /// Long edge of the downscaled copy the histogram is counted from.
