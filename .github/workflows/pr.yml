@@ -33,12 +33,17 @@ jobs:
           node-version: 22
           cache: npm
 
+      # Both builds: Photonamous runs WebGPU by default and WebGL where it is
+      # not offered. The key's prefix changed when pkg-wgpu joined, so no
+      # entry holding pkg alone is restored.
       - name: Cache WASM pkg output
         id: wasm-cache
         uses: actions/cache@v4
         with:
-          path: apps/lopsy-web/src/engine-wasm/pkg
-          key: wasm-pkg-${{ hashFiles('engine/**/*.rs', 'engine/**/Cargo.toml', 'engine/**/Cargo.lock', 'engine/**/*.wgsl') }}
+          path: |
+            apps/lopsy-web/src/engine-wasm/pkg
+            apps/lopsy-web/src/engine-wasm/pkg-wgpu
+          key: wasm-pkgs-${{ hashFiles('engine/**/*.rs', 'engine/**/Cargo.toml', 'engine/**/Cargo.lock', 'engine/**/*.wgsl') }}
 
       - name: Cache cargo registry, git, and target
         if: steps.wasm-cache.outputs.cache-hit != 'true'
@@ -67,20 +72,27 @@ jobs:
       - name: Check engine bundle size
         run: npm run wasm:size
 
-      # The wgpu backend is a second artifact that nothing loads yet
-      # (docs/engine-migration-plan.md, Phase 6). Building it here keeps it
-      # compiling and shows its size as it grows.
+      # The wgpu backend: Lopsy loads it for ?renderer=wgpu, Photonamous by
+      # default. Its size is shown as it grows.
       - name: Build WASM (wgpu backend)
         if: steps.wasm-cache.outputs.cache-hit != 'true'
-        run: |
-          npm run wasm:build:wgpu
-          wc -c apps/lopsy-web/src/engine-wasm/pkg-wgpu/lopsy_wasm_bg.wasm apps/lopsy-web/src/engine-wasm/pkg-wgpu/lopsy_wasm.js
+        run: npm run wasm:build:wgpu
+
+      - name: Show wgpu bundle size
+        run: wc -c apps/lopsy-web/src/engine-wasm/pkg-wgpu/lopsy_wasm_bg.wasm apps/lopsy-web/src/engine-wasm/pkg-wgpu/lopsy_wasm.js
 
       - name: Upload WASM pkg artifact
         uses: actions/upload-artifact@v4
         with:
           name: wasm-pkg
           path: apps/lopsy-web/src/engine-wasm/pkg
+          retention-days: 1
+
+      - name: Upload WASM pkg-wgpu artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-pkg-wgpu
+          path: apps/lopsy-web/src/engine-wasm/pkg-wgpu
           retention-days: 1
 
   rust-test:
@@ -202,6 +214,12 @@ jobs:
         with:
           name: wasm-pkg
           path: apps/lopsy-web/src/engine-wasm/pkg
+      # The app imports the wgpu build's glue too (@lopsy/engine-pkg-wgpu, the RAF workers).
+      - name: Download WASM pkg-wgpu artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg-wgpu
+          path: apps/lopsy-web/src/engine-wasm/pkg-wgpu
       # Each of these checks packages/ui (@lopsy/ui, which Lopsy uses too) first.
       - run: npm run typecheck:photos
       - run: npm run lint:photos
