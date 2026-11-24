@@ -179,6 +179,19 @@
   padding-left: var(--space-1);
 }
 
+/* A list's rows. Opened out, a long one keeps to about nine rows and scrolls in its own room, the half row saying there is more. */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.list[data-all] {
+  flex-shrink: 0;
+  max-height: 276px;
+  overflow-y: auto;
+}
+
 .more {
   align-self: flex-start;
   min-height: 24px;

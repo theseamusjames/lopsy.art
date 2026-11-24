@@ -10,8 +10,12 @@ import { useUi } from '../../app/store';
 import { ASSET_DRAG_TYPE, readDraggedIds } from '../../app/drag';
 import { setAlbumItem } from '../../library/items';
 import { isHiddenPairHalf, sameCollection, sidebarCounts, type Collection } from '../../library/asset-query';
+import { isLongList, shortList } from '../../library/short-list';
 import { IconButton } from '../IconButton/IconButton';
 import styles from './Sidebar.module.css';
+
+/** The lists that can run long: each shows its first rows until it is opened out. */
+type ListKey = 'albums' | 'saved' | 'dates' | 'imports' | 'keywords';
 
 export function Sidebar() {
   const view = useLibraryView();
@@ -29,7 +33,27 @@ export function Sidebar() {
   const importNames = useMemo(() => importLabels(imports), [imports]);
   const [openDates, setOpenDates] = useState<ReadonlySet<string>>(new Set());
   const [renamingSearch, setRenamingSearch] = useState<string | null>(null);
-  const [showAllImports, setShowAllImports] = useState(false);
+  const [openLists, setOpenLists] = useState<ReadonlySet<ListKey>>(new Set());
+  const isAll = (key: ListKey) => openLists.has(key);
+  /** Under a long list: opens it out (it then scrolls in a room of its own) and folds it again. */
+  const more = (key: ListKey, total: number, noun: string) =>
+    isLongList(total) && (
+      <button
+        type="button"
+        className={styles.more}
+        aria-expanded={isAll(key)}
+        aria-label={isAll(key) ? `Show fewer ${noun}` : `Show all ${total} ${noun}`}
+        onClick={() =>
+          setOpenLists((prev) => {
+            const next = new Set(prev);
+            if (!next.delete(key)) next.add(key);
+            return next;
+          })
+        }
+      >
+        {isAll(key) ? 'Show fewer' : `Show all ${total}`}
+      </button>
+    );
   const toggleDate = (key: string) =>
     setOpenDates((prev) => {
       const next = new Set(prev);
@@ -135,7 +159,8 @@ export function Sidebar() {
             Albums are groups you pick by hand. Drag photos onto one, or tick it under In albums in the details panel.
           </p>
         )}
-        {albums.map((album) =>
+        <div className={styles.list} data-all={isAll('albums') || undefined} data-testid="album-list">
+        {shortList(albums, isAll('albums'), (album) => album.id === editing || (collection.kind === 'album' && collection.albumId === album.id)).map((album) =>
           editing === album.id ? (
             <div key={album.id} className={styles.editRow}>
               {nameInput}
@@ -187,6 +212,8 @@ export function Sidebar() {
             </div>
           ),
         )}
+        </div>
+        {more('albums', albums.length, 'albums')}
         {editing === 'new' && <div className={styles.editRow}>{nameInput}</div>}
       </div>
 
@@ -195,7 +222,8 @@ export function Sidebar() {
           <h2 className={styles.sectionTitle}>Saved searches</h2>
         </div>
         {saved.length === 0 && <p className={styles.empty}>Narrow the photos with the filters above the grid, then Save search.</p>}
-        {saved.map((search) =>
+        <div className={styles.list} data-all={isAll('saved') || undefined}>
+        {shortList(saved, isAll('saved'), (search) => search.id === renamingSearch || (collection.kind === 'saved' && collection.searchId === search.id)).map((search) =>
           renamingSearch === search.id ? (
             <div key={search.id} className={styles.editRow}>
               <input
@@ -231,6 +259,8 @@ export function Sidebar() {
             </div>
           ),
         )}
+        </div>
+        {more('saved', saved.length, 'saved searches')}
       </div>
 
       <div className={styles.section}>
@@ -239,8 +269,8 @@ export function Sidebar() {
         </div>
         {dates.length === 0 && <p className={styles.empty}>No dates yet.</p>}
         {dates.length > 0 && (
-          <ul className={styles.tree}>
-            {dates.map((year) => (
+          <ul className={`${styles.tree} ${styles.list}`} data-all={isAll('dates') || undefined}>
+            {shortList(dates, isAll('dates'), (year) => collection.kind === 'date' && collection.prefix.startsWith(year.year)).map((year) => (
               <li key={year.year}>
                 {dateRow(year.year, year.year, year.count, year.year)}
                 {openDates.has(year.year) && (
@@ -265,13 +295,15 @@ export function Sidebar() {
             ))}
           </ul>
         )}
+        {more('dates', dates.length, 'years')}
       </div>
 
       <div className={styles.section}>
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Imports</h2>
         </div>
-        {imports.slice(0, showAllImports ? imports.length : 6).map((batch) => (
+        <div className={styles.list} data-all={isAll('imports') || undefined}>
+        {shortList(imports, isAll('imports'), (batch) => collection.kind === 'import' && collection.importId === batch.importId).map((batch) => (
           <div key={batch.importId}>
             {item(
               { kind: 'import', importId: batch.importId },
@@ -281,11 +313,8 @@ export function Sidebar() {
             )}
           </div>
         ))}
-        {imports.length > 6 && (
-          <button type="button" className={styles.more} aria-expanded={showAllImports} onClick={() => setShowAllImports((v) => !v)}>
-            {showAllImports ? 'Show fewer' : `Show all ${imports.length}`}
-          </button>
-        )}
+        </div>
+        {more('imports', imports.length, 'imports')}
       </div>
 
       <div className={styles.section}>
@@ -293,9 +322,12 @@ export function Sidebar() {
           <h2 className={styles.sectionTitle}>Keywords</h2>
         </div>
         {counts.keywords.length === 0 && <p className={styles.empty}>Add keywords to photos in the details panel.</p>}
-        {counts.keywords.map(([keyword, count]) => (
+        <div className={styles.list} data-all={isAll('keywords') || undefined} data-testid="keyword-list">
+        {shortList(counts.keywords, isAll('keywords'), ([keyword]) => collection.kind === 'keyword' && collection.keyword === keyword).map(([keyword, count]) => (
           <div key={keyword}>{item({ kind: 'keyword', keyword }, <Tag size={14} />, keyword, count)}</div>
         ))}
+        </div>
+        {more('keywords', counts.keywords.length, 'keywords')}
       </div>
     </nav>
   );
