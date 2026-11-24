@@ -115,6 +115,46 @@ uniforms! {
         pub curve_top: f32,
         pub curve_slope: f32,
         pub shoulder_headroom: f32,
+        pub scene_on: i32,
+        pub exposure: f32,
+        pub temperature: f32,
+        pub tint: f32,
+        pub tone: [f32; 4],
+        pub blacks: f32,
+        pub wb_stops: [f32; 2],
+        pub tone_consts: [f32; 4],
+        pub knots: Vec4Array<2>,
+        pub rows: Vec4Array<12>,
+        pub areas: Vec4Array<32>,
+        pub area_count: i32,
+        pub area_tone: Vec4Array<8>,
+    }
+}
+
+uniforms! {
+    /// `develop/look.wgsl`
+    pub struct LookParams {
+        pub lms_from_rgb: Mat3,
+        pub rgb_from_lms: Mat3,
+        pub lab_from_lms: Mat3,
+        pub lms_from_lab: Mat3,
+        pub luma: [f32; 3],
+        pub color_on: i32,
+        pub vibrance: f32,
+        pub saturation: f32,
+        pub vib_consts: [f32; 2],
+        pub mixer_on: i32,
+        pub mixer: Vec4Array<6>,
+        pub band_hues: Vec4Array<2>,
+        pub mixer_consts: [f32; 4],
+        pub grade_on: i32,
+        pub grade: Vec4Array<5>,
+        pub curve_on: [f32; 4],
+        pub curve_width: i32,
+        pub curve_size: i32,
+        pub areas: Vec4Array<32>,
+        pub area_count: i32,
+        pub area_vibrance: Vec4Array<2>,
     }
 }
 

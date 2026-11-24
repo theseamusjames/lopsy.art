@@ -1501,3 +1501,283 @@ fn with_the_working_space_screen_only_views_still_never_reach_exports() {
     assert!(engine.working_space.is_none());
     assert_no_gpu_errors();
 }
+
+// ---------------------------------------------------------------------------
+// Tone, colour and curves on linear data: the tone pass's scene part and the
+// look pass against their references, and what they must do
+// ---------------------------------------------------------------------------
+
+/// A radial area at (`cx`, `cy`) with radii (`rx`, `ry`), feather 0.5, and
+/// its seven sliders: exposure, contrast, highlights, shadows,
+/// temperature, tint, saturation.
+fn radial_area(cx: f32, cy: f32, rx: f32, ry: f32, sliders: [f32; 7]) -> Vec<f32> {
+    let mut v = vec![1.0, 0.0, 1.0, cx, cy, rx, ry, 0.0, 0.5];
+    v.extend_from_slice(&sliders);
+    v
+}
+
+/// The tone pass drawn over `scene` (16 wide) for the RAW state when `raw`,
+/// or with no profile part.
+fn gpu_tone(engine: &mut EngineInner, scene: &[f32], raw: bool) -> Vec<f32> {
+    let program = engine.shaders.tone().expect("compiles");
+    let src = float_texture(engine, 16, scene);
+    let dst = engine.texture_pool.acquire(16, (scene.len() / 64) as u32).expect("texture");
+    let state = if raw { engine.raw_develop.as_ref() } else { None };
+    let (pass, _) = lopsy_engine::develop::tone::pass_for(engine, &program, src, state);
+    assert!(pass.draw(Target::Texture(dst)));
+    floats(engine, dst)
+}
+
+/// The CPU reference of the whole tone pass for the engine's settings.
+fn cpu_tone(engine: &EngineInner, scene: &[f32], raw: Option<&lopsy_core::raf::develop::RawDevelopSettings>) -> Vec<f32> {
+    let areas = lopsy_core::areas::parse_areas(engine.areas.as_deref().unwrap_or(&[])).unwrap().0;
+    let area_tone = lopsy_engine::develop::tone::area_tone(engine);
+    let sliders = engine.develop_tone.unwrap_or_default();
+    let toned = lopsy_core::scene_tone::scene_tone_reference(scene, 16, scene.len() / 64, &sliders, &areas, &area_tone);
+    match raw {
+        Some(s) => lopsy_core::tone::tone_reference(&toned, &lopsy_core::raf::develop::tone_settings(s)),
+        None => toned,
+    }
+}
+
+#[test]
+fn the_tone_pass_on_scene_data_matches_its_cpu_reference() {
+    let Some(mut engine) = engine(16, 3) else { return };
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    let s = develop_settings();
+    commands::develop::set_raw_develop_json(&mut engine, &serde_json::to_string(&s).unwrap()).expect("develop");
+    let mut areas = radial_area(8.0, 1.5, 5.0, 2.0, [0.7, 40.0, -60.0, 30.0, 50.0, -20.0, 0.0]);
+    areas.extend(radial_area(3.0, 0.5, 3.0, 3.0, [-0.5, -30.0, 80.0, -40.0, -30.0, 40.0, 0.0]));
+    commands::develop::set_image_areas(&mut engine, &areas).expect("areas");
+    let mut layer = [0.0f32; commands::develop::AREA_LOOK_LEN];
+    layer[0] = 60.0;
+    layer[1] = -45.0;
+    commands::develop::set_develop_area_look(&mut engine, 1, &layer).expect("area look");
+    let scene = working_space_picture();
+    // Every slider, both ends and between, RAW and not.
+    let cases: [[f32; 8]; 4] = [
+        [0.0, 0.0, 0.0, 35.0, -100.0, 60.0, 20.0, -30.0],
+        [0.0, 0.0, 0.0, -100.0, 100.0, -100.0, -100.0, 100.0],
+        [1.3, 40.0, -25.0, 100.0, -40.0, 100.0, 100.0, -100.0],
+        [-0.8, -100.0, 100.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    ];
+    for (n, values) in cases.iter().enumerate() {
+        commands::develop::set_develop_tone(&mut engine, values).expect("tone");
+        let raw = n % 2 == 0;
+        let gpu = gpu_tone(&mut engine, &scene, raw);
+        let expected = cpu_tone(&engine, &as_halves(&scene), raw.then_some(&s));
+        // The GPU's log2 and exp2 are within a few units in the last place
+        // of an f32; half-float output hides most of that, so 4 ulps of a
+        // half, as for the profile's part alone.
+        assert_within_halves(&format!("tone pass, case {n}"), &gpu, &as_halves(&expected), 4.0);
+    }
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn zero_on_every_tone_slider_and_an_area_of_zeros_change_nothing() {
+    let Some(mut engine) = engine(16, 3) else { return };
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    let s = develop_settings();
+    commands::develop::set_raw_develop_json(&mut engine, &serde_json::to_string(&s).unwrap()).expect("develop");
+    let scene = working_space_picture();
+    let before = gpu_tone(&mut engine, &scene, true);
+    commands::develop::set_develop_tone(&mut engine, &[0.0; 8]).expect("tone");
+    commands::develop::set_image_areas(&mut engine, &radial_area(8.0, 1.5, 5.0, 2.0, [0.0; 7])).expect("areas");
+    assert!(lopsy_engine::develop::tone::scene_is_active(&engine), "the scene part runs, for the area");
+    assert_eq!(gpu_tone(&mut engine, &scene, true), before);
+    assert_eq!(gpu_tone(&mut engine, &scene, false), as_halves(&scene), "no profile, no sliders: the identity");
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn a_grey_ramp_stays_grey_through_tone_at_any_slider_values() {
+    let Some(mut engine) = engine(16, 4) else { return };
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    commands::develop::set_raw_develop_json(&mut engine, &serde_json::to_string(&develop_settings()).unwrap()).expect("develop");
+    let ramp: Vec<f32> = (0..64).flat_map(|i| {
+        let v = 8.0 * (i as f32 / 63.0).powi(3);
+        [v, v, v, 1.0]
+    }).collect();
+    for values in [[0.0, 0.0, 0.0, 100.0, -100.0, 100.0, -100.0, 100.0], [2.0, 0.0, 0.0, -100.0, 100.0, -100.0, 100.0, -100.0]] {
+        commands::develop::set_develop_tone(&mut engine, &values).expect("tone");
+        for raw in [true, false] {
+            for p in gpu_tone(&mut engine, &ramp, raw).chunks(4) {
+                let ulp = p[1].abs().max(1.0 / 64.0) / 1024.0;
+                assert!((p[0] - p[1]).abs() <= ulp && (p[2] - p[1]).abs() <= ulp, "{values:?}, raw {raw}: {p:?}");
+            }
+        }
+    }
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn highlights_down_recovers_three_stops_above_white_through_the_raw_curve() {
+    let Some(mut engine) = engine(16, 4) else { return };
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    commands::develop::set_raw_develop_json(&mut engine, &serde_json::to_string(&develop_settings()).unwrap()).expect("develop");
+    // Scene luminance 0 to 8, three stops above white, grey.
+    let ramp: Vec<f32> = (0..64).flat_map(|i| {
+        let v = 8.0 * i as f32 / 63.0;
+        [v, v, v, 1.0]
+    }).collect();
+    let srgb = OutputSettings::sdr(OutputTarget::Srgb, Gamut::Rec2020, false);
+    let out = |engine: &mut EngineInner, highlights: f32| {
+        commands::develop::set_develop_tone(engine, &[0.0, 0.0, 0.0, 0.0, highlights, 0.0, 0.0, 0.0]).expect("tone");
+        let rendered = gpu_tone(engine, &ramp, true);
+        gpu_output(engine, &rendered, &srgb).chunks(4).map(|p| p[1]).collect::<Vec<f32>>()
+    };
+    let flat = out(&mut engine, 0.0);
+    let recovered = out(&mut engine, -100.0);
+    // The pixels that were above white: scene 1 to 8.
+    let above: Vec<usize> = (0..64).filter(|&i| 8.0 * i as f32 / 63.0 > 1.0).collect();
+    assert!(flat[63] > 0.999, "Highlights 0 reaches white: {}", flat[63]);
+    let step = 1.0 / 65535.0;
+    for pair in above.windows(2) {
+        let (a, b) = (recovered[pair[0]], recovered[pair[1]]);
+        assert!(b > a + step, "scene pixels {} and {}: {a} then {b}, not distinct", pair[0], pair[1]);
+    }
+    assert!(recovered[63] < 0.99, "the top of the ramp comes back below white: {}", recovered[63]);
+    eprintln!("Highlights -100: scene 1 -> {}, scene 8 -> {}", recovered[above[0]], recovered[63]);
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn a_mask_with_exposure_plus_one_doubles_its_centre_and_leaves_outside_alone() {
+    let Some(mut engine) = engine(16, 3) else { return };
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    commands::develop::set_image_areas(&mut engine, &radial_area(3.5, 1.5, 2.0, 2.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])).expect("areas");
+    let flat: Vec<f32> = (0..48).flat_map(|_| [0.1f32, 0.25, 0.4, 1.0]).collect();
+    let out = gpu_tone(&mut engine, &flat, false);
+    let centre = (16 + 3) * 4;
+    let flat_h = as_halves(&flat);
+    for c in 0..3 {
+        assert_eq!(out[centre + c], 2.0 * flat_h[centre + c], "channel {c} at the centre");
+    }
+    for x in 7..16 {
+        for y in 0..3 {
+            let i = (y * 16 + x) * 4;
+            assert_eq!(out[i..i + 4], flat_h[i..i + 4], "pixel ({x}, {y}) is outside the mask");
+        }
+    }
+    assert_no_gpu_errors();
+}
+
+/// The look pass drawn over `rendered` (16 wide) with the document's settings.
+fn gpu_look(engine: &mut EngineInner, rendered: &[f32]) -> Vec<f32> {
+    let program = engine.shaders.look().expect("compiles");
+    let src = float_texture(engine, 16, rendered);
+    let dst = engine.texture_pool.acquire(16, (rendered.len() / 64) as u32).expect("texture");
+    let run = lopsy_engine::develop::look::document_run(engine);
+    let (pass, _) = lopsy_engine::develop::look::pass(engine, &program, src, &run);
+    assert!(pass.draw(Target::Texture(dst)));
+    floats(engine, dst)
+}
+
+/// A curve table through (0, lift), (0.5, mid) and (1, top), straight between.
+fn curve_table(lift: f32, mid: f32, top: f32) -> Vec<f32> {
+    let n = lopsy_core::look::CURVE_ENTRIES;
+    (0..n).map(|i| {
+        let x = i as f32 / (n - 1) as f32;
+        if x < 0.5 { lift + (mid - lift) * x * 2.0 } else { mid + (top - mid) * (x - 0.5) * 2.0 }
+    }).collect()
+}
+
+#[test]
+fn the_look_pass_matches_its_cpu_reference() {
+    let Some(mut engine) = engine(16, 3) else { return };
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    commands::develop::set_image_areas(&mut engine, &radial_area(8.0, 1.5, 5.0, 2.0, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -70.0])).expect("areas");
+    let mut layer = [0.0f32; commands::develop::AREA_LOOK_LEN];
+    layer[2] = 80.0;
+    commands::develop::set_develop_area_look(&mut engine, 0, &layer).expect("area look");
+    let mut look = vec![35.0f32, -20.0];
+    look.extend((0..24).map(|k| [40.0, -60.0, 30.0, 0.0][k % 4] * if k % 3 == 0 { 1.0 } else { -0.5 }));
+    // Lopsy's grade layout: warm shadows, cool highlights, balance and width.
+    look.extend_from_slice(&[0.08, 0.0, -0.08, 0.05, 0.0, 0.0, 0.0, 0.0, -0.05, 0.0, 0.06, -0.03, 0.0, 0.0, 0.0, 0.0, 1.2, 0.2]);
+    let rendered = working_space_picture();
+    let identity = curve_table(0.0, 0.5, 1.0);
+    let mut curves = curve_table(0.05, 0.55, 0.95);
+    curves.extend(curve_table(0.0, 0.6, 1.0));
+    curves.extend(identity.iter().copied());
+    curves.extend(curve_table(0.1, 0.4, 1.0));
+    let cases = [(look.clone(), None), (vec![0.0; 44], Some(&curves)), (look, Some(&curves))];
+    for (n, (look, curves)) in cases.into_iter().enumerate() {
+        commands::develop::set_develop_look(&mut engine, &look).expect("look");
+        match curves {
+            Some(c) => commands::develop::set_develop_curves(&mut engine, c).expect("curves"),
+            None => commands::develop::clear_develop_curves(&mut engine),
+        }
+        let gpu = gpu_look(&mut engine, &rendered);
+        // The CPU reads the tables as the half-float texture holds them.
+        let all_identity = identity.repeat(4);
+        let tables = lopsy_core::look::parse_curves(&as_halves(curves.map_or(&all_identity[..], |c| &c[..]))).unwrap();
+        let tables = [0, 1, 2, 3].map(|k| if curves.is_some() && k != 2 { tables[k].clone() } else { None });
+        let areas = lopsy_core::areas::parse_areas(engine.areas.as_deref().unwrap()).unwrap().0;
+        let inputs = lopsy_core::look::LookInputs {
+            settings: engine.develop_look.unwrap_or_default(),
+            curves: &tables,
+            areas: &areas,
+            area_vibrance: &[80.0],
+        };
+        let expected = lopsy_core::look::look_reference(&as_halves(&rendered), 16, 3, &inputs);
+        // The cube roots, the hue's atan2 and the matrices are a few f32
+        // units in the last place apart; after the trip into OkLab and back
+        // that stays under a half-float unit, so 4 of them.
+        assert_within_halves(&format!("look pass, case {n}"), &gpu, &as_halves(&expected), 4.0);
+    }
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn saturation_down_gives_equal_channels_and_zero_looks_change_nothing() {
+    let Some(mut engine) = engine(16, 3) else { return };
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    let rendered = working_space_picture();
+    commands::develop::set_develop_look(&mut engine, &[0.0; 44]).expect("look");
+    let identity = curve_table(0.0, 0.5, 1.0).repeat(4);
+    commands::develop::set_develop_curves(&mut engine, &identity).expect("curves");
+    assert!(!compositor::look_draws(&engine), "nothing to draw");
+    // An area makes the colour step run with values of 0 at its pixels.
+    commands::develop::set_image_areas(&mut engine, &radial_area(8.0, 1.5, 5.0, 2.0, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1e-6])).expect("areas");
+    let same = gpu_look(&mut engine, &rendered);
+    let halves = as_halves(&rendered);
+    for (i, (g, e)) in same.iter().zip(&halves).enumerate() {
+        assert!((g - e).abs() <= e.abs().max(1.0 / 64.0) / 1024.0, "value {i}: {g} against {e}");
+    }
+    // Saturation −100 for the photo, and an area of −100 on a photo at 0:
+    // both exactly grey.
+    let mut grey = [0.0f32; 44];
+    grey[1] = -100.0;
+    commands::develop::clear_image_areas(&mut engine);
+    commands::develop::set_develop_look(&mut engine, &grey).expect("look");
+    for p in gpu_look(&mut engine, &rendered).chunks(4) {
+        assert!(p[0] == p[1] && p[1] == p[2], "{p:?}");
+    }
+    commands::develop::set_develop_look(&mut engine, &[0.0; 44]).expect("look");
+    commands::develop::set_image_areas(&mut engine, &radial_area(8.0, 1.5, 50.0, 50.0, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -100.0])).expect("areas");
+    for p in gpu_look(&mut engine, &rendered).chunks(4) {
+        assert!(p[0] == p[1] && p[1] == p[2], "{p:?}");
+    }
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn with_the_working_space_lopsys_adjustments_do_nothing_and_the_new_stages_do() {
+    let Some(mut engine) = engine(8, 4) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, 8, 4, 1.0)).expect("layer");
+    let texels: Vec<[u8; 4]> = (0..32).map(|i| [(i * 8) as u8, 120, 60, 255]).collect();
+    commands::layer::upload_layer_pixels(&mut engine, "art", texels.as_flattened(), 8, 4, 0, 0).expect("pixels");
+    let plain = now(compositor::composite_for_export_u16(&mut engine));
+    commands::adjustment::set_image_contrast(&mut engine, 60.0);
+    commands::develop::set_image_color_mixer(&mut engine, &[50.0; 24]).expect("mixer");
+    assert_ne!(now(compositor::composite_for_export_u16(&mut engine)), plain, "Lopsy's adjustments act without the working space");
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    let with_old = now(compositor::composite_for_export_u16(&mut engine));
+    commands::adjustment::clear_image_adjustments(&mut engine);
+    commands::develop::clear_image_color_mixer(&mut engine);
+    assert_eq!(now(compositor::composite_for_export_u16(&mut engine)), with_old, "they do nothing with it");
+    commands::develop::set_develop_tone(&mut engine, &[0.0, 0.0, 0.0, 60.0, 0.0, 0.0, 0.0, 0.0]).expect("tone");
+    assert_ne!(now(compositor::composite_for_export_u16(&mut engine)), with_old, "the new contrast does");
+    assert_no_gpu_errors();
+}

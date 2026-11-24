@@ -134,8 +134,9 @@ const SETTINGS: [Settings; 4] = [
         apply: |_, _| {},
     },
     // The document-wide stages after the RAW one: noise reduction, local
-    // contrast and haze, the image adjustments' tone, colour by hue,
-    // sharpening and finish, at the working image's pixel scale.
+    // contrast and haze, tone on scene data (Contrast, Highlights and
+    // Shadows), colour by hue in the look pass, sharpening and finish, at
+    // the working image's pixel scale.
     Settings {
         name: "color-detail-finish",
         raw: |photo| photo.defaults.clone(),
@@ -143,9 +144,7 @@ const SETTINGS: [Settings; 4] = [
             let scale = photo.pixel_scale;
             commands::develop::set_image_detail(engine, &[80.0, 1.0, 20.0, 30.0, 50.0, 40.0, scale]).expect("detail");
             commands::develop::set_image_local_contrast(engine, &[35.0, 30.0, 20.0, scale]).expect("local contrast");
-            commands::adjustment::set_image_contrast(engine, 15.0);
-            commands::adjustment::set_image_highlights(engine, -30.0);
-            commands::adjustment::set_image_shadows(engine, 25.0);
+            commands::develop::set_develop_tone(engine, &[0.0, 0.0, 0.0, 15.0, -30.0, 25.0, 0.0, 0.0]).expect("tone");
             // (hue, saturation, luminance) of orange, yellow, green and
             // blue: oranges and yellows richer, greens toward yellow and
             // paler, blues deeper and more saturated.
@@ -154,12 +153,16 @@ const SETTINGS: [Settings; 4] = [
             mixer[6..9].copy_from_slice(&[-10.0, 20.0, 0.0]);
             mixer[9..12].copy_from_slice(&[-20.0, -15.0, 10.0]);
             mixer[15..18].copy_from_slice(&[5.0, 35.0, -25.0]);
-            commands::develop::set_image_color_mixer(engine, &mixer).expect("mixer");
+            let mut look = vec![0.0f32; 2];
+            look.extend_from_slice(&mixer);
+            look.extend_from_slice(&[0.0; 18]);
+            commands::develop::set_develop_look(engine, &look).expect("look");
             commands::develop::set_image_finish(engine, &[-35.0, 50.0, 20.0, 50.0, 30.0, 40.0, 50.0, 7.0, scale]).expect("finish");
         },
     },
-    // A radial area with its built-in adjustments, and a layer for it with
-    // tone and colour grading of its own.
+    // A radial area with its built-in adjustments (on scene data and in the
+    // look pass), and a layer for it with whites, blacks, vibrance and
+    // colour grading of its own.
     Settings {
         name: "area-and-layer",
         raw: |photo| photo.defaults.clone(),
@@ -172,14 +175,16 @@ const SETTINGS: [Settings; 4] = [
                 0.5, 20.0, -20.0, 30.0, 25.0, -10.0, 15.0, // exposure .. saturation
             ];
             commands::develop::set_image_areas(engine, &area).expect("areas");
-            commands::develop::set_image_area_tone(engine, 0, 20.0, -15.0, 30.0).expect("area tone");
-            // A cool global tint, as `compileColorGrade` packs one.
-            let mut grade = [0.0f32; 18];
+            // Whites, blacks, vibrance, no colour by hue, and a cool global
+            // tint, as `compileColorGrade` packs one.
+            let mut layer = [0.0f32; commands::develop::AREA_LOOK_LEN];
+            layer[..3].copy_from_slice(&[20.0, -15.0, 30.0]);
+            let grade = &mut layer[27..];
             grade[12] = -0.15;
             grade[14] = 0.2;
             grade[16] = 1.0;
             grade[17] = 0.25;
-            commands::develop::set_image_area_color_grading(engine, 0, &grade).expect("area grade");
+            commands::develop::set_develop_area_look(engine, 0, &layer).expect("area look");
         },
     },
 ];

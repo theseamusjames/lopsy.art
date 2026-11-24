@@ -417,3 +417,115 @@ pub fn read_rendered_f32(engine: &mut EngineInner) -> Read<Vec<f32>> {
     let (w, h) = (engine.doc_width, engine.doc_height);
     engine.gpu().read_rgba_f32(rendered, 0, 0, w, h)
 }
+
+// ---------------------------------------------------------------------------
+// Tone, colour and curves on linear data (with the working space)
+// ---------------------------------------------------------------------------
+//
+// These drive the tone pass (`develop::tone`, `lopsy_core::scene_tone`) and
+// the look pass (`develop::look`, `lopsy_core::look`), which run only with
+// the working space. Lopsy's image adjustments, the old colour by hue and
+// the old areas pass do not run with it, so their setters change nothing
+// then; these replace them. All zeros is the identity.
+
+/// Tone on scene data: `lopsy_core::scene_tone::ToneSliders::parse`'s 8
+/// floats (exposure EV, temperature, tint, contrast, highlights, shadows,
+/// whites, blacks; recipe units). For a RAW photo, send exposure,
+/// temperature and tint as 0: the RAW step applies the photo's own.
+pub fn set_develop_tone(engine: &mut EngineInner, values: &[f32]) -> Result<(), String> {
+    let sliders = lopsy_core::scene_tone::ToneSliders::parse(values)?;
+    engine.develop_tone = (!sliders.is_identity()).then_some(sliders);
+    engine.needs_recomposite = true;
+    Ok(())
+}
+
+/// Colour on rendered linear data: `lopsy_core::look::LookSettings::parse`'s
+/// 44 floats (vibrance, saturation, Color by hue's 24, the grade's 18).
+pub fn set_develop_look(engine: &mut EngineInner, values: &[f32]) -> Result<(), String> {
+    let look = lopsy_core::look::LookSettings::parse(values)?;
+    engine.develop_look = (!look.is_identity()).then_some(look);
+    engine.needs_recomposite = true;
+    Ok(())
+}
+
+/// Four curve tables as a texture, reusing `existing` when there is one.
+/// Returns `None` when every table is the identity, and releases `existing`
+/// then.
+fn upload_curves(
+    engine: &mut EngineInner,
+    existing: Option<crate::develop::look::CurvesState>,
+    values: &[f32],
+) -> Result<Option<crate::develop::look::CurvesState>, String> {
+    use crate::develop::look::{curve_texels, CurvesState, CURVE_ROWS};
+    let tables = lopsy_core::look::parse_curves(values)?;
+    let on = [0, 1, 2, 3].map(|k| tables[k].is_some());
+    let reusable = existing.map(|c| c.texture).filter(|&t| engine.texture_pool.get(t).is_some());
+    if !on.iter().any(|&o| o) {
+        if let Some(old) = reusable {
+            engine.texture_pool.release(old);
+        }
+        return Ok(None);
+    }
+    let texture = match reusable {
+        Some(t) => t,
+        None => engine.texture_pool.acquire(CURVE_WIDTH, CURVE_ROWS)?,
+    };
+    if let Err(e) = engine.texture_pool.upload_rgba_f32(texture, 0, 0, CURVE_WIDTH, CURVE_ROWS, &curve_texels(values)) {
+        engine.texture_pool.release(texture);
+        return Err(e);
+    }
+    Ok(Some(CurvesState { texture, on }))
+}
+
+/// Curves on rendered linear data: 4 × 4096 floats, master, red, green,
+/// blue, each table over encoded 0..1 (`lopsy_core::look`). On failure the
+/// curves are off.
+pub fn set_develop_curves(engine: &mut EngineInner, values: &[f32]) -> Result<(), String> {
+    let existing = engine.develop_curves.take();
+    engine.needs_recomposite = true;
+    engine.develop_curves = upload_curves(engine, existing, values)?;
+    Ok(())
+}
+
+pub fn clear_develop_curves(engine: &mut EngineInner) {
+    if let Some(curves) = engine.develop_curves.take() {
+        engine.texture_pool.release(curves.texture);
+    }
+    engine.needs_recomposite = true;
+}
+
+/// Tone, look and curves all off.
+pub fn clear_develop_adjustments(engine: &mut EngineInner) {
+    engine.develop_tone = None;
+    engine.develop_look = None;
+    clear_develop_curves(engine);
+}
+
+/// Floats in `set_develop_area_look`.
+pub const AREA_LOOK_LEN: usize = 3 + color_mixer::VALUES_LEN + lopsy_core::look::GRADING_LEN;
+
+/// Area `index`'s layer with the working space: 45 floats, whites, blacks
+/// and vibrance (−100..100, blended through the area's mask in the tone and
+/// look passes), then Color by hue's 24 and a grade's 18 (run over a copy
+/// and laid back through the mask).
+pub fn set_develop_area_look(engine: &mut EngineInner, index: u32, values: &[f32]) -> Result<(), String> {
+    if values.len() != AREA_LOOK_LEN {
+        return Err(format!("Area look needs {AREA_LOOK_LEN} floats, got {}", values.len()));
+    }
+    if !values[..2].iter().all(|v| v.is_finite()) {
+        return Err("Area look values must be finite".to_string());
+    }
+    let settings = lopsy_core::look::LookSettings::parse_parts(values[2], 0.0, &values[3..27], &values[27..])?;
+    let tone = lopsy_core::scene_tone::AreaTone { whites: values[0].clamp(-100.0, 100.0), blacks: values[1].clamp(-100.0, 100.0) };
+    area_layer(engine, index)?.look = Some(crate::develop::look::AreaLook { tone, settings });
+    Ok(())
+}
+
+/// Area `index`'s curves with the working space, in `set_develop_curves`'
+/// layout. On failure the area's curves are off.
+pub fn set_develop_area_curves(engine: &mut EngineInner, index: u32, values: &[f32]) -> Result<(), String> {
+    let existing = area_layer(engine, index)?.look_curves.take();
+    let curves = upload_curves(engine, existing, values)?;
+    area_layer(engine, index)?.look_curves = curves;
+    Ok(())
+}

@@ -1993,11 +1993,16 @@ struct MiddleStage {
     apply: fn(&mut EngineInner, ChainRun),
 }
 
-/// The stages in order. Each still assumes sRGB-encoded values, so each is
-/// `Display`, and the chain runs them inside one conversion there and one
-/// back. A stage rewritten for linear light changes its `space` to
-/// `Rendered`, and the chain then converts around it.
-const MIDDLE_STAGES: [MiddleStage; 8] = [
+/// The stages in order. Without the working space every stage is drawn as
+/// it always was and none is wrapped. With it, a `Display` stage still
+/// assumes sRGB-encoded values, and the chain runs consecutive ones inside
+/// one conversion there and one back; a `Rendered` stage works on rendered
+/// linear Rec. 2020. The image adjustments (Lopsy's), the old colour by hue
+/// and the old areas pass do not run at all with the working space: the
+/// tone pass (`enter_working_space`) and the look pass do their jobs.
+/// Each `apply` checks what its `draws` checks, since the chain calls
+/// `apply` whatever `draws` says.
+const MIDDLE_STAGES: [MiddleStage; 9] = [
     MiddleStage {
         space: StageSpace::Display,
         draws: |e, _| e.detail.is_some_and(|d| d.reduces_noise()),
@@ -2010,28 +2015,48 @@ const MIDDLE_STAGES: [MiddleStage; 8] = [
     },
     MiddleStage {
         space: StageSpace::Display,
-        draws: |e, run| run.applies_adjustments() && (has_any_adjustment(&e.adjustments) || e.adjustments.vignette.abs() > 1e-6),
+        draws: image_adjustments_draw,
         apply: |e, run| {
-            if run.applies_adjustments() {
+            if image_adjustments_draw(e, run) {
                 apply_image_adjustments(e);
             }
         },
     },
     MiddleStage {
         space: StageSpace::Display,
-        draws: |e, _| e.color_mixer.is_some(),
-        apply: |e, _| apply_color_mixer(e),
+        draws: |e, _| e.working_space.is_none() && e.color_mixer.is_some(),
+        apply: |e, _| {
+            if e.working_space.is_none() {
+                apply_color_mixer(e);
+            }
+        },
+    },
+    MiddleStage {
+        space: StageSpace::Rendered,
+        draws: |e, _| look_draws(e),
+        apply: |e, _| {
+            if look_draws(e) {
+                apply_look(e, &crate::develop::look::document_run(e));
+            }
+        },
     },
     MiddleStage {
         space: StageSpace::Display,
-        draws: |e, _| e.areas.as_ref().is_some_and(|v| v.len() >= lopsy_core::areas::STRIDE),
-        apply: |e, _| apply_areas(e, AreasMode::Apply),
+        draws: |e, _| e.working_space.is_none() && e.areas.as_ref().is_some_and(|v| v.len() >= lopsy_core::areas::STRIDE),
+        apply: |e, _| {
+            if e.working_space.is_none() {
+                apply_areas(e, AreasMode::Apply);
+            }
+        },
     },
     MiddleStage {
-        space: StageSpace::Display,
+        // With the working space each layer converts for its display-encoded
+        // stages itself; without it nothing is converted.
+        space: StageSpace::Rendered,
         draws: |e, _| {
             let count = e.areas.as_ref().map_or(0, |v| v.len() / lopsy_core::areas::STRIDE);
-            e.area_layers.iter().take(count).any(|l| l.as_ref().is_some_and(area_layer_draws))
+            let ws = e.working_space.is_some();
+            e.area_layers.iter().take(count).any(|l| l.as_ref().is_some_and(|l| area_layer_draws(l, ws)))
         },
         apply: |e, _| apply_area_layers(e),
     },
@@ -2052,6 +2077,19 @@ const MIDDLE_STAGES: [MiddleStage; 8] = [
         apply: |e, _| apply_finish(e),
     },
 ];
+
+/// Whether Lopsy's image adjustments (stage 5) run: never with the working
+/// space.
+fn image_adjustments_draw(e: &EngineInner, run: ChainRun) -> bool {
+    e.working_space.is_none()
+        && run.applies_adjustments()
+        && (has_any_adjustment(&e.adjustments) || e.adjustments.vignette.abs() > 1e-6)
+}
+
+/// Whether the document's look pass runs: only with the working space.
+pub fn look_draws(e: &EngineInner) -> bool {
+    e.working_space.is_some() && crate::develop::look::document_run(e).draws()
+}
 
 /// The develop chain over the composite, from the RAW step to the last
 /// stage before the output step. With the working space the composite is
@@ -2086,10 +2124,17 @@ fn conversion_between(from: StageSpace, to: StageSpace) -> crate::develop::worki
 
 /// Into the working space after the RAW step: the tone step for a RAW
 /// photo (the RAW step left scene data), the input step for any other.
+/// The tone pass also holds tone on scene data; a photo that is not RAW
+/// runs it only when that has something to do.
 fn enter_working_space(engine: &EngineInner) {
     match (&engine.raw_develop, engine.working_space) {
-        (Some(state), _) => apply_tone(engine, state),
-        (None, Some(ws)) => convert_composite(engine, crate::develop::working_space::Conversion::Input(ws.source)),
+        (Some(state), _) => apply_tone(engine, Some(state)),
+        (None, Some(ws)) => {
+            convert_composite(engine, crate::develop::working_space::Conversion::Input(ws.source));
+            if crate::develop::tone::scene_is_active(engine) {
+                apply_tone(engine, None);
+            }
+        }
         (None, None) => {}
     }
 }
@@ -2120,7 +2165,7 @@ fn convert_composite(engine: &EngineInner, conversion: crate::develop::working_s
     through_scratch_a(engine, pass, 1);
 }
 
-fn apply_tone(engine: &EngineInner, state: &crate::develop::RawDevelopState) {
+fn apply_tone(engine: &EngineInner, raw: Option<&crate::develop::RawDevelopState>) {
     let program = match engine.shaders.tone() {
         Ok(program) => program,
         Err(e) => {
@@ -2128,7 +2173,20 @@ fn apply_tone(engine: &EngineInner, state: &crate::develop::RawDevelopState) {
             return;
         }
     };
-    let (pass, units) = crate::develop::tone::pass(engine, &program, engine.composite_texture, state);
+    let (pass, units) = crate::develop::tone::pass_for(engine, &program, engine.composite_texture, raw);
+    through_scratch_a(engine, pass, units);
+}
+
+/// The look pass over the composite in place, with `run`'s settings.
+fn apply_look(engine: &EngineInner, run: &crate::develop::look::LookRun) {
+    let program = match engine.shaders.look() {
+        Ok(program) => program,
+        Err(e) => {
+            crate::host::log(crate::host::LogLevel::Error, &format!("Look shader: {e}"));
+            return;
+        }
+    };
+    let (pass, units) = crate::develop::look::pass(engine, &program, engine.composite_texture, run);
     through_scratch_a(engine, pass, units);
 }
 
@@ -2308,7 +2366,8 @@ fn apply_area_layers(engine: &mut EngineInner) {
     let stride = lopsy_core::areas::STRIDE;
     let count = (values.len() / stride).min(engine.area_layers.len());
     for index in 0..count {
-        let Some(layer) = engine.area_layers[index].clone().filter(area_layer_draws) else {
+        let ws = engine.working_space.is_some();
+        let Some(layer) = engine.area_layers[index].clone().filter(|l| area_layer_draws(l, ws)) else {
             continue;
         };
         if let Err(e) = area_layer(engine, &values[index * stride..(index + 1) * stride], layer) {
@@ -2319,28 +2378,57 @@ fn apply_area_layers(engine: &mut EngineInner) {
 }
 
 /// Whether a layer would change the image: a stage of it is set and on.
-fn area_layer_draws(layer: &crate::engine::AreaLayer) -> bool {
-    has_any_adjustment(&layer.adjustments)
-        || layer.color_mixer.is_some()
-        || layer.detail.is_some_and(|d| d.reduces_noise() || d.sharpens())
+/// With the working space (`ws`) its Whites, Blacks and Vibrance act in the
+/// document's tone and look passes, not here, and its image adjustments
+/// and old colour by hue are not used.
+fn area_layer_draws(layer: &crate::engine::AreaLayer, ws: bool) -> bool {
+    let wrapped = layer.detail.is_some_and(|d| d.reduces_noise() || d.sharpens())
         || layer.local_contrast.is_some_and(|l| l.is_active())
-        || layer.finish.is_some()
+        || layer.finish.is_some();
+    if ws {
+        return wrapped || area_look_run(layer).draws();
+    }
+    wrapped || has_any_adjustment(&layer.adjustments) || layer.color_mixer.is_some()
 }
 
-fn area_layer(engine: &mut EngineInner, area: &[f32], layer: crate::engine::AreaLayer) -> Result<(), String> {
-    let program = engine.shaders.area_layer()?;
-    let (w, h) = (engine.doc_width, engine.doc_height);
-    // The image as it is, kept while the stages below work on the composite.
-    let original = engine.texture_pool.acquire(w, h)?;
-    let is_kept = doc_pass(engine, &engine.shaders.copy_exact, ())
-        .texture("u_tex", engine.composite_texture)
-        .draw(Target::Texture(original));
-    engine.gpu().unbind_textures(1);
-    if !is_kept {
-        engine.texture_pool.release(original);
-        return Err("the composite could not be kept".to_string());
-    }
+/// An area layer's own run of the look pass: its Color by hue, grade and
+/// curves.
+fn area_look_run(layer: &crate::engine::AreaLayer) -> crate::develop::look::LookRun<'static> {
+    let look = layer.look.filter(crate::develop::look::AreaLook::runs_look);
+    crate::develop::look::area_run(look, layer.look_curves)
+}
 
+/// An area layer's stages with the working space: its look pass on the
+/// rendered image, then its noise reduction, local contrast, sharpening and
+/// finish inside the display encoding, as the document's own run there.
+fn area_layer_working_space(engine: &mut EngineInner, layer: &crate::engine::AreaLayer) {
+    let run = area_look_run(layer);
+    if run.draws() {
+        apply_look(engine, &run);
+    }
+    let wrapped = layer.detail.is_some_and(|d| d.reduces_noise() || d.sharpens())
+        || layer.local_contrast.is_some_and(|l| l.is_active())
+        || layer.finish.is_some_and(|f| f.is_active());
+    if !wrapped {
+        return;
+    }
+    use crate::develop::working_space::Conversion;
+    convert_composite(engine, Conversion::ToDisplay);
+    let document = (
+        std::mem::replace(&mut engine.detail, layer.detail),
+        std::mem::replace(&mut engine.local_contrast, layer.local_contrast),
+        std::mem::replace(&mut engine.finish, layer.finish),
+    );
+    crate::develop::detail::apply_noise_reduction(engine);
+    crate::develop::detail::apply_local_contrast(engine);
+    crate::develop::detail::apply_sharpening(engine);
+    apply_finish(engine);
+    (engine.detail, engine.local_contrast, engine.finish) = document;
+    convert_composite(engine, Conversion::FromDisplay);
+}
+
+/// An area layer's stages without the working space, as they always ran.
+fn area_layer_display(engine: &mut EngineInner, layer: crate::engine::AreaLayer) {
     // The document's settings step aside for the area's, and the stages run as
     // they do for the document. Each logs its own failure, so nothing here
     // returns before the document's settings are back.
@@ -2358,6 +2446,27 @@ fn area_layer(engine: &mut EngineInner, area: &[f32], layer: crate::engine::Area
     crate::develop::detail::apply_sharpening(engine);
     apply_finish(engine);
     (engine.adjustments, engine.color_mixer, engine.detail, engine.local_contrast, engine.finish) = document;
+}
+
+fn area_layer(engine: &mut EngineInner, area: &[f32], layer: crate::engine::AreaLayer) -> Result<(), String> {
+    let program = engine.shaders.area_layer()?;
+    let (w, h) = (engine.doc_width, engine.doc_height);
+    // The image as it is, kept while the stages below work on the composite.
+    let original = engine.texture_pool.acquire(w, h)?;
+    let is_kept = doc_pass(engine, &engine.shaders.copy_exact, ())
+        .texture("u_tex", engine.composite_texture)
+        .draw(Target::Texture(original));
+    engine.gpu().unbind_textures(1);
+    if !is_kept {
+        engine.texture_pool.release(original);
+        return Err("the composite could not be kept".to_string());
+    }
+
+    if engine.working_space.is_some() {
+        area_layer_working_space(engine, &layer);
+    } else {
+        area_layer_display(engine, layer);
+    }
 
     let params = crate::gpu::params::develop::AreaLayerParams { area: Vec4Array::from_floats(area) };
     let pass = engine.pass(&program, params).texture("u_tex", original).texture("u_adjusted", engine.composite_texture);

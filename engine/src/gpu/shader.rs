@@ -166,6 +166,7 @@ pub const DETAIL_SHARPEN_FRAG: &str = translated!("develop/detail_sharpen");
 pub const LOCAL_CONTRAST_FRAG: &str = translated!("develop/local_contrast");
 pub const WORKING_SPACE_FRAG: &str = translated!("develop/working_space");
 pub const TONE_FRAG: &str = translated!("develop/tone");
+pub const LOOK_FRAG: &str = translated!("develop/look");
 pub const OUTPUT_FRAG: &str = translated!("develop/output");
 
 /// Declares the typed shaders: each source tagged with the uniform struct
@@ -264,6 +265,7 @@ typed_shaders! {
     LOCAL_CONTRAST: params::develop::LocalContrastParams = LOCAL_CONTRAST_FRAG;
     WORKING_SPACE: params::develop::WorkingSpaceParams = WORKING_SPACE_FRAG;
     TONE: params::develop::ToneParams = TONE_FRAG;
+    LOOK: params::develop::LookParams = LOOK_FRAG;
     OUTPUT: params::develop::OutputParams = OUTPUT_FRAG;
     GRADIENT_LINEAR: params::gradient::GradientLinearParams = GRADIENT_LINEAR_FRAG;
     GRADIENT_RADIAL: params::gradient::GradientRadialParams = GRADIENT_RADIAL_FRAG;
@@ -456,6 +458,7 @@ pub struct ShaderPrograms {
     local_contrast: RefCell<Option<Rc<ShaderProgram<params::develop::LocalContrastParams>>>>,
     working_space: RefCell<Option<Rc<ShaderProgram<params::develop::WorkingSpaceParams>>>>,
     tone: RefCell<Option<Rc<ShaderProgram<params::develop::ToneParams>>>>,
+    look: RefCell<Option<Rc<ShaderProgram<params::develop::LookParams>>>>,
     output: RefCell<Option<Rc<ShaderProgram<params::develop::OutputParams>>>>,
     pub mask_luminance: ShaderProgram<()>,
     pub liquify_dab: ShaderProgram<params::filters::LiquifyDabParams>,
@@ -546,6 +549,11 @@ impl ShaderPrograms {
     /// `develop/tone.wgsl`, compiled the first time it is asked for.
     pub fn tone(&self) -> Result<Rc<ShaderProgram<params::develop::ToneParams>>, String> {
         lazily(&self.tone, || compile(&self.linker, &TONE))
+    }
+
+    /// `develop/look.wgsl`, compiled the first time it is asked for.
+    pub fn look(&self) -> Result<Rc<ShaderProgram<params::develop::LookParams>>, String> {
+        lazily(&self.look, || compile(&self.linker, &LOOK))
     }
 
     /// `develop/output.wgsl`, compiled the first time it is asked for.
@@ -669,6 +677,7 @@ impl ShaderPrograms {
             local_contrast: RefCell::new(None),
             working_space: RefCell::new(None),
             tone: RefCell::new(None),
+            look: RefCell::new(None),
             output: RefCell::new(None),
             mask_luminance: compile(linker, &MASK_LUMINANCE)?,
             liquify_dab: compile(linker, &LIQUIFY_DAB)?,

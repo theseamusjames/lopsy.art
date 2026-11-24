@@ -38,6 +38,8 @@ pub mod areas;
 pub mod finish;
 pub mod working_space;
 pub mod tone;
+pub mod scene_tone;
+pub mod look;
 pub mod output;
 pub mod psd;
 pub mod text_types;

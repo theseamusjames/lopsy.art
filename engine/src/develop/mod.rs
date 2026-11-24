@@ -179,6 +179,7 @@
 //! its capture sharpening.
 
 pub mod detail;
+pub mod look;
 pub mod output;
 pub mod tone;
 pub mod working_space;

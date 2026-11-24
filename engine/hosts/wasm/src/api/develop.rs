@@ -237,3 +237,67 @@ pub fn set_image_finish(engine: &mut Engine, values: &[f32]) -> Result<(), JsErr
 pub fn clear_image_finish(engine: &mut Engine) {
     lopsy_engine::commands::develop::clear_image_finish(&mut engine.inner)
 }
+
+// Tone, colour and curves on linear data. These act only with the working
+// space (`setDevelopWorkingSpace`); with it, Lopsy's image adjustments
+// (`setImageExposure` … `setImageVibrance`, `setImagePhotoFilter`,
+// `setImageCurvesLut`, `setImageColorGrading`), `setImageColorMixer` and
+// the area layers' `setImageAreaTone`, `setImageAreaCurvesLut`,
+// `setImageAreaColorGrading` and `setImageAreaColorMixer` change nothing.
+// All zeros is the identity.
+
+/// Tone on scene data, before the profile's base curve: 8 floats
+/// `[exposure EV −5..5, temperature −100..100, tint −100..100,
+///   contrast, highlights, shadows, whites, blacks (each −100..100)]`, the
+/// recipe's units. Exposure, Temperature and Tint are for a photo that is
+/// not RAW; for a RAW photo send them as 0 (the RAW step applies the
+/// photo's own). Temperature ±100 is a red and blue gain of 2^(±0.6) and
+/// 2^(∓0.6), Tint ±100 a green gain of 2^(∓0.4), luminance kept.
+#[wasm_bindgen(js_name = "setDevelopTone")]
+pub fn set_develop_tone(engine: &mut Engine, values: &[f32]) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::set_develop_tone(&mut engine.inner, values).map_err(|e| JsError::new(&e))
+}
+
+/// Colour on rendered linear data, in OkLab: 44 floats `[vibrance,
+/// saturation (−100..100), Color by hue's 24 (as setImageColorMixer),
+/// a colour grade's 18 (as setImageColorGrading)]`.
+#[wasm_bindgen(js_name = "setDevelopLook")]
+pub fn set_develop_look(engine: &mut Engine, values: &[f32]) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::set_develop_look(&mut engine.inner, values).map_err(|e| JsError::new(&e))
+}
+
+/// Curves: 16384 floats, four tables of 4096 (master, red, green, blue),
+/// entry `i` the curve's output at input `i / 4095`, both on the sRGB
+/// curve's encoding (as Lopsy's 256-entry LUT, over 0..1). A table equal
+/// to the identity is skipped.
+#[wasm_bindgen(js_name = "setDevelopCurves")]
+pub fn set_develop_curves(engine: &mut Engine, values: &[f32]) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::set_develop_curves(&mut engine.inner, values).map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "clearDevelopCurves")]
+pub fn clear_develop_curves(engine: &mut Engine) {
+    lopsy_engine::commands::develop::clear_develop_curves(&mut engine.inner)
+}
+
+/// `setDevelopTone`, `setDevelopLook` and `setDevelopCurves` all off.
+#[wasm_bindgen(js_name = "clearDevelopAdjustments")]
+pub fn clear_develop_adjustments(engine: &mut Engine) {
+    lopsy_engine::commands::develop::clear_develop_adjustments(&mut engine.inner)
+}
+
+/// Area `index`'s layer: 45 floats `[whites, blacks, vibrance (−100..100),
+/// Color by hue's 24, a colour grade's 18]`. Whites and Blacks act in the
+/// tone map and Vibrance in the colour step, through the area's mask;
+/// Color by hue and the grade run over a copy laid back through the mask.
+/// Cleared with the area's layer (`clearImageAreaLayer`).
+#[wasm_bindgen(js_name = "setDevelopAreaLook")]
+pub fn set_develop_area_look(engine: &mut Engine, index: u32, values: &[f32]) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::set_develop_area_look(&mut engine.inner, index, values).map_err(|e| JsError::new(&e))
+}
+
+/// Area `index`'s curves, in `setDevelopCurves`' layout.
+#[wasm_bindgen(js_name = "setDevelopAreaCurves")]
+pub fn set_develop_area_curves(engine: &mut Engine, index: u32, values: &[f32]) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::set_develop_area_curves(&mut engine.inner, index, values).map_err(|e| JsError::new(&e))
+}

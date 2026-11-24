@@ -44,16 +44,19 @@ pub fn pass<'a>(
 
 /// The gamut the document's colours can lie anywhere in when they reach
 /// the output step: Rec. 2020 for a RAW photo, whose camera colours are not
-/// limited to any display's, and otherwise the gamut the photo was encoded
-/// in; but sRGB when a stage that clamps every channel to 0..1 in sRGB ran
-/// over the whole image (the image adjustments, `with_adjustments` when the
-/// run applies them, or colour by hue), since nothing outside sRGB is left.
+/// limited to any display's, and for a photo that is not RAW once tone on
+/// scene data or the look pass changed it (white balance and saturation
+/// can take a colour out of the gamut it came in), and otherwise the gamut
+/// the photo was encoded in. With the working space no stage clamps to
+/// sRGB: the image adjustments and the old colour by hue, which did, do not
+/// run. Without it this is sRGB (`with_adjustments` is then unused).
 pub fn source_gamut(engine: &EngineInner, with_adjustments: bool) -> Gamut {
-    let clamps_to_srgb = engine.color_mixer.is_some()
-        || (with_adjustments && crate::document::compositor::has_any_adjustment(&engine.adjustments));
+    let _ = with_adjustments;
     match (&engine.raw_develop, &engine.working_space) {
-        _ if clamps_to_srgb => Gamut::Srgb,
         (Some(_), _) => Gamut::Rec2020,
+        (None, Some(_)) if crate::develop::tone::scene_is_active(engine) || crate::document::compositor::look_draws(engine) => {
+            Gamut::Rec2020
+        }
         (None, Some(ws)) => ws.source.gamut(),
         (None, None) => Gamut::Srgb,
     }

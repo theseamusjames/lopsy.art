@@ -190,6 +190,13 @@ pub struct AreaLayer {
     pub detail: Option<lopsy_core::detail::DetailSettings>,
     pub local_contrast: Option<lopsy_core::detail::LocalContrastSettings>,
     pub finish: Option<lopsy_core::finish::FinishSettings>,
+    /// With the working space: Whites, Blacks and Vibrance blended through
+    /// the mask, and Color by hue and a grade run over a copy
+    /// (`setDevelopAreaLook`). The `adjustments` and `color_mixer` above
+    /// are not used then.
+    pub look: Option<crate::develop::look::AreaLook>,
+    /// With the working space: the area's curves (`setDevelopAreaCurves`).
+    pub look_curves: Option<crate::develop::look::CurvesState>,
 }
 
 pub struct EngineInner {
@@ -269,6 +276,15 @@ pub struct EngineInner {
     /// area's layer (`compositor::apply_area_layers`). `None`, or one with
     /// nothing set, draws no layer. Empty by default.
     pub area_layers: Vec<Option<AreaLayer>>,
+    /// With the working space: tone on scene data (`setDevelopTone`), in the
+    /// tone pass. `None` (the default) is the identity.
+    pub develop_tone: Option<lopsy_core::scene_tone::ToneSliders>,
+    /// With the working space: colour and grading on rendered linear data
+    /// (`setDevelopLook`), in the look pass. `None` by default.
+    pub develop_look: Option<lopsy_core::look::LookSettings>,
+    /// With the working space: the curves (`setDevelopCurves`), in the look
+    /// pass. `None` by default.
+    pub develop_curves: Option<crate::develop::look::CurvesState>,
     /// The area whose mask the live frame shows in red, or −1. Never in exports.
     pub area_overlay: i32,
     /// (shadows, highlights) clipping warnings on the live frame only.
@@ -324,6 +340,9 @@ impl EngineInner {
         if let Some(layer) = self.area_layers.get_mut(index).and_then(Option::take) {
             if let Some(tex) = layer.adjustments.curves_texture {
                 self.texture_pool.release(tex);
+            }
+            if let Some(curves) = layer.look_curves {
+                self.texture_pool.release(curves.texture);
             }
         }
     }
@@ -399,6 +418,9 @@ impl EngineInner {
             local_contrast: None,
             areas: None,
             area_layers: Vec::new(),
+            develop_tone: None,
+            develop_look: None,
+            develop_curves: None,
             area_overlay: -1,
             clipping_warning: (false, false),
             detail_mask_view: false,
@@ -852,6 +874,11 @@ impl EngineInner {
         self.local_contrast = None;
         self.areas = None;
         self.clear_area_layers();
+        self.develop_tone = None;
+        self.develop_look = None;
+        if let Some(curves) = self.develop_curves.take() {
+            self.texture_pool.release(curves.texture);
+        }
         self.area_overlay = -1;
         self.finish = None;
         self.detail_mask_view = false;
