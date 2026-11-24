@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decimalsOf, formatValue, parseValue, snap } from './readout';
+import { decimalsOf, fineReadout, formatValue, parseValue, snap } from './readout';
 
 const EV = { min: -5, max: 5, step: 0.01 };
 const PCT = { min: -100, max: 100, step: 1 };
@@ -40,5 +40,24 @@ describe('parseValue', () => {
     expect(parseValue('200', PCT)).toBe(100);
     expect(parseValue('abc', PCT)).toBeNull();
     expect(parseValue('', PCT)).toBeNull();
+  });
+});
+
+describe('fineReadout', () => {
+  const hue = fineReadout({ min: 0, max: 360, step: 1 });
+
+  it('shows a tenth only when the value has one', () => {
+    expect(hue.format(216.7)).toBe('216.7');
+    expect(hue.format(216)).toBe('216');
+  });
+
+  it('reads back exactly what it shows, so leaving the box changes nothing', () => {
+    for (const value of [0, 0.1, 90.7, 216, 359.9, 360]) expect(hue.parse(hue.format(value))).toBe(value);
+  });
+
+  it('takes a typed tenth, held to the range', () => {
+    expect(hue.parse('12.34')).toBe(12.3);
+    expect(hue.parse('400')).toBe(360);
+    expect(hue.parse('blue')).toBeNull();
   });
 });

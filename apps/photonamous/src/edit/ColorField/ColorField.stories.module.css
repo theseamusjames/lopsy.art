@@ -1,0 +1,10 @@
+.column {
+  width: 268px;
+  margin-left: auto;
+}
+
+.readout {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}

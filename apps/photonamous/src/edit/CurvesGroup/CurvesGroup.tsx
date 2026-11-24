@@ -1,42 +1,36 @@
-import { useState } from 'react';
 import { RotateCcw } from 'lucide-react';
-import type { CurveChannel, CurvePoint, Recipe } from '@lopsy/photos-core/library/recipe';
+import type { Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Json } from '@lopsy/photos-core/library/types';
-import { CurveEditor } from '../../components/CurveEditor/CurveEditor';
-import { CURVE_CHANNEL_DEFS, curvesResetChanges } from '../edit-controls';
-import { useTabs } from '../tabs';
+import { CurvesControls } from '../CurvesControls/CurvesControls';
+import { curvesResetChanges } from '../edit-controls';
+import { EditSection, type SectionHide } from '../EditSection/EditSection';
 import styles from './CurvesGroup.module.css';
 
 export interface CurvesGroupProps {
   readonly recipe: Recipe;
   readonly isDisabled: boolean;
+  /** Folded to its heading or open (EditSection). */
+  readonly isOpen: boolean;
+  readonly onToggle: () => void;
+  /** The section's eye (EditSection). The Edit view disables the controls while it is hidden. */
+  readonly hide?: SectionHide | undefined;
   /** Live, while a point moves. */
   readonly onDraft: (changes: Record<string, Json>) => void;
   readonly onCommit: (changes: Record<string, Json>, label: string) => void;
 }
 
-function asJson(points: readonly CurvePoint[]): Json {
-  return points.map((p) => ({ x: Math.round(p.x * 1e4) / 1e4, y: Math.round(p.y * 1e4) / 1e4 }));
-}
-
-/** The Curves group: a point curve per channel, one history step per release. */
-export function CurvesGroup({ recipe, isDisabled, onDraft, onCommit }: CurvesGroupProps) {
-  const [channel, setChannel] = useState<CurveChannel>('luminance');
-  const def = CURVE_CHANNEL_DEFS.find((c) => c.id === channel) ?? CURVE_CHANNEL_DEFS[0];
+/** The Curves section of the Edit panel: its heading, Reset and eye, over `CurvesControls`. */
+export function CurvesGroup({ recipe, isDisabled, isOpen, onToggle, hide, onDraft, onCommit }: CurvesGroupProps) {
   const resetChanges = curvesResetChanges(recipe);
   const isDefault = Object.keys(resetChanges).length === 0;
-  const { tabProps, panelProps } = useTabs(
-    CURVE_CHANNEL_DEFS.map((c) => c.id),
-    channel,
-    setChannel,
-  );
-  if (!def) return null;
-  const path = `curves.${def.id}`;
-
   return (
-    <section className={styles.group} aria-label="Curves">
-      <header className={styles.header}>
-        <h2 className={styles.title}>Curves</h2>
+    <EditSection
+      title="Curves"
+      isOpen={isOpen}
+      onToggle={onToggle}
+      isChanged={!isDefault}
+      hide={hide}
+      actions={
         <button
           type="button"
           className={styles.reset}
@@ -47,24 +41,16 @@ export function CurvesGroup({ recipe, isDisabled, onDraft, onCommit }: CurvesGro
         >
           <RotateCcw size={14} aria-hidden />
         </button>
-      </header>
-      <div className={styles.tabs} role="tablist" aria-label="Curve channel">
-        {CURVE_CHANNEL_DEFS.map((c) => (
-          <button key={c.id} type="button" className={styles.tab} {...tabProps(c.id)}>
-            {c.label}
-          </button>
-        ))}
-      </div>
-      <div {...panelProps}>
-        <CurveEditor
-          label={`${def.label} curve`}
-          points={recipe.curves[def.id]}
-          color={def.color}
-          isDisabled={isDisabled}
-          onChange={(points) => onDraft({ [path]: asJson(points) })}
-          onCommit={(points) => onCommit({ [path]: asJson(points) }, `Curves: ${def.label}`)}
-        />
-      </div>
-    </section>
+      }
+    >
+      <CurvesControls
+        curves={recipe.curves}
+        pathOf={(channel) => `curves.${channel}`}
+        historyLabel={(channel) => `Curves: ${channel}`}
+        isDisabled={isDisabled}
+        onDraft={onDraft}
+        onCommit={onCommit}
+      />
+    </EditSection>
   );
 }

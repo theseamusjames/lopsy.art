@@ -41,3 +41,17 @@ export function parseValue(text: string, range: SliderRange): number | null {
   if (cleaned === '' || !/^[+-]?(\d+\.?\d*|\.\d+)$/.test(cleaned)) return null;
   return snap(Number(cleaned), range);
 }
+
+/**
+ * The readout of a slider whose value is kept to a tenth although the
+ * slider steps in whole numbers (a colour field's hue and saturation):
+ * '216.7', and '216' when it is whole. The box must show all of the value,
+ * or leaving it would round the value to what it shows.
+ */
+export function fineReadout(range: SliderRange): { readonly format: (value: number) => string; readonly parse: (text: string) => number | null } {
+  const fine = { ...range, step: 0.1 };
+  return {
+    format: (value) => formatValue(value, Number.isInteger(snap(value, fine)) ? { ...range, step: 1 } : fine),
+    parse: (text) => parseValue(text, fine),
+  };
+}

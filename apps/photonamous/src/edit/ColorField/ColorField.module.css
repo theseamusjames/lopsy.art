@@ -1,0 +1,124 @@
+/* The field's place in its column: a square as wide as the column, kept while the field is enlarged out of it. */
+.slot {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+}
+
+/* Hue left to right at full strength, fading to white at the bottom. The colours are the picker's own, not the theme's. */
+.field {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(to bottom, transparent, #fff),
+    linear-gradient(
+      to right,
+      hsl(0 100% 50%),
+      hsl(60 100% 50%),
+      hsl(120 100% 50%),
+      hsl(180 100% 50%),
+      hsl(240 100% 50%),
+      hsl(300 100% 50%),
+      hsl(360 100% 50%)
+    );
+  box-shadow: 0 0 0 1px var(--color-border);
+  /* The pointer is drawn by the field (.pointer): a ring of the colour under it. */
+  cursor: none;
+  touch-action: none;
+}
+
+/* Enlarged: placed in the window (color-field.ts sets where), growing out of the small field's top right corner. */
+.field[data-expanded] {
+  position: fixed;
+  inset: auto;
+  top: var(--field-top);
+  left: var(--field-left);
+  z-index: var(--z-popover);
+  width: var(--field-size);
+  height: var(--field-size);
+  box-shadow:
+    0 0 0 1px var(--color-border-strong),
+    var(--shadow-lg);
+  transform-origin: top right;
+  animation: grow 140ms ease-out;
+}
+
+@keyframes grow {
+  from {
+    transform: scale(var(--field-from, 1));
+  }
+}
+
+.field[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.field:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+}
+
+/* The marker: a ring on the colour, filled with it, that reads on any part of the field. */
+.puck {
+  position: absolute;
+  top: calc(var(--puck-y) * 100%);
+  left: calc(var(--puck-x) * 100%);
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--puck-color);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
+
+/* The pointer over the field: a ring twice the marker's size, filled with the colour a press there would pick. */
+.pointer {
+  position: absolute;
+  top: calc(var(--hover-y) * 100%);
+  left: calc(var(--hover-x) * 100%);
+  z-index: 1;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--hover-color);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
+
+/* Enlarge: a dark square in the bottom left corner, over the field's pale end. */
+.expand {
+  position: absolute;
+  bottom: var(--space-1);
+  left: var(--space-1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.65);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  cursor: pointer;
+}
+
+.expand:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.expand:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.expand:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+}
