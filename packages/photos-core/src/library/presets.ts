@@ -24,34 +24,49 @@ function preset(id: string, name: string, values: Readonly<Record<string, Json>>
   return { id: `${BUILT_IN_PREFIX}${id}`, name, groups, values: clean, createdAt: '', deleted: false, builtIn: true };
 }
 
+/**
+ * Tuned by eye on the linear pipeline (docs/photonamous-linear-plan.md
+ * section 8, decisions 18 to 22, 30 and 31) against how each looked on the
+ * old display-referred chain, over the sample RAFs and some phone JPEGs.
+ * Contrast there is a slope in stops about middle grey, so a contrasty look
+ * needs a larger number than before, and Shadows to keep a dark photo's
+ * shadows from going to black with it.
+ */
 export const BUILT_IN_PRESETS: readonly Preset[] = [
   preset('punchy', 'Punchy', {
-    'tone.contrast': 25,
-    'tone.highlights': -20,
-    'tone.shadows': 15,
-    'tone.blacks': -10,
-    'color.vibrance': 30,
+    'tone.contrast': 45,
+    'tone.highlights': -35,
+    'tone.shadows': 25,
+    'tone.blacks': -5,
+    'color.vibrance': 40,
     'color.saturation': 5,
-    'localContrast.small': 20,
+    'localContrast.small': 15,
+    'localContrast.large': 10,
   }),
   preset('soft-matte', 'Soft matte', {
-    'tone.contrast': -20,
-    'tone.highlights': -15,
-    'tone.blacks': 25,
-    'color.saturation': -15,
+    'tone.contrast': -30,
+    'tone.highlights': -20,
+    'tone.shadows': 15,
+    'tone.blacks': 50,
+    'color.saturation': -20,
+    // The curve's lifted black is what makes it matte; on the linear chain the old lift (0.08) showed as about half the fade it gave before.
     'curves.luminance': [
-      { x: 0, y: 0.08 },
-      { x: 0.5, y: 0.52 },
-      { x: 1, y: 0.95 },
+      { x: 0, y: 0.14 },
+      { x: 0.5, y: 0.53 },
+      { x: 1, y: 0.93 },
     ],
   }),
   preset('monochrome', 'Monochrome', {
     'profile.id': 'monochrome',
-    'tone.contrast': 20,
-    'tone.whites': 10,
-    'tone.blacks': -10,
-    'localContrast.large': 15,
+    'tone.contrast': 50,
+    // Highlights rather than Whites: the contrast is kept off a bright sky or wall, which Whites pushed into white.
+    'tone.highlights': -30,
+    'tone.shadows': 10,
+    'tone.blacks': -15,
+    'localContrast.large': 25,
+    'localContrast.small': 10,
   }),
+  // Temperature is a shift from the photo's own balance, RAW or not, so Warm and Cool keep each photo's white balance and lean it.
   preset('warm', 'Warm', {
     'whiteBalance.mode': 'custom',
     'whiteBalance.temperature': 20,
@@ -60,10 +75,11 @@ export const BUILT_IN_PRESETS: readonly Preset[] = [
   }),
   preset('cool', 'Cool', {
     'whiteBalance.mode': 'custom',
-    'whiteBalance.temperature': -20,
+    'whiteBalance.temperature': -30,
     'whiteBalance.tint': -3,
+    // A light blue in the shadows: the linear grade tints dark tones more than the old one did, and at 15 turned green shadows teal.
     'colorGrading.shadows.hue': 220,
-    'colorGrading.shadows.saturation': 15,
+    'colorGrading.shadows.saturation': 8,
   }),
 ];
 

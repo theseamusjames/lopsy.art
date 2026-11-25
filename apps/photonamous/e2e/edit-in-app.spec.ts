@@ -47,9 +47,9 @@ test('Edit in the library: history, versions, presets, copy and paste, filmstrip
   await expect(edit.getByLabel('Exposure value', { exact: true })).toHaveValue('+1.00');
   await expect(history.getByRole('button', { name: 'Vibrance +30' })).toBeVisible();
 
-  // Presets: one step.
+  // Presets: one step. +45 is Punchy's Contrast as re-tuned for the linear pipeline.
   await edit.getByRole('list', { name: 'Presets' }).getByRole('button', { name: 'Punchy', exact: true }).click();
-  await expect(edit.getByLabel('Contrast value', { exact: true })).toHaveValue('+25');
+  await expect(edit.getByLabel('Contrast value', { exact: true })).toHaveValue('+45');
   await expect(history.getByRole('button', { name: 'Preset: Punchy' })).toBeVisible();
   // The presets a library starts with are the user's to delete, like any they save.
   const presetList = edit.getByRole('list', { name: 'Presets' });
@@ -63,7 +63,7 @@ test('Edit in the library: history, versions, presets, copy and paste, filmstrip
   await edit.getByLabel('New version name').fill('Bright');
   await edit.getByLabel('New version name').press('Enter');
   await expect(versions.getByRole('button', { name: 'Bright', exact: true })).toHaveAttribute('aria-current', 'true');
-  await expect(edit.getByLabel('Contrast value', { exact: true })).toHaveValue('+25');
+  await expect(edit.getByLabel('Contrast value', { exact: true })).toHaveValue('+45');
   await setValue(page, 'Exposure', '2');
   await versions.getByRole('button', { name: 'Original', exact: true }).click();
   await expect(edit.getByLabel('Exposure value', { exact: true })).toHaveValue('+1.00');
@@ -99,7 +99,7 @@ test('Edit in the library: history, versions, presets, copy and paste, filmstrip
   await expect(edit.getByLabel('Exposure value', { exact: true })).toHaveValue('0.00');
   await edit.getByRole('button', { name: 'Paste edits' }).click();
   await expect(edit.getByLabel('Exposure value', { exact: true })).toHaveValue('+1.00');
-  await expect(edit.getByLabel('Contrast value', { exact: true })).toHaveValue('+25');
+  await expect(edit.getByLabel('Contrast value', { exact: true })).toHaveValue('+45');
 
   // Export is the header's alone, and here it takes the photo being edited: not the one selected in the grid under it.
   await expect(edit.getByRole('button', { name: /^Export/ })).toHaveCount(0);
