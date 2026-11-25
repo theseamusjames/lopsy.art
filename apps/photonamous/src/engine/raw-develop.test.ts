@@ -120,7 +120,7 @@ describe('temperatureTintFor', () => {
   });
 
   it('clamps to the slider range and survives nonsense', () => {
-    expect(temperatureTintFor([16, 1, 0.01])).toEqual({ temperature: 100, tint: -100 });
+    expect(temperatureTintFor([16, 1, 0.01])).toEqual({ temperature: 150, tint: -150 });
     expect(temperatureTintFor([0, 1, 1])).toEqual({ temperature: 0, tint: 0 });
   });
 });

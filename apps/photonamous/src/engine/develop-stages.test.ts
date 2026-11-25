@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_RECIPE, type Recipe } from '@lopsy/photos-core/library/recipe';
+import { DEFAULT_RECIPE, recipeFromPaths, type Recipe } from '@lopsy/photos-core/library/recipe';
+import { limitForLegacy, whiteBalanceFilter } from './recipe-to-adjustments';
 import {
   AREA_LOOK_LEN,
   CURVES_LEN,
@@ -154,5 +155,44 @@ describe('developStages', () => {
     expect(stages.adjustments.photoFilter.density).toBe(1);
     expect(stages.curvesLut()).toBeNull();
     expect(stages.mixer()).toBeNull();
+  });
+
+  it('sends values past 100 whole on the linear path and holds them at 100 on the legacy one', () => {
+    const wide: Recipe = recipeFromPaths({
+      'tone.contrast': 150,
+      'tone.highlights': -150,
+      'tone.shadows': 120,
+      'tone.whites': -130,
+      'tone.blacks': 150,
+      'whiteBalance.mode': 'custom',
+      'whiteBalance.temperature': -150,
+      'whiteBalance.tint': 140,
+      'color.vibrance': 150,
+      'color.saturation': 125,
+      'colorByHue.red.hue': -150,
+      'colorByHue.red.saturation': 150,
+      'colorByHue.blue.luminance': 150,
+      'colorGrading.shadows.saturation': 60,
+      'colorGrading.shadows.luminance': -150,
+      'colorGrading.balance': 150,
+      'localContrast.large': 150,
+      'finish.grain.amount': 150,
+    });
+    const linear = developStages(wide, { isRaw: false, path: 'linear' });
+    if (linear.path !== 'linear') throw new Error('linear');
+    expect(Array.from(linear.tone)).toEqual([0, -150, 140, 150, -150, 120, -130, 150]);
+    expect(Array.from(linear.look.slice(0, 5))).toEqual([150, 125, -150, 150, 0]);
+
+    const legacy = developStages(wide, { isRaw: false, path: 'legacy' });
+    if (legacy.path !== 'legacy') throw new Error('legacy');
+    const a = legacy.adjustments;
+    expect([a.contrast, a.highlights, a.shadows, a.whites, a.blacks, a.vibrance, a.saturation]).toEqual([100, -100, 100, -100, 100, 100, 100]);
+    expect(legacy.adjustments.photoFilter).toEqual(whiteBalanceFilter(-100, 100));
+    expect(Array.from(legacy.mixer() ?? []).slice(0, 3)).toEqual([-100, 100, 0]);
+    expect(Array.from(legacy.mixer() ?? []).slice(15, 18)).toEqual([0, 0, 100]);
+    const grade = recipeFromPaths({ 'colorGrading.shadows.saturation': 60, 'colorGrading.shadows.luminance': -100, 'colorGrading.balance': 100 }).colorGrading;
+    expect(Array.from(legacy.grade() ?? [])).toEqual(Array.from(compileColorGrade(grade)));
+    // Within ±100 the legacy path sends what it always did.
+    expect(limitForLegacy(EDITED)).toEqual(EDITED);
   });
 });

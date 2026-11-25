@@ -19,7 +19,7 @@ export function curvesLut(recipe: Recipe): Uint8Array | null {
   return isIdentityCurves(curves) ? null : buildCurvesLutRgba(curves);
 }
 
-/** 24 floats, (hue, saturation, luminance) per band in HUE_BANDS order, −100..100. */
+/** 24 floats, (hue, saturation, luminance) per band in HUE_BANDS order: hue and luminance ±150, saturation −100..150 (±100 on the legacy path). */
 export function colorMixerValues(recipe: Recipe): Float32Array | null {
   const values = HUE_BANDS.flatMap((band) => {
     const h = recipe.colorByHue[band];

@@ -2,8 +2,8 @@
  * Color Grading compiled for the engine, ported from lopsy-web's
  * filters/color-grading.ts so a grade looks the same in both apps: four
  * wheels (shadows, midtones, highlights, global) of hue 0..360,
- * saturation 0..100 and luminance −100..100, plus Blending 0..100 and
- * Balance −100..100, packed into the 18 floats `setImageColorGrading`
+ * saturation 0..100 and luminance −150..150, plus Blending 0..100 and
+ * Balance −150..150 (Lopsy runs ±100), packed into the 18 floats `setImageColorGrading`
  * takes.
  */
 

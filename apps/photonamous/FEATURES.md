@@ -494,6 +494,28 @@ the newer version made.
   export of a photo.
 - **Local contrast** (Large details, Small details, Haze) and **Sharpness
   & noise**.
+- **Slider ranges.** Where a value past 100 means something the slider
+  runs to 150, and 100 is no longer its end: Temperature and Tint,
+  Contrast, Highlights, Shadows, Whites and Blacks run −150 to 150;
+  Vibrance, Saturation, a band's Color by hue saturation, Large details
+  and Small details −100 to 150 (−100 is grey, or the detail taken away
+  exactly); Color by hue's hue and luminance and Color Grading's
+  luminance and Balance −150 to 150; Haze −150 to 100 (100 takes away the
+  whole haze it measures); Sharpen, Edges only, Noise, Grain and Grain
+  size 0 to 150. A mask's Contrast, Highlights, Shadows, Temperature and
+  Tint run −150 to 150, its Saturation and Large details −100 to 150, and
+  its further adjustments as the photo's. The rest keep their ends, which
+  are real ones: Exposure (±5 EV, a mask's ±4), Radius (pixels), Angle
+  (degrees), Color noise and Keep detail (0 to 100), Color Grading's hue
+  (0 to 360), saturation (to the colour field's edge, 100) and Blending,
+  the Vignette's amount (±100 takes the corners to black or white) and
+  its Midpoint, Roundness and Feather, Roughness, and a mask's Amount and
+  Feather. A typed value past the end is held to it. A camera's
+  white-balance preset is its own Temperature and Tint wherever they are
+  within ±150 (before, ±100 cut some off, most often Tungsten); past 150
+  it is held there. On RAW files the Kelvin readout shows "—" where the
+  body's fitted scale passes infinite Kelvin, which on most bodies is
+  between about 100 and 150.
 - Every group has a **Reset**. The sliders are Lopsy's: the name on the
   left, the track, then a value field that takes a typed number (↑ and ↓
   step it). A changed slider's track fills in blue from its default to the
@@ -713,7 +735,8 @@ never talks to Google. Lopsy's side is in `apps/lopsy-web/FEATURES.md`
   finished look in 8 bits and shown as sRGB, and the status bar says
   "8-bit"; there the tone and colour sliders, curves and Auto work on the
   screen values after the RAW look, as they did before the linear working
-  space, so the same edit looks somewhat different there.
+  space, so the same edit looks somewhat different there, and a tone,
+  white balance or colour slider past 100 (and a mask's) works as 100.
 - **HDR on screen.** On WebGPU, while the display reports high dynamic
   range, the Edit view's canvas is HDR (16-bit float, extended tone
   mapping) and highlights above white show brighter than the page's

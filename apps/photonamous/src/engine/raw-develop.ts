@@ -7,14 +7,14 @@
  * before the document's image adjustments run on top.
  *
  * White balance is a POC mapping until Temperature and Tint read in kelvin
- * (spec E9): Temperature t ∈ [-100, 100] scales red by 2^(0.6·t/100) and
+ * (spec E9): Temperature t ∈ [-150, 150] scales red by 2^(0.6·t/100) and
  * blue by 2^(−0.6·t/100); Tint m scales green by 2^(−0.4·m/100). The three
  * gains are then divided by their weighted sum (¼ R, ½ G, ¼ B, a camera's
  * green-heavy luminance) so the image's brightness stays put and only its
  * colour moves.
  */
 
-import type { Recipe } from '@lopsy/photos-core/library/recipe';
+import { SLIDER_END, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { DevelopProfile, ProfileSettings } from './profiles';
 
 /** The JSON `setRawDevelop` takes and `rafDevelopDefaults` returns. */
@@ -58,7 +58,7 @@ export function wbRatioFor(temperature: number, tint: number): [number, number, 
 /**
  * The inverse of `wbRatioFor`: Temperature and Tint whose ratios match
  * `ratio` up to scale (the luminance normalisation drops out), rounded and
- * clamped to the sliders' −100..100. Used for Auto white balance, whose
+ * clamped to the sliders' −150..150. Used for Auto white balance, whose
  * engine answer is camera-space multipliers.
  */
 export function temperatureTintFor(ratio: readonly [number, number, number]): { temperature: number; tint: number } {
@@ -67,7 +67,7 @@ export function temperatureTintFor(ratio: readonly [number, number, number]): { 
   const t = Math.log2(r / b) / (2 * RAW_TEMPERATURE_STOPS);
   const m = -Math.log2(g / Math.sqrt(r * b)) / RAW_TINT_STOPS;
   const toSlider = (v: number) => {
-    const rounded = Math.round(Math.min(100, Math.max(-100, v * 100)));
+    const rounded = Math.round(Math.min(SLIDER_END, Math.max(-SLIDER_END, v * 100)));
     return rounded === 0 ? 0 : rounded;
   };
   return { temperature: toSlider(t), tint: toSlider(m) };

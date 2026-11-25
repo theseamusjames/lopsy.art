@@ -12,7 +12,8 @@
  *   adjustments (`recipe-to-adjustments.ts`), the 256-entry curves LUT,
  *   the old Color by hue and colour grading. It is the only thing that
  *   renders there, and it is kept apart so that it can be deleted in one
- *   cut when the fallback goes.
+ *   cut when the fallback goes. Those take ±100, so a slider past it is
+ *   held at 100 there (`limitForLegacy`); the linear path takes ±150.
  *
  * Detail, local contrast, haze, the finish and the areas' built-in sliders
  * take the same calls on both paths.
@@ -21,7 +22,7 @@
 import type { Recipe } from '@lopsy/photos-core/library/recipe';
 import { colorControlsKey, colorGradeValues, colorMixerValues, curvesLut } from './color-controls';
 import { buildCurveTable, CURVE_TABLE_ENTRIES, isIdentityCurves, type Curves } from './curves';
-import { recipeToAdjustments, type EngineAdjustments } from './recipe-to-adjustments';
+import { limitForLegacy, recipeToAdjustments, type EngineAdjustments } from './recipe-to-adjustments';
 
 export type DevelopPath = 'linear' | 'legacy';
 
@@ -154,12 +155,14 @@ export function developStages(recipe: Recipe, options: { readonly isRaw: boolean
       curves: () => developCurvesValues(recipe),
     };
   }
+  // Lopsy's adjustments and the old colour passes take ±100: 150 is 100 here.
+  const limited = limitForLegacy(recipe);
   return {
     path,
-    adjustments: recipeToAdjustments(recipe, { isRaw }),
-    colorKey: colorControlsKey(recipe),
-    curvesLut: () => curvesLut(recipe),
-    mixer: () => colorMixerValues(recipe),
-    grade: () => colorGradeValues(recipe),
+    adjustments: recipeToAdjustments(limited, { isRaw }),
+    colorKey: colorControlsKey(limited),
+    curvesLut: () => curvesLut(limited),
+    mixer: () => colorMixerValues(limited),
+    grade: () => colorGradeValues(limited),
   };
 }

@@ -19,7 +19,52 @@
  * it runs after the tone controls rather than before them in linear light.
  */
 
-import type { QuarterTurns, Recipe } from '@lopsy/photos-core/library/recipe';
+import { GRADE_RANGES, HUE_BANDS, type QuarterTurns, type Recipe } from '@lopsy/photos-core/library/recipe';
+
+/**
+ * What the legacy path takes. Lopsy's adjustments (and its shader, which
+ * this app must not change), the old Color by hue and the old colour
+ * grading run ±100, so a recipe value past it is held there on this path:
+ * 150 renders as 100 on the 8-bit fallback.
+ */
+export const LEGACY_LIMIT = 100;
+
+const limit = (v: number) => Math.min(LEGACY_LIMIT, Math.max(-LEGACY_LIMIT, v));
+
+/**
+ * The recipe as the legacy path's calls take it: white balance, the tone
+ * sliders, Vibrance, Saturation, Color by hue and colour grading's
+ * luminance and balance held to ±100. The rest (detail, local contrast,
+ * haze, the finish) goes to the develop passes, which take the recipe's
+ * whole range on both paths, and is left as it is.
+ */
+export function limitForLegacy(recipe: Recipe): Recipe {
+  const { tone, color, whiteBalance, colorByHue, colorGrading } = recipe;
+  return {
+    ...recipe,
+    whiteBalance: { ...whiteBalance, temperature: limit(whiteBalance.temperature), tint: limit(whiteBalance.tint) },
+    tone: {
+      ...tone,
+      contrast: limit(tone.contrast),
+      highlights: limit(tone.highlights),
+      shadows: limit(tone.shadows),
+      whites: limit(tone.whites),
+      blacks: limit(tone.blacks),
+    },
+    color: { vibrance: limit(color.vibrance), saturation: limit(color.saturation) },
+    colorByHue: Object.fromEntries(
+      HUE_BANDS.map((band) => {
+        const h = colorByHue[band];
+        return [band, { hue: limit(h.hue), saturation: limit(h.saturation), luminance: limit(h.luminance) }];
+      }),
+    ) as unknown as Recipe['colorByHue'],
+    colorGrading: {
+      ...colorGrading,
+      ...Object.fromEntries(GRADE_RANGES.map((range) => [range, { ...colorGrading[range], luminance: limit(colorGrading[range].luminance) }])),
+      balance: limit(colorGrading.balance),
+    },
+  };
+}
 
 export interface PhotoFilter {
   /** Per-channel gain, the largest of the three is 1. */

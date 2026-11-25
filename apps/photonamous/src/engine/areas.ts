@@ -12,7 +12,7 @@ import { isIdentityCurves } from './curves';
 import { curvesKey, developAreaLookValues, developCurvesValues } from './develop-stages';
 import { detailValues, localContrastValues } from './detail-controls';
 import { finishValues } from './finish-controls';
-import type { Framing } from './recipe-to-adjustments';
+import { limitForLegacy, type Framing } from './recipe-to-adjustments';
 
 /** Where the document sits relative to the source image. */
 export interface AreaFrame {
@@ -172,9 +172,11 @@ export interface AreaLayerOptions {
 
 /** An area's layer, or null when its effects change nothing and it draws none. */
 export function areaLayerValues(area: Area, options: AreaLayerOptions): AreaLayerValues | null {
-  const fx = area.effects;
-  const { whites, blacks } = fx.tone;
-  const { vibrance } = fx.color;
+  // The legacy path's area layer is Lopsy's adjustments and the old colour passes, which take ±100.
+  const limited = limitForLegacy(area.effects);
+  const { whites, blacks } = limited.tone;
+  const { vibrance } = limited.color;
+  const fx = { ...area.effects, colorByHue: limited.colorByHue, colorGrading: limited.colorGrading };
   const values: AreaLayerValues = {
     tone: whites === 0 && blacks === 0 && vibrance === 0 ? null : [whites, blacks, vibrance],
     curves: curvesLut(fx),

@@ -940,6 +940,41 @@ was.
 57. **HDR exports use up to 7 GB across the browser's processes** on a
     40-megapixel photo at full size. A smaller size is now offered
     (decision 44).
+58. **Sliders run to 150 where 100 was only a cap** (the owner ran out
+    of room). Every mapping from such a slider is linear in it or a
+    power of two of it, so 150 is one and a half times as far along the
+    same curve and a value within ±100 renders as before (the golden
+    renders did not move): `lopsy_core::scene_tone::SLIDER_END` in the
+    engine, `SLIDER_END` in the recipe. Widened at both ends:
+    Temperature, Tint, Contrast, Highlights, Shadows, Whites, Blacks
+    (the tone map stays monotone with ±150 and a mask's ±150 on top, the
+    knots forced into order as before), Color by hue's hue (±45°) and
+    luminance, Color Grading's luminance and Balance, and a mask's
+    Contrast, Highlights, Shadows, Temperature and Tint. Widened above,
+    with −100 kept: Vibrance, Saturation, a band's saturation and a
+    mask's Saturation (−100 is grey; below it the chroma factor is held
+    at 0), Large and Small details and a mask's Large details (−100 takes
+    the detail away; below it comes back inverted). Widened below, with
+    +100 kept: Haze (+100 removes the whole measured veil). Widened from
+    0 to 150: Edges only, Noise (past 100 the bilateral's range widens
+    and its mix stays whole, so it never overshoots the filtered value),
+    Grain and Grain size; Sharpen was already 150. Kept: Exposure and a
+    mask's Exposure (EV), Radius (pixels), Angle (degrees), Color noise
+    (100 replaces the chroma wholly), Keep detail (past about 133 the
+    range would be negative), Color Grading's hue (degrees), saturation
+    (the colour field's edge) and Blending (full overlap), the Vignette
+    (±100 takes the corners to black or white), its Midpoint, Roundness
+    (rectangle to circle) and Feather (the whole way to the corners),
+    Roughness (a mix of two octaves), and a mask's Amount and Feather.
+    The 8-bit fallback holds tone, white balance, Vibrance, Saturation,
+    Color by hue and the grade at ±100 where the app builds its calls,
+    so Lopsy's adjustment shader and ranges are unchanged, and the old
+    areas pass holds a mask's sliders at ±100 itself. White-balance
+    presets clamp to ±150: on the eight samples 9 presets were cut off at
+    ±100 (Tungsten on DSCF7863, DSCF8078 and DSCF8267, six on DSCF8169,
+    shot under warm light) and 2 still are, DSCF8169's Cloudy (+173) and
+    Daylight Fluorescent (+191) (`core/tests/raf_wb_presets.rs` prints
+    them). XMP export writes a value past Adobe's range at its end.
 
 ### Verified at the end
 

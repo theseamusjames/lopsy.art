@@ -1,8 +1,8 @@
 /**
  * The Finish group (vignette shape and grain) as the engine's
  * `setImageFinish` takes it: nine floats, `[vignetteAmount −100..100,
- * size 0..100, roundness −100..100, feather 0..100, grainAmount 0..100,
- * grainSize 0..100, grainRoughness 0..100, seed, pixelScale]`.
+ * size 0..100, roundness −100..100, feather 0..100, grainAmount 0..150,
+ * grainSize 0..150, grainRoughness 0..100, seed, pixelScale]`.
  *
  * The recipe's `finish.vignette` darkens when positive; the engine's
  * amount darkens when negative, so it is sent negated.
