@@ -324,3 +324,12 @@ export function seedSelectionMaskRef(engine: Engine, mask: Uint8ClampedArray): v
   tracked.selectionActive = true;
 }
 
+/**
+ * Forget which selection mask the engine holds, after something wrote the
+ * selection texture with a mask that isn't the tracked one (the GPU feather
+ * blurs it in place). The next `syncSelection` uploads again.
+ */
+export function forgetSelectionMaskRef(engine: Engine): void {
+  getTracked(engine).selectionMask = null;
+}
+

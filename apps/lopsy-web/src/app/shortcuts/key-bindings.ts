@@ -1,8 +1,13 @@
 import { invokeFromUi } from '../../commands/invoke-from-ui';
 
-/** A keyboard handler runs a command, or is exempt: it calls the stores directly, for the reason given. */
+/**
+ * A keyboard handler runs a command, or is exempt: it calls the stores
+ * directly, for the reason given. A command binding runs once per key press;
+ * `repeats` lets it run again on each keydown auto-repeat while the key is
+ * held (#1823).
+ */
 export type KeyBinding =
-  | { readonly command: string; readonly params?: Readonly<Record<string, unknown>> }
+  | { readonly command: string; readonly params?: Readonly<Record<string, unknown>>; readonly repeats?: true }
   | { readonly exempt: string };
 
 /**
@@ -47,8 +52,8 @@ export const KEY_BINDINGS = {
   deselect: { command: 'select.none', params: { commit: true } },
   toggleGrid: { command: 'ui.view.grid' },
   toggleGuides: { command: 'ui.view.guides' },
-  undo: { command: 'history.undo' },
-  redo: { command: 'history.redo' },
+  undo: { command: 'history.undo', repeats: true },
+  redo: { command: 'history.redo', repeats: true },
   autoTone: { command: 'image.auto', params: { kind: 'tone' } },
   autoContrast: { command: 'image.auto', params: { kind: 'contrast' } },
   autoColor: { command: 'image.auto', params: { kind: 'color' } },
@@ -62,9 +67,34 @@ type Bindings = typeof KEY_BINDINGS;
 
 export type KeyCommand = { [K in keyof Bindings]: Bindings[K] extends { readonly command: string } ? K : never }[keyof Bindings];
 
-/** Runs the command bound to a key handler, in the key's tick; `params` replaces the table's own. */
+/** Whether the keydown being handled now is an auto-repeat of a held key. */
+let handlingRepeat = false;
+
+/**
+ * Runs `handle` for one keydown, so that runKeyCommand inside it knows
+ * whether the event is an auto-repeat. A held key's repeats run only the
+ * bindings marked `repeats`: one-shot document commands (Delete's Clear
+ * Selection, Invert, Merge Down, Auto Tone…) would otherwise push a history
+ * step, a full-layer snapshot and a mask upload per repeat (#1823).
+ */
+export function handleKeyEvent<T>(e: KeyboardEvent, handle: () => T): T {
+  const outer = handlingRepeat;
+  handlingRepeat = e.repeat;
+  try {
+    return handle();
+  } finally {
+    handlingRepeat = outer;
+  }
+}
+
+/**
+ * Runs the command bound to a key handler, in the key's tick; `params`
+ * replaces the table's own. Does nothing on an auto-repeat unless the
+ * binding `repeats`.
+ */
 export function runKeyCommand(key: KeyCommand, params?: Readonly<Record<string, unknown>>): void {
   const binding: KeyBinding = KEY_BINDINGS[key];
   if (!('command' in binding)) return;
+  if (handlingRepeat && !binding.repeats) return;
   invokeFromUi(binding.command, params ?? binding.params);
 }

@@ -6,7 +6,8 @@ import { runKeyCommand } from './shortcuts/key-bindings';
 import { commitLiveFloat } from './interactions/live-float';
 import { isUnmovedPrefloat, commitUnmovedPrefloat } from './interactions/prefloat';
 import { getEngine } from '../engine-wasm/engine-state';
-import { clearSelectedPixels, hasFloat, setSelectionMask } from '../engine-wasm/wasm-bridge';
+import { clearSelectedPixels, hasFloat } from '../engine-wasm/wasm-bridge';
+import { syncSelection } from '../engine-wasm/engine-sync';
 
 /**
  * Delete in layer-mask edit mode: fills the active layer's mask with the
@@ -44,13 +45,12 @@ export function clearSelectedLayerPixels(activeId: string, selectionMask: Uint8C
   const selNow = useEditorStore.getState().selection;
   if (!selNow.active || !selNow.mask) return false;
 
-  // Force-sync the current selection mask to the GPU before clearing.
-  // The GPU mask is otherwise only updated on the next render frame, so a
-  // selection that was just nudged with the arrow keys (or floated) would
-  // clear using a stale mask — clearing the original area instead of the
-  // moved one.
-  const maskBytes = new Uint8Array(selNow.mask.buffer, selNow.mask.byteOffset, selNow.mask.byteLength);
-  setSelectionMask(engine, maskBytes, selNow.maskWidth, selNow.maskHeight);
+  // Sync the current selection mask to the GPU before clearing. The GPU
+  // mask is otherwise only updated on the next render frame, so a selection
+  // that was just nudged with the arrow keys (or floated) would clear using
+  // a stale mask — clearing the original area instead of the moved one.
+  // The upload is skipped when the engine already holds this mask (#1823).
+  syncSelection(engine, selNow);
 
   editor.pushHistory('Clear Selection');
   // Clear only — clipboardCut would also re-copy into the retained
