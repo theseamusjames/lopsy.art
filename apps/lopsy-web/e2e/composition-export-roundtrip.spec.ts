@@ -772,16 +772,12 @@ test.describe('Composition: Neon City — Export Round-Trip', () => {
     await flushRenderAndWait(page);
 
     const psdDownloadPromise = page.waitForEvent('download');
-    // Call exportPsdFile directly to avoid render loop re-entrancy
-    await page.evaluate(() => {
-      const { exportPsdFile } = window as unknown as {
-        exportPsdFile: (depth: number) => void;
-      };
-      // It's re-exported on the module scope; import it
-      return import('/src/io/psd.ts').then((mod) => {
-        mod.exportPsdFile(16);
-      });
-    });
+    // Through the File menu, as a user does. Calling exportPsdFile inside
+    // page.evaluate started the download before the evaluate returned, and
+    // Chromium's download navigation then destroyed the evaluate's context.
+    await page.getByRole('button', { name: 'File' }).click();
+    await page.waitForTimeout(200);
+    await page.getByRole('menuitem', { name: 'Export PSD' }).click();
     const psdDownload = await psdDownloadPromise;
     expect(psdDownload.suggestedFilename()).toMatch(/\.psd$/);
 
