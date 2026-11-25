@@ -19,7 +19,7 @@ const STEPS: readonly StepWords[] = [
   {
     step: 'upload',
     name: 'Upload your photos',
-    words: 'Import your RAW, JPG, PNG or other common photo types. They’re stored on your Google Drive, never anyplace else.',
+    words: 'Import your RAW, DNG, JPG or other common photo types. They’re stored on your Google Drive, never anyplace else.',
   },
   {
     step: 'edit',

@@ -11,6 +11,14 @@ export const MIME_TYPES: Readonly<Record<ImageFormat, string>> = {
   lopsy: 'application/x-lopsy',
 };
 
+/**
+ * The MIME types a file that import reads may carry in someone's storage:
+ * each format's own, and `application/octet-stream`, which is what a file
+ * has when whatever put it there did not know its type. A file picker is
+ * filtered to these; the magic bytes still decide what a picked file is.
+ */
+export const IMPORTABLE_MIME_TYPES: readonly string[] = [...new Set(Object.values(MIME_TYPES)), 'application/octet-stream'];
+
 function startsWith(bytes: Uint8Array, text: string): boolean {
   if (bytes.length < text.length) return false;
   for (let i = 0; i < text.length; i++) if (bytes[i] !== text.charCodeAt(i)) return false;

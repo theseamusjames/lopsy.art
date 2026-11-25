@@ -44,7 +44,7 @@ function photo(n: number): NewAsset {
     fileName: `DSCF${String(n % 10000).padStart(4, "0")}.RAF`,
     byteSize: 30_000_000 + (n % 5_000_000),
     format: "raf",
-    mimeType: "image/x-fujifilm-raf",
+    mimeType: "image/x-fuji-raf",
     capturedAt: `2026-${String(1 + (n % 12)).padStart(2, "0")}-${String(day).padStart(2, "0")}T16:02:11+01:00`,
     importedAt: "2026-11-15T10:00:00.000Z",
     importId: `imp-${Math.floor(n / 500)}`,

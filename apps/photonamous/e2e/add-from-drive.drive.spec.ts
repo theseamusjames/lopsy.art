@@ -60,6 +60,9 @@ test("Google Drive: a photo picked in Google's Picker, in the page, is added", a
   // The way out is offered while the Picker is open, and the page with it on is accessible.
   await expect(page.getByRole('complementary', { name: PROMPT })).toBeVisible();
   expect(await axeViolations(page)).toEqual([]);
+  // The Picker is asked for every kind of photo the app reads, Fujifilm RAW by the name Drive knows it by.
+  const offered = (await stub<string>(page, 'stub.mimeTypes')).split(',');
+  for (const type of ['image/x-fuji-raf', 'image/x-adobe-dng', 'image/jpeg', 'image/png', 'image/webp']) expect(offered, type).toContain(type);
 
   await page.evaluate((picked) => Reflect.get(window, '__lopsyPickerStub').pick([picked]), id);
   await expect(page.getByRole('complementary', { name: PROMPT })).toHaveCount(0);
@@ -88,6 +91,7 @@ test("Google Drive: when the Picker in the page is stuck, Google's own window ta
   expect(asked.searchParams.get('trigger_onepick')).toBe('true');
   expect(asked.searchParams.get('scope')).toBe('https://www.googleapis.com/auth/drive.file');
   expect(new URL(asked.searchParams.get('redirect_uri') ?? '').pathname).toBe('/drive-picked');
+  expect((asked.searchParams.get('mimetypes') ?? '').split(',')).toContain('image/x-fuji-raf');
   await expectPhotos(page, 1);
 
   // The choice is remembered: the next time, the window opens straight away. Closing it adds nothing and says nothing.

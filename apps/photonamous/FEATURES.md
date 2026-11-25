@@ -17,7 +17,7 @@ is `docs/photonamous-spec.md`; running and setup are in
 - **Try it now** opens **How it works**: three steps side by side, each
   with a drawing. Step 1, Connect with Google: Photonamous has access
   only to the one folder it creates in the visitor's Drive. Step 2,
-  Upload your photos: RAW, JPG, PNG and other common types, stored in
+  Upload your photos: RAW, DNG, JPG and other common types, stored in
   their Drive and nowhere else. Step 3, Edit and export. Under them is
   **Continue with Google**, which has focus, and a line saying what Google
   will ask. On a narrow window the steps stack. A failed sign-in is said
