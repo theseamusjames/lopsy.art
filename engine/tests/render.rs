@@ -970,6 +970,8 @@ fn noise_reduction_matches_its_cpu_reference() {
     for (name, values) in [
         ("noise reduction, full size", [0.0, 1.0, 0.0, 70.0, 80.0, 30.0, 1.0]),
         ("noise reduction, half size", [0.0, 1.0, 0.0, 40.0, 100.0, 0.0, 0.5]),
+        // Each slider at its end: luminance at 150 widens the range with the mix whole.
+        ("noise reduction at its ends", [0.0, 1.0, 0.0, 150.0, 100.0, 100.0, 1.0]),
     ] {
         let Some(run) = run_stage(&|e| commands::develop::set_image_detail(e, &values).expect("detail")) else { return };
         let s = DetailSettings::from_values(&values).unwrap();
@@ -994,6 +996,8 @@ fn haze_and_local_contrast_match_their_cpu_reference() {
     for (name, values) in [
         ("local contrast and dehaze, full size", [60.0, 50.0, 40.0, 1.0]),
         ("local contrast and added haze, half size", [-50.0, -40.0, -60.0, 0.5]),
+        // The new ends: both details at 150, haze added at −150.
+        ("details at their top and haze at its bottom", [150.0, 150.0, -150.0, 1.0]),
     ] {
         let Some(run) = run_stage(&|e| commands::develop::set_image_local_contrast(e, &values).expect("local contrast")) else { return };
         let s = LocalContrastSettings::from_values(&values).unwrap();
@@ -1020,6 +1024,7 @@ fn sharpening_matches_its_cpu_reference() {
     for (name, values) in [
         ("sharpening, no edge mask", [120.0, 1.2, 0.0, 0.0, 0.0, 0.0, 1.0]),
         ("sharpening, edge mask", [150.0, 2.0, 40.0, 0.0, 0.0, 0.0, 1.0]),
+        ("sharpening, edge mask at its top", [150.0, 1.0, 150.0, 0.0, 0.0, 0.0, 1.0]),
     ] {
         let Some(run) = run_stage(&|e| commands::develop::set_image_detail(e, &values).expect("detail")) else { return };
         let s = DetailSettings::from_values(&values).unwrap();
@@ -1067,9 +1072,11 @@ fn the_built_in_area_adjustments_match_their_cpu_reference() {
     let (w, h) = (STAGE_W as usize, STAGE_H as usize);
     // A linear area with every adjustment raised, and an inverted, rotated
     // radial one with every adjustment lowered, over the first.
-    let mut values = [0.0f32; 32];
+    // A third, at the sliders' new ends, which this pass holds to ±100.
+    let mut values = [0.0f32; 48];
     values[..16].copy_from_slice(&[0.0, 0.0, 0.9, 10.0, 5.0, 80.0, 50.0, 0.0, 0.0, 1.2, 40.0, 50.0, 40.0, 60.0, -30.0, 50.0]);
-    values[16..].copy_from_slice(&[1.0, 1.0, 0.8, 50.0, 30.0, 30.0, 18.0, 0.6, 0.5, -0.8, -50.0, -60.0, -40.0, -50.0, 40.0, -70.0]);
+    values[16..32].copy_from_slice(&[1.0, 1.0, 0.8, 50.0, 30.0, 30.0, 18.0, 0.6, 0.5, -0.8, -50.0, -60.0, -40.0, -50.0, 40.0, -70.0]);
+    values[32..].copy_from_slice(&[0.0, 0.0, 0.5, 60.0, 0.0, 20.0, 40.0, 0.0, 0.0, 0.3, -150.0, 150.0, -150.0, 150.0, -150.0, 150.0]);
     let Some(run) = run_stage(&|e| commands::develop::set_image_areas(e, &values).expect("areas")) else { return };
     let (areas, _) = lopsy_core::areas::parse_areas(&values).expect("parse");
     let reference = |_| lopsy_core::areas::areas_reference(&run.input, w, h, &areas);
@@ -1087,6 +1094,8 @@ fn finish_matches_its_cpu_reference() {
         ("finish, full size", [-60.0, 40.0, 50.0, 60.0, 50.0, 60.0, 40.0, 7.0, 1.0]),
         // A lightening, rectangular vignette and the working image's grain.
         ("finish, working size", [50.0, 20.0, -70.0, 30.0, 80.0, 20.0, 70.0, 11.0, 0.4]),
+        // Grain's amount and size at their new top.
+        ("finish, grain at its top", [-100.0, 0.0, 100.0, 100.0, 150.0, 150.0, 100.0, 3.0, 1.0]),
     ] {
         let Some(run) = run_stage(&|e| commands::develop::set_image_finish(e, &values).expect("finish")) else { return };
         let s = FinishSettings::from_values(&values).unwrap();
@@ -1549,18 +1558,27 @@ fn the_tone_pass_on_scene_data_matches_its_cpu_reference() {
     commands::develop::set_raw_develop_json(&mut engine, &serde_json::to_string(&s).unwrap()).expect("develop");
     let mut areas = radial_area(8.0, 1.5, 5.0, 2.0, [0.7, 40.0, -60.0, 30.0, 50.0, -20.0, 0.0]);
     areas.extend(radial_area(3.0, 0.5, 3.0, 3.0, [-0.5, -30.0, 80.0, -40.0, -30.0, 40.0, 0.0]));
+    // A mask at the sliders' new ends, which adds ±150 to the photo's ±150.
+    areas.extend(radial_area(12.0, 1.0, 6.0, 3.0, [0.3, 150.0, -150.0, 150.0, 150.0, -150.0, 0.0]));
     commands::develop::set_image_areas(&mut engine, &areas).expect("areas");
     let mut layer = [0.0f32; commands::develop::AREA_LOOK_LEN];
     layer[0] = 60.0;
     layer[1] = -45.0;
     commands::develop::set_develop_area_look(&mut engine, 1, &layer).expect("area look");
+    layer[0] = 150.0;
+    layer[1] = -150.0;
+    commands::develop::set_develop_area_look(&mut engine, 2, &layer).expect("area look");
     let scene = working_space_picture();
     // Every slider, both ends and between, RAW and not.
-    let cases: [[f32; 8]; 4] = [
+    // The last three are at the new ends, ±150, which the areas add to.
+    let cases: [[f32; 8]; 7] = [
         [0.0, 0.0, 0.0, 35.0, -100.0, 60.0, 20.0, -30.0],
         [0.0, 0.0, 0.0, -100.0, 100.0, -100.0, -100.0, 100.0],
         [1.3, 40.0, -25.0, 100.0, -40.0, 100.0, 100.0, -100.0],
         [-0.8, -100.0, 100.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 150.0, -150.0, 150.0, 150.0, -150.0],
+        [0.5, 150.0, -150.0, -150.0, 150.0, -150.0, -150.0, 150.0],
+        [0.0, 0.0, 0.0, 150.0, 150.0, 150.0, -150.0, -150.0],
     ];
     for (n, values) in cases.iter().enumerate() {
         commands::develop::set_develop_tone(&mut engine, values).expect("tone");
@@ -1702,7 +1720,19 @@ fn the_look_pass_matches_its_cpu_reference() {
     curves.extend(curve_table(0.0, 0.6, 1.0));
     curves.extend(identity.iter().copied());
     curves.extend(curve_table(0.1, 0.4, 1.0));
-    let cases = [(look.clone(), None), (vec![0.0; 44], Some(&curves)), (look, Some(&curves))];
+    // Saturation, Vibrance and Color by hue at their new ends: 150 up,
+    // −100 for the chroma scales, ±150 for hue and luminance.
+    let mut wide = vec![150.0f32, 150.0];
+    wide.extend((0..24).map(|k| match k % 6 {
+        0 => 150.0,
+        1 => 150.0,
+        2 => -150.0,
+        3 => -150.0,
+        4 => -100.0,
+        _ => 150.0,
+    }));
+    wide.extend_from_slice(&look[26..]);
+    let cases = [(look.clone(), None), (vec![0.0; 44], Some(&curves)), (look, Some(&curves)), (wide, None)];
     for (n, (look, curves)) in cases.into_iter().enumerate() {
         commands::develop::set_develop_look(&mut engine, &look).expect("look");
         match curves {
@@ -1920,7 +1950,12 @@ fn linear_local_contrast_matches_its_cpu_reference() {
     let luma = lopsy_core::working_space::luma(Gamut::Rec2020);
     // Both directions of each, at full size (the large blur through the
     // box downscale, the small one not) and at half size.
-    for (name, values) in [("details up, full size", [60.0, 50.0, 0.0, 1.0]), ("details down, half size", [-50.0, -80.0, 0.0, 0.5])] {
+    for (name, values) in [
+        ("details up, full size", [60.0, 50.0, 0.0, 1.0]),
+        ("details down, half size", [-50.0, -80.0, 0.0, 0.5]),
+        ("details at their top", [150.0, 150.0, 0.0, 1.0]),
+        ("details at their bottom", [-100.0, -100.0, 0.0, 1.0]),
+    ] {
         let set = |e: &mut EngineInner| commands::develop::set_image_local_contrast(e, &values).expect("local contrast");
         let Some((input, gpu)) = run_on_composite(&picture, &set, lopsy_engine::develop::detail::apply_local_contrast_linear) else { return };
         let s = LocalContrastSettings::from_values(&values).unwrap();
@@ -1958,7 +1993,12 @@ fn linear_haze_matches_its_cpu_reference() {
         })
         .collect();
     let luma = lopsy_core::working_space::luma(Gamut::Rec2020);
-    for (name, values) in [("dehaze, full size", [0.0, 0.0, 70.0, 1.0]), ("added haze, half size", [0.0, 0.0, -60.0, 0.5])] {
+    for (name, values) in [
+        ("dehaze, full size", [0.0, 0.0, 70.0, 1.0]),
+        ("added haze, half size", [0.0, 0.0, -60.0, 0.5]),
+        ("dehaze at its top", [0.0, 0.0, 100.0, 1.0]),
+        ("added haze at its bottom", [0.0, 0.0, -150.0, 1.0]),
+    ] {
         let set = |e: &mut EngineInner| commands::develop::set_image_local_contrast(e, &values).expect("haze");
         let Some((input, gpu)) = run_on_composite(&picture, &set, lopsy_engine::develop::detail::apply_haze) else { return };
         let s = LocalContrastSettings::from_values(&values).unwrap();

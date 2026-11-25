@@ -10,13 +10,16 @@
 //!    OkLab's own matrices composed with `working_space::conversion`
 //!    ([`OkLabMatrices`]). Saturation scales chroma by `1 + s/100` (grey at
 //!    −100, exactly: the colour is replaced by the grey of the same OkLab
-//!    lightness), Vibrance by `1 + v/100 · VIBRANCE_STRENGTH · (1 −
-//!    smoothstep(0, VIBRANCE_CHROMA, C))`, so it moves muted colours most.
+//!    lightness; ×2.5 at its top, 150), Vibrance by `1 + v/100 · VIBRANCE_STRENGTH · (1 −
+//!    smoothstep(0, VIBRANCE_CHROMA, C))`, so it moves muted colours most
+//!    (−100 takes a grey's chroma to 0; its top is 150).
 //!    Each area adds its built-in Saturation and its layer's Vibrance through
 //!    its mask, as the tone pass does (`crate::scene_tone`). Then Color by
 //!    hue: the eight bands of `crate::color_mixer` (its centres, weights
 //!    and strengths, its 24-value layout), on OkLab hue, without its sRGB
-//!    gamut limit and without clamping; the output step maps the gamut.
+//!    gamut limit and without clamping; the output step maps the gamut. Its
+//!    hue and luminance run ±150 and its saturation −100..150 here
+//!    ([`MIXER_LIMITS`]); the old pass keeps ±100.
 //! 2. **Colour grading**, the 18 values of `setImageColorGrading` (four
 //!    wheels of tint and luminance offsets, the balance exponent and the
 //!    crossover width), with its ranges on rendered luminance through the
@@ -36,6 +39,7 @@
 //! as it does on an sRGB image.
 
 use crate::areas::{self, Area};
+use crate::scene_tone::SLIDER_END;
 use crate::color_mixer::{band_weights, HUE_SHIFT_MAX_DEG, LUM_FULL_CHROMA, LUM_SHIFT_MAX, VALUES_LEN as MIXER_LEN};
 use crate::working_space::{conversion, luma, srgb_decode, srgb_encode, Gamut};
 
@@ -123,7 +127,16 @@ pub fn from_oklab(m: &OkLabMatrices, lab: [f32; 3]) -> [f32; 3] {
     apply(&m.rgb_from_lms, apply(&m.lms_from_lab, lab).map(|v| v * v * v))
 }
 
-/// The look's settings: Vibrance and Saturation (−100..100), Color by hue
+/// The lower end of Saturation, Vibrance and a band's saturation: −100
+/// scales chroma by 0 (grey), and below it the factor would go negative,
+/// which the passes hold at 0, so a lower value could only repeat grey.
+pub const CHROMA_FLOOR: f32 = -100.0;
+
+/// Each Color by hue value's range, (hue, saturation, luminance): hue and
+/// luminance ±150, saturation from [`CHROMA_FLOOR`] to 150.
+pub const MIXER_LIMITS: [(f32, f32); 3] = [(-SLIDER_END, SLIDER_END), (CHROMA_FLOOR, SLIDER_END), (-SLIDER_END, SLIDER_END)];
+
+/// The look's settings: Vibrance and Saturation (−100..150), Color by hue
 /// (24 values, `crate::color_mixer`'s layout) and a colour grade, `None`
 /// when its wheels are all neutral.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -142,7 +155,8 @@ impl Default for LookSettings {
 
 impl LookSettings {
     /// Vibrance, saturation, then Color by hue's 24 and the grade's 18, from
-    /// `values` (`LOOK_LEN` floats). Sliders are clamped to ±100.
+    /// `values` (`LOOK_LEN` floats). Vibrance and Saturation are clamped to
+    /// −100..150, Color by hue to [`MIXER_LIMITS`].
     pub fn parse(values: &[f32]) -> Result<Self, String> {
         if values.len() != LOOK_LEN {
             return Err(format!("Develop look needs {LOOK_LEN} floats, got {}", values.len()));
@@ -156,8 +170,9 @@ impl LookSettings {
             return Err("Develop look values must be finite".to_string());
         }
         let mut m = [0.0f32; MIXER_LEN];
-        for (d, s) in m.iter_mut().zip(mixer) {
-            *d = s.clamp(-100.0, 100.0);
+        for (i, (d, s)) in m.iter_mut().zip(mixer).enumerate() {
+            let (lo, hi) = MIXER_LIMITS[i % 3];
+            *d = s.clamp(lo, hi);
         }
         let mut g = [0.0f32; GRADING_LEN];
         g.copy_from_slice(grading);
@@ -170,8 +185,8 @@ impl LookSettings {
         g[17] = g[17].max(MIN_GRADE_SHAPE);
         let has_grade = g[..16].iter().any(|&v| v != 0.0);
         Ok(Self {
-            vibrance: vibrance.clamp(-100.0, 100.0),
-            saturation: saturation.clamp(-100.0, 100.0),
+            vibrance: vibrance.clamp(CHROMA_FLOOR, SLIDER_END),
+            saturation: saturation.clamp(CHROMA_FLOOR, SLIDER_END),
             mixer: m,
             grading: has_grade.then_some(g),
         })
@@ -388,6 +403,57 @@ mod tests {
         assert!((to_oklab(&m, [grey[0], grey[1], grey[2]])[0] - l_in).abs() < 1e-4);
         let more = run(&px, LookSettings { saturation: 100.0, ..Default::default() }, &NO_CURVES);
         assert!(more[4] > 2.5, "the bright orange is not clamped: {:?}", &more[4..8]);
+    }
+
+    /// The widened ends are taken, the real ones still hold, and 150 keeps
+    /// going the way 100 went.
+    #[test]
+    fn the_wide_ends_are_taken_and_saturation_still_stops_at_grey() {
+        let mut values = [0.0f32; LOOK_LEN];
+        values[0] = 400.0;
+        values[1] = -400.0;
+        for (k, v) in values[2..2 + MIXER_LEN].iter_mut().enumerate() {
+            *v = if k % 2 == 0 { 400.0 } else { -400.0 };
+        }
+        let s = LookSettings::parse(&values).unwrap();
+        assert_eq!((s.vibrance, s.saturation), (150.0, -100.0));
+        assert_eq!(&s.mixer[..6], &[150.0, -100.0, 150.0, -150.0, 150.0, -150.0]);
+        let m = oklab_matrices();
+        let chroma = |c: [f32; 3]| {
+            let l = to_oklab(&m, c);
+            (l[1] * l[1] + l[2] * l[2]).sqrt()
+        };
+        let c = [0.5f32, 0.2, 0.1];
+        let at = |sat: f32| chroma(color_pixel(&m, c, sat, 0.0, &[0.0; MIXER_LEN]));
+        assert!((at(150.0) / chroma(c) - 2.5).abs() < 1e-3 && at(150.0) > at(100.0));
+        let muted = [0.3f32, 0.27, 0.25];
+        assert!(chroma(color_pixel(&m, muted, 0.0, 150.0, &[0.0; MIXER_LEN])) > chroma(color_pixel(&m, muted, 0.0, 100.0, &[0.0; MIXER_LEN])));
+    }
+
+    /// Black, white, bright and out-of-gamut colours through every look
+    /// control at its ends, with a mask's Saturation and Vibrance added on
+    /// top: no NaN or infinity.
+    #[test]
+    fn no_extreme_gives_nan_or_infinity() {
+        let m = oklab_matrices();
+        let inputs: [[f32; 3]; 7] = [[0.0; 3], [1.0; 3], [8.0; 3], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [-0.05, 0.4, 1.3], [0.02, 0.0, 0.05]];
+        for c in inputs {
+            for sat in [-200.0f32, -100.0, 150.0, 300.0] {
+                for vib in [-200.0f32, -100.0, 150.0, 300.0] {
+                    for v in [-150.0f32, -100.0, 150.0] {
+                        let mixer: [f32; MIXER_LEN] = std::array::from_fn(|k| if k % 3 == 1 { v.max(-100.0) } else { v });
+                        let mut g = [0.0f32; GRADING_LEN];
+                        g[0] = 0.6;
+                        g[7] = -0.75;
+                        g[11] = 0.75;
+                        g[16] = 8.0;
+                        g[17] = 1.0 / 3.0;
+                        let out = grade_pixel(color_pixel(&m, c, sat, vib, &mixer), &g);
+                        assert!(out.iter().all(|x| x.is_finite()), "{c:?} sat {sat} vib {vib} mixer {v}: {out:?}");
+                    }
+                }
+            }
+        }
     }
 
     #[test]

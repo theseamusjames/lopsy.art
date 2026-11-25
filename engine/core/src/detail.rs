@@ -33,6 +33,8 @@
 //! the same amount to all three channels or by scaling them together, so
 //! none of them makes colour halos.
 
+use crate::scene_tone::SLIDER_END;
+
 /// Rec. 709 luma weights.
 pub const LUMA: [f32; 3] = [0.2126, 0.7152, 0.0722];
 /// Above this σ (working pixels) a blur goes through a downscaled image.
@@ -54,13 +56,21 @@ pub struct DetailSettings {
     pub amount: f32,
     /// 0.5..3.0 full-resolution pixels.
     pub radius: f32,
-    /// 0..100: 0 sharpens everything, 100 only strong edges.
+    /// 0..150: 0 sharpens everything, higher values only stronger edges
+    /// (the mask's threshold is linear in it).
     pub edges: f32,
-    /// Luminance noise reduction 0..100.
+    /// Luminance noise reduction 0..150: up to 100 the filtered luminance is
+    /// mixed in by `nr_luminance / 100` and the bilateral's range widens with
+    /// it; past 100 the mix stays whole and the range keeps widening
+    /// ([`nr_luminance_mix`], [`nr_range_sigma`]).
     pub nr_luminance: f32,
-    /// Colour noise reduction 0..100.
+    /// Colour noise reduction 0..100. At 100 the chroma is wholly the
+    /// blurred chroma (away from luminance edges); past it the mix would
+    /// overshoot and push colour noise the other way, so 100 is its end.
     pub nr_color: f32,
     /// Keep detail 0..100: how much luminance noise reduction spares edges.
+    /// At 100 the range σ is a quarter of what it is at 0; past about 133 it
+    /// would be negative, so 100 is its end.
     pub nr_detail: f32,
     /// Working width / full width (1 at full resolution).
     pub pixel_scale: f32,
@@ -75,8 +85,8 @@ impl DetailSettings {
         Ok(Self {
             amount: v[0].clamp(0.0, 150.0),
             radius: v[1].clamp(0.5, 3.0),
-            edges: v[2].clamp(0.0, 100.0),
-            nr_luminance: v[3].clamp(0.0, 100.0),
+            edges: v[2].clamp(0.0, SLIDER_END),
+            nr_luminance: v[3].clamp(0.0, SLIDER_END),
             nr_color: v[4].clamp(0.0, 100.0),
             nr_detail: v[5].clamp(0.0, 100.0),
             pixel_scale: v[6].clamp(1e-3, 1.0),
@@ -94,7 +104,15 @@ impl DetailSettings {
     }
 }
 
-/// Large details, small details and haze, −100..100 each.
+/// Large details and small details, −100..150, and haze, −150..100. At −100
+/// a detail slider takes that detail away exactly (below it the detail
+/// would come back inverted); at +100 haze removal takes away the whole
+/// measured veil (past it, light that is not veil).
+pub const DETAIL_FLOOR: f32 = -100.0;
+/// Haze's top: the whole measured veil removed.
+pub const HAZE_TOP: f32 = 100.0;
+
+/// Large details, small details and haze (`DETAIL_FLOOR`, `HAZE_TOP`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LocalContrastSettings {
     pub large: f32,
@@ -110,9 +128,9 @@ impl LocalContrastSettings {
             return Err("Local contrast values must be 4 finite floats".to_string());
         }
         Ok(Self {
-            large: v[0].clamp(-100.0, 100.0),
-            small: v[1].clamp(-100.0, 100.0),
-            haze: v[2].clamp(-100.0, 100.0),
+            large: v[0].clamp(DETAIL_FLOOR, SLIDER_END),
+            small: v[1].clamp(DETAIL_FLOOR, SLIDER_END),
+            haze: v[2].clamp(-SLIDER_END, HAZE_TOP),
             pixel_scale: v[3].clamp(1e-3, 1.0),
         })
     }
@@ -177,6 +195,13 @@ fn px(img: &[f32], i: usize) -> [f32; 3] {
     [img[i * 4], img[i * 4 + 1], img[i * 4 + 2]]
 }
 
+/// How much of the bilateral's luminance is mixed in: the slider over 100,
+/// whole from 100 on. Past 100 the slider only widens the range σ, so more
+/// noise is taken without the mix overshooting the filtered value.
+pub fn nr_luminance_mix(s: &DetailSettings) -> f32 {
+    (s.nr_luminance / 100.0).min(1.0)
+}
+
 /// Range σ of the luminance bilateral.
 pub fn nr_range_sigma(s: &DetailSettings) -> f32 {
     (0.02 + 0.10 * s.nr_luminance / 100.0) * (1.0 - 0.75 * s.nr_detail / 100.0)
@@ -218,7 +243,7 @@ pub fn noise_reduce_reference(img: &[f32], chroma_blur: &[f32], w: usize, h: usi
 /// `noise_reduce_reference`, run as `run` says.
 pub fn noise_reduce_run_reference(img: &[f32], chroma_blur: &[f32], w: usize, h: usize, s: &DetailSettings, run: NoiseRun) -> Vec<f32> {
     let sr = nr_range_sigma(s) / run.threshold_scale;
-    let (lum, col) = (s.nr_luminance / 100.0, s.nr_color / 100.0);
+    let (lum, col) = (nr_luminance_mix(s), s.nr_color / 100.0);
     let mut out = img.to_vec();
     for y in 0..h {
         for x in 0..w {
@@ -443,5 +468,43 @@ mod tests {
         assert!(DetailSettings::from_values(&[1.0; 6]).is_err());
         assert!(LocalContrastSettings::from_values(&[f32::NAN, 0.0, 0.0, 1.0]).is_err());
         assert!(!LocalContrastSettings::from_values(&[0.0, 0.0, 0.0, 1.0]).unwrap().is_active());
+    }
+
+    /// The widened ends are taken and the real ends still hold.
+    #[test]
+    fn settings_take_the_wide_ends_and_stop_at_the_real_ones() {
+        let d = DetailSettings::from_values(&[150.0, 1.0, 150.0, 150.0, 150.0, 150.0, 1.0]).unwrap();
+        assert_eq!((d.amount, d.edges, d.nr_luminance, d.nr_color, d.nr_detail), (150.0, 150.0, 150.0, 100.0, 100.0));
+        let d = DetailSettings::from_values(&[151.0, 1.0, 400.0, 151.0, 0.0, 0.0, 1.0]).unwrap();
+        assert_eq!((d.amount, d.edges, d.nr_luminance), (150.0, 150.0, 150.0));
+        let lc = LocalContrastSettings::from_values(&[150.0, 150.0, -150.0, 1.0]).unwrap();
+        assert_eq!((lc.large, lc.small, lc.haze), (150.0, 150.0, -150.0));
+        let lc = LocalContrastSettings::from_values(&[-150.0, 300.0, 150.0, 1.0]).unwrap();
+        assert_eq!((lc.large, lc.small, lc.haze), (-100.0, 150.0, 100.0));
+    }
+
+    /// Noise reduction past 100 mixes in the whole filtered luminance, as at
+    /// 100, over a wider range: it smooths more, and stays as it was below 100.
+    #[test]
+    fn noise_reduction_past_100_widens_the_range_without_overshooting() {
+        let s = |l: f32| DetailSettings::from_values(&[0.0, 1.0, 0.0, l, 0.0, 50.0, 1.0]).unwrap();
+        assert_eq!(nr_luminance_mix(&s(50.0)), 0.5);
+        assert_eq!(nr_luminance_mix(&s(100.0)), 1.0);
+        assert_eq!(nr_luminance_mix(&s(150.0)), 1.0);
+        assert!(nr_range_sigma(&s(150.0)) > nr_range_sigma(&s(100.0)));
+        let (w, h) = (8usize, 8usize);
+        let img: Vec<f32> = (0..w * h).flat_map(|i| {
+            let v = 0.4 + if (i * 7919) % 5 < 2 { 0.08 } else { -0.05 };
+            [v, v, v, 1.0]
+        }).collect();
+        let blur = gaussian(&img, w, h, NR_CHROMA_SIGMA);
+        let spread = |o: &[f32]| {
+            let ys: Vec<f32> = o.chunks_exact(4).map(|p| luma([p[0], p[1], p[2]])).collect();
+            ys.iter().cloned().fold(f32::MIN, f32::max) - ys.iter().cloned().fold(f32::MAX, f32::min)
+        };
+        let at = |l: f32| noise_reduce_reference(&img, &blur, w, h, &s(l));
+        let (a100, a150) = (at(100.0), at(150.0));
+        assert!(spread(&a150) <= spread(&a100) && spread(&a100) < spread(&img), "{} {} {}", spread(&img), spread(&a100), spread(&a150));
+        assert!(a150.iter().all(|v| v.is_finite()));
     }
 }

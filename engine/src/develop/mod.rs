@@ -154,7 +154,7 @@
 //! White balance and statistics:
 //! - `rafAutoWhiteBalance(linearRgba)`: near-neutral-pixel white balance, as `wbRatio`.
 //! - `rafAutoWhiteBalanceClipped(linearRgba, clipLevels)`: the same, leaving out clipped and reconstructed pixels.
-//! - `rafWhiteBalancePresets(rafBytes)`, `rafWhiteBalanceKelvin(rafBytes)`: the body's presets in recipe units, and the Kelvin scale, a line fitted through the presets (a RAF has no calibration data, so its Kelvin is a readout, not a colour temperature). A DNG's Kelvin is real: `dngWhiteBalance` and `dngWhiteBalanceKelvin`.
+//! - `rafWhiteBalancePresets(rafBytes)`, `rafWhiteBalanceKelvin(rafBytes)`: the body's presets in recipe units (clamped to the sliders' ±150), and the Kelvin scale, a line fitted through the presets (a RAF has no calibration data, so its Kelvin is a readout, not a colour temperature). A DNG's Kelvin is real: `dngWhiteBalance` and `dngWhiteBalanceKelvin`.
 //! - `sampleNeutralWhiteBalance(engine, x, y, radius)` (readback): the picker; leaves out clipped and reconstructed pixels when `setRawDevelop`'s JSON has `clipLevels`.
 //! - `readDevelopHistogram(engine)` (readback): 4 × 256 bins of the displayed result; with the working space, of the sRGB output.
 //! - `readHdrHistogram(engine, peak)` (readback, working space only): 4 × 256 bins of the HDR rendering for the HDR canvas in sRGB primaries, encoded values from black (bin 0) to the peak (bin 255); `hdrHistogramWhiteBin(peak)` is where white falls (139.7 for 4).
@@ -170,15 +170,18 @@
 //! Tone, colour and curves with the working space (`develop.rs`; all zeros
 //! is the identity, and each acts only with the working space):
 //! - `setDevelopTone(engine, Float32Array(8))`: exposure EV, temperature,
-//!   tint, contrast, highlights, shadows, whites, blacks (recipe units);
+//!   tint, contrast, highlights, shadows, whites, blacks (recipe units:
+//!   exposure clamped to ±10 EV, the rest to ±150, `scene_tone::SLIDER_END`);
 //!   exposure, temperature and tint 0 for a RAW photo.
-//! - `setDevelopLook(engine, Float32Array(44))`: vibrance, saturation,
-//!   Color by hue's 24, a grade's 18.
+//! - `setDevelopLook(engine, Float32Array(44))`: vibrance and saturation
+//!   (−100..150), Color by hue's 24 (hue and luminance ±150, saturation
+//!   −100..150), a grade's 18 (as compiled, not clamped).
 //! - `setDevelopCurves(engine, Float32Array(16384))`: master, red, green,
 //!   blue, 4096 entries each; `clearDevelopCurves(engine)`.
 //! - `clearDevelopAdjustments(engine)`: the three above off.
 //! - `setDevelopAreaLook(engine, index, Float32Array(45))`: an area layer's
-//!   whites, blacks, vibrance, Color by hue's 24, a grade's 18;
+//!   whites and blacks (±150), vibrance (−100..150), Color by hue's 24, a
+//!   grade's 18;
 //!   `setDevelopAreaCurves(engine, index, Float32Array(16384))`.
 //!
 //! With the working space these older calls change nothing (they still
@@ -194,13 +197,17 @@
 //! `clearImageColorGrading` (Lopsy's 18 floats, on the document's image
 //! adjustments).
 //!
-//! Detail: `setImageDetail` / `clearImageDetail` (7 floats: sharpening and
-//! noise reduction), `setImageLocalContrast` / `clearImageLocalContrast`
-//! (4 floats: large details, small details, haze, pixel scale). With the
+//! Detail: `setImageDetail` / `clearImageDetail` (7 floats: sharpening
+//! 0..150, radius, edges 0..150, noise reduction's luminance 0..150 (past
+//! 100 a wider range, the mix whole), colour and keep detail 0..100),
+//! `setImageLocalContrast` / `clearImageLocalContrast` (4 floats: large and
+//! small details −100..150, haze −150..100, pixel scale). With the
 //! working space the same values drive 2n (noise reduction), 2h (haze) and
 //! the linear 4 (large and small details); their layouts are unchanged.
 //!
-//! Areas: `setImageAreas` / `clearImageAreas` (16 floats an area, at most 8).
+//! Areas: `setImageAreas` / `clearImageAreas` (16 floats an area, at most 8;
+//! the six signed sliders ±150, saturation −100..150; stage 7, without the
+//! working space, holds them to ±100, `areas::LEGACY_LIMIT`).
 //! An area's layer, by the area's index: `setImageAreaTone` (whites,
 //! blacks, vibrance), `setImageAreaCurvesLut`, `setImageAreaColorGrading`,
 //! `setImageAreaColorMixer`, `setImageAreaDetail`,
@@ -208,7 +215,19 @@
 //! document-wide twin's values; `clearImageAreaLayer(engine, index)` and
 //! `clearImageAreaLayers`.
 //!
-//! Finish: `setImageFinish` / `clearImageFinish` (9 floats).
+//! Finish: `setImageFinish` / `clearImageFinish` (9 floats; grain's amount
+//! and size 0..150, the vignette's controls and roughness to 100).
+//!
+//! **Slider limits.** A slider whose 100 was only a cap takes values to 150
+//! (`lopsy_core::scene_tone::SLIDER_END`); every mapping from it is linear
+//! in it or a power of two of it, so 150 is one and a half times as far
+//! along the same curve and a value within ±100 renders as it always did.
+//! The ends that stayed are real ones: Saturation, Vibrance and a band's
+//! saturation at −100 (grey), the details at −100 (removed exactly), haze at
+//! +100 (the whole veil), noise reduction's colour and keep detail at 100,
+//! the vignette's amount, midpoint, roundness and feather, and grain's
+//! roughness. Lopsy's calls (`setImageExposure` … and the old Color by hue,
+//! `setImageColorMixer`) keep ±100.
 //!
 //! Views, screen only: `setImageAreaOverlay(engine, index)`,
 //! `setClippingWarning(engine, shadows, highlights)`,

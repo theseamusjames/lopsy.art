@@ -218,7 +218,7 @@ pub fn raf_develop_defaults(params_json: &str) -> Result<String, JsError> {
 
 /// White-balance presets for the body that shot `data` (the RAF file), as
 /// JSON `[{ "name", "temperature", "tint" }]` in the recipe's units
-/// (relative to as shot, −100..100), in menu order: Daylight, Cloudy,
+/// (relative to as shot, clamped to −150..150), in menu order: Daylight, Cloudy,
 /// Shade, Tungsten, the fluorescents, Flash, Underwater, as the body has
 /// them; a body missing from the table uses its sensor family's. `[]` for a
 /// file without an as-shot balance.

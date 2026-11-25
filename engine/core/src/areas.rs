@@ -28,12 +28,12 @@
 //! | 7 | radial rotation (linear: ignored) | radians |
 //! | 8 | radial feather (linear: ignored) | 0..1 |
 //! | 9 | exposure | EV, −4..4 |
-//! | 10 | contrast | −100..100 |
-//! | 11 | highlights | −100..100 |
-//! | 12 | shadows | −100..100 |
-//! | 13 | temperature | −100..100 |
-//! | 14 | tint | −100..100 |
-//! | 15 | saturation | −100..100 |
+//! | 10 | contrast | −150..150 |
+//! | 11 | highlights | −150..150 |
+//! | 12 | shadows | −150..150 |
+//! | 13 | temperature | −150..150 |
+//! | 14 | tint | −150..150 |
+//! | 15 | saturation | −100..150 |
 //!
 //! Document pixel coordinates have their origin at the top-left corner of
 //! the document and pixel (x, y) has its centre at (x + 0.5, y + 0.5).
@@ -48,7 +48,11 @@
 //! `1 − smoothstep(1 − feather, 1, r)` (feather floored at 0.001). Then
 //! `invert` flips it and `amount` scales it.
 //!
-//! **Adjustments**, each scaled by the mask `m`, in this order:
+//! **Adjustments**, each scaled by the mask `m`, in this order, with the
+//! five signed sliders and saturation held to ±100 first ([`LEGACY_LIMIT`]):
+//! this pass runs only without the working space, where contrast below −100
+//! would turn the image's contrast over; the tone and look passes take the
+//! wider values:
 //! - exposure: linear light × `2^(m · ev)`;
 //! - temperature / tint: linear red × `2^(0.3 · m · T)` and blue ×
 //!   `2^(−0.3 · m · T)`; green × `2^(−0.25 · m · tint)` (+ tint is magenta);
@@ -75,6 +79,12 @@
 //! on encoded values, alpha untouched (`area_layer_reference`,
 //! `develop/area_layer.wgsl`). The mask is the one above, amount and invert
 //! included. An area with nothing further set draws no layer.
+
+use crate::scene_tone::SLIDER_END;
+
+/// What the areas pass of the chain without the working space holds each
+/// slider to, as it always took them. Within ±100 its maths is unchanged.
+pub const LEGACY_LIMIT: f32 = 100.0;
 
 /// Most areas one pass applies.
 pub const MAX_AREAS: usize = 8;
@@ -120,7 +130,7 @@ pub fn parse_areas(values: &[f32]) -> Result<(Vec<Area>, Vec<f32>), String> {
             k if k == 1.0 => true,
             k => return Err(format!("Area kind must be 0 (linear) or 1 (radial), got {k}")),
         };
-        let slider = |x: f32| x.clamp(-100.0, 100.0);
+        let slider = |x: f32| x.clamp(-SLIDER_END, SLIDER_END);
         let a = Area {
             radial,
             invert: v[1] >= 0.5,
@@ -134,7 +144,7 @@ pub fn parse_areas(values: &[f32]) -> Result<(Vec<Area>, Vec<f32>), String> {
             shadows: slider(v[12]),
             temperature: slider(v[13]),
             tint: slider(v[14]),
-            saturation: slider(v[15]),
+            saturation: v[15].clamp(crate::look::CHROMA_FLOOR, SLIDER_END),
         };
         clamped.extend_from_slice(&[
             if a.radial { 1.0 } else { 0.0 },
@@ -196,23 +206,24 @@ pub fn adjust(rgb: [f32; 3], a: &Area, m: f32) -> [f32; 3] {
         return rgb;
     }
     let gain = (m * a.exposure).exp2();
-    let t = a.temperature / 100.0;
-    let wb = [(0.3 * m * t).exp2(), (-0.25 * m * a.tint / 100.0).exp2(), (-0.3 * m * t).exp2()];
+    let l = |v: f32| v.clamp(-LEGACY_LIMIT, LEGACY_LIMIT);
+    let t = l(a.temperature) / 100.0;
+    let wb = [(0.3 * m * t).exp2(), (-0.25 * m * l(a.tint) / 100.0).exp2(), (-0.3 * m * t).exp2()];
     let mut e = [0.0f32; 3];
     for c in 0..3 {
         e[c] = to_encoded(to_linear(rgb[c]) * gain * wb[c]);
     }
-    let k = 1.0 + m * a.contrast / 100.0;
+    let k = 1.0 + m * l(a.contrast) / 100.0;
     for v in e.iter_mut() {
         *v = (*v - 0.5) * k + 0.5;
     }
     let y = luma(e);
-    let shift = 0.25 * m * (a.highlights / 100.0 * smoothstep(0.5, 1.0, y) + a.shadows / 100.0 * (1.0 - smoothstep(0.0, 0.5, y)));
+    let shift = 0.25 * m * (l(a.highlights) / 100.0 * smoothstep(0.5, 1.0, y) + l(a.shadows) / 100.0 * (1.0 - smoothstep(0.0, 0.5, y)));
     for v in e.iter_mut() {
         *v += shift;
     }
     let y = luma(e);
-    let s = 1.0 + m * a.saturation / 100.0;
+    let s = 1.0 + m * l(a.saturation) / 100.0;
     e.map(|v| (y + s * (v - y)).max(0.0))
 }
 
@@ -340,6 +351,20 @@ mod tests {
         let hard = area(radial((0.0, 0.0), (10.0, 10.0), 0.0, 0.0));
         assert_eq!(mask(&hard, 9.9, 0.0), 1.0);
         assert_eq!(mask(&hard, 10.1, 0.0), 0.0);
+    }
+
+    #[test]
+    fn the_sliders_take_150_and_the_pass_without_the_working_space_holds_them_to_100() {
+        let mut v = linear((0.0, 0.0), (10.0, 0.0));
+        v[10..16].copy_from_slice(&[-150.0, 150.0, -150.0, 150.0, -150.0, -150.0]);
+        let a = area(v);
+        assert_eq!((a.contrast, a.highlights, a.shadows, a.temperature, a.tint, a.saturation), (-150.0, 150.0, -150.0, 150.0, -150.0, -100.0));
+        let mut held = v;
+        held[10..16].copy_from_slice(&[-100.0, 100.0, -100.0, 100.0, -100.0, -100.0]);
+        let px = [0.4f32, 0.35, 0.3];
+        assert_eq!(adjust(px, &a, 1.0), adjust(px, &area(held), 1.0));
+        v[10] = 400.0;
+        assert_eq!(area(v).contrast, 150.0);
     }
 
     #[test]

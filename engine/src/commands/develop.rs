@@ -113,7 +113,10 @@ pub fn set_develop_working_space(engine: &mut EngineInner, on: bool, source: u8)
 /// Color by hue on the composite, after the image adjustments: 24 values,
 /// (hue, saturation, luminance) per band in −100..100, bands in the order
 /// red, orange, yellow, green, aqua, blue, purple, magenta
-/// (`lopsy_core::color_mixer`).
+/// (`lopsy_core::color_mixer`). This is the pass of the chain without the
+/// working space, and it keeps ±100: its saturation is held at the sRGB
+/// gamut's edge, so it has no room past it. With the working space Color by
+/// hue is the look pass's (`set_develop_look`), which takes −150..150.
 pub fn set_image_color_mixer(engine: &mut EngineInner, values: &[f32]) -> Result<(), String> {
     let values: [f32; color_mixer::VALUES_LEN] = values
         .try_into()
@@ -133,8 +136,9 @@ pub fn clear_image_color_mixer(engine: &mut EngineInner) {
 }
 
 /// Sharpening and noise reduction: `[amount 0..150, radius 0.5..3 (full-
-/// resolution px), edges 0..100, nrLuminance 0..100, nrColor 0..100,
+/// resolution px), edges 0..150, nrLuminance 0..150, nrColor 0..100,
 /// nrDetail 0..100, pixelScale (working width / full width)]`, clamped.
+/// `nrLuminance` past 100 widens the bilateral's range with the mix whole.
 /// See `lopsy_core::detail` for where and how they run.
 pub fn set_image_detail(engine: &mut EngineInner, values: &[f32]) -> Result<(), String> {
     engine.detail = Some(lopsy_core::detail::DetailSettings::from_values(values)?);
@@ -147,8 +151,8 @@ pub fn clear_image_detail(engine: &mut EngineInner) {
     engine.needs_recomposite = true;
 }
 
-/// Large details, small details and haze: `[large, small, haze (each
-/// −100..100), pixelScale]`, clamped. With the working space, haze acts on
+/// Large details, small details and haze: `[large −100..150, small
+/// −100..150, haze −150..100, pixelScale]`, clamped. With the working space, haze acts on
 /// scene data before the tone pass and the two details on rendered data
 /// after it (`lopsy_core::linear_detail`); without it, all three on encoded
 /// values (`lopsy_core::detail`).
@@ -202,7 +206,8 @@ fn area_layer(engine: &mut EngineInner, index: u32) -> Result<&mut crate::engine
 }
 
 /// Whites, blacks and vibrance of area `index`'s layer, −100..100 each as
-/// `set_image_whites`, `set_image_blacks` and `set_image_vibrance` take them.
+/// `set_image_whites`, `set_image_blacks` and `set_image_vibrance` take them
+/// (Lopsy's image adjustments, the chain without the working space).
 pub fn set_image_area_tone(engine: &mut EngineInner, index: u32, whites: f32, blacks: f32, vibrance: f32) -> Result<(), String> {
     if ![whites, blacks, vibrance].iter().all(|v| v.is_finite()) {
         return Err("Area tone values must be finite".to_string());
@@ -314,7 +319,7 @@ pub fn set_image_area_overlay(engine: &mut EngineInner, index: i32) {
 
 /// The shaped vignette and grain (`lopsy_core::finish`): 9 floats
 /// `[vignetteAmount −100..100, size 0..100, roundness −100..100,
-/// feather 0..100, grainAmount 0..100, grainSize 0..100,
+/// feather 0..100, grainAmount 0..150, grainSize 0..150,
 /// grainRoughness 0..100, seed, pixelScale]`, clamped.
 pub fn set_image_finish(engine: &mut EngineInner, values: &[f32]) -> Result<(), String> {
     engine.finish = Some(lopsy_core::finish::FinishSettings::from_values(values)?);
@@ -537,7 +542,8 @@ pub fn composite_for_export_sized(engine: &mut EngineInner, width: u32, height: 
 
 /// Tone on scene data: `lopsy_core::scene_tone::ToneSliders::parse`'s 8
 /// floats (exposure EV, temperature, tint, contrast, highlights, shadows,
-/// whites, blacks; recipe units). For a RAW photo, send exposure,
+/// whites, blacks; recipe units: exposure −10..10 EV, the rest −150..150,
+/// clamped). For a RAW photo, send exposure,
 /// temperature and tint as 0: the RAW step applies the photo's own.
 pub fn set_develop_tone(engine: &mut EngineInner, values: &[f32]) -> Result<(), String> {
     let sliders = lopsy_core::scene_tone::ToneSliders::parse(values)?;
@@ -547,7 +553,8 @@ pub fn set_develop_tone(engine: &mut EngineInner, values: &[f32]) -> Result<(), 
 }
 
 /// Colour on rendered linear data: `lopsy_core::look::LookSettings::parse`'s
-/// 44 floats (vibrance, saturation, Color by hue's 24, the grade's 18).
+/// 44 floats (vibrance and saturation −100..150, Color by hue's 24 with hue
+/// and luminance −150..150 and saturation −100..150, the grade's 18), clamped.
 pub fn set_develop_look(engine: &mut EngineInner, values: &[f32]) -> Result<(), String> {
     let look = lopsy_core::look::LookSettings::parse(values)?;
     engine.develop_look = (!look.is_identity()).then_some(look);
@@ -620,9 +627,9 @@ pub fn clear_develop_adjustments(engine: &mut EngineInner) {
 /// Floats in `set_develop_area_look`.
 pub const AREA_LOOK_LEN: usize = 3 + color_mixer::VALUES_LEN + lopsy_core::look::GRADING_LEN;
 
-/// Area `index`'s layer with the working space: 45 floats, whites, blacks
-/// and vibrance (−100..100, blended through the area's mask in the tone and
-/// look passes), then Color by hue's 24 and a grade's 18 (run over a copy
+/// Area `index`'s layer with the working space: 45 floats, whites and
+/// blacks (−150..150) and vibrance (−100..150), blended through the area's
+/// mask in the tone and look passes, then Color by hue's 24 and a grade's 18 (run over a copy
 /// and laid back through the mask).
 pub fn set_develop_area_look(engine: &mut EngineInner, index: u32, values: &[f32]) -> Result<(), String> {
     if values.len() != AREA_LOOK_LEN {
@@ -632,7 +639,8 @@ pub fn set_develop_area_look(engine: &mut EngineInner, index: u32, values: &[f32
         return Err("Area look values must be finite".to_string());
     }
     let settings = lopsy_core::look::LookSettings::parse_parts(values[2], 0.0, &values[3..27], &values[27..])?;
-    let tone = lopsy_core::scene_tone::AreaTone { whites: values[0].clamp(-100.0, 100.0), blacks: values[1].clamp(-100.0, 100.0) };
+    let end = lopsy_core::scene_tone::SLIDER_END;
+    let tone = lopsy_core::scene_tone::AreaTone { whites: values[0].clamp(-end, end), blacks: values[1].clamp(-end, end) };
     area_layer(engine, index)?.look = Some(crate::develop::look::AreaLook { tone, settings });
     Ok(())
 }

@@ -203,7 +203,9 @@ pub fn auto_tone(histogram: &[u32], current: &ToneSettings) -> ToneSettings {
     let dark = fraction(0, 21).max(channel_bottom);
     let shadows = if dark > 0.15 { ((dark - 0.15) * 150.0).min(25.0) } else { 0.0 };
 
-    let slider = |base: f32, delta: f32| (base + delta).clamp(-100.0, 100.0).round();
+    // The sliders' own ends, so a value past 100 is not cut back to it.
+    let end = crate::scene_tone::SLIDER_END;
+    let slider = |base: f32, delta: f32| (base + delta).clamp(-end, end).round();
     ToneSettings {
         exposure: ((current.exposure + delta_ev).clamp(-5.0, 5.0) * 100.0).round() / 100.0,
         contrast: slider(current.contrast, contrast),
@@ -331,7 +333,7 @@ pub const RAW_TINT_STOPS: f32 = 0.4;
 pub const ENCODED_TEMPERATURE_STOPS: f32 = 0.5;
 pub const ENCODED_TINT_STOPS: f32 = 0.35;
 
-/// The `[temperature, tint]` (−100..100) whose gains make the mean of
+/// The `[temperature, tint]` (−150..150) whose gains make the mean of
 /// `rgba16` (straight RGBA u16, transparent pixels skipped) neutral, with
 /// the RAW stops when `is_raw` and the encoded ones otherwise. `[0, 0]`
 /// when the patch is empty or has a channel at 0. Mirrors the app's
@@ -372,7 +374,8 @@ pub fn neutral_temperature_tint_clipped(rgba16: &[u16], is_raw: bool, clip: Opti
     };
     let t = (r / b).log2() / (2.0 * ts as f64);
     let m = -(g / (r * b).sqrt()).log2() / ms as f64;
-    let slider = |v: f64| ((v * 100.0).clamp(-100.0, 100.0).round() as f32) + 0.0;
+    let end = f64::from(crate::scene_tone::SLIDER_END);
+    let slider = |v: f64| ((v * 100.0).clamp(-end, end).round() as f32) + 0.0;
     [slider(t), slider(m)]
 }
 
@@ -462,8 +465,12 @@ mod tests {
     fn corrections_add_to_the_current_settings_and_stay_in_range() {
         let current = ToneSettings { exposure: 4.5, contrast: 90.0, ..Default::default() };
         let t = auto_tone(&ramp(5, 40), &current);
-        assert!(t.exposure <= 5.0 && t.contrast <= 100.0, "{t:?}");
+        assert!(t.exposure <= 5.0 && t.contrast <= 150.0, "{t:?}");
         assert!(t.exposure > 4.5);
+        // A value past 100 is kept, and the sum stops at the sliders' end, 150.
+        let current = ToneSettings { contrast: 140.0, whites: 150.0, ..Default::default() };
+        let t = auto_tone(&ramp(5, 40), &current);
+        assert!(t.contrast >= 140.0 - 25.0 && t.contrast <= 150.0 && t.whites == 150.0, "{t:?}");
     }
 
     #[test]

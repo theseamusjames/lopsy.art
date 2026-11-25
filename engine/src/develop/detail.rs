@@ -138,7 +138,7 @@ fn noise_reduction(engine: &mut EngineInner, s: &DetailSettings, run: NoiseRun) 
     let (w, h) = (engine.doc_width, engine.doc_height);
     let chroma = blur(engine, engine.composite_texture, w, h, detail::NR_CHROMA_SIGMA * s.pixel_scale)?;
     let params = NoiseReduceParams {
-        luminance: s.nr_luminance / 100.0,
+        luminance: lopsy_core::detail::nr_luminance_mix(s),
         color: s.nr_color / 100.0,
         range_sigma: detail::nr_range_sigma(s) / run.threshold_scale,
         guard_scale: run.threshold_scale,

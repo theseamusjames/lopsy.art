@@ -36,10 +36,17 @@ fn luma(c: vec3<f32>) -> f32 {
     return dot(c, vec3<f32>(0.2126, 0.7152, 0.0722));
 }
 
-fn adjust(rgb: vec3<f32>, a2: vec4<f32>, a3: vec4<f32>, m: f32) -> vec3<f32> {
+// The sliders arrive in −150..150; this pass holds them to ±100
+// (lopsy_core::areas::LEGACY_LIMIT), where contrast below −100 would turn
+// the image's contrast over.
+const LEGACY_LIMIT: f32 = 100.0;
+
+fn adjust(rgb: vec3<f32>, a2in: vec4<f32>, a3in: vec4<f32>, m: f32) -> vec3<f32> {
     if (m <= 0.0) {
         return rgb;
     }
+    let a2 = vec4<f32>(a2in.x, a2in.y, clamp(a2in.zw, vec2<f32>(-LEGACY_LIMIT), vec2<f32>(LEGACY_LIMIT)));
+    let a3 = clamp(a3in, vec4<f32>(-LEGACY_LIMIT), vec4<f32>(LEGACY_LIMIT));
     let gain = exp2(m * a2.y);
     let t = a3.y / 100.0;
     let wb = vec3<f32>(exp2(0.3 * m * t), exp2(-0.25 * m * a3.z / 100.0), exp2(-0.3 * m * t));

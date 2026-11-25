@@ -13,7 +13,9 @@
 //!    slider adds: exposure in stops, white balance in the log domain (the
 //!    gains below are powers of two of the blended values), tone sliders in
 //!    their own units, which move knots. A mask therefore costs no pass, and
-//!    where `m` is 0 the pixel gets exactly the photo's own values.
+//!    where `m` is 0 the pixel gets exactly the photo's own values. Each
+//!    slider runs to ±[`SLIDER_END`] (150), and a mask's adds up to as much
+//!    again, so the blended values reach ±300.
 //! 2. **Exposure and white balance**, a gain on all three channels:
 //!    `2^ev` times the white-balance gains, red `2^(WB_TEMPERATURE_STOPS·t)`,
 //!    blue `2^(−WB_TEMPERATURE_STOPS·t)`, green `2^(−WB_TINT_STOPS·tint)`
@@ -33,7 +35,8 @@
 //! by `2^(CONTRAST_STOPS · c)` (a change of slope about middle grey, which
 //! stays put); then each slider adds its row of [`HIGHLIGHTS`],
 //! [`SHADOWS`], [`WHITES`] or [`BLACKS`] (stops at −100 and at +100) times
-//! its value over 100. The outputs are then forced into increasing order
+//! its value over 100, so ±150 moves a knot one and a half times as far as
+//! ±100 along the same straight line. The outputs are then forced into increasing order
 //! with a slope of at least [`MIN_SLOPE`], outward from middle grey, and a
 //! monotone cubic (Fritsch–Carlson) is drawn through them; beyond the end
 //! knots it continues straight (in stops) at the end tangent. Every tangent
@@ -115,9 +118,15 @@ pub const WB_TEMPERATURE_STOPS: f32 = 0.6;
 pub const WB_TINT_STOPS: f32 = 0.4;
 /// Floats in `setDevelopTone`.
 pub const TONE_LEN: usize = 8;
+/// The far end of a develop slider whose 100 is not a real limit, in
+/// recipe units: Temperature, Tint and the tone sliders run ±150, and the
+/// other sliders that widened run to it at their open end. Every mapping
+/// from such a slider is linear in it, or a power of two of it, so 150 is
+/// one and a half times as far along the same curve as 100.
+pub const SLIDER_END: f32 = 150.0;
 
 /// The photo's own sliders, in the recipe's units: exposure in EV
-/// (−5..5), the rest −100..100. Exposure, Temperature and Tint are for a
+/// (−5..5), the rest −150..150. Exposure, Temperature and Tint are for a
 /// photo that is not RAW; a RAW photo's are applied by the RAW step.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct ToneSliders {
@@ -134,7 +143,7 @@ pub struct ToneSliders {
 impl ToneSliders {
     /// `setDevelopTone`'s 8 floats: exposure, temperature, tint, contrast,
     /// highlights, shadows, whites, blacks. Exposure is clamped to ±10 EV,
-    /// the rest to ±100.
+    /// the rest to ±[`SLIDER_END`].
     pub fn parse(values: &[f32]) -> Result<Self, String> {
         if values.len() != TONE_LEN {
             return Err(format!("Develop tone needs {TONE_LEN} floats, got {}", values.len()));
@@ -142,7 +151,7 @@ impl ToneSliders {
         if !values.iter().all(|v| v.is_finite()) {
             return Err("Develop tone values must be finite".to_string());
         }
-        let s = |v: f32| v.clamp(-100.0, 100.0);
+        let s = |v: f32| v.clamp(-SLIDER_END, SLIDER_END);
         Ok(Self {
             exposure: values[0].clamp(-10.0, 10.0),
             temperature: s(values[1]),
@@ -174,7 +183,7 @@ pub struct AreaTone {
 }
 
 /// Every knot's output for the five tone sliders (contrast, highlights,
-/// shadows, whites, blacks; −100..100, or beyond where masks add up),
+/// shadows, whites, blacks; −150..150, or to ±300 where masks add up),
 /// forced increasing.
 pub fn knot_outputs(sliders: [f32; 5]) -> [f32; KNOTS] {
     let [c, h, s, w, b] = sliders;
@@ -341,6 +350,8 @@ mod tests {
     use super::*;
 
     const ENDS: [f32; 5] = [-100.0, -50.0, 0.0, 50.0, 100.0];
+    /// The sliders' new ends, and a mask's ±150 on top of them.
+    const WIDE: [f32; 7] = [-300.0, -150.0, -100.0, 0.0, 100.0, 150.0, 300.0];
 
     #[test]
     fn zero_is_the_identity() {
@@ -385,6 +396,93 @@ mod tests {
             }
         }
         assert_eq!(count, 3125);
+    }
+
+    /// Every tone slider at ±150, and ±150 more from a mask, in every
+    /// combination: the map still rises everywhere, has positive tangents,
+    /// and stays continuous in value and slope.
+    #[test]
+    fn the_map_stays_monotonic_at_the_wide_ends_and_with_a_mask_on_top() {
+        let mut count = 0;
+        for c in WIDE {
+            for h in WIDE {
+                for s in WIDE {
+                    for w in WIDE {
+                        for b in WIDE {
+                            let sliders = [c, h, s, w, b];
+                            let y = knot_outputs(sliders);
+                            let m = tangents(&y);
+                            assert!(m.iter().all(|&v| v > 0.0 && v.is_finite()), "{sliders:?}: {m:?}");
+                            let mut last = f32::NEG_INFINITY;
+                            for k in 0..=400 {
+                                let x = -12.0 + k as f32 * 0.05;
+                                let v = eval(x, &y, &m);
+                                assert!(v > last && v.is_finite(), "{sliders:?} not rising at {x}");
+                                last = v;
+                            }
+                            for &kx in &KNOT_STOPS {
+                                let e = 1e-3;
+                                let (a, b0, c0) = (eval(kx - e, &y, &m), eval(kx, &y, &m), eval(kx + e, &y, &m));
+                                assert!(((b0 - a) / e - (c0 - b0) / e).abs() < 0.05, "{sliders:?} kink at {kx}");
+                            }
+                            count += 1;
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(count, 16807);
+    }
+
+    /// Within the old range nothing moved: 150 is the same straight line
+    /// as 100, one and a half times as far along it.
+    #[test]
+    fn one_hundred_and_fifty_is_one_and_a_half_times_as_far_as_one_hundred() {
+        for i in 0..5 {
+            for sign in [-1.0f32, 1.0] {
+                let mut at100 = [0.0f32; 5];
+                at100[i] = 100.0 * sign;
+                let mut at150 = at100;
+                at150[i] = 150.0 * sign;
+                let (y0, y1, y15) = (knot_outputs([0.0; 5]), knot_outputs(at100), knot_outputs(at150));
+                if i == 0 {
+                    // Contrast is a power of two of its value: the gain at 150 is the gain at 100 to the 1.5th.
+                    let g = |y: &[f32; KNOTS]| y[0] / KNOT_STOPS[0];
+                    assert!((g(&y15) - g(&y1).powf(1.5)).abs() < 1e-5, "contrast {sign}");
+                    continue;
+                }
+                for k in 0..KNOTS {
+                    let (d1, d15) = (y1[k] - y0[k], y15[k] - y0[k]);
+                    // Equal where the forced order did not have to step in.
+                    assert!((d15 - 1.5 * d1).abs() < 1e-5 || (d15.abs() > d1.abs()), "slider {i} sign {sign} knot {k}: {d1} {d15}");
+                }
+            }
+        }
+        // The parser takes ±150 and stops there.
+        let t = ToneSliders::parse(&[20.0, 150.0, -150.0, 151.0, -400.0, 150.0, 149.5, -150.0]).unwrap();
+        assert_eq!((t.exposure, t.temperature, t.tint, t.contrast, t.highlights), (10.0f32.min(20.0), 150.0, -150.0, 150.0, -150.0));
+        assert_eq!((t.shadows, t.whites, t.blacks), (150.0, 149.5, -150.0));
+        assert!(ToneSliders::parse(&[0.0, f32::NAN, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).is_err());
+    }
+
+    /// Black, white, a bright white, a saturated colour and colours outside
+    /// the gamut through every slider at its ends, with a mask on top: no
+    /// value comes out NaN or infinite.
+    #[test]
+    fn no_extreme_gives_nan_or_infinity() {
+        let inputs: [[f32; 3]; 7] = [[0.0; 3], [1.0; 3], [16.0; 3], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [-0.1, 0.5, 1.2], [1e-7, 0.0, 0.0]];
+        for c in inputs {
+            for ev in [-14.0f32, 0.0, 14.0] {
+                for t in [-300.0f32, 0.0, 300.0] {
+                    for tint in [-300.0f32, 300.0] {
+                        for tone in WIDE {
+                            let out = tone_pixel(c, ev, t, tint, [tone, -tone, tone, tone, -tone]);
+                            assert!(out.iter().all(|v| v.is_finite()), "{c:?} ev {ev} t {t} tint {tint} tone {tone}: {out:?}");
+                        }
+                    }
+                }
+            }
+        }
     }
 
     #[test]

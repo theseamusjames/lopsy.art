@@ -209,7 +209,9 @@ pub fn raf_auto_white_balance_clipped(linear_rgba: &[f32], clip_levels: &[f32]) 
 }
 
 /// Color by hue: 24 floats, (hue, saturation, luminance) per band in
-/// −100..100, bands red, orange, yellow, green, aqua, blue, purple, magenta.
+/// −100..100 (clamped), bands red, orange, yellow, green, aqua, blue,
+/// purple, magenta. The pass without the working space; `setDevelopLook`'s
+/// Color by hue takes −150..150.
 #[wasm_bindgen(js_name = "setImageColorMixer")]
 pub fn set_image_color_mixer(engine: &mut Engine, values: &[f32]) -> Result<(), JsError> {
     lopsy_engine::commands::develop::set_image_color_mixer(&mut engine.inner, values).map_err(|e| JsError::new(&e))
@@ -221,8 +223,9 @@ pub fn clear_image_color_mixer(engine: &mut Engine) {
 }
 
 /// Sharpening and noise reduction: 7 floats `[amount 0..150, radius
-/// 0.5..3 (full-resolution px), edges 0..100, nrLuminance 0..100,
-/// nrColor 0..100, nrDetail 0..100, pixelScale]`.
+/// 0.5..3 (full-resolution px), edges 0..150, nrLuminance 0..150,
+/// nrColor 0..100, nrDetail 0..100, pixelScale]`, each clamped to its
+/// range. Past 100 nrLuminance widens the filter's range; its mix stays whole.
 #[wasm_bindgen(js_name = "setImageDetail")]
 pub fn set_image_detail(engine: &mut Engine, values: &[f32]) -> Result<(), JsError> {
     lopsy_engine::commands::develop::set_image_detail(&mut engine.inner, values).map_err(|e| JsError::new(&e))
@@ -233,8 +236,8 @@ pub fn clear_image_detail(engine: &mut Engine) {
     lopsy_engine::commands::develop::clear_image_detail(&mut engine.inner)
 }
 
-/// Local contrast and haze: 4 floats `[large, small, haze (−100..100),
-/// pixelScale]`. With the working space they act in linear light (haze
+/// Local contrast and haze: 4 floats `[large −100..150, small −100..150,
+/// haze −150..100, pixelScale]`, clamped. With the working space they act in linear light (haze
 /// before tone, the details after it); the layout is the same.
 #[wasm_bindgen(js_name = "setImageLocalContrast")]
 pub fn set_image_local_contrast(engine: &mut Engine, values: &[f32]) -> Result<(), JsError> {
@@ -251,7 +254,9 @@ pub fn clear_image_local_contrast(engine: &mut Engine) {
 /// `[kind (0 linear, 1 radial), invert (0/1), amount 0..1,
 ///   x0, y0, x1, y1, rotation (rad), feather 0..1,
 ///   exposure (EV −4..4), contrast, highlights, shadows,
-///   temperature, tint, saturation (−100..100)]`.
+///   temperature, tint (−150..150), saturation (−100..150)]`, clamped.
+/// Without the working space the areas pass holds the six sliders to
+/// ±100; with it the tone and look passes take them whole.
 /// Linear: (x0, y0) = p0 (full effect), (x1, y1) = p1 (no effect).
 /// Radial: (x0, y0) = centre, (x1, y1) = radii; rotation and feather apply.
 /// Coordinates are document pixels.
@@ -272,7 +277,8 @@ pub fn clear_image_areas(engine: &mut Engine) {
 // on values its document-wide twin would refuse. What is set stays until
 // `clearImageAreaLayer`, `clearImageAreaLayers` or `clearImageAreas`.
 
-/// Whites, blacks and vibrance of an area's layer, −100..100 each.
+/// Whites, blacks and vibrance of an area's layer, −100..100 each (Lopsy's
+/// image adjustments; with the working space `setDevelopAreaLook`).
 #[wasm_bindgen(js_name = "setImageAreaTone")]
 pub fn set_image_area_tone(engine: &mut Engine, index: u32, whites: f32, blacks: f32, vibrance: f32) -> Result<(), JsError> {
     lopsy_engine::commands::develop::set_image_area_tone(&mut engine.inner, index, whites, blacks, vibrance).map_err(|e| JsError::new(&e))
@@ -360,8 +366,9 @@ pub fn set_image_detail_mask_view(engine: &mut Engine, on: bool) {
 
 /// Shaped vignette and grain, last in the develop chain: 9 floats
 /// `[vignetteAmount −100..100, size 0..100, roundness −100..100,
-///   feather 0..100, grainAmount 0..100, grainSize 0..100,
-///   grainRoughness 0..100, seed (an integer per photo), pixelScale]`.
+///   feather 0..100, grainAmount 0..150, grainSize 0..150,
+///   grainRoughness 0..100, seed (an integer per photo), pixelScale]`,
+///   clamped.
 /// Replaces the adjustments' vignette: set that one to 0 when using this.
 #[wasm_bindgen(js_name = "setImageFinish")]
 pub fn set_image_finish(engine: &mut Engine, values: &[f32]) -> Result<(), JsError> {
@@ -382,20 +389,22 @@ pub fn clear_image_finish(engine: &mut Engine) {
 // All zeros is the identity.
 
 /// Tone on scene data, before the profile's base curve: 8 floats
-/// `[exposure EV −5..5, temperature −100..100, tint −100..100,
-///   contrast, highlights, shadows, whites, blacks (each −100..100)]`, the
-/// recipe's units. Exposure, Temperature and Tint are for a photo that is
-/// not RAW; for a RAW photo send them as 0 (the RAW step applies the
-/// photo's own). Temperature ±100 is a red and blue gain of 2^(±0.6) and
-/// 2^(∓0.6), Tint ±100 a green gain of 2^(∓0.4), luminance kept.
+/// `[exposure EV −5..5, temperature, tint,
+///   contrast, highlights, shadows, whites, blacks (each −150..150)]`, the
+/// recipe's units, clamped (exposure to ±10 EV). Exposure, Temperature and
+/// Tint are for a photo that is not RAW; for a RAW photo send them as 0
+/// (the RAW step applies the photo's own). Temperature ±100 is a red and
+/// blue gain of 2^(±0.6) and 2^(∓0.6), Tint ±100 a green gain of 2^(∓0.4),
+/// luminance kept; ±150 is 2^(±0.9) and 2^(∓0.6).
 #[wasm_bindgen(js_name = "setDevelopTone")]
 pub fn set_develop_tone(engine: &mut Engine, values: &[f32]) -> Result<(), JsError> {
     lopsy_engine::commands::develop::set_develop_tone(&mut engine.inner, values).map_err(|e| JsError::new(&e))
 }
 
 /// Colour on rendered linear data, in OkLab: 44 floats `[vibrance,
-/// saturation (−100..100), Color by hue's 24 (as setImageColorMixer),
-/// a colour grade's 18 (as setImageColorGrading)]`.
+/// saturation (−100..150), Color by hue's 24 (setImageColorMixer's layout;
+/// hue and luminance −150..150, saturation −100..150), a colour grade's 18
+/// (as setImageColorGrading)]`, clamped.
 #[wasm_bindgen(js_name = "setDevelopLook")]
 pub fn set_develop_look(engine: &mut Engine, values: &[f32]) -> Result<(), JsError> {
     lopsy_engine::commands::develop::set_develop_look(&mut engine.inner, values).map_err(|e| JsError::new(&e))
@@ -421,7 +430,7 @@ pub fn clear_develop_adjustments(engine: &mut Engine) {
     lopsy_engine::commands::develop::clear_develop_adjustments(&mut engine.inner)
 }
 
-/// Area `index`'s layer: 45 floats `[whites, blacks, vibrance (−100..100),
+/// Area `index`'s layer: 45 floats `[whites, blacks (−150..150), vibrance (−100..150),
 /// Color by hue's 24, a colour grade's 18]`. Whites and Blacks act in the
 /// tone map and Vibrance in the colour step, through the area's mask;
 /// Color by hue and the grade run over a copy laid back through the mask.

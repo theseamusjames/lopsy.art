@@ -6,8 +6,14 @@
 //!
 //! `setImageFinish` takes 9 floats:
 //! `[vignetteAmount −100..100, size 0..100, roundness −100..100,
-//!   feather 0..100, grainAmount 0..100, grainSize 0..100,
+//!   feather 0..100, grainAmount 0..150, grainSize 0..150,
 //!   grainRoughness 0..100, seed, pixelScale]`.
+//! The vignette's ends are real ones: at ±100 the corners reach black or
+//! white (past it the darkening factor goes below 0 and the lightening
+//! passes white), the midpoint at 100 already sits beyond the corners,
+//! roundness 100 is a circle and feather 100 a falloff the whole way from
+//! the centre to the corners. Roughness is a mix of two octaves, whole at
+//! 100. Grain's amount and size are linear in their values and run to 150.
 //! The vignette here replaces the image adjustments' amount-only one: an app
 //! that uses this sets that one to 0.
 //!
@@ -32,7 +38,7 @@
 //! seed, so grain is deterministic per photo; values are interpolated
 //! bilinearly with a smoothstep, and roughness mixes in a second octave at
 //! half the cell size. The grain is added to all channels, weighted toward
-//! the midtones, at up to ±0.12 at amount 100.
+//! the midtones, at up to ±0.12 at amount 100 (±0.18 at 150).
 
 /// Floats `setImageFinish` takes.
 pub const VALUES_LEN: usize = 9;
@@ -60,8 +66,8 @@ impl FinishSettings {
             size: v[1].clamp(0.0, 100.0),
             roundness: v[2].clamp(-100.0, 100.0),
             feather: v[3].clamp(0.0, 100.0),
-            grain: v[4].clamp(0.0, 100.0),
-            grain_size: v[5].clamp(0.0, 100.0),
+            grain: v[4].clamp(0.0, crate::scene_tone::SLIDER_END),
+            grain_size: v[5].clamp(0.0, crate::scene_tone::SLIDER_END),
             roughness: v[6].clamp(0.0, 100.0),
             seed: v[7].abs().min(16_777_216.0) as u32,
             pixel_scale: v[8].clamp(1e-3, 1.0),
@@ -194,6 +200,22 @@ pub fn finish_reference(rgba: &[f32], w: usize, h: usize, s: &FinishSettings) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Grain's amount and size take 150; the vignette's ends stay at 100.
+    #[test]
+    fn grain_takes_150_and_the_vignette_keeps_its_ends() {
+        let s = FinishSettings::from_values(&[-150.0, 150.0, 150.0, 150.0, 150.0, 150.0, 150.0, 1.0, 1.0]).unwrap();
+        assert_eq!((s.vignette, s.size, s.roundness, s.feather), (-100.0, 100.0, 100.0, 100.0));
+        assert_eq!((s.grain, s.grain_size, s.roughness), (150.0, 150.0, 100.0));
+        let s = FinishSettings::from_values(&[0.0, 50.0, 0.0, 50.0, 400.0, 400.0, 0.0, 1.0, 1.0]).unwrap();
+        assert_eq!((s.grain, s.grain_size), (150.0, 150.0));
+        for c in [[0.0f32; 3], [1.0; 3], [0.5, 0.1, 0.9]] {
+            for x in [0.5f32, 37.5, 99.5] {
+                let out = finish_pixel(c, &s, x, 20.5, 100.0, 40.0);
+                assert!(out.iter().all(|v| v.is_finite() && *v >= 0.0), "{out:?}");
+            }
+        }
+    }
 
     fn settings(v: [f32; VALUES_LEN]) -> FinishSettings {
         FinishSettings::from_values(&v).unwrap()
