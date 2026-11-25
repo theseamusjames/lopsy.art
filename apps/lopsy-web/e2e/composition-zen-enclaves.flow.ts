@@ -1122,7 +1122,7 @@ export async function s34(page: Page): Promise<unknown> {
   const y0 = (await layerBounds(page, 'Isle 3')).y;
   await menu(page, 'View', 'Show Grid');
   await selectLayer(page, '03 Rock Garden');
-  await selectLayer(page, '04 Koi Pond', ['Control']);
+  await selectLayer(page, '04 Koi Pond', ['ControlOrMeta']);
   await tool(page, 'move');
   const from = await docToScreen(page, T3.x + 40, T3.y + 60);
   const to = await docToScreen(page, T3.x + 40, T3.y + 76);

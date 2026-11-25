@@ -403,7 +403,7 @@ export async function newLayer(page: Page, name: string): Promise<string> {
   return activeLayerId(page);
 }
 
-export async function selectLayer(page: Page, name: string, modifiers: Array<'Shift' | 'Control'> = []): Promise<string> {
+export async function selectLayer(page: Page, name: string, modifiers: Array<'Shift' | 'ControlOrMeta'> = []): Promise<string> {
   const id = await layerIdByName(page, name);
   const row = page.locator(`[data-layer-id="${id}"]`);
   await row.scrollIntoViewIfNeeded();
@@ -643,7 +643,7 @@ export async function selectAlpha(page: Page, name: string): Promise<void> {
   const id = await layerIdByName(page, name);
   const row = page.locator(`[data-layer-id="${id}"]`);
   await row.scrollIntoViewIfNeeded();
-  await row.locator('[class*="_thumbnail_"]').first().click({ modifiers: ['Control'] });
+  await row.locator('[class*="_thumbnail_"]').first().click({ modifiers: ['ControlOrMeta'] });
   await pause(page, 400);
 }
 
