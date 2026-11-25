@@ -17,7 +17,9 @@ export default defineConfig({
   testIgnore: undefined,
   testMatch: /photos-(handoff|grade)\.spec\.ts$/,
   use: { ...base.use, baseURL: `http://localhost:${port}` },
-  projects: (base.projects ?? []).filter((p) => p.name === 'chromium'),
+  projects: (base.projects ?? [])
+    .filter((p) => p.name === 'chromium')
+    .map((p) => ({ ...p, testIgnore: undefined })),
   webServer: {
     command: `npx vite --port ${port} --strictPort`,
     port,

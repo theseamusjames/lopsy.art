@@ -118,9 +118,9 @@ test.describe('Lens Distortion Filter', () => {
     const dialogHeading = page.locator('h2:has-text("Lens Distortion")');
     await expect(dialogHeading).toBeVisible({ timeout: 3000 });
 
-    const strengthLabel = page.locator('text=Strength');
-    const zoomLabel = page.locator('text=Zoom');
-    const fringingLabel = page.locator('text=Chromatic Fringing');
+    const strengthLabel = page.getByText('Strength', { exact: true });
+    const zoomLabel = page.getByText('Zoom', { exact: true });
+    const fringingLabel = page.getByText('Chromatic Fringing', { exact: true });
     await expect(strengthLabel).toBeVisible({ timeout: 2000 });
     await expect(zoomLabel).toBeVisible({ timeout: 2000 });
     await expect(fringingLabel).toBeVisible({ timeout: 2000 });
