@@ -332,6 +332,8 @@ test.describe('Composition 1: Painted Landscape', () => {
     // Set sun layer to Screen blend mode
     await page.locator(`[data-layer-id="${sunLayerId}"]`).click();
     await setBlendMode(page, 'screen');
+    // The blend mode is set in the effects drawer; close it so it does not cover the canvas the next strokes paint on.
+    await closeEffectsPanel(page);
 
     await page.screenshot({ path: 'e2e/screenshots/comp1-02-sun-radial.png' });
 
@@ -419,6 +421,8 @@ test.describe('Composition 1: Painted Landscape', () => {
     // Set ground to Multiply blend mode
     await page.locator(`[data-layer-id="${groundLayerId}"]`).click();
     await setBlendMode(page, 'multiply');
+    // The blend mode is set in the effects drawer; close it so it does not cover the canvas the next strokes paint on.
+    await closeEffectsPanel(page);
 
     await page.screenshot({ path: 'e2e/screenshots/comp1-06-ground.png' });
 
@@ -567,6 +571,8 @@ test.describe('Composition 1: Painted Landscape', () => {
 
     await page.locator(`[data-layer-id="${overlayLayerId}"]`).click();
     await setBlendMode(page, 'overlay');
+    // The blend mode is set in the effects drawer; close it so it does not cover the canvas the next strokes paint on.
+    await closeEffectsPanel(page);
     await setLayerOpacity(page, overlayLayerId, 60);
 
     await page.screenshot({ path: 'e2e/screenshots/comp1-12-blend-modes.png' });
@@ -645,6 +651,8 @@ test.describe('Composition 1: Painted Landscape', () => {
 
     await page.locator(`[data-layer-id="${starsLayerId}"]`).click();
     await setBlendMode(page, 'screen');
+    // The blend mode is set in the effects drawer; close it so it does not cover the canvas the next strokes paint on.
+    await closeEffectsPanel(page);
 
     await page.screenshot({ path: 'e2e/screenshots/comp1-15-stars.png' });
 
