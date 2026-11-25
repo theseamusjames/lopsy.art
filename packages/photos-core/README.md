@@ -63,6 +63,12 @@ Photonamous/                 role library
   - Album sets are `assets` (whole photos) and `versions`
     (`"<assetId>/<versionId>"`). Asset keywords are the set `keywords`.
   - Recipe leaves are version fields named `recipe.<path>`.
+  - `recipe.pipeline` is the rendering pipeline the version was edited
+    with (`PIPELINE_VERSION`). It is written once, in the op that creates
+    the version, even at its default; edits, pastes and presets never
+    write it (`editRecipe` and `sanitizeRecipeValues` drop it), and a
+    whole-recipe write (`setRecipe`, a reset) writes the given recipe's.
+    A version without it (written before it was recorded) reads as 1.
 - **Segments**:
   - Segments are written only by their own device, and never rewritten.
     Only the roll-up (`rollup.ts`) merges a device's own small segments.
@@ -109,7 +115,7 @@ library (`lock.ts`) allows one writer per device.
     each one object leaf.
   - `recipeFromPaths` validates and clamps every leaf, using `RECIPE_RANGES`
     and `rangeForPath`, and ignores unknown paths.
-  - New versions store only non-default leaves.
+  - New versions store only non-default leaves, and their pipeline.
   - Controls added after the first release (`LATER_PATHS`, `LATER_GROUPS`)
     count in `recipeHash` only when they are set. New fields must keep
     existing hashes, or every stored preview goes stale.

@@ -19,6 +19,17 @@ import type { Json } from './types';
 /** Bumped when the rendering maths changes; old recipes keep their version. */
 export const PIPELINE_VERSION = 1;
 
+/**
+ * What a recipe or a preview reads as when it records no pipeline: 1, the
+ * only pipeline there was before versions and previews recorded theirs.
+ */
+export const UNRECORDED_PIPELINE = 1;
+
+/** A recorded pipeline as a version number; anything else (missing, broken) is UNRECORDED_PIPELINE. */
+export function pipelineFrom(value: unknown): number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : UNRECORDED_PIPELINE;
+}
+
 export type QuarterTurns = 0 | 90 | 180 | 270;
 
 export interface CropRect {
@@ -696,7 +707,8 @@ export function recipeFromPaths(paths: Readonly<Record<string, unknown>>): Recip
     luminance: num(`colorGrading.${range}.luminance`, 0),
   });
   return {
-    pipeline: typeof pipeline === 'number' && Number.isInteger(pipeline) && pipeline > 0 ? pipeline : d.pipeline,
+    // A version written before pipelines were recorded was edited with the first one.
+    pipeline: pipelineFrom(pipeline),
     profile: { id: typeof profile === 'string' && profile !== '' ? profile : d.profile.id },
     whiteBalance: {
       mode: mode === 'custom' ? 'custom' : 'asShot',
@@ -901,6 +913,8 @@ export function isGroupDefault(recipe: Recipe, group: RecipeGroupId): boolean {
 /**
  * Keeps only the paths that are recipe leaves, with values as
  * `recipeFromPaths` reads them (clamped, or the default when invalid).
+ * `pipeline` is not kept: it belongs to a version, not to an edit, so a
+ * paste or a preset never relabels the version it lands on.
  */
 export function sanitizeRecipeValues(values: Readonly<Record<string, unknown>>): Record<string, Json> {
   const out: Record<string, Json> = {};
@@ -910,7 +924,7 @@ export function sanitizeRecipeValues(values: Readonly<Record<string, unknown>>):
     const leaf = areaLeafJson(path, value);
     if (leaf !== undefined) out[path] = leaf;
   }
-  const known = Object.keys(DEFAULT_PATHS).filter((p) => Object.prototype.hasOwnProperty.call(values, p));
+  const known = Object.keys(DEFAULT_PATHS).filter((p) => p !== 'pipeline' && Object.prototype.hasOwnProperty.call(values, p));
   if (known.length === 0) return out;
   const read = recipeToPaths(recipeFromPaths(values));
   for (const path of known) out[path] = recipeLeafJson(read[path] ?? null);

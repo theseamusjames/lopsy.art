@@ -33,6 +33,7 @@ import {
   recipeHash,
   recipeLeafJson,
   recipeToPaths,
+  UNRECORDED_PIPELINE,
   type Recipe,
 } from './recipe';
 import { loadNewestSnapshot } from './snapshot';
@@ -107,20 +108,36 @@ export function recipeFields(recipe: Recipe): Record<string, Json> {
   return out;
 }
 
-function nonDefaultRecipeFields(recipe: Recipe): Record<string, Json> {
-  const out: Record<string, Json> = {};
+/** The recipe leaf that records the pipeline a version was edited with. */
+const PIPELINE_FIELD = 'recipe.pipeline';
+
+/**
+ * A new version's recipe fields: the leaves off their default, and always
+ * its pipeline. The pipeline is written once, here, and never by an edit,
+ * so it costs one field per version; were it left out at its default, a
+ * later build with a newer default would read the version as its own.
+ */
+function newVersionRecipeFields(recipe: Recipe): Record<string, Json> {
+  const out: Record<string, Json> = { [PIPELINE_FIELD]: recipe.pipeline };
   for (const [path, value] of Object.entries(recipeFields(recipe))) {
     if (JSON.stringify(value) !== DEFAULT_FIELD_TEXT.get(path)) out[path] = value;
   }
   return out;
 }
 
+/**
+ * What each recipe field holds when it was never written: the default
+ * recipe's value, but for the pipeline, which a version that never wrote
+ * it was edited with the first of (UNRECORDED_PIPELINE).
+ */
+const UNWRITTEN_FIELDS: Readonly<Record<string, Json>> = { ...recipeFields(DEFAULT_RECIPE), [PIPELINE_FIELD]: UNRECORDED_PIPELINE };
+
 const DEFAULT_FIELD_TEXT: ReadonlyMap<string, string> = new Map(
-  Object.entries(recipeFields(DEFAULT_RECIPE)).map(([path, value]) => [path, JSON.stringify(value)]),
+  Object.entries(UNWRITTEN_FIELDS).map(([path, value]) => [path, JSON.stringify(value)]),
 );
 
 const DEFAULT_PATHS: Readonly<Record<string, Json>> = Object.fromEntries(
-  Object.entries(recipeFields(DEFAULT_RECIPE)).map(([k, v]) => [k.slice('recipe.'.length), v]),
+  Object.entries(UNWRITTEN_FIELDS).map(([k, v]) => [k.slice('recipe.'.length), v]),
 );
 
 function assetFields(asset: NewAsset, versionId: VersionId): Record<string, Json> {
@@ -634,7 +651,8 @@ class Session implements PhotosLibrarySession {
 
   editRecipe(versionId: VersionId, changes: Readonly<Record<string, Json>>, label: string): void {
     const fields: Record<string, Json> = {};
-    for (const [path, value] of Object.entries(changes)) fields[`recipe.${path}`] = value;
+    // An edit never relabels the pipeline the version was made with.
+    for (const [path, value] of Object.entries(changes)) if (path !== 'pipeline') fields[`recipe.${path}`] = value;
     if (Object.keys(fields).length === 0) return;
     this.emit([{ t: 'set', kind: 'version', id: versionId, fields }], { id: newId(this.now()), label });
   }
@@ -920,7 +938,7 @@ class Session implements PhotosLibrarySession {
       deleted: false,
       // Leaves at their default are left out: a missing leaf reads as the default, and a new version's
       // 70-odd recipe fields would otherwise dominate the size of a large library's state.
-      ...nonDefaultRecipeFields(recipe ?? DEFAULT_RECIPE),
+      ...newVersionRecipeFields(recipe ?? DEFAULT_RECIPE),
     };
   }
 
