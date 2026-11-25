@@ -135,7 +135,7 @@ import { getTracked, markPathTextFontRedrawn } from './sync-state';
 import { textLayoutGeneration } from './text-layout-generation';
 import { syncLayers } from './sync-layers';
 
-export { resetTrackedState, seedMaskDataRef, seedSelectionMaskRef } from './sync-state';
+export { forgetSelectionMaskRef, resetTrackedState, seedMaskDataRef, seedSelectionMaskRef } from './sync-state';
 export { syncLayers } from './sync-layers';
 
 // Explicit uploadLayerMask import so the wrapper below can call it.

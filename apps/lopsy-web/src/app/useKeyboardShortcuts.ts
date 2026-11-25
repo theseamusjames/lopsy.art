@@ -10,7 +10,7 @@ import { isModalDialogOpen } from './shortcuts/modal-guard';
 import { dismissTopPopover } from './shortcuts/escape-dismiss';
 import { handleEditShortcut } from './shortcuts/edit-shortcuts';
 import { handleDeleteKey } from './delete-key';
-import { runKeyCommand } from './shortcuts/key-bindings';
+import { handleKeyEvent, runKeyCommand } from './shortcuts/key-bindings';
 import { handleZoomShortcut } from './shortcuts/zoom-shortcuts';
 import { pasteOrOpenBlob, pasteInternalClipboard } from './paste-or-open';
 import {
@@ -372,13 +372,15 @@ export function useKeyboardShortcuts({
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown, true);
+    // Auto-repeats of a held key run only the bindings that repeat (#1823).
+    const onKeyDown = (e: KeyboardEvent) => handleKeyEvent(e, () => handleKeyDown(e));
+    window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keyup', handleKeyUp);
     window.addEventListener('paste', handlePaste);
     window.addEventListener('blur', invalidateInternalClipboardPriority);
     window.addEventListener('blur', releaseAllNudgeKeys);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('keydown', onKeyDown, true);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('paste', handlePaste);
       window.removeEventListener('blur', invalidateInternalClipboardPriority);

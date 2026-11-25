@@ -25,7 +25,7 @@ import {
   readSelectionMask,
   combineSelections as wasmCombineSelections,
 } from '../../engine-wasm/wasm-bridge';
-import { seedSelectionMaskRef } from '../../engine-wasm/sync-state';
+import { forgetSelectionMaskRef, seedSelectionMaskRef } from '../../engine-wasm/sync-state';
 import { createPolygonMask as tsCreatePolygonMask } from '../../tools/lasso/lasso';
 import { createTransformState } from '../../tools/transform/transform';
 import { marqueeStrategy } from '../../tools/marquee/marquee-strategy';
@@ -90,6 +90,8 @@ export async function featherMaskOnGpu(
   const u8Mask = new Uint8Array(mask.buffer, mask.byteOffset, mask.byteLength);
   setSelectionMask(engine, u8Mask, docW, docH);
   featherSelectionMask(engine, radius);
+  // The texture now holds the feathered blur, not any mask the store has.
+  forgetSelectionMaskRef(engine);
   const readback = await readSelectionMask(engine);
   if (readback.length < 8) return null;
   const dv = new DataView(readback.buffer, readback.byteOffset, readback.byteLength);

@@ -230,22 +230,27 @@
 
 /*
  * A narrow window: the film on top at its own shape, the way in below it.
- * The app's body never scrolls, so the screen itself does.
+ * The app's body never scrolls, so the screen itself does. The panel grows
+ * to the foot of a screen taller than the two, so no strip of the screen's
+ * background is left under it.
  */
 @media (max-width: 860px) {
   .screen {
-    display: block;
+    display: flex;
+    flex-direction: column;
     height: 100%;
     overflow-y: auto;
   }
 
   .stage {
+    flex-shrink: 0;
     aspect-ratio: 6 / 5;
     max-height: 70vh;
     width: 100%;
   }
 
   .panel {
+    flex: 1 0 auto;
     overflow: visible;
     padding: var(--space-6) var(--space-4);
     border-left: none;

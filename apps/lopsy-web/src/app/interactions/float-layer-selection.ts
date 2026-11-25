@@ -5,6 +5,7 @@ import {
   setSelectionMask,
   type Engine,
 } from '../../engine-wasm/wasm-bridge';
+import { seedSelectionMaskRef } from '../../engine-wasm/sync-state';
 import { isLayerAlphaSelection } from './layer-alpha-selection';
 import { transformLiftMask } from './transform-lift-mask';
 import { useEditorStore } from '../editor-store';
@@ -44,6 +45,8 @@ export function floatLayerSelection(engine: Engine, layerId: string, selection: 
   floatSelection(engine, layerId);
   compositeFloat(engine, 0, 0);
   if (isWholeLayer || liftMask) setSelectionMask(engine, bytesOf(mask), maskWidth, maskHeight);
+  // The engine holds `mask` now, whichever branch ran.
+  seedSelectionMaskRef(engine, mask);
 }
 
 /**
