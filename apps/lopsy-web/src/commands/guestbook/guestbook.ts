@@ -1,14 +1,20 @@
 import { defineCommand } from '../registry';
 import { GUESTBOOK_OP } from '../lopsy-api';
 
-/** The custom event a note arrives as in Google Analytics, in its `note`, `note_2` and `note_3` parameters. */
+/** The custom event an entry arrives as in Google Analytics, each field given as a parameter of its own name. */
 export const GUESTBOOK_EVENT = 'guestbook';
 
-/** Google Analytics does not log an event parameter whose value is over 100 characters, so a note goes in parts. */
-const PART_LENGTH = 100;
+/** Google Analytics does not log an event parameter whose value is over 100 characters. */
+export const MAX_FIELD_LENGTH = 100;
 
-/** What three parts always hold: a part ends a character early rather than cut an emoji's surrogate pair in two. */
-export const MAX_NOTE_LENGTH = 280;
+export interface GuestbookEntry {
+  readonly name?: string;
+  readonly region?: string;
+  readonly model?: string;
+  readonly message?: string;
+}
+
+export const GUESTBOOK_FIELDS = ['name', 'region', 'model', 'message'] as const satisfies readonly (keyof GuestbookEntry)[];
 
 declare global {
   interface Window {
@@ -20,48 +26,44 @@ declare global {
   }
 }
 
-/** The note as event parameters: `note`, then `note_2` and `note_3` when it runs past one part. */
-export function noteParameters(note: string): Record<string, string> {
-  const parts: string[] = [];
-  let part = '';
-  for (const character of note) {
-    if (part.length + character.length > PART_LENGTH) {
-      parts.push(part);
-      part = '';
-    }
-    part += character;
+/** The fields the entry gives, as the event's parameters: one left out or empty is not sent. */
+export function entryParameters(entry: GuestbookEntry): Record<string, string> {
+  const parameters: Record<string, string> = {};
+  for (const field of GUESTBOOK_FIELDS) {
+    const value = entry[field];
+    if (value) parameters[field] = value;
   }
-  parts.push(part);
-  return Object.fromEntries(parts.map((text, index) => [index === 0 ? 'note' : `note_${index + 1}`, text]));
+  return parameters;
 }
 
-/** Sends the note as a 'guestbook' event. False when the page has no analytics to carry it. */
-export function signGuestbook(note: string): boolean {
+/** Sends the entry as a 'guestbook' event. False when the page has no analytics to carry it. */
+export function signGuestbook(entry: GuestbookEntry): boolean {
   const zaraz = window.zaraz;
   if (!zaraz) return false;
   try {
-    // track is async: a note that fails on its way is lost quietly, as any analytics event is.
-    void Promise.resolve(zaraz.track(GUESTBOOK_EVENT, noteParameters(note))).catch(() => undefined);
+    // track is async: an entry that fails on its way is lost quietly, as any analytics event is.
+    void Promise.resolve(zaraz.track(GUESTBOOK_EVENT, entryParameters(entry))).catch(() => undefined);
     return true;
   } catch {
     return false;
   }
 }
 
+function fieldSpec(description: string) {
+  return { type: 'string', optional: true, maxLength: MAX_FIELD_LENGTH, description } as const;
+}
+
 export const guestbookSign = defineCommand({
   id: GUESTBOOK_OP,
   summary:
-    'Signs the guestbook, where agents leave a note to say hello to the people who make Lopsy: we suggest your name, your region, your model and a message. It is also lopsy.guestbook(note). The note goes to Lopsy\'s usage statistics (Google Analytics) and nothing in the document changes. Returns { signed }: false when the page has no analytics to carry the note (a development build, or a blocker).',
+    'Signs the guestbook, where agents leave a note to say hello to the people who make Lopsy: your name, your region, your model and a message, each optional. It is also lopsy.guestbook({ name, region, model, message }). The entry goes to Lopsy\'s usage statistics (Google Analytics), so leave nothing private, and nothing in the document changes. Returns { signed }: false when the page has no analytics to carry the entry (a development build, or a blocker).',
   surface: 'document',
   settles: false,
   params: {
-    note: {
-      type: 'string',
-      minLength: 1,
-      maxLength: MAX_NOTE_LENGTH,
-      description:
-        'What to leave, in a line: your name, your region, your model and a message, such as "Ada, Lisbon, Example-1: hello, the gradients are lovely". Nothing private: it is kept with the site\'s usage statistics.',
-    },
+    name: fieldSpec('What you are called, such as "Ada".'),
+    region: fieldSpec('Where in the world you are, as you would say it: "Lisbon", "us-east".'),
+    model: fieldSpec('The model you are, such as "Example-1".'),
+    message: fieldSpec('What you would like to say: "Hello, the gradients are lovely".'),
   },
-  run: ({ note }): { signed: boolean } => ({ signed: signGuestbook(note) }),
+  run: (entry): { signed: boolean } => ({ signed: signGuestbook(entry) }),
 });

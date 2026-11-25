@@ -1,5 +1,5 @@
 /**
- * `guestbook.sign` (src/commands/guestbook/guestbook.ts): an agent's note
+ * `guestbook.sign` (src/commands/guestbook/guestbook.ts): an agent's entry
  * goes to the page's analytics as a 'guestbook' event. In production that
  * is Cloudflare Zaraz, added at the edge; here a stand-in records the calls.
  */
@@ -29,36 +29,39 @@ async function tracked(page: Page): Promise<Tracked[]> {
   return page.evaluate(() => (window as AnalyticsWindow).__tracked ?? []);
 }
 
-const NOTE = 'Ada, Lisbon, Example-1: hello';
+const ENTRY = { name: 'Ada', region: 'Lisbon', model: 'Example-1', message: 'Hello, the gradients are lovely' };
 
 test.describe('guestbook.sign', () => {
-  test('sends the note as a guestbook event, with no document open', async ({ page }) => {
+  test('sends the entry as a guestbook event, a parameter for each field, with no document open', async ({ page }) => {
     await installAnalytics(page);
-    expect(await run(page, { op: 'guestbook.sign', note: NOTE })).toEqual({ signed: true });
-    expect(await tracked(page)).toEqual([{ name: 'guestbook', properties: { note: NOTE } }]);
+    expect(await run(page, { op: 'guestbook.sign', ...ENTRY })).toEqual({ signed: true });
+    expect(await tracked(page)).toEqual([{ name: 'guestbook', properties: ENTRY }]);
+  });
+
+  test('every field is optional: it sends the ones given, and an empty entry still signs', async ({ page }) => {
+    await installAnalytics(page);
+    expect(await run(page, { op: 'guestbook.sign', message: 'Only this' })).toEqual({ signed: true });
+    expect(await run(page, { op: 'guestbook.sign', name: 'Ada', region: '' })).toEqual({ signed: true });
+    expect(await run(page, { op: 'guestbook.sign' })).toEqual({ signed: true });
+    expect(await tracked(page)).toEqual([
+      { name: 'guestbook', properties: { message: 'Only this' } },
+      { name: 'guestbook', properties: { name: 'Ada' } },
+      { name: 'guestbook', properties: {} },
+    ]);
   });
 
   test('answers signed: false where the page has no analytics, as on this dev server', async ({ page }) => {
     expect(await page.evaluate(() => 'zaraz' in window)).toBe(false);
-    expect(await run(page, { op: 'guestbook.sign', note: NOTE })).toEqual({ signed: false });
+    expect(await run(page, { op: 'guestbook.sign', ...ENTRY })).toEqual({ signed: false });
   });
 
-  test('refuses a missing, empty or over-long note and sends nothing', async ({ page }) => {
+  test('refuses an over-long field, a field that is not a string and a field of another name, and sends nothing', async ({ page }) => {
     await installAnalytics(page);
-    expect((await runError(page, { op: 'guestbook.sign' })).code).toBe('invalid');
-    expect((await runError(page, { op: 'guestbook.sign', note: '' })).code).toBe('invalid');
-    const tooLong = await runError(page, { op: 'guestbook.sign', note: 'a'.repeat(281) });
+    const tooLong = await runError(page, { op: 'guestbook.sign', message: 'a'.repeat(101) });
     expect(tooLong.code).toBe('invalid');
-    expect(tooLong.message).toContain('280 characters');
+    expect(tooLong.message).toContain('100 characters');
+    expect((await runError(page, { op: 'guestbook.sign', name: 42 })).code).toBe('invalid');
+    expect((await runError(page, { op: 'guestbook.sign', note: 'Hello' })).code).toBe('invalid');
     expect(await tracked(page)).toEqual([]);
-  });
-
-  test('sends a long note in parts of 100 characters, the most Google Analytics takes in one parameter', async ({ page }) => {
-    await installAnalytics(page);
-    const note = `${'a'.repeat(100)}${'b'.repeat(100)}${'c'.repeat(80)}`;
-    expect(await run(page, { op: 'guestbook.sign', note })).toEqual({ signed: true });
-    expect(await tracked(page)).toEqual([
-      { name: 'guestbook', properties: { note: 'a'.repeat(100), note_2: 'b'.repeat(100), note_3: 'c'.repeat(80) } },
-    ]);
   });
 });

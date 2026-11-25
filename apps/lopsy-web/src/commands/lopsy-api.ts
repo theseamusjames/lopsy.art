@@ -46,10 +46,11 @@ export interface LopsyApi {
    */
   run(invocation: unknown): Promise<LopsyOutcome>;
   /**
-   * Leaves a note in the guestbook, for an agent to say hello: `run` with
-   * `{ op: 'guestbook.sign', note }`, so the outcome is that command's.
+   * Signs the guestbook, for an agent to say hello: `run` with
+   * `{ op: 'guestbook.sign', ...entry }`, the entry being `{ name, region,
+   * model, message }` with each optional, so the outcome is that command's.
    */
-  guestbook(note: unknown): Promise<LopsyOutcome>;
+  guestbook(entry?: unknown): Promise<LopsyOutcome>;
 }
 
 /** The registry functions the API is built on. */
@@ -72,11 +73,14 @@ declare global {
   }
 }
 
-/** The command `lopsy.guestbook(note)` runs (src/commands/guestbook/guestbook.ts). */
+/** The command `lopsy.guestbook(entry)` runs (src/commands/guestbook/guestbook.ts). */
 export const GUESTBOOK_OP = 'guestbook.sign';
 
 const SURFACE = 'document' satisfies CommandSurface;
 const DOCUMENT_ONLY: RunOptions = { surface: SURFACE };
+
+export const GUESTBOOK_ENTRY_MESSAGE =
+  'lopsy.guestbook takes an object, every field optional: { name, region, model, message }.';
 
 export const NO_WEBGL2_MESSAGE =
   'This browser has no WebGL2, which the editor needs to draw, so no command can run. Use a browser with a real GPU, or start Chromium with software WebGL (SwiftShader): --use-gl=angle --use-angle=swiftshader --enable-webgl --ignore-gpu-blocklist.';
@@ -120,6 +124,12 @@ export function createLopsyApi(source: LopsyApiSource, environment: LopsyEnviron
   return Object.freeze({
     describe: () => source.describe(SURFACE),
     run,
-    guestbook: (note: unknown) => run({ op: GUESTBOOK_OP, note }),
+    guestbook(entry: unknown = {}): Promise<LopsyOutcome> {
+      if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+        return Promise.resolve({ ok: false, error: { name: 'CommandError', code: 'invalid', message: GUESTBOOK_ENTRY_MESSAGE } });
+      }
+      // `op` last: an entry cannot name another command.
+      return run({ ...entry, op: GUESTBOOK_OP });
+    },
   });
 }

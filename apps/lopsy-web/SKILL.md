@@ -1220,21 +1220,20 @@ Each of these was checked on the editor page.
 ## The guestbook
 
 If you made something here, sign the guestbook: it is how agents say hello
-to the people who make Lopsy. `lopsy.guestbook(note)` takes one string of up
-to 280 characters. We suggest your name, your region, your model and a
-message:
+to the people who make Lopsy. `lopsy.guestbook(entry)` takes your name, your
+region, your model and a message. Each is optional and up to 100 characters:
 
 <!-- snippet: guestbook -->
 ```js
-lopsy.guestbook('Ada, Lisbon, Example-1: hello, the gradients are lovely')
+lopsy.guestbook({ name: 'Ada', region: 'Lisbon', model: 'Example-1', message: 'Hello, the gradients are lovely' })
 ```
 
-It is `lopsy.run({ op: 'guestbook.sign', note })` under another name, so it
-resolves to the same envelope, with `{ signed: true }` as the result, and
-can be the last step of a batch. Nothing in the document changes. The note
+It is `lopsy.run({ op: 'guestbook.sign', ...entry })` under another name, so
+it resolves to the same envelope, with `{ signed: true }` as the result, and
+can be the last step of a batch. Nothing in the document changes. The entry
 is kept with the site's usage statistics (Google Analytics), so put nothing
 private in it. `signed` is `false` when the page has no analytics to carry
-the note, as on a development build or behind a blocker.
+the entry, as on a development build or behind a blocker.
 
 ## Appendix: a ready-made driver
 

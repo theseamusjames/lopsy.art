@@ -163,25 +163,34 @@ test.describe('window.lopsy on the editor', () => {
     await page.screenshot({ path: 'e2e/screenshots/lopsy-api-editor-new-document.png' });
   });
 
-  test('guestbook() leaves the note with the page\'s analytics, from the first-run screen', async ({ page }) => {
+  test('guestbook() leaves the entry with the page\'s analytics, from the first-run screen', async ({ page }) => {
     await openEditor(page);
     await expect(page.getByRole('dialog', { name: 'New Document' })).toBeVisible();
     const signed = await page.evaluate(async () => {
       const tracked: unknown[][] = [];
       window.zaraz = { track: (...call: unknown[]) => void tracked.push(call) };
       const api = (window as unknown as LopsyWindow).lopsy!;
-      return { outcome: await api.guestbook('Ada, Lisbon, Example-1: hello'), tracked, viaRun: await api.run({ op: 'guestbook.sign', note: 'again' }) };
+      return {
+        all: await api.guestbook({ name: 'Ada', region: 'Lisbon', model: 'Example-1', message: 'Hello' }),
+        some: await api.guestbook({ message: 'Only this' }),
+        none: await api.guestbook(),
+        viaRun: await api.run({ op: 'guestbook.sign', name: 'Ada' }),
+        aString: await api.guestbook('Hello'),
+        tracked,
+      };
     });
-    expect(signed.outcome).toEqual({ ok: true, result: { signed: true } });
-    expect(signed.viaRun).toEqual({ ok: true, result: { signed: true } });
-    expect(signed.tracked).toEqual([
-      ['guestbook', { note: 'Ada, Lisbon, Example-1: hello' }],
-      ['guestbook', { note: 'again' }],
-    ]);
-    expect(await page.evaluate(() => (window as unknown as LopsyWindow).lopsy!.guestbook())).toMatchObject({
+    const ok = { ok: true, result: { signed: true } };
+    expect([signed.all, signed.some, signed.none, signed.viaRun]).toEqual([ok, ok, ok, ok]);
+    expect(signed.aString).toMatchObject({
       ok: false,
-      error: { code: 'invalid' },
+      error: { code: 'invalid', message: expect.stringContaining('{ name, region, model, message }') },
     });
+    expect(signed.tracked).toEqual([
+      ['guestbook', { name: 'Ada', region: 'Lisbon', model: 'Example-1', message: 'Hello' }],
+      ['guestbook', { message: 'Only this' }],
+      ['guestbook', {}],
+      ['guestbook', { name: 'Ada' }],
+    ]);
     // Signing is not an edit: the first-run screen is still up and no document was made.
     await expect(page.getByRole('dialog', { name: 'New Document' })).toBeVisible();
   });

@@ -37,7 +37,7 @@ export interface LopsyWindow {
   lopsy?: {
     describe: () => Description[];
     run: (invocation: unknown) => Promise<Outcome>;
-    guestbook: (note?: unknown) => Promise<Outcome>;
+    guestbook: (entry?: unknown) => Promise<Outcome>;
   };
 }
 

@@ -347,7 +347,7 @@ test.describe('SKILL.md', () => {
       expect(placed?.name).toBe('Pasted Layer');
     });
 
-    test('the guestbook snippet leaves its note with the page\'s analytics', async ({ page }) => {
+    test('the guestbook snippet leaves its entry with the page\'s analytics', async ({ page }) => {
       await openEditor(page);
       // The dev server has no analytics (Cloudflare adds it in production), so a stand-in takes the event.
       await page.evaluate(() => {
@@ -356,8 +356,9 @@ test.describe('SKILL.md', () => {
       });
       expect(await page.evaluate(snippet('guestbook'))).toEqual({ ok: true, result: { signed: true } });
       const tracked = await page.evaluate(() => (window as unknown as { __tracked: unknown[][] }).__tracked);
-      expect(tracked).toEqual([['guestbook', { note: 'Ada, Lisbon, Example-1: hello, the gradients are lovely' }]]);
-      expect(SKILL).toContain('to 280 characters');
+      expect(tracked).toEqual([
+        ['guestbook', { name: 'Ada', region: 'Lisbon', model: 'Example-1', message: 'Hello, the gradients are lovely' }],
+      ]);
     });
 
     test('the renderer expression names the WebGL renderer', async ({ page }) => {
