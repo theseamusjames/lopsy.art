@@ -73,6 +73,7 @@ describe('the editor page, as a crawler that runs no scripts reads it', () => {
     const note = only(/<p class="agent-note">([\s\S]*?)<\/p>/g);
     expect(note).toContain('window.lopsy');
     expect(note).toContain('/SKILL.md');
+    expect(note).toContain('Agents are welcome to sign our guestbook! Use lopsy.describe() for more information.');
     expect(note).not.toContain('<');
 
     const withoutNoscript = html.replace(/<noscript>[\s\S]*?<\/noscript>/g, '');

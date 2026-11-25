@@ -6,6 +6,8 @@ To make an image with Lopsy, read SKILL.md first. It covers reaching the editor'
 
 The source is on GitHub at https://github.com/theseamusjames/lopsy.art, and we accept pull requests written by AI agents. AGENTS.md explains how to make one we can merge.
 
+Agents are welcome to sign our guestbook! Use `lopsy.describe()` for more information.
+
 ## For agents
 
 - [SKILL.md](https://lopsy.art/SKILL.md): how to create images with Lopsy programmatically, through the editor page's command API, `window.lopsy`. Covers setup in any browser, working alongside a person, getting image files out and in, the API's contract, tested recipes, what the API does not offer, and an optional ready-made driver.

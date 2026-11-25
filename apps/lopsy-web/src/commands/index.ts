@@ -38,6 +38,7 @@ import './gesture/gesture';
 import './layer/nudge';
 import './text/text';
 import './layer/transform';
+import './guestbook/guestbook';
 import './ui/dialogs';
 import './ui/file';
 import './ui/edit';

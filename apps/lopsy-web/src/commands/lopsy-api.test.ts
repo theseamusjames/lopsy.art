@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CommandError, SettleTimeoutError } from './command';
 import { createRegistry } from './registry';
-import { LOPSY_ERROR_CODES, NO_WEBGL2_MESSAGE, createLopsyApi } from './lopsy-api';
+import { GUESTBOOK_ENTRY_MESSAGE, GUESTBOOK_OP, LOPSY_ERROR_CODES, NO_WEBGL2_MESSAGE, createLopsyApi } from './lopsy-api';
 import { CANVAS_DRAG_MESSAGE, LIVE_PREVIEW_MESSAGE } from './preflight';
 
 afterEach(() => {
@@ -68,6 +68,55 @@ function setup({ hasWebGL2 = true }: { hasWebGL2?: boolean } = {}) {
   });
   return { api: createLopsyApi(registry, { hasWebGL2: () => hasWebGL2 }), registry, log };
 }
+
+describe('lopsy.guestbook', () => {
+  function withGuestbook() {
+    const { api, registry, log } = setup();
+    const entries: unknown[] = [];
+    registry.define({
+      id: GUESTBOOK_OP,
+      summary: 'Signs the guestbook.',
+      surface: 'document',
+      settles: false,
+      params: { name: { type: 'string', optional: true }, message: { type: 'string', optional: true } },
+      run: (entry) => {
+        entries.push(entry);
+        return { signed: true };
+      },
+    });
+    return { api, entries, log };
+  }
+
+  it('runs guestbook.sign with the entry\'s fields, and answers as run does', async () => {
+    const { api, entries } = withGuestbook();
+    expect(await api.guestbook({ name: 'Ada', message: 'hello' })).toEqual({ ok: true, result: { signed: true } });
+    expect(await api.guestbook({})).toEqual({ ok: true, result: { signed: true } });
+    expect(await api.guestbook()).toEqual({ ok: true, result: { signed: true } });
+    expect(entries).toEqual([{ name: 'Ada', message: 'hello' }, {}, {}]);
+    expect(await api.guestbook({ name: 42 })).toMatchObject({ ok: false, error: { name: 'CommandError', code: 'invalid' } });
+    expect(await api.guestbook({ note: 'hello' })).toMatchObject({ ok: false, error: { code: 'invalid' } });
+    expect(entries).toHaveLength(3);
+  });
+
+  it('answers anything that is not an object as invalid, saying what it takes', async () => {
+    const { api, entries } = withGuestbook();
+    for (const entry of ['hello', 42, null, ['hello']]) {
+      expect(await api.guestbook(entry)).toEqual({
+        ok: false,
+        error: { name: 'CommandError', code: 'invalid', message: GUESTBOOK_ENTRY_MESSAGE },
+      });
+    }
+    expect(GUESTBOOK_ENTRY_MESSAGE).toContain('{ name, region, model, message }');
+    expect(entries).toEqual([]);
+  });
+
+  it('cannot be made to run another command', async () => {
+    const { api, entries, log } = withGuestbook();
+    expect(await api.guestbook({ op: 'layer.add', name: 'Ada' })).toEqual({ ok: true, result: { signed: true } });
+    expect(entries).toEqual([{ name: 'Ada' }]);
+    expect(log).toEqual([]);
+  });
+});
 
 describe('lopsy.describe', () => {
   it('lists the document commands only, as JSON', () => {
