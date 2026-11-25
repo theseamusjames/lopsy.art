@@ -28,6 +28,17 @@ describe('white balance presets', () => {
     expect(parsePresets('[]')).toEqual([]);
     expect(parsePresets('nope')).toEqual([]);
   });
+
+  it('leaves out a preset whose slider values are those of an earlier one', () => {
+    // A Fujifilm body's Underwater multipliers are within a percent of its Daylight ones: the same two slider values.
+    const json = JSON.stringify([
+      { name: 'Daylight', temperature: 45, tint: -17 },
+      { name: 'Cloudy', temperature: 74, tint: -27 },
+      { name: 'Underwater', temperature: 45.3, tint: -16.6 },
+      { name: 'Shade', temperature: 45, tint: -18 },
+    ]);
+    expect(parsePresets(json).map((p) => p.name)).toEqual(['Daylight', 'Cloudy', 'Shade']);
+  });
 });
 
 describe('Kelvin', () => {

@@ -23,7 +23,14 @@ function isFiniteNumber(v: unknown): v is number {
   return typeof v === 'number' && Number.isFinite(v);
 }
 
-/** The engine's preset list; malformed entries are left out. */
+/**
+ * The engine's preset list; malformed entries are left out, and so is a
+ * preset whose slider values are those of one already listed. A preset is
+ * stored as its two slider values and the menu names the first preset
+ * that matches them, so the second of two equal ones could never be
+ * shown as chosen. They do occur: on many Fujifilm bodies the camera's
+ * Underwater multipliers are its Daylight ones.
+ */
 export function parsePresets(json: string): WhiteBalancePresetValues[] {
   let raw: unknown;
   try {
@@ -39,6 +46,7 @@ export function parsePresets(json: string): WhiteBalancePresetValues[] {
     if (typeof name !== 'string' || name === '' || !isFiniteNumber(temperature) || !isFiniteNumber(tint)) continue;
     const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     if (out.some((p) => p.id === id)) continue;
+    if (out.some((p) => Math.round(p.temperature) === Math.round(temperature) && Math.round(p.tint) === Math.round(tint))) continue;
     out.push({ id, name, temperature, tint });
   }
   return out;

@@ -77,8 +77,15 @@ test.describe('White balance on a RAF', () => {
     // The menu: As shot, Auto, then the body's presets in the engine's order, then Custom.
     const mode = page.getByLabel('White balance mode');
     await expect(mode).toHaveValue('asShot');
+    // Each distinct setting once: this body's Underwater has Daylight's slider values, and the menu, which names
+    // a preset by its values, could never show it as chosen.
+    const listed = expected.presets.filter(
+      (p, i, all) => !all.slice(0, i).some((q) => Math.round(q.temperature) === Math.round(p.temperature) && Math.round(q.tint) === Math.round(p.tint)),
+    );
+    expect(listed.length).toBeLessThan(expected.presets.length);
     const options = await mode.locator('option').allTextContents();
-    expect(options).toEqual(['As shot', 'Auto', ...expected.presets.map((p) => p.name), 'Custom']);
+    expect(options).toEqual(['As shot', 'Auto', ...listed.map((p) => p.name), 'Custom']);
+    expect(options).not.toContain('Underwater');
     expect(options.indexOf('Daylight')).toBeLessThan(options.indexOf('Cloudy'));
 
     // As shot reads as the camera's Kelvin.
@@ -118,5 +125,22 @@ test.describe('White balance on a RAF', () => {
     const clamped = Number((await temperature.inputValue()).replace(' K', ''));
     expect(clamped).toBeGreaterThanOrEqual(2000);
     expect(clamped).toBeLessThan(6500);
+  });
+  test('every preset in the menu can be chosen, and the menu then shows it', async ({ page }) => {
+    await openHarness(page);
+    await page.getByTestId('harness-file').setInputFiles(sample ?? '');
+    await waitForReady(page, 120_000);
+    const mode = page.getByLabel('White balance mode');
+    await expect(mode).toHaveValue('asShot');
+    const presets = await mode.locator('option').evaluateAll((options) =>
+      options.map((option) => (option instanceof HTMLOptionElement ? option.value : '')).filter((value) => value.startsWith('preset:')),
+    );
+    expect(presets.length).toBeGreaterThan(3);
+    for (const preset of presets) {
+      await mode.selectOption(preset);
+      await expect(mode, `the menu after choosing ${preset}`).toHaveValue(preset);
+    }
+    await mode.selectOption('asShot');
+    await expect(mode).toHaveValue('asShot');
   });
 });

@@ -433,7 +433,9 @@ the newer version made.
   be level). The crop shrinks to the largest rectangle inside.
 - **White balance**: under its heading, a **Mode** menu (As shot; Auto,
   on RAW files; the RAW file's presets — Daylight, Cloudy, Shade,
-  Tungsten, the fluorescents, Flash, Underwater, as the body has them;
+  Tungsten, the fluorescents, Flash, Underwater, as the body has them
+  (one whose values are those of another, as Underwater is of Daylight on
+  many bodies, is listed once);
   and Custom, which the sliders set) and a **picker** (the pipette):
   while it is armed, "Click something neutral · Esc to cancel" shows on
   the photo, and a click sets Temperature and Tint to neutralise that
