@@ -183,13 +183,27 @@ test.describe('Export color profiles (ICC)', () => {
     const ihdr = parsePngChunks(buf).find((c) => c.type === 'IHDR')!;
     expect(ihdr.payload[8], '16-bit depth').toBe(16);
 
-    const colorChunks = pngColorChunks(buf);
-    expect(colorChunks, 'exactly one color chunk').toHaveLength(1);
-
+    const chunks = parsePngChunks(buf);
+    const types = chunks.map((c) => c.type);
     if (wideGamut) {
-      expect(colorChunks[0]!.type).toBe('iCCP');
-      expect(colorChunks[0]!.payload.subarray(0, 10).toString('latin1')).toBe('Display P3');
-      const profile = inflateIccp(colorChunks[0]!);
+      // Nothing that would contradict the profile.
+      for (const type of ['sRGB', 'gAMA', 'cHRM']) expect(types, `no ${type} chunk`).not.toContain(type);
+
+      // The engine's Display P3 PNG names its space twice, as one: a cICP
+      // chunk (P3 primaries 12, the sRGB transfer 13, RGB 0, full range 1)
+      // beside the ICC profile (docs/photonamous-linear-plan.md section 8,
+      // decision 5). PNG wants both before the image data, and cICP before
+      // iCCP's profile is read.
+      const iccps = chunks.filter((c) => c.type === 'iCCP');
+      const cicps = chunks.filter((c) => c.type === 'cICP');
+      expect(iccps, 'exactly one ICC profile').toHaveLength(1);
+      expect(cicps, 'exactly one cICP chunk').toHaveLength(1);
+      expect([...cicps[0]!.payload]).toEqual([12, 13, 0, 1]);
+      const firstIdat = types.indexOf('IDAT');
+      expect(types.indexOf('cICP')).toBeLessThan(types.indexOf('iCCP'));
+      expect(types.indexOf('iCCP')).toBeLessThan(firstIdat);
+      expect(iccps[0]!.payload.subarray(0, 10).toString('latin1')).toBe('Display P3');
+      const profile = inflateIccp(iccps[0]!);
       expectRealRgbProfile(profile);
       // Bradford-adapted P3 red colorant (X ≈ 0.51512). The old profile
       // shipped unadapted D65 colorants (X ≈ 0.4866) which shifted hues.
@@ -198,6 +212,8 @@ test.describe('Export color profiles (ICC)', () => {
       expect(redX).toBeGreaterThan(0.5);
       expect(redX).toBeLessThan(0.53);
     } else {
+      const colorChunks = pngColorChunks(buf);
+      expect(colorChunks, 'exactly one color chunk').toHaveLength(1);
       expect(colorChunks[0]!.type).toBe('sRGB');
     }
   });

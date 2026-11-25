@@ -179,6 +179,26 @@ pub struct BrushState {
 
 pub use crate::imaging::adjustments::ImageAdjustmentState;
 
+/// What one area's layer runs the image through, with the area's own
+/// settings: the document's develop stages again, each `None` (or at its
+/// defaults) unless the area was given it. Of `adjustments` an area sets
+/// whites, blacks, vibrance, the curves LUT and colour grading.
+#[derive(Clone, Default)]
+pub struct AreaLayer {
+    pub adjustments: ImageAdjustmentState,
+    pub color_mixer: Option<[f32; lopsy_core::color_mixer::VALUES_LEN]>,
+    pub detail: Option<lopsy_core::detail::DetailSettings>,
+    pub local_contrast: Option<lopsy_core::detail::LocalContrastSettings>,
+    pub finish: Option<lopsy_core::finish::FinishSettings>,
+    /// With the working space: Whites, Blacks and Vibrance blended through
+    /// the mask, and Color by hue and a grade run over a copy
+    /// (`setDevelopAreaLook`). The `adjustments` and `color_mixer` above
+    /// are not used then.
+    pub look: Option<crate::develop::look::AreaLook>,
+    /// With the working space: the area's curves (`setDevelopAreaCurves`).
+    pub look_curves: Option<crate::develop::look::CurvesState>,
+}
+
 pub struct EngineInner {
     pub gpu_ctx: GpuContext,
     pub shaders: ShaderPrograms,
@@ -229,6 +249,60 @@ pub struct EngineInner {
     /// levels LUTs. Applied on the compositor's final pass, not baked into
     /// pixels.
     pub adjustments: ImageAdjustmentState,
+    /// The RAW develop stage (`develop/`), applied to the composite before
+    /// `adjustments`. `None` (the default) leaves the composite untouched.
+    pub raw_develop: Option<crate::develop::RawDevelopState>,
+    /// The develop chain's working space (`develop::working_space`): with
+    /// it, the composite is linear Rec. 2020 from the RAW or input step to
+    /// the output step. `None` (the default, and always in Lopsy) leaves
+    /// every stage as it was.
+    pub working_space: Option<crate::develop::working_space::WorkingSpace>,
+    /// Whether the screen's pixels are Display P3, as the host last said
+    /// through `set_screen_output`. Only the working space's output step
+    /// reads it.
+    pub screen_is_display_p3: bool,
+    /// The HDR view of the working space's live frame: whether it is on and
+    /// its peak. It acts only while the screen is HDR
+    /// (`develop::output::live_settings`). A way of viewing, so a new
+    /// document keeps it.
+    pub develop_hdr: crate::develop::output::HdrView,
+    /// Color by hue (`develop/color_mixer.wgsl`): 24 values, applied after
+    /// `adjustments`. `None` (the default) leaves the composite untouched.
+    pub color_mixer: Option<[f32; lopsy_core::color_mixer::VALUES_LEN]>,
+    /// Sharpening and noise reduction (`develop::detail`). `None` (the
+    /// default) runs neither.
+    pub detail: Option<lopsy_core::detail::DetailSettings>,
+    /// Haze and local contrast (`develop::detail`). `None` by default.
+    pub local_contrast: Option<lopsy_core::detail::LocalContrastSettings>,
+    /// Areas (`lopsy_core::areas`): the clamped floats, `STRIDE` per area.
+    /// `None` (the default) runs no pass.
+    pub areas: Option<Vec<f32>>,
+    /// Each area's own further settings, by its place in `areas`: the
+    /// area's layer (`compositor::apply_area_layers`). `None`, or one with
+    /// nothing set, draws no layer. Empty by default.
+    pub area_layers: Vec<Option<AreaLayer>>,
+    /// With the working space: tone on scene data (`setDevelopTone`), in the
+    /// tone pass. `None` (the default) is the identity.
+    pub develop_tone: Option<lopsy_core::scene_tone::ToneSliders>,
+    /// With the working space: colour and grading on rendered linear data
+    /// (`setDevelopLook`), in the look pass. `None` by default.
+    pub develop_look: Option<lopsy_core::look::LookSettings>,
+    /// With the working space: the curves (`setDevelopCurves`), in the look
+    /// pass. `None` by default.
+    pub develop_curves: Option<crate::develop::look::CurvesState>,
+    /// While `commands::develop::read_scene_statistics` renders a frame: the
+    /// small float texture the chain box-downscales the scene image into,
+    /// before the tone pass. `None` otherwise.
+    pub scene_capture: Option<TextureHandle>,
+    /// The area whose mask the live frame shows in red, or −1. Never in exports.
+    pub area_overlay: i32,
+    /// (shadows, highlights) clipping warnings on the live frame only.
+    pub clipping_warning: (bool, bool),
+    /// Show the sharpening edge mask in place of the live frame.
+    pub detail_mask_view: bool,
+    /// Shaped vignette and grain (`lopsy_core::finish`), last in the develop
+    /// chain. `None` by default.
+    pub finish: Option<lopsy_core::finish::FinishSettings>,
     /// Mask editing — skip mask clipping, show blue overlay instead.
     pub mask_edit_layer_id: Option<String>,
     /// Magnetic lasso session (doc-sized Sobel edge field; present only
@@ -270,6 +344,26 @@ pub struct SnapshotTexture {
 }
 
 impl EngineInner {
+    /// Area `index`'s layer off: its curves texture goes back to the pool.
+    pub fn clear_area_layer(&mut self, index: usize) {
+        if let Some(layer) = self.area_layers.get_mut(index).and_then(Option::take) {
+            if let Some(tex) = layer.adjustments.curves_texture {
+                self.texture_pool.release(tex);
+            }
+            if let Some(curves) = layer.look_curves {
+                self.texture_pool.release(curves.texture);
+            }
+        }
+    }
+
+    /// Every area's layer off.
+    pub fn clear_area_layers(&mut self) {
+        for index in 0..self.area_layers.len() {
+            self.clear_area_layer(index);
+        }
+        self.area_layers.clear();
+    }
+
     pub fn new(gpu_ctx: GpuContext, shaders: ShaderPrograms) -> Result<Self, String> {
         let (mut texture_pool, mut fbo_pool) = gpu_ctx.create_pools();
 
@@ -325,6 +419,23 @@ impl EngineInner {
             liquify_disp_texture: None,
             layer_transform: Vec::new(),
             adjustments: ImageAdjustmentState::default(),
+            raw_develop: None,
+            working_space: None,
+            screen_is_display_p3: false,
+            develop_hdr: crate::develop::output::HdrView::default(),
+            color_mixer: None,
+            detail: None,
+            local_contrast: None,
+            areas: None,
+            area_layers: Vec::new(),
+            develop_tone: None,
+            develop_look: None,
+            develop_curves: None,
+            scene_capture: None,
+            area_overlay: -1,
+            clipping_warning: (false, false),
+            detail_mask_view: false,
+            finish: None,
             mask_edit_layer_id: None,
             mlasso: MagneticLassoState::default(),
             text_renderer: None,
@@ -466,11 +577,21 @@ impl EngineInner {
     /// values above 1.0 should show brighter than white (HDR). Returns
     /// whether the screen is HDR afterwards: never on WebGL, where the host
     /// sets the colour space on the canvas itself and the canvas is 8-bit.
+    /// On both, the develop working space's output step renders the live
+    /// frame for the colour space said here.
     pub fn set_screen_output(&mut self, is_display_p3: bool, wants_hdr: bool) -> bool {
         // The document's adjustments keep or clip what goes above white
         // by whether the screen is HDR, so the composite is rebuilt.
         self.needs_recomposite = true;
+        self.screen_is_display_p3 = is_display_p3;
         self.gpu_ctx.set_screen_output(is_display_p3, wants_hdr)
+    }
+
+    /// Whether the screen really is HDR: the surface the engine configured
+    /// keeps values above 1.0. False on WebGL, with no canvas, and on a wgpu
+    /// canvas that could not be made float, whatever the host asked for.
+    pub fn screen_is_hdr(&self) -> bool {
+        self.gpu_ctx.is_screen_hdr()
     }
 
     pub fn set_background_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
@@ -620,7 +741,10 @@ impl EngineInner {
 
     /// Release all layer textures, masks, stroke textures, selection,
     /// clipboard, float, brush tip, and shape preview. Resets the engine
-    /// to a clean state without destroying the WebGL context.
+    /// to a clean state without destroying the WebGL context. The develop
+    /// state goes with it, the working space included: an engine that
+    /// wants the working space after a clear sets it again
+    /// (`commands::develop::set_develop_working_space`).
     pub fn clear_all_layers(&mut self) {
         // Layer textures
         for (_, tex) in self.layer_textures.drain() {
@@ -760,6 +884,27 @@ impl EngineInner {
             self.texture_pool.release(tex);
         }
         self.adjustments.has_gradient_map = false;
+        if let Some(curve) = self.raw_develop.take().and_then(|d| d.curve_texture) {
+            self.texture_pool.release(curve);
+        }
+        if let Some(rendered) = self.working_space.take().and_then(|w| w.rendered) {
+            self.texture_pool.release(rendered);
+        }
+        self.color_mixer = None;
+        self.detail = None;
+        self.local_contrast = None;
+        self.areas = None;
+        self.clear_area_layers();
+        self.develop_tone = None;
+        self.develop_look = None;
+        if let Some(curves) = self.develop_curves.take() {
+            self.texture_pool.release(curves.texture);
+        }
+        self.area_overlay = -1;
+        self.finish = None;
+        self.detail_mask_view = false;
+        self.clipping_warning = (false, false);
+        crate::commands::adjustment::reset_image_color_grading(&mut self.adjustments);
         self.needs_recomposite = true;
         // Clear text renderer layer state so stale text layouts don't persist
         // across document switches.

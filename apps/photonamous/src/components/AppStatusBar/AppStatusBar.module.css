@@ -1,0 +1,17 @@
+/* Below the library or the Edit view. A window too narrow for every item cuts the bar off at its edge rather than wrapping it. */
+.frame {
+  flex-shrink: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* The working size goes first when the window is narrow. */
+.wide {
+  display: contents;
+}
+
+@media (max-width: 600px) {
+  .wide {
+    display: none;
+  }
+}

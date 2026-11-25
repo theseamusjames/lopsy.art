@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@lopsy/engine-pkg/*": ["../lopsy-web/src/engine-wasm/pkg/*"],
+      "@lopsy/engine-pkg-wgpu/*": ["../lopsy-web/src/engine-wasm/pkg-wgpu/*", "../lopsy-web/src/engine-wasm/pkg/*"],
+      "@lopsy/engine-wasm/renderer-choice": ["../lopsy-web/src/engine-wasm/renderer-choice.ts"],
+      "@lopsy/engine-wasm/readback-order": ["../lopsy-web/src/engine-wasm/readback-order.ts"],
+      "@lopsy/engine-wasm/display": ["../lopsy-web/src/engine-wasm/display.ts"],
+      "@lopsy/image-metadata": ["../lopsy-web/src/utils/image-metadata.ts"]
+    }
+  },
+  "include": ["src"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}

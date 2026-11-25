@@ -1,4 +1,4 @@
-import { Slider } from '../../components/Slider/Slider';
+import { Slider } from '@lopsy/ui/Slider';
 import type { StrokeEffect } from '../../types';
 import { useEditorStore } from '../../app/editor-store';
 import { effectSliderLimits } from './effect-list';

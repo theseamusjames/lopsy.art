@@ -1,0 +1,89 @@
+/* Photonamous shares Lopsy's design tokens, reset and fonts (packages/ui). */
+@import '@lopsy/ui/styles/fonts.css';
+@import '@lopsy/ui/styles/reset.css';
+@import '@lopsy/ui/styles/tokens.css';
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* Photonamous' own tokens: the five colour labels, stars and tile backing. */
+:root {
+  --label-red: #e5534b;
+  --label-yellow: #e3b341;
+  --label-green: #57ab5a;
+  --label-blue: #539bf5;
+  --label-purple: #b083f0;
+  --star-on: #f0c24a;
+  --tile-bg: #161616;
+  --viewer-bg: #111111;
+
+  /*
+   * Colours that meet WCAG 2.2 AA contrast on this app's surfaces (#111 to
+   * #404040): 4.5:1 for text, 3:1 for a control's edge or focus ring.
+   * Lopsy's disabled grey is for disabled controls only. Filled buttons
+   * take @lopsy/ui's --color-primary-* and --color-danger-*, as Lopsy's do.
+   */
+  /* Accent-coloured text, also on a selected or hovered row. */
+  --ph-accent-text: #6cb6ff;
+  /* Secondary text that must stay readable on every surface, hover and active rows included. */
+  --ph-text-muted: var(--color-text-muted);
+  /* The focus ring: at least 3:1 against every surface. */
+  --ph-focus-ring: var(--color-focus-ring);
+  /* Error text (Lopsy's --color-error is 4.2:1 on a dialog): 4.5:1 on every surface. */
+  --ph-error-text: #ff8a80;
+  /* The app's header, which stays on screen over the library and the Edit view alike: the Edit view starts under it. */
+  --ph-header-height: 48px;
+  /* The edge of a control with no text of its own (a text box, an empty star): 3:1 on every surface. */
+  --ph-control-edge: var(--color-control-edge);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+body {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+}
+
+/*
+ * Every select draws the same arrow in the same place: Lucide's ChevronDown,
+ * as the app's other dropdowns use, 8 px in from the right. Once a select is
+ * styled, the browser puts its own arrow wherever it likes, often against
+ * the edge. The colours are --color-text-secondary and, when disabled,
+ * --color-text-disabled, written out because a data URI can't read a custom
+ * property. A module styling a select sets background-color and the other
+ * sides' padding, never the shorthands, which would undo this.
+ */
+select {
+  appearance: none;
+  padding-right: var(--space-7);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a0a0a0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-2) center;
+  background-size: 12px 12px;
+}
+
+select:disabled {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23606060' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+/* Forced colours: the system's own arrow, which follows the user's colours. */
+@media (forced-colors: active) {
+  select,
+  select:disabled {
+    appearance: auto;
+    background-image: none;
+  }
+}

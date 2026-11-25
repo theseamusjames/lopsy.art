@@ -7,9 +7,9 @@ import { installDevHooks } from './dev-hooks';
 import { checkWebGL2Support } from './components/WebGL2Warning/WebGL2Warning';
 import { describeCommands, runInvocation, runInvocations } from './commands';
 import { createLopsyApi } from './commands/lopsy-api';
-import './styles/fonts.css';
-import './styles/tokens.css';
-import './styles/reset.css';
+import '@lopsy/ui/styles/fonts.css';
+import '@lopsy/ui/styles/tokens.css';
+import '@lopsy/ui/styles/reset.css';
 
 installDevHooks();
 

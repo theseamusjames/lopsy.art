@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { createDocument, waitForStore } from './helpers';
+import { createDocument, docToScreen, getEditorState, selectTool, waitForStore } from './helpers';
 
 // #670 + #671: the zoom indicator in the status bar responds to
 // double-click (reset zoom to 100% AND recenter) and click-and-drag
@@ -118,5 +118,43 @@ test.describe('Status-bar zoom indicator', () => {
     const afterMove = await page.evaluate(() => (window as unknown as { __editorStore: { getState: () => { viewport: { zoom: number } } } }).__editorStore.getState().viewport.zoom);
     expect(afterMove).toBe(beforeMove);
     await page.mouse.up();
+  });
+
+  test('from the keyboard: Enter for 100%, and the arrow keys step the zoom without nudging the layer', async ({ page }) => {
+    // Real content on the active layer, and the Move tool, so a nudge would
+    // show as a change of the layer's position and a history row.
+    await selectTool(page, 'marquee-rect');
+    const a = await docToScreen(page, 50, 50);
+    const b = await docToScreen(page, 200, 150);
+    await page.mouse.move(a.x, a.y);
+    await page.mouse.down();
+    await page.mouse.move(b.x, b.y, { steps: 5 });
+    await page.mouse.up();
+    await page.getByRole('button', { name: 'Edit' }).click();
+    await page.locator('[role="menuitem"]:has-text("Fill")').first().click();
+    await page.keyboard.press('Control+d');
+    await selectTool(page, 'move');
+    const before = await getEditorState(page);
+    const layerBefore = before.document.layers.find((l) => l.id === before.document.activeLayerId);
+
+    const readout = page.getByRole('button', { name: /^Zoom \d+%$/ });
+    await readout.click();
+    await expect(readout).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(readout).toHaveAccessibleName('Zoom 100%');
+    await page.keyboard.press('ArrowRight');
+    await expect(readout).toHaveAccessibleName('Zoom 110%');
+    await page.keyboard.press('ArrowUp');
+    await expect(readout).toHaveAccessibleName('Zoom 120%');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    await expect(readout).toHaveAccessibleName('Zoom 90%');
+    await page.waitForTimeout(150);
+
+    const after = await getEditorState(page);
+    const layerAfter = after.document.layers.find((l) => l.id === after.document.activeLayerId);
+    expect({ x: layerAfter?.x, y: layerAfter?.y }).toEqual({ x: layerBefore?.x, y: layerBefore?.y });
+    expect(after.undoStackLength).toBe(before.undoStackLength);
   });
 });

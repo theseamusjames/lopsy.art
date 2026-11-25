@@ -154,6 +154,25 @@ pub const BUCKET_FILL_COLOR_MATCH_FRAG: &str = translated!("shape/bucket_fill_co
 // Color
 pub const COLOR_CONVERT_FRAG: &str = translated!("color/color_convert");
 
+// Develop
+pub const RAW_DEVELOP_FRAG: &str = translated!("develop/raw_develop");
+pub const COLOR_MIXER_FRAG: &str = translated!("develop/color_mixer");
+pub const AREAS_FRAG: &str = translated!("develop/areas");
+pub const AREA_LAYER_FRAG: &str = translated!("develop/area_layer");
+pub const CLIP_WARNING_FRAG: &str = translated!("develop/clip_warning");
+pub const FINISH_FRAG: &str = translated!("develop/finish");
+pub const BLUR_AXIS_FRAG: &str = translated!("develop/blur_axis");
+pub const NOISE_REDUCE_FRAG: &str = translated!("develop/noise_reduce");
+pub const DETAIL_SHARPEN_FRAG: &str = translated!("develop/detail_sharpen");
+pub const LOCAL_CONTRAST_FRAG: &str = translated!("develop/local_contrast");
+pub const LUMINANCE_STATS_FRAG: &str = translated!("develop/luminance_stats");
+pub const LOCAL_CONTRAST_LOG_FRAG: &str = translated!("develop/local_contrast_log");
+pub const HAZE_FRAG: &str = translated!("develop/haze");
+pub const WORKING_SPACE_FRAG: &str = translated!("develop/working_space");
+pub const TONE_FRAG: &str = translated!("develop/tone");
+pub const LOOK_FRAG: &str = translated!("develop/look");
+pub const OUTPUT_FRAG: &str = translated!("develop/output");
+
 /// Declares the typed shaders: each source tagged with the uniform struct
 /// its passes are created with. A test checks every struct against its
 /// source's `Params` block.
@@ -239,6 +258,23 @@ typed_shaders! {
     GAUSSIAN_BLUR: params::filters::GaussianBlurParams = GAUSSIAN_BLUR_FRAG;
     BOX_BLUR: params::filters::BoxBlurParams = BOX_BLUR_FRAG;
     COLOR_CONVERT: params::color::ColorConvertParams = COLOR_CONVERT_FRAG;
+    RAW_DEVELOP: params::develop::RawDevelopParams = RAW_DEVELOP_FRAG;
+    COLOR_MIXER: params::develop::ColorMixerParams = COLOR_MIXER_FRAG;
+    AREAS: params::develop::AreasParams = AREAS_FRAG;
+    AREA_LAYER: params::develop::AreaLayerParams = AREA_LAYER_FRAG;
+    CLIP_WARNING: params::develop::ClipWarningParams = CLIP_WARNING_FRAG;
+    FINISH: params::develop::FinishParams = FINISH_FRAG;
+    BLUR_AXIS: params::develop::BlurAxisParams = BLUR_AXIS_FRAG;
+    NOISE_REDUCE: params::develop::NoiseReduceParams = NOISE_REDUCE_FRAG;
+    DETAIL_SHARPEN: params::develop::DetailSharpenParams = DETAIL_SHARPEN_FRAG;
+    LOCAL_CONTRAST: params::develop::LocalContrastParams = LOCAL_CONTRAST_FRAG;
+    LUMINANCE_STATS: params::develop::LuminanceStatsParams = LUMINANCE_STATS_FRAG;
+    LOCAL_CONTRAST_LOG: params::develop::LocalContrastLogParams = LOCAL_CONTRAST_LOG_FRAG;
+    HAZE: params::develop::HazeParams = HAZE_FRAG;
+    WORKING_SPACE: params::develop::WorkingSpaceParams = WORKING_SPACE_FRAG;
+    TONE: params::develop::ToneParams = TONE_FRAG;
+    LOOK: params::develop::LookParams = LOOK_FRAG;
+    OUTPUT: params::develop::OutputParams = OUTPUT_FRAG;
     GRADIENT_LINEAR: params::gradient::GradientLinearParams = GRADIENT_LINEAR_FRAG;
     GRADIENT_RADIAL: params::gradient::GradientRadialParams = GRADIENT_RADIAL_FRAG;
     SHAPE_FILL: params::shape::ShapeFillParams = SHAPE_FILL_FRAG;
@@ -291,6 +327,20 @@ impl<P> ShaderProgram<P> {
     pub(in crate::gpu) fn linked(&self) -> &LinkedProgram {
         &self.linked
     }
+}
+
+/// The program in `slot`, compiling it with `make` the first time. A failed
+/// compile is not cached, so a later call tries again.
+fn lazily<P>(
+    slot: &RefCell<Option<Rc<ShaderProgram<P>>>>,
+    make: impl FnOnce() -> Result<ShaderProgram<P>, String>,
+) -> Result<Rc<ShaderProgram<P>>, String> {
+    if let Some(program) = slot.borrow().as_ref() {
+        return Ok(Rc::clone(program));
+    }
+    let program = Rc::new(make()?);
+    *slot.borrow_mut() = Some(Rc::clone(&program));
+    Ok(program)
 }
 
 /// Compiles a shader that takes the uniform struct `P`.
@@ -404,6 +454,26 @@ pub struct ShaderPrograms {
     // Selection
     // Color
     pub color_convert: ShaderProgram<params::color::ColorConvertParams>,
+    // Develop
+    /// The Photonamous develop passes, compiled on first use (`raw_develop()`,
+    /// `color_mixer()`) so a Lopsy session never links them.
+    raw_develop: RefCell<Option<Rc<ShaderProgram<params::develop::RawDevelopParams>>>>,
+    color_mixer: RefCell<Option<Rc<ShaderProgram<params::develop::ColorMixerParams>>>>,
+    areas: RefCell<Option<Rc<ShaderProgram<params::develop::AreasParams>>>>,
+    area_layer: RefCell<Option<Rc<ShaderProgram<params::develop::AreaLayerParams>>>>,
+    clip_warning: RefCell<Option<Rc<ShaderProgram<params::develop::ClipWarningParams>>>>,
+    finish: RefCell<Option<Rc<ShaderProgram<params::develop::FinishParams>>>>,
+    blur_axis: RefCell<Option<Rc<ShaderProgram<params::develop::BlurAxisParams>>>>,
+    noise_reduce: RefCell<Option<Rc<ShaderProgram<params::develop::NoiseReduceParams>>>>,
+    detail_sharpen: RefCell<Option<Rc<ShaderProgram<params::develop::DetailSharpenParams>>>>,
+    local_contrast: RefCell<Option<Rc<ShaderProgram<params::develop::LocalContrastParams>>>>,
+    luminance_stats: RefCell<Option<Rc<ShaderProgram<params::develop::LuminanceStatsParams>>>>,
+    local_contrast_log: RefCell<Option<Rc<ShaderProgram<params::develop::LocalContrastLogParams>>>>,
+    haze: RefCell<Option<Rc<ShaderProgram<params::develop::HazeParams>>>>,
+    working_space: RefCell<Option<Rc<ShaderProgram<params::develop::WorkingSpaceParams>>>>,
+    tone: RefCell<Option<Rc<ShaderProgram<params::develop::ToneParams>>>>,
+    look: RefCell<Option<Rc<ShaderProgram<params::develop::LookParams>>>>,
+    output: RefCell<Option<Rc<ShaderProgram<params::develop::OutputParams>>>>,
     pub mask_luminance: ShaderProgram<()>,
     pub liquify_dab: ShaderProgram<params::filters::LiquifyDabParams>,
     // Text
@@ -433,6 +503,91 @@ impl ShaderPrograms {
         let program = Rc::new(compile_blend_variant(&self.linker, mode)?);
         self.blend_variants.borrow_mut().insert(mode, Rc::clone(&program));
         Ok(program)
+    }
+
+    /// `develop/raw_develop.wgsl`, compiled the first time it is asked for.
+    pub fn raw_develop(&self) -> Result<Rc<ShaderProgram<params::develop::RawDevelopParams>>, String> {
+        lazily(&self.raw_develop, || compile(&self.linker, &RAW_DEVELOP))
+    }
+
+    /// `develop/color_mixer.wgsl`, compiled the first time it is asked for.
+    pub fn color_mixer(&self) -> Result<Rc<ShaderProgram<params::develop::ColorMixerParams>>, String> {
+        lazily(&self.color_mixer, || compile(&self.linker, &COLOR_MIXER))
+    }
+
+    /// `develop/areas.wgsl`, compiled the first time it is asked for.
+    pub fn areas(&self) -> Result<Rc<ShaderProgram<params::develop::AreasParams>>, String> {
+        lazily(&self.areas, || compile(&self.linker, &AREAS))
+    }
+
+    /// `develop/area_layer.wgsl`, compiled the first time it is asked for.
+    pub fn area_layer(&self) -> Result<Rc<ShaderProgram<params::develop::AreaLayerParams>>, String> {
+        lazily(&self.area_layer, || compile(&self.linker, &AREA_LAYER))
+    }
+
+    /// `develop/clip_warning.wgsl`, compiled the first time it is asked for.
+    pub fn clip_warning(&self) -> Result<Rc<ShaderProgram<params::develop::ClipWarningParams>>, String> {
+        lazily(&self.clip_warning, || compile(&self.linker, &CLIP_WARNING))
+    }
+
+    /// `develop/finish.wgsl`, compiled the first time it is asked for.
+    pub fn finish(&self) -> Result<Rc<ShaderProgram<params::develop::FinishParams>>, String> {
+        lazily(&self.finish, || compile(&self.linker, &FINISH))
+    }
+
+    /// `develop/blur_axis.wgsl`, compiled the first time it is asked for.
+    pub fn blur_axis(&self) -> Result<Rc<ShaderProgram<params::develop::BlurAxisParams>>, String> {
+        lazily(&self.blur_axis, || compile(&self.linker, &BLUR_AXIS))
+    }
+
+    /// `develop/noise_reduce.wgsl`, compiled the first time it is asked for.
+    pub fn noise_reduce(&self) -> Result<Rc<ShaderProgram<params::develop::NoiseReduceParams>>, String> {
+        lazily(&self.noise_reduce, || compile(&self.linker, &NOISE_REDUCE))
+    }
+
+    /// `develop/detail_sharpen.wgsl`, compiled the first time it is asked for.
+    pub fn detail_sharpen(&self) -> Result<Rc<ShaderProgram<params::develop::DetailSharpenParams>>, String> {
+        lazily(&self.detail_sharpen, || compile(&self.linker, &DETAIL_SHARPEN))
+    }
+
+    /// `develop/local_contrast.wgsl`, compiled the first time it is asked for.
+    pub fn local_contrast(&self) -> Result<Rc<ShaderProgram<params::develop::LocalContrastParams>>, String> {
+        lazily(&self.local_contrast, || compile(&self.linker, &LOCAL_CONTRAST))
+    }
+
+    /// `develop/luminance_stats.wgsl`, compiled the first time it is asked for.
+    pub fn luminance_stats(&self) -> Result<Rc<ShaderProgram<params::develop::LuminanceStatsParams>>, String> {
+        lazily(&self.luminance_stats, || compile(&self.linker, &LUMINANCE_STATS))
+    }
+
+    /// `develop/local_contrast_log.wgsl`, compiled the first time it is asked for.
+    pub fn local_contrast_log(&self) -> Result<Rc<ShaderProgram<params::develop::LocalContrastLogParams>>, String> {
+        lazily(&self.local_contrast_log, || compile(&self.linker, &LOCAL_CONTRAST_LOG))
+    }
+
+    /// `develop/haze.wgsl`, compiled the first time it is asked for.
+    pub fn haze(&self) -> Result<Rc<ShaderProgram<params::develop::HazeParams>>, String> {
+        lazily(&self.haze, || compile(&self.linker, &HAZE))
+    }
+
+    /// `develop/working_space.wgsl`, compiled the first time it is asked for.
+    pub fn working_space(&self) -> Result<Rc<ShaderProgram<params::develop::WorkingSpaceParams>>, String> {
+        lazily(&self.working_space, || compile(&self.linker, &WORKING_SPACE))
+    }
+
+    /// `develop/tone.wgsl`, compiled the first time it is asked for.
+    pub fn tone(&self) -> Result<Rc<ShaderProgram<params::develop::ToneParams>>, String> {
+        lazily(&self.tone, || compile(&self.linker, &TONE))
+    }
+
+    /// `develop/look.wgsl`, compiled the first time it is asked for.
+    pub fn look(&self) -> Result<Rc<ShaderProgram<params::develop::LookParams>>, String> {
+        lazily(&self.look, || compile(&self.linker, &LOOK))
+    }
+
+    /// `develop/output.wgsl`, compiled the first time it is asked for.
+    pub fn output(&self) -> Result<Rc<ShaderProgram<params::develop::OutputParams>>, String> {
+        lazily(&self.output, || compile(&self.linker, &OUTPUT))
     }
 
     pub fn compile_all(ctx: &crate::gpu::context::GpuContext) -> Result<Self, String> {
@@ -540,6 +695,23 @@ impl ShaderPrograms {
             // Selection
             // Color
             color_convert: compile(linker, &COLOR_CONVERT)?,
+            raw_develop: RefCell::new(None),
+            color_mixer: RefCell::new(None),
+            areas: RefCell::new(None),
+            area_layer: RefCell::new(None),
+            clip_warning: RefCell::new(None),
+            finish: RefCell::new(None),
+            blur_axis: RefCell::new(None),
+            noise_reduce: RefCell::new(None),
+            detail_sharpen: RefCell::new(None),
+            local_contrast: RefCell::new(None),
+            luminance_stats: RefCell::new(None),
+            local_contrast_log: RefCell::new(None),
+            haze: RefCell::new(None),
+            working_space: RefCell::new(None),
+            tone: RefCell::new(None),
+            look: RefCell::new(None),
+            output: RefCell::new(None),
             mask_luminance: compile(linker, &MASK_LUMINANCE)?,
             liquify_dab: compile(linker, &LIQUIFY_DAB)?,
             // Text

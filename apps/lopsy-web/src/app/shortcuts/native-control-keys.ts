@@ -1,3 +1,5 @@
+import { HANDLES_ARROW_KEYS_ATTR } from '@lopsy/ui/a11y/arrow-keys';
+
 /**
  * Arrow keys that native range inputs, radio buttons, and selects use for
  * their own built-in behavior (slider stepping, radio-group navigation,
@@ -8,13 +10,6 @@
  * non-text input like these).
  */
 const ARROW_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
-
-/**
- * Marks a custom control that handles arrow keys itself. The global handler
- * runs in the capture phase, so such a control cannot stop it by calling
- * stopPropagation from its own keydown.
- */
-export const HANDLES_ARROW_KEYS_ATTR = 'data-handles-arrow-keys';
 
 function isRangeOrRadioInput(el: HTMLInputElement): boolean {
   const type = (el.type || 'text').toLowerCase();

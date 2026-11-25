@@ -1,0 +1,155 @@
+.histogram {
+  position: relative;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.frame {
+  position: relative;
+}
+
+.chart {
+  display: block;
+  width: 100%;
+  height: 72px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.red,
+.green,
+.blue {
+  mix-blend-mode: screen;
+  opacity: 0.7;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.red {
+  fill: #d04a4a;
+  stroke: #d04a4a;
+}
+
+.green {
+  fill: #4ab04a;
+  stroke: #4ab04a;
+  stroke-dasharray: 4 2;
+}
+
+.blue {
+  fill: #4a6ad0;
+  stroke: #4a6ad0;
+  stroke-dasharray: 1 2;
+}
+
+.luminance {
+  fill: none;
+  stroke: var(--color-text-secondary);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.clip {
+  position: absolute;
+  top: 1px;
+  display: flex;
+  align-items: flex-start;
+  width: 24px;
+  height: 24px;
+  padding: 3px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.clip[data-side='shadows'] {
+  left: 1px;
+  justify-content: flex-start;
+}
+
+.clip[data-side='highlights'] {
+  right: 1px;
+  justify-content: flex-end;
+}
+
+.clip:hover {
+  background: var(--color-bg-hover);
+}
+
+.clip[aria-pressed='true'] {
+  background: var(--color-bg-active);
+  box-shadow: inset 0 0 0 1px var(--color-text-primary);
+}
+
+.clip:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+}
+
+.marker {
+  width: 10px;
+  height: 10px;
+}
+
+.marker path {
+  fill: none;
+  stroke: var(--ph-text-muted);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.clip[data-side='shadows'][data-clipped] .marker path {
+  fill: var(--color-accent);
+  stroke: var(--color-accent);
+}
+
+.clip[data-side='highlights'][data-clipped] .marker path {
+  fill: var(--color-warning);
+  stroke: var(--color-warning);
+}
+
+.key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--font-size-xs);
+  color: var(--ph-text-muted);
+}
+
+.keyItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.keyLine {
+  width: 16px;
+  height: 4px;
+  overflow: visible;
+}
+
+/* SDR white on the HDR histogram: a thin rule, with its name above the chart's bottom edge. */
+.white {
+  stroke: var(--color-text-primary);
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.whiteLabel {
+  position: absolute;
+  bottom: 2px;
+  left: var(--x);
+  padding: 0 var(--space-1);
+  font-size: var(--font-size-xs);
+  line-height: 1.2;
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  pointer-events: none;
+}

@@ -1,0 +1,25 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* The library, and the Edit view over it; the status bar sits below both. */
+.views {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+/*
+ * The Edit view covers the library but not the app's header, which stays
+ * in use above it. It is above everything in the library and under the
+ * header's own panel and every dialog, which can open over it.
+ */
+.edit {
+  position: absolute;
+  inset: var(--ph-header-height) 0 0 0;
+  z-index: var(--z-canvas-popover);
+  background: var(--color-bg-primary);
+}

@@ -44,22 +44,35 @@ pub fn renderer_name() -> String {
     if cfg!(feature = "wgpu") { "wgpu" } else { "webgl" }.to_string()
 }
 
-/// The event the window receives when the wgpu device is lost. The page
-/// answers it by creating the engine again (`useCanvasRendering.ts`).
+/// The event the window receives when an engine's wgpu device is lost.
+/// The page answers it by creating that engine again
+/// (`useCanvasRendering.ts`, `develop-engine.ts`).
+///
+/// It is a `CustomEvent` whose `detail` is `{ engineId, reason, message }`:
+/// `engineId` is the number `engineId(engine)` returns for the engine that
+/// lost its device, `reason` is WebGPU's (`"destroyed"` or `"unknown"`)
+/// and `message` is the browser's text. A page with several engines
+/// rebuilds only the one named. An engine being freed never fires it.
 #[cfg(feature = "wgpu")]
 const GPU_LOST_EVENT: &str = "lopsy-gpu-lost";
 
 #[cfg(feature = "wgpu")]
-fn announce_gpu_lost(_reason: &str) {
+fn announce_gpu_lost(engine_id: u32, reason: &str, message: &str) {
     let Some(window) = web_sys::window() else { return };
-    if let Ok(event) = web_sys::Event::new(GPU_LOST_EVENT) {
+    let detail = js_sys::Object::new();
+    let _ = js_sys::Reflect::set(&detail, &"engineId".into(), &engine_id.into());
+    let _ = js_sys::Reflect::set(&detail, &"reason".into(), &reason.into());
+    let _ = js_sys::Reflect::set(&detail, &"message".into(), &message.into());
+    let init = web_sys::CustomEventInit::new();
+    init.set_detail(&detail);
+    if let Ok(event) = web_sys::CustomEvent::new_with_event_init_dict(GPU_LOST_EVENT, &init) {
         let _ = window.dispatch_event(&event);
     }
 }
 
 /// A WebGL canvas fires `webglcontextlost` itself.
 #[cfg(not(feature = "wgpu"))]
-fn announce_gpu_lost(_reason: &str) {}
+fn announce_gpu_lost(_engine_id: u32, _reason: &str, _message: &str) {}
 
 #[cfg(not(feature = "wgpu"))]
 #[wasm_bindgen(js_name = "createEngine")]
@@ -77,6 +90,16 @@ pub async fn create_engine(canvas: HtmlCanvasElement) -> Result<Engine, JsError>
     host::install(host::Host { log: console_log, now_ms: js_sys::Date::now, gpu_lost: announce_gpu_lost });
     let gpu_ctx = GpuContext::new(&canvas).await.map_err(|e| JsError::new(&e))?;
     engine_on(gpu_ctx)
+}
+
+/// This engine's id: a number no other engine in the page has, the same
+/// for the engine's whole life. On wgpu the `lopsy-gpu-lost` event's
+/// `detail.engineId` is it, so a page with several engines can tell which
+/// one lost its device. WebGL engines have one too, though their losses
+/// arrive as `webglcontextlost` on their own canvas.
+#[wasm_bindgen(js_name = "engineId")]
+pub fn engine_id(engine: &Engine) -> u32 {
+    lopsy_engine::commands::layer::engine_id(&engine.inner)
 }
 
 fn engine_on(gpu_ctx: GpuContext) -> Result<Engine, JsError> {
@@ -101,10 +124,21 @@ pub fn set_viewport(engine: &mut Engine, zoom: f64, pan_x: f64, pan_y: f64, scre
 /// On wgpu, say whether the canvas is Display P3 and whether it should be
 /// HDR: values above 1.0 shown brighter than white. Returns whether it is
 /// HDR afterwards. WebGL returns false: there the page sets the drawing
-/// buffer's colour space itself, and the buffer is 8 bits a channel.
+/// buffer's colour space itself, and the buffer is 8 bits a channel. On
+/// both, the develop working space renders the live frame for the colour
+/// space said here, so a page with a P3 WebGL canvas calls it too.
 #[wasm_bindgen(js_name = "setScreenOutput")]
 pub fn set_screen_output(engine: &mut Engine, is_display_p3: bool, wants_hdr: bool) -> bool {
     engine.inner.set_screen_output(is_display_p3, wants_hdr)
+}
+
+/// Whether the screen really is HDR now: the engine's canvas is float
+/// with extended tone mapping (wgpu, after `setScreenOutput` asked for HDR
+/// and the browser could make it). Always false on WebGL. The status bar
+/// should say HDR only when this is true.
+#[wasm_bindgen(js_name = "screenIsHdr")]
+pub fn screen_is_hdr(engine: &Engine) -> bool {
+    engine.inner.screen_is_hdr()
 }
 
 #[wasm_bindgen(js_name = "setBackgroundColor")]
@@ -119,6 +153,9 @@ pub fn set_document_color_mode(engine: &mut Engine, mode: u32) {
     engine.inner.set_document_color_mode(mode);
 }
 
+/// Remove every layer and reset the document's state, the develop state
+/// included: the working space is off afterwards, so an engine that wants
+/// it calls `setDevelopWorkingSpace` again after this.
 #[wasm_bindgen(js_name = "clearAllLayers")]
 pub fn clear_all_layers(engine: &mut Engine) {
     engine.inner.clear_all_layers();
@@ -269,6 +306,8 @@ pub fn detect_color_space() -> u32 {
 // ============================================================
 
 readback_export! {
+    /// The document as RGBA8 sRGB. With the develop working space, rendered
+    /// for sRGB by the output step, and dithered for a RAW photo.
     #[wasm_bindgen(js_name = "compositeForExport")]
     pub fn composite_for_export(engine) -> Result<Vec<u8>> {
         read(compositor::composite_for_export(engine))
@@ -276,9 +315,39 @@ readback_export! {
 }
 
 readback_export! {
+    /// A 16-bit PNG of the document. `color_space` 0 is sRGB, 1 Display P3,
+    /// 2 Rec. 2020. With the develop working space, the pixels are rendered
+    /// for that space by the output step (not dithered).
     #[wasm_bindgen(js_name = "exportPng16")]
     pub fn export_png_16(engine, color_space: u8) -> Result<Vec<u8>> {
         read(compositor::export_png_16(engine, color_space))
+    }
+}
+
+readback_export! {
+    /// A 16-bit RGBA TIFF (Deflate, predictor 2, embedded ICC) of the same
+    /// composite `exportPng16` encodes. `color_space` as `exportPng16`.
+    #[wasm_bindgen(js_name = "exportTiff16")]
+    pub fn export_tiff_16(engine, color_space: u8) -> Result<Vec<u8>> {
+        read(compositor::export_tiff_16(engine, color_space))
+    }
+}
+
+readback_export! {
+    /// The composite as a 16-bit PNG in `file_space`, its numbers taken to
+    /// be in `pixel_space` and converted. 0 is sRGB, 1 Display P3, 2
+    /// Rec. 2020. `exportPng16(cs)` is `exportPng16To(cs, cs)`.
+    #[wasm_bindgen(js_name = "exportPng16To")]
+    pub fn export_png_16_to(engine, pixel_space: u8, file_space: u8) -> Result<Vec<u8>> {
+        read(lopsy_engine::commands::export::export_png_16_to(engine, pixel_space, file_space))
+    }
+}
+
+readback_export! {
+    /// As `exportPng16To`, as a 16-bit RGBA TIFF with `file_space`'s ICC profile.
+    #[wasm_bindgen(js_name = "exportTiff16To")]
+    pub fn export_tiff_16_to(engine, pixel_space: u8, file_space: u8) -> Result<Vec<u8>> {
+        read(lopsy_engine::commands::export::export_tiff_16_to(engine, pixel_space, file_space))
     }
 }
 
@@ -293,15 +362,29 @@ pub fn get_composite_size(engine: &Engine) -> Vec<u32> {
     vec![engine.inner.doc_width, engine.inner.doc_height]
 }
 
-/// Build an ICC profile for the given color space (0 = sRGB, 1 = Display P3).
+/// Build an ICC profile for the given color space (0 = sRGB, 1 = Display
+/// P3, 2 = Rec. 2020; anything else sRGB).
 /// Used by the JS export path to tag files when the browser encoder did not.
 #[wasm_bindgen(js_name = "buildIccProfile")]
 pub fn build_icc_profile(color_space: u8) -> Vec<u8> {
     let cs = match color_space {
         1 => lopsy_core::color::ColorSpace::DisplayP3,
+        2 => lopsy_core::color::ColorSpace::Rec2020,
         _ => lopsy_core::color::ColorSpace::Srgb,
     };
     lopsy_core::export::build_icc_profile(cs)
+}
+
+/// Convert an RGBA8 pixel buffer from one colour space to another (0 =
+/// sRGB, 1 = Display P3, 2 = Rec. 2020), alpha untouched: the 8-bit
+/// counterpart of the conversion `exportPng16To` does.
+#[wasm_bindgen(js_name = "convertColorSpace8")]
+pub fn convert_color_space_8(mut pixels: Vec<u8>, from: u8, to: u8) -> Result<Vec<u8>, JsError> {
+    use lopsy_engine::commands::export::color_space_from_code;
+    let from = color_space_from_code(from).map_err(|e| JsError::new(&e))?;
+    let to = color_space_from_code(to).map_err(|e| JsError::new(&e))?;
+    lopsy_core::space_convert::convert_rgba8(&mut pixels, from, to);
+    Ok(pixels)
 }
 
 /// Convert an RGBA8 pixel buffer from Display P3 to sRGB.

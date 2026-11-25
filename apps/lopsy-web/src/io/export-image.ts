@@ -113,6 +113,16 @@ async function encodePng16(engine: Engine, width: number, height: number): Promi
   return encoded(tagged, 'png', width, height);
 }
 
+/**
+ * The flattened composite as a 16-bit PNG, encoded in Rust at full
+ * precision and tagged like every PNG export, without the pre-steps: what
+ * Save to Photonamous sends beside the .lopsy it has just serialized.
+ */
+export async function renderPng16(engine: Engine): Promise<Blob> {
+  const [width = 0, height = 0] = getCompositeSize(engine);
+  return (await encodePng16(engine, width, height)).blob;
+}
+
 /** The composite as `encodeDocumentImage` encodes it, without the pre-steps: for reads that must not change the document. */
 export function encodeCompositeImage(engine: Engine, options: ImageExportSettings): Promise<EncodedImage | null> {
   return readBytes(encodeCompositeBlob(engine, options));

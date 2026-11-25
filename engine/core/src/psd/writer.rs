@@ -1,6 +1,5 @@
 use std::io::{Cursor, Seek, SeekFrom, Write};
-use crate::color::ColorSpace;
-use crate::export::build_icc_profile;
+use crate::export::legacy_srgb_icc_profile;
 use super::blend_keys::blend_mode_to_psd_key;
 use super::flatten::flatten_layers;
 use super::packbits::packbits_encode;
@@ -53,7 +52,7 @@ fn write_image_resources(out: &mut Cursor<Vec<u8>>, doc: &PsdDocument) {
     write_image_resource(out, 1005, &build_resolution_info(72, 72));
 
     // ICC profile (ID 1039)
-    let icc = doc.icc_profile.clone().unwrap_or_else(|| build_icc_profile(ColorSpace::Srgb));
+    let icc = doc.icc_profile.clone().unwrap_or_else(legacy_srgb_icc_profile);
     write_image_resource(out, 1039, &icc);
 
     // Backpatch section length
@@ -763,7 +762,7 @@ mod tests {
 
     #[test]
     fn write_psd_embeds_provided_icc_profile() {
-        let p3 = build_icc_profile(crate::color::ColorSpace::DisplayP3);
+        let p3 = crate::export::build_icc_profile(crate::color::ColorSpace::DisplayP3);
         let doc = PsdDocument {
             width: 4,
             height: 4,
@@ -791,7 +790,7 @@ mod tests {
         let embedded = find_image_resource(&psd, 1039).expect("missing ICC resource 1039");
         assert_eq!(
             embedded,
-            build_icc_profile(crate::color::ColorSpace::Srgb),
+            legacy_srgb_icc_profile(),
             "sRGB documents must keep the legacy sRGB profile"
         );
     }

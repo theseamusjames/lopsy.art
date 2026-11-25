@@ -27,6 +27,17 @@ engine/
       blend.rs        # Blend mode math
       brush.rs        # Brush dab geometry
       color.rs        # Color space conversions
+      working_space.rs # The develop working space: gamuts, matrices from primaries, the input step
+      cct.rs          # Correlated colour temperature and tint of a white point, and back
+      raf/            # RAF decode: the baked import, and linear camera RGB for the develop chain
+      dng/            # DNG decode: the baked import (mod.rs), linear camera RGB (linear.rs),
+                      # and camera colour by the DNG specification's method (camera_color.rs)
+      tone.rs         # The develop tone step (scene to rendered) and its curve's shoulder
+      scene_tone.rs   # Tone on scene data: the tone sliders and masks, a monotone map in stops
+      look.rs         # Colour in OkLab, colour grading and curves on rendered linear data
+      detail.rs       # Noise reduction, sharpening, and local contrast and haze on encoded values
+      linear_detail.rs # Large and small details on log luminance, haze on scene data
+      output.rs       # The develop output step: roll-off, gamut mapping, transfer, dither
       compress.rs     # RLE compression for undo snapshots
       layer.rs        # Layer descriptor types (GlowDesc, ShadowDesc, etc.)
       pixel_buffer.rs # crop_to_content_bounds, pixel utilities
@@ -42,7 +53,7 @@ engine/
     cli/            # lopsy-cli: the `lopsy` binary, the engine on a native GPU with no browser
   Cargo.toml        # The workspace, and the lopsy-engine crate
   build.rs          # Translates the shaders and embeds the built-in brushes
-  tests/            # Render tests on a native GPU (`--features native`)
+  tests/            # Render tests and golden renders on a native GPU (`--features native`)
   src/              # lopsy-engine: the engine. No #[wasm_bindgen] anywhere
     commands/         # What a host can ask for: plain Rust in, Result<_, String> out
     host.rs           # Logging, clock and "the GPU is gone", installed by the host
@@ -76,6 +87,7 @@ engine/
         program.rs      # Shader compilation, linking, uniform upload
         pass.rs         # What a pass does to the WebGL context
       read.rs         # `Read<T>`: a readback the backend completes when it can
+      loss.rs         # Engine ids, and why a freed engine never reports a lost device
       wgpu/           # The wgpu backend, compiled in place of webgl/ by
                       # `--features wgpu`: the same modules as webgl/, plus
         read.rs         # texture -> buffer -> mapped bytes, as a `Read`
@@ -109,7 +121,104 @@ gpu/shaders/
     invert.wgsl, hue_sat.wgsl, sharpen.wgsl, noise.wgsl, posterize.wgsl, threshold.wgsl
   gradient/
     gradient_linear.wgsl, gradient_radial.wgsl
+  develop/                # Photonamous' develop chain (src/develop/mod.rs lists them)
+    raw_develop.wgsl      # RAW stage: linear camera RGB → sRGB (or scene Rec. 2020)
+    working_space.wgsl    # Input step, and into and out of the display encoding
+    tone.wgsl             # Tone pass: scene → rendered, linear Rec. 2020 (tone sliders, masks, profile)
+    look.wgsl             # Look pass: OkLab colour, colour grading, curves on rendered linear data
+    output.wgsl           # Output step: rendered → the screen's or a file's space
+    noise_reduce.wgsl, local_contrast.wgsl, detail_sharpen.wgsl, blur_axis.wgsl
+    luminance_stats.wgsl  # What the linear local contrast and haze blur: log-luminance moments, the veil
+    local_contrast_log.wgsl # Large and small details on rendered linear data (working space on)
+    haze.wgsl             # Haze on scene data, before the tone pass (working space on)
+    color_mixer.wgsl, areas.wgsl, area_layer.wgsl, finish.wgsl, clip_warning.wgsl
 ```
+
+### The Photonamous develop chain
+
+`src/develop/mod.rs` is the map: the stage order (RAW develop, noise
+reduction, local contrast and haze, image adjustments, colour mixer, areas
+and each area's layer, sharpening, finish, then the screen-only views; with
+the working space, noise reduction and haze on scene data, the tone pass,
+local contrast, the look pass, the areas' layers, sharpening, finish,
+output), where each pass lives, the
+JS API, and the deviations from `docs/photonamous-spec.md` 6.10. Rules:
+
+- Every stage is off (`None`) by default, and then the composite is
+  byte-identical to Lopsy's. Keep it that way.
+- The working space (`develop::working_space`, `setDevelopWorkingSpace`)
+  is a per-document opt-in that Photonamous turns on and Lopsy never does.
+  With it the image is unclamped linear Rec. 2020 from the RAW (or input)
+  step to the output step. Tone (the tone sliders and the areas' built-in
+  ones, through their masks) runs on scene data in the tone pass, and
+  colour, grading and curves on rendered data in the look pass
+  (`lopsy_core::scene_tone`, `lopsy_core::look`, set with `setDevelop…`);
+  Lopsy's image adjustments, the old colour by hue and the old areas pass
+  do not run at all then. Noise reduction (today's algorithm, inside a
+  display encoding that keeps values above 1 and below 0) and haze run on
+  scene data before the tone pass (`compositor::scene_stages`), and large
+  and small details on rendered data after it (`lopsy_core::linear_detail`;
+  `setImageDetail` and `setImageLocalContrast` drive them). The stages that
+  still assume sRGB-encoded values (sharpening, finish) run inside a
+  display encoding (`compositor::MIDDLE_STAGES`; move a stage out by
+  changing its `space`). Without it nothing changes: the render tests that
+  predate it hold that. Readbacks that are statistics
+  (histogram, pixel readout) read the output rendered for sRGB, never the
+  screen's space.
+- Every stage has a CPU reference in `lopsy-core` (`raf::develop`,
+  `detail`, `linear_detail`, `color_mixer`, `areas`, `finish`, `working_space`, `tone`, `scene_tone`, `look`,
+  `output`). Change a shader and its
+  reference together; the tests compare them.
+- **Camera colour.** The RAW step takes a white-balance gain (`wbRatio`)
+  and a camera matrix (`camToRgb`, to linear sRGB, carried on to Rec.
+  2020). For a RAF the matrix is one daylight matrix per sensor
+  generation and Kelvin is a readout fitted to the body's presets
+  (`raf::wb_presets`); nothing about it follows the white balance. For a
+  DNG the matrix comes from the file's own calibration by the DNG
+  specification's method (`dng::camera_color`: two illuminants
+  interpolated by inverse colour temperature, forward matrices or Bradford
+  to D50) and is recomputed on the CPU for each white balance, and Kelvin
+  and tint are real (`cct`); the app sends `wbRatio` and `camToRgb`
+  together. The tests on real DNGs read `LOPSY_DNG_SAMPLES`
+  (`core/tests/dng_develop.rs`, `--release`).
+- Develop shaders compile lazily through `ShaderPrograms::<name>()`, never
+  in `compile_all`.
+- Screen-only views (overlays, clipping warning, mask view) run only in the
+  live `compositor::composite`, never on an export path, and a test checks
+  that exports are byte-identical with them on.
+- `tests/render.rs` compares every stage's shader with its reference on
+  a real GPU (`--features native`), with a tolerance each test explains.
+  The CPU side stores its blurs and results as half floats, both ways a
+  GPU may round them, so a mean difference of more than a few 16-bit
+  steps is a real disagreement: fix the side that is wrong, do not widen
+  the tolerance.
+- A decoder checks header sizes before allocating from them
+  (`lopsy_core::decode::DecodeLimits`: `PNG_LIMITS`, `RAW_LIMITS`), and
+  allocates large buffers with `try_reserve`.
+
+### Golden renders
+
+`tests/golden.rs` develops real RAF files through the whole chain on a
+native GPU (decoded as Photonamous decodes its working image, binned to a
+512-pixel long edge) with a fixed set of settings, and compares a
+fingerprint of each result (with the working space on, rendered for
+sRGB, as Photonamous renders it), the mean R, G and B of a 12 × 8 grid of
+cells, with the one stored in `tests/golden/<file>.txt`. A cell channel
+more than 256 of 65535 off fails, and the message names the file, the
+settings and each cell that moved. The RAF files are not in this
+repository: point `LOPSY_RAF_SAMPLES` at a clone of
+`theseamusjames/sample-raf-images`; without it the test notes that and
+passes.
+
+```bash
+cd engine
+LOPSY_RAF_SAMPLES=/path/to/sample-raf-images cargo test -p lopsy-engine --features native --test golden
+# Rendering changed on purpose: make the fingerprints again
+LOPSY_RAF_SAMPLES=/path/to/sample-raf-images LOPSY_GOLDEN_UPDATE=1 cargo test -p lopsy-engine --features native --test golden
+```
+
+A change that moves how a photo renders must come with its new
+fingerprints, in the same commit.
 
 ### Adding an engine function JS can call
 
@@ -223,7 +332,8 @@ Effect images (glows, shadow, stroke) are cached per layer in the live composito
 
 - `texture_pool.rs` detects `EXT_color_buffer_float` and uses `RGBA16F` textures when available.
 - `engine-state.ts` sets `drawingBufferColorSpace = 'display-p3'` on capable displays.
-- `final_blit.wgsl` passes values through without clamping. On the wgpu engine the canvas is HDR (`rgba16float`, extended tone mapping) while the display is (`screen-output.ts`, `setScreenOutput`), and the document's own adjustments then keep what they push above white (`OverWhite::Kept`). Everything else in the pipeline is 0..1: `docs/hdr-support.md` lists what HDR editing would need.
+- With the develop working space on, the output step renders the live frame for the space `setScreenOutput` last said (sRGB or Display P3, SDR) before the final blit; the final blit's dither is the screen's only dither. While the canvas really is HDR (`screenIsHdr`) and the HDR view is on (`setDevelopHdr`), it renders for the HDR canvas instead: highlights above white up to a peak, sRGB curve extended past 1 (`develop/mod.rs`, "The screen"). `readHdrOutputF32` is the HDR picture for a file.
+- `final_blit.wgsl` passes values through without clamping. On the wgpu engine the canvas is HDR (`rgba16float`, extended tone mapping) while the display is (`screen-output.ts`, `setScreenOutput`), and the document's own adjustments then keep what they push above white (`OverWhite::Kept`). Without the working space everything else in the pipeline is 0..1: `docs/hdr-support.md` lists what HDR editing would need.
 
 ### Commands
 

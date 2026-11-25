@@ -1,0 +1,60 @@
+/* Two columns, or one on a narrow window, so the list never needs scrolling sideways. */
+.help {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-3) var(--space-6);
+  width: min(600px, calc(100vw - var(--space-8)));
+  max-height: 70vh;
+  overflow: auto;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.help:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: -2px;
+}
+
+.group {
+  min-width: 0;
+}
+
+.heading {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-ui);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--space-2);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.keys {
+  display: flex;
+}
+
+.kbd {
+  display: inline-block;
+  min-width: 22px;
+  padding: 1px var(--space-1);
+  border: 1px solid var(--color-border-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  text-align: center;
+}

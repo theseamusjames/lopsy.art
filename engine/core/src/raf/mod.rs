@@ -19,12 +19,15 @@
 pub mod base_curves;
 pub mod compression;
 pub mod dcp;
+pub mod develop;
+pub mod highlights;
 mod markesteijn;
 pub mod wb_presets;
 pub mod xtrans;
 
 use serde::{Deserialize, Serialize};
 
+use crate::black_level::BlackLevels;
 use crate::dng::color;
 use crate::dng::tiff::TiffReader;
 use crate::dng::demosaic;
@@ -92,6 +95,26 @@ pub struct RafRenderParams {
     pub cam_to_srgb: [f32; 9],
     pub film_mode: Option<u16>,
     pub orientation: u16,
+    /// The raw value at which the sensor clips, in raw units, which the
+    /// mosaic's 1.0 stands for (before white balance). It is the bit
+    /// depth's largest value: no RAF tag this decoder reads records a
+    /// lower saturation. 0 in params written before it was recorded.
+    #[serde(default)]
+    pub white_level: u32,
+    /// The level at which each channel (R, G, B) clips, in the units of the
+    /// mosaic and of the linear renders (`develop::render_linear_band`,
+    /// `develop::render_binned_linear`): linear camera RGB at the as-shot
+    /// white balance, where the white level is 1.0 before that balance.
+    /// A reconstructed value can lie above it. `None` in params written
+    /// before it was recorded.
+    #[serde(default)]
+    pub clip_levels: Option<[f32; 3]>,
+    /// What the linear renders need to reconstruct clipped channels
+    /// (`highlights`), measured once over the whole frame so every band
+    /// and the binned view use the same. `None` when nothing in the frame
+    /// comes near its clip level, and in params written before it existed.
+    #[serde(default)]
+    pub highlight_chroma: Option<highlights::ChromaGrid>,
 }
 
 impl RafRenderParams {
@@ -173,6 +196,30 @@ pub struct RafBandPixels {
 /// same rows of a whole-frame render.
 pub fn render_band(src: &[f32], params: &RafRenderParams, band: RafBand) -> Result<RafBandPixels, String> {
     let w = params.width as usize;
+    let src_h = check_band(src, params, band)?;
+    let clamped = baked_mosaic(src.to_vec());
+    let rgb = render_rgb(&clamped, w, src_h, params);
+    drop(clamped);
+    Ok(orient_band(rgb, params, band, true))
+}
+
+/// The mosaic as the baked decode has always seen it: below black clamped
+/// to 0. `prepare_raf` keeps what the file holds for the linear path, and
+/// no sample there exceeds its channel's white-balance gain (samples are
+/// capped at the white level), so this alone reproduces the old clamp of
+/// every sample to 0..1 before white balance, bit for bit.
+fn baked_mosaic(mut mosaic: Vec<f32>) -> Vec<f32> {
+    for v in mosaic.iter_mut() {
+        *v = v.max(0.0);
+    }
+    mosaic
+}
+
+/// Check that `src` holds exactly mosaic rows `[band.src_y0, band.src_y1)`
+/// of a frame described by `params`, with the band inside it at CFA phase 0.
+/// Returns the number of source rows.
+fn check_band(src: &[f32], params: &RafRenderParams, band: RafBand) -> Result<usize, String> {
+    let w = params.width as usize;
     let valid = band.src_y0.is_multiple_of(6)
         && band.src_y0 <= band.y0
         && band.y0 < band.y1
@@ -185,11 +232,19 @@ pub fn render_band(src: &[f32], params: &RafRenderParams, band: RafBand) -> Resu
     if src.len() != w * src_h {
         return Err(format!("RAF band source has {} values, expected {}", src.len(), w * src_h));
     }
+    Ok(src_h)
+}
 
-    let rgb = render_rgb(src, w, src_h, params);
+/// Cut the band's own rows out of `rgb` (rendered from the band's source
+/// rows), convert to RGBA (clamped to 0..1 when `clamp`) and apply the EXIF
+/// orientation, placing the result in the oriented image. Takes `rgb` by
+/// value and frees it before orienting, to keep peak memory at one band.
+fn orient_band(rgb: Vec<f32>, params: &RafRenderParams, band: RafBand, clamp: bool) -> RafBandPixels {
+    let w = params.width as usize;
     let skip = (band.y0 - band.src_y0) as usize * w * 3;
     let take = (band.y1 - band.y0) as usize * w * 3;
-    let rgba = rgb_to_rgba(&rgb[skip..skip + take]);
+    let rows = &rgb[skip..skip + take];
+    let rgba = if clamp { rgb_to_rgba(rows) } else { rgb_to_rgba_unclamped(rows) };
     drop(rgb);
 
     let band_h = band.y1 - band.y0;
@@ -201,7 +256,23 @@ pub fn render_band(src: &[f32], params: &RafRenderParams, band: RafBand) -> Resu
         6 | 7 => (params.height - band.y1, 0),
         _ => (0, band.y0),
     };
-    Ok(RafBandPixels { x, y, width: ow, height: oh, pixels })
+    RafBandPixels { x, y, width: ow, height: oh, pixels }
+}
+
+/// The camera model and the as-shot white balance multipliers (`[R, 1, B]`,
+/// tag 0xF00D) of a RAF, read from its headers without decoding pixels.
+/// `None` for the multipliers when the file has no as-shot tag (the decode
+/// then uses grey world).
+pub fn read_wb_info(data: &[u8]) -> Result<(String, Option<[f32; 3]>), String> {
+    if data.len() < 120 || &data[0..16] != b"FUJIFILMCCD-RAW " {
+        return Err("Not a Fujifilm RAF file".to_string());
+    }
+    let model = parse_camera_model(&data[28..60]);
+    let offset = read_be_u32(data, 100) as usize;
+    let length = read_be_u32(data, 104) as usize;
+    let end = offset.checked_add(length).filter(|&e| e <= data.len()).ok_or("CFA data extends past end of file")?;
+    let meta = parse_cfa_tiff(&data[offset..end])?;
+    Ok((model, meta.as_shot_wb))
 }
 
 /// Decode a Fujifilm RAF file with production defaults (Markesteijn demosaic,
@@ -218,6 +289,7 @@ pub fn read_raf(data: &[u8]) -> Result<RafImage, String> {
 /// post-demosaic pass.
 pub fn read_raf_opts(data: &[u8], opts: RafDecodeOpts) -> Result<RafImage, String> {
     let RafMosaic { params, mosaic, exif_info, debug_log } = prepare_raf(data, opts)?;
+    let mosaic = baked_mosaic(mosaic);
     let rgb = render_rgb(&mosaic, params.width as usize, params.height as usize, &params);
     drop(mosaic);
     let rgba = rgb_to_rgba(&rgb);
@@ -308,6 +380,9 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
 
     let cfa_section = &data[cfa_data_offset..cfa_data_offset + cfa_data_length];
     let cfa_meta = parse_cfa_tiff(cfa_section)?;
+    // The CFA dimensions are untrusted: check them before planes are
+    // allocated from them (u16 raw plane plus f32 mosaic).
+    crate::decode::check_image_size(cfa_meta.width, cfa_meta.height, 6)?;
 
     let raw_w = cfa_meta.width as usize;
     let raw_h = cfa_meta.height as usize;
@@ -354,81 +429,83 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
 
     let base_pat_for_decompress = cfa_pattern.as_ref().copied().unwrap_or(DEFAULT_XTRANS_CFA);
 
-    let raw_plane: Vec<u16> = if is_compressed {
+    // An uncompressed strip is read in place (little-endian u16 samples),
+    // never copied into a full-frame plane first: that copy and the crop
+    // copy after it were 160 MB of the first view on a 40 MP frame.
+    let decompressed: Option<Vec<u16>> = if is_compressed {
         raf_log!("[RAF] decompressing Fujifilm compressed strip");
-        compression::decompress_fuji_strip(pixel_data, raw_w as u32, raw_h as u32, &base_pat_for_decompress)
-            .map_err(|e| format!("Compressed RAF decode failed: {e}. \
-                Try setting your camera to \"Uncompressed\" RAW, or convert to DNG \
-                with Adobe DNG Converter."))?
+        Some(compression::decompress_fuji_strip(pixel_data, raw_w as u32, raw_h as u32, &base_pat_for_decompress)
+            .map_err(|e| format!("This camera's compressed RAW format isn't supported yet ({e}). \
+                Set the camera to \"Uncompressed\" RAW, or convert it to DNG."))?)
     } else {
         let expected_bytes = raw_w * raw_h * 2;
         if pixel_bytes < expected_bytes {
             return Err(format!("Pixel data too small: expected {expected_bytes}, got {pixel_bytes}"));
         }
-        let mut buf = Vec::with_capacity(raw_w * raw_h);
-        for i in 0..(raw_w * raw_h) {
-            let off = i * 2;
-            if off + 1 < pixel_data.len() {
-                buf.push(u16::from_le_bytes([pixel_data[off], pixel_data[off + 1]]));
-            } else {
-                buf.push(0);
+        None
+    };
+    let plane_len = decompressed.as_ref().map_or(raw_w * raw_h, Vec::len);
+    let raw_at = |i: usize| -> u16 {
+        match &decompressed {
+            Some(plane) => plane[i],
+            None => {
+                let off = i * 2;
+                if off + 1 < pixel_data.len() { u16::from_le_bytes([pixel_data[off], pixel_data[off + 1]]) } else { 0 }
             }
         }
-        buf
     };
 
     // Sample-based sanity check: if the decoded plane still looks like
     // garbage (median near black), bail with a clear error. This catches
     // both undetected compressed variants and decompression failures
-    // that produced bogus output.
+    // that produced bogus output. An uncompressed strip of exactly
+    // width × height × 2 bytes is read as it is: a night shot's median can
+    // sit at black (DSCF8169, an X-E5 frame under tungsten, has its median
+    // 0.1 % above black), and that is a real picture, not a failed decode.
     let sample_stride = (raw_w * raw_h).max(1) / 1000;
     let mut sample_vals: Vec<u16> = Vec::with_capacity(1000);
     for i in (raw_w * 100..raw_w * raw_h).step_by(sample_stride.max(1)) {
-        if i < raw_plane.len() {
-            sample_vals.push(raw_plane[i]);
+        if i < plane_len {
+            sample_vals.push(raw_at(i));
         }
     }
     sample_vals.sort();
     let sample_median = sample_vals.get(sample_vals.len() / 2).copied().unwrap_or(0);
-    let black_u16 = cfa_meta.black_level.unwrap_or(1024.0) as u16;
+    let black_u16 = cfa_meta.black_level.as_ref().map_or(1024.0, BlackLevels::mean) as u16;
 
-    if !sample_vals.is_empty() && sample_median < black_u16 + 50 {
+    let is_plain_strip = !is_compressed && pixel_bytes == raw_w * raw_h * 2;
+    if !is_plain_strip && !sample_vals.is_empty() && sample_median < black_u16 + 50 {
         return Err(
-            "RAF pixel data has no signal after decode (median near black). \
-             This may be an unsupported compression variant. Try setting your camera \
-             to \"Uncompressed\" RAW, or convert to DNG with Adobe DNG Converter.".into()
+            "This camera's compressed RAW format isn't supported yet (the decoded \
+             data has no signal). Set the camera to \"Uncompressed\" RAW, or convert \
+             it to DNG.".into()
         );
     }
 
     // ── Crop to output area ─────────────────────────────────────
 
-    let pixel_count = w * h;
-    let mut raw_u16 = Vec::with_capacity(pixel_count);
+    // ── Crop to output area and normalize, in one pass ──────────
 
+    raf_log!("[RAF] white_level={}, black={:?}", white_level, cfa_meta.black_level);
+
+    // Every sample value of a site maps the same way, so the f64 maths runs
+    // once per value (at most 65536) and level instead of once per sample
+    // (40 million). Each sample has its own site's black level subtracted.
+    // Not clamped: a sample below black stays negative, so noise in the
+    // shadows averages to black instead of being rectified above it.
+    let unit = UnitTables::new(cfa_meta.black_level.as_ref(), white_level, f64::NEG_INFINITY, false);
+    let pixel_count = w * h;
+    let mut normalized: Vec<f32> = Vec::with_capacity(pixel_count);
     for row in 0..h {
         let src_row = row + crop_top as usize;
         for col in 0..w {
             let src_col = col + crop_left as usize;
             let idx = src_row * raw_w + src_col;
-            if idx < raw_plane.len() {
-                raw_u16.push(raw_plane[idx].min(white_level));
-            } else {
-                raw_u16.push(0);
-            }
+            let v = if idx < plane_len { raw_at(idx).min(white_level) } else { 0 };
+            normalized.push(unit.at(src_row, src_col)[v as usize]);
         }
     }
-
-    // ── Normalize ───────────────────────────────────────────────
-
-    let black = cfa_meta.black_level.unwrap_or(0.0);
-    let max_val = white_level as f64;
-    let range = max_val - black;
-
-    raf_log!("[RAF] white_level={}, black={:.1}", white_level, black);
-
-    let mut normalized: Vec<f32> = raw_u16.iter()
-        .map(|&v| ((v as f64 - black) / range).clamp(0.0, 1.0) as f32)
-        .collect();
+    drop(decompressed);
 
     // ── Per-pixel white balance (raw CFA-aware) ─────────────────
     // These sensors' raw R≈G≈B for provably-neutral subjects (measured
@@ -446,9 +523,7 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
         raf_log!("[RAF] CFA phase auto-detected: row_shift={}, col_shift={}", rs, cs);
         shift_cfa(&base_pat, rs, cs)
     } else {
-        [0u8, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2,
-         0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2,
-         0, 1, 1, 2]
+        BAYER_RGGB_CFA
     };
     let cfa_period = if is_xtrans { 6 } else { 2 };
 
@@ -467,11 +542,14 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
             gw[0], gw[1], gw[2]);
         gw
     };
-    for row in 0..h {
-        for col in 0..w {
-            let cfa_idx = (row % cfa_period) * cfa_period + (col % cfa_period);
-            let color = cfa[cfa_idx] as usize;
-            normalized[row * w + col] *= wb[color];
+    // Each row's multipliers repeat with the CFA period: look them up per
+    // column instead of computing two remainders per sample.
+    let row_gains: Vec<Vec<f32>> = (0..cfa_period)
+        .map(|py| (0..w).map(|col| wb[cfa[py * cfa_period + col % cfa_period] as usize]).collect())
+        .collect();
+    for (row, line) in normalized.chunks_exact_mut(w).enumerate() {
+        for (v, g) in line.iter_mut().zip(&row_gains[row % cfa_period]) {
+            *v *= g;
         }
     }
 
@@ -493,7 +571,14 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
         cam_to_srgb,
         film_mode: exif_info.film_mode,
         orientation: exif_orientation,
+        white_level: u32::from(white_level),
+        // A sample is capped at the white level, which is 1.0 before white
+        // balance, so each channel clips at exactly its gain.
+        clip_levels: Some(wb),
+        highlight_chroma: highlights::ChromaGrid::measure(&normalized, w, h, &cfa[..cfa_period * cfa_period], cfa_period, wb),
     };
+    raf_log!("[RAF] clip levels: [{:.4}, {:.4}, {:.4}], highlight reconstruction: {}",
+        wb[0], wb[1], wb[2], if params.highlight_chroma.is_some() { "on" } else { "nothing clipped" });
 
     raf_log!("[RAF] demosaic: {}", match (is_xtrans, opts.demosaic) {
         (false, _) => "Bayer bilinear",
@@ -527,16 +612,38 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
 /// Each output pixel depends only on mosaic pixels within
 /// `RENDER_REACH_ROWS` of it, which is what makes banded rendering exact.
 pub fn render_rgb(mosaic: &[f32], w: usize, h: usize, params: &RafRenderParams) -> Vec<f32> {
-    let cfa: [u8; 36] = params.cfa.as_slice().try_into().unwrap_or(DEFAULT_XTRANS_CFA);
+    let mut rgb_f32 = render_rgb_unsharpened(mosaic, w, h, params);
 
-    let mut rgb_f32 = if params.is_xtrans {
+    // ── Capture sharpening ──────────────────────────────────────
+    // A mild luma unsharp mask in display (gamma-encoded) space, to match
+    // the crispness of the camera-rendered JPEG / Preview. Kept modest
+    // (small radius, low amount) so it sharpens real edges without ringing
+    // and is off the demosaic critical path.
+    unsharp_mask_luma(&mut rgb_f32, w, h, CAPTURE_SHARPEN_AMOUNT);
+
+    rgb_f32
+}
+
+/// Demosaic a white-balanced mosaic (first row at CFA phase 0) to
+/// interleaved camera RGB, unclamped.
+fn demosaic_rgb(mosaic: &[f32], w: usize, h: usize, params: &RafRenderParams) -> Vec<f32> {
+    let cfa: [u8; 36] = params.cfa.as_slice().try_into().unwrap_or(DEFAULT_XTRANS_CFA);
+    if params.is_xtrans {
         match params.demosaic {
             DemosaicMode::Markesteijn => xtrans::demosaic_xtrans(mosaic, w as u32, h as u32, &cfa),
             DemosaicMode::Nearest => xtrans::demosaic_nearest(mosaic, w as u32, h as u32, &cfa),
         }
     } else {
         demosaic::bilinear(mosaic, w as u32, h as u32, &cfa[..4])
-    };
+    }
+}
+
+/// `render_rgb` without its last step, capture sharpening: gamma-encoded
+/// sRGB, not yet clamped. Public so the develop tests can compare the GPU
+/// develop maths against today's look; not part of the import path.
+#[doc(hidden)]
+pub fn render_rgb_unsharpened(mosaic: &[f32], w: usize, h: usize, params: &RafRenderParams) -> Vec<f32> {
+    let mut rgb_f32 = demosaic_rgb(mosaic, w, h, params);
 
     color::apply_matrix(&mut rgb_f32, &params.cam_to_srgb);
 
@@ -593,14 +700,15 @@ pub fn render_rgb(mosaic: &[f32], w: usize, h: usize, params: &RafRenderParams) 
 
     color::apply_srgb_gamma(&mut rgb_f32);
 
-    // ── Capture sharpening ──────────────────────────────────────
-    // A mild luma unsharp mask in display (gamma-encoded) space, to match
-    // the crispness of the camera-rendered JPEG / Preview. Kept modest
-    // (small radius, low amount) so it sharpens real edges without ringing
-    // and is off the demosaic critical path.
-    unsharp_mask_luma(&mut rgb_f32, w, h, CAPTURE_SHARPEN_AMOUNT);
-
     rgb_f32
+}
+
+fn rgb_to_rgba_unclamped(rgb: &[f32]) -> Vec<f32> {
+    let mut rgba = Vec::with_capacity(rgb.len() / 3 * 4);
+    for px in rgb.chunks_exact(3) {
+        rgba.extend_from_slice(&[px[0], px[1], px[2], 1.0]);
+    }
+    rgba
 }
 
 fn rgb_to_rgba(rgb: &[f32]) -> Vec<f32> {
@@ -700,10 +808,7 @@ pub fn debug_wb_mosaic(data: &[u8]) -> Result<(Vec<f32>, usize, usize, [u8; 36])
     let w = width as usize;
     let h = height as usize;
 
-    let black   = cfa_meta.black_level.unwrap_or(0.0);
-    let max_val = white_level as f64;
-    let range   = max_val - black;
-
+    let unit = UnitTables::new(cfa_meta.black_level.as_ref(), white_level, f64::NEG_INFINITY, true);
     let mut normalized: Vec<f32> = Vec::with_capacity(w * h);
     for row in 0..h {
         let src_row = row + crop_top as usize;
@@ -711,7 +816,7 @@ pub fn debug_wb_mosaic(data: &[u8]) -> Result<(Vec<f32>, usize, usize, [u8; 36])
             let src_col = col + crop_left as usize;
             let idx = src_row * raw_w + src_col;
             let v = raw_plane.get(idx).copied().unwrap_or(0).min(white_level);
-            normalized.push(((v as f64 - black) / range).clamp(0.0, 1.0) as f32);
+            normalized.push(unit.at(src_row, src_col)[v as usize]);
         }
     }
 
@@ -721,9 +826,7 @@ pub fn debug_wb_mosaic(data: &[u8]) -> Result<(Vec<f32>, usize, usize, [u8; 36])
         let (rs, cs) = detect_cfa_shift(&normalized, w, h, &base_pat, crop_top as usize, crop_left as usize);
         shift_cfa(&base_pat, rs, cs)
     } else {
-        [0u8, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2,
-         0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2,
-         0, 1, 1, 2]
+        BAYER_RGGB_CFA
     };
     let cfa_period = if is_xtrans { 6 } else { 2 };
 
@@ -831,10 +934,7 @@ pub fn debug_raw_mosaic(data: &[u8]) -> Result<(Vec<f32>, usize, usize, [u8; 36]
     let w = width as usize;
     let h = height as usize;
 
-    let black   = cfa_meta.black_level.unwrap_or(0.0);
-    let max_val = white_level as f64;
-    let range   = (max_val - black).max(1.0);
-
+    let unit = UnitTables::new(cfa_meta.black_level.as_ref(), white_level, 1.0, true);
     let mut normalized = Vec::with_capacity(w * h);
     for row in 0..h {
         let src_row = row + crop_top as usize;
@@ -842,7 +942,7 @@ pub fn debug_raw_mosaic(data: &[u8]) -> Result<(Vec<f32>, usize, usize, [u8; 36]
             let src_col = col + crop_left as usize;
             let idx = src_row * raw_w + src_col;
             let v = raw_plane.get(idx).copied().unwrap_or(0).min(white_level);
-            normalized.push(((v as f64 - black) / range).clamp(0.0, 1.0) as f32);
+            normalized.push(unit.at(src_row, src_col)[v as usize]);
         }
     }
 
@@ -1530,9 +1630,79 @@ struct CfaMeta {
     strip_offset: u32,
     strip_byte_count: u32,
     is_compressed: bool,
-    black_level: Option<f64>,
+    black_level: Option<BlackLevels>,
     as_shot_wb: Option<[f32; 3]>,
 }
+
+/// For each position of the black-level tile, a table from raw sample
+/// (0..=white level) to 0..1 with that position's level subtracted
+/// (clamped to 0..1 when asked; otherwise below black is negative). Sites
+/// with the same level share a table, so a file with one level has the one
+/// table the decoder has always built.
+struct UnitTables {
+    rows: usize,
+    cols: usize,
+    site: Vec<usize>,
+    tables: Vec<Vec<f32>>,
+}
+
+impl UnitTables {
+    /// `min_range` floors white minus black (`f64::NEG_INFINITY` for none).
+    fn new(black: Option<&BlackLevels>, white_level: u16, min_range: f64, clamp: bool) -> Self {
+        let uniform = BlackLevels::uniform(0.0);
+        let black = black.unwrap_or(&uniform);
+        let (rows, cols) = black.period();
+        let max_val = white_level as f64;
+        let mut levels: Vec<f64> = Vec::new();
+        let mut tables: Vec<Vec<f32>> = Vec::new();
+        let mut site = Vec::with_capacity(rows * cols);
+        for r in 0..rows {
+            for c in 0..cols {
+                let b = black.at(r, c, 0);
+                let i = match levels.iter().position(|&l| l == b) {
+                    Some(i) => i,
+                    None => {
+                        let range = (max_val - b).max(min_range);
+                        levels.push(b);
+                        tables.push(
+                            (0..=white_level as u32)
+                                .map(|v| {
+                                    let u = (v as f64 - b) / range;
+                                    (if clamp { u.clamp(0.0, 1.0) } else { u }) as f32
+                                })
+                                .collect(),
+                        );
+                        levels.len() - 1
+                    }
+                };
+                site.push(i);
+            }
+        }
+        Self { rows, cols, site, tables }
+    }
+
+    /// The table for the sample at (`raw_row`, `raw_col`) of the uncropped
+    /// raw frame, where the black-level tile starts.
+    #[inline]
+    fn at(&self, raw_row: usize, raw_col: usize) -> &[f32] {
+        if self.tables.len() == 1 {
+            return &self.tables[0];
+        }
+        &self.tables[self.site[(raw_row % self.rows) * self.cols + raw_col % self.cols]]
+    }
+}
+
+/// A Bayer RAF's pattern, RGGB from the crop's top-left, repeated over the
+/// 36 entries `RafRenderParams::cfa` holds (Bayer uses the first four), 0 R,
+/// 1 G, 2 B. It is fixed rather than read from the CFA header's pattern
+/// (tag 0x0131): reading it needs a real Bayer RAF to check the pattern's
+/// phase against, and a wrong phase would swap red and blue in every
+/// Bayer RAF.
+const BAYER_RGGB_CFA: [u8; 36] = [
+    0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, //
+    0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, //
+    0, 1, 1, 2,
+];
 
 fn parse_cfa_tiff(cfa_section: &[u8]) -> Result<CfaMeta, String> {
     let reader = TiffReader::new(cfa_section)
@@ -1561,13 +1731,10 @@ fn parse_cfa_tiff(cfa_section: &[u8]) -> Result<CfaMeta, String> {
 
     let is_compressed = (strip_byte_count as u64) < (width as u64 * height as u64 * 2);
 
+    // Tag 0xF00A: one black level per CFA site (36 for X-Trans).
     let black_level = sub_ifd.iter()
         .find(|e| e.tag == 0xF00A)
-        .and_then(|e| {
-            let vals = e.as_u32_vec()?;
-            if vals.is_empty() { return None; }
-            Some(vals.iter().map(|&v| v as f64).sum::<f64>() / vals.len() as f64)
-        });
+        .and_then(|e| BlackLevels::from_raf(&e.as_u32_vec()?));
 
     // Tag 0xF00D: Fujifilm as-shot white balance, LONG[3] in [G, R, B] order.
     // Green is the reference channel (typically 302); R and B are larger when
@@ -1640,6 +1807,41 @@ fn color_matrix_for_model(model: &str) -> [f32; 9] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// One level: one table, the formula the decoder always used.
+    #[test]
+    fn one_black_level_builds_the_old_table() {
+        let black = BlackLevels::from_raf(&[1020; 36]).unwrap();
+        let unit = UnitTables::new(Some(&black), 16383, f64::NEG_INFINITY, true);
+        assert_eq!(unit.tables.len(), 1);
+        for v in [0u32, 1020, 1021, 5000, 16383] {
+            let old = ((v as f64 - 1020.0) / (16383.0 - 1020.0)).clamp(0.0, 1.0) as f32;
+            assert_eq!(unit.at(3, 5)[v as usize], old);
+        }
+        assert_eq!(UnitTables::new(None, 255, f64::NEG_INFINITY, true).at(0, 0)[255], 1.0);
+    }
+
+    /// Each site subtracts its own level, the tile starting at the raw
+    /// frame's corner.
+    #[test]
+    fn black_levels_are_subtracted_per_site() {
+        let black = BlackLevels::from_raf(&[100, 200, 300, 400]).unwrap();
+        let unit = UnitTables::new(Some(&black), 1000, f64::NEG_INFINITY, true);
+        assert_eq!(unit.tables.len(), 4);
+        assert_eq!(unit.at(0, 0)[100], 0.0);
+        assert_eq!(unit.at(0, 1)[200], 0.0);
+        assert_eq!(unit.at(1, 0)[300], 0.0);
+        assert_eq!(unit.at(3, 3)[400], 0.0);
+        assert_eq!(unit.at(2, 1)[600], 0.5, "(600 - 200) / (1000 - 200)");
+    }
+
+    /// A Bayer RAF is RGGB, the pattern the decoder has always used for
+    /// one, whatever its CFA header says.
+    #[test]
+    fn a_bayer_raf_is_rggb() {
+        let rggb: [u8; 36] = std::array::from_fn(|i| [0u8, 1, 1, 2][i % 4]);
+        assert_eq!(BAYER_RGGB_CFA, rggb);
+    }
 
     #[test]
     fn detect_cfa_shift_finds_correct_phase() {
@@ -1854,6 +2056,9 @@ mod tests {
                 cam_to_srgb: color::neutralize_matrix(&color_matrix_for_model(model)),
                 film_mode: Some(0x200),
                 orientation: 6,
+                white_level: 16383,
+                clip_levels: Some([1.7, 1.0, 1.8]),
+                highlight_chroma: None,
             };
             let json = serde_json::to_string(&params).unwrap();
             let back: RafRenderParams = serde_json::from_str(&json).unwrap();

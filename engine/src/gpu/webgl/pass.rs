@@ -95,6 +95,21 @@ impl<'a> GpuRef<'a> {
         Read::ready(result)
     }
 
+    /// Read back `w × h` texels of `texture` starting at `(x, y)` as 32-bit
+    /// float RGBA, unclamped. Fails on a pool without float textures, whose
+    /// values are clipped to 0..1 at 8 bits: a caller wants these reads for
+    /// what lies outside that.
+    pub fn read_rgba_f32(self, texture: TextureHandle, x: i32, y: i32, w: u32, h: u32) -> Read<Vec<f32>> {
+        let Some(tex) = self.textures.get(texture) else {
+            return Read::failed("Texture not found");
+        };
+        self.fbos.attach_texture(self.render_fbo, tex);
+        self.fbos.bind(self.render_fbo);
+        let result = self.textures.read_rgba_f32(x, y, w, h);
+        self.fbos.unbind();
+        Read::ready(result)
+    }
+
     /// Upload `w * h` single-byte values as a temporary R8 texture and run
     /// `program` over it into `dst`, with the bytes bound to `sampler` and
     /// blending off. This is how one-byte-per-texel data reaches a pooled
@@ -188,6 +203,12 @@ impl<'a> GpuRef<'a> {
     /// Show what the frame's screen passes drew. A WebGL canvas shows its
     /// drawing buffer without being asked.
     pub fn finish_frame(self) {}
+
+    /// Whether [`Target::Screen`] is a canvas. A WebGL context is always
+    /// made from one.
+    pub fn has_screen(self) -> bool {
+        true
+    }
 
     /// Size of the canvas [`Target::Screen`] draws to, in device pixels.
     pub fn screen_size(self) -> Result<(i32, i32), String> {

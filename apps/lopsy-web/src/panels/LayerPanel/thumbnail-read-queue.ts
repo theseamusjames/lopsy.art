@@ -20,7 +20,7 @@
  * already drained.
  */
 
-import { EngineGoneError } from '../../engine-wasm/wasm-bridge';
+import { EngineGoneError } from '../../engine-wasm/readback-order';
 
 type ThumbnailReader = () => Promise<ImageData | null>;
 type ThumbnailCallback = (thumb: ImageData | null) => void;

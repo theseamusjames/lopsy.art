@@ -47,6 +47,8 @@ const PREVIEW_SPEC = /build-preview\.spec\.ts/;
 
 export default defineConfig({
   testDir: './e2e',
+  // Needs a build that names Photonamous' URL; it runs under playwright.photos.config.ts.
+  testIgnore: [/photos-(handoff|grade)\.spec\.ts$/],
   timeout: 600000,
   workers: 2,
   retries: 1,

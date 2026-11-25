@@ -7,6 +7,7 @@
 pub mod gpu;
 pub mod host;
 pub mod imaging;
+pub mod develop;
 pub mod document;
 pub mod engine;
 pub mod commands;

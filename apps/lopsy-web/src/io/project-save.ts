@@ -1,6 +1,6 @@
 /**
- * Project Save — serializes the full Lopsy document state to a .lopsy file
- * and triggers a browser download.
+ * Project Save — serializes the full Lopsy document state to .lopsy bytes
+ * (serializeProject) and saves them as a download (saveProject).
  *
  * File format (binary):
  *   [4 bytes: manifest JSON byte length (uint32 LE)]
@@ -39,6 +39,40 @@ const LOPSY_MAGIC = new Uint8Array([0x4c, 0x4f, 0x50, 0x53, 0x59, 0x00]); // "LO
  */
 export const FORMAT_VERSION = 3;
 
+/** The engine's u16 compressed-blob format; `uploadLayerPixelsCompressedU16` reads it back. */
+export const PIXEL_FORMAT_RGBA16_LZ4 = 'rgba16-lz4' satisfies LayerPixelFormat;
+
+/** Whether a layer's pixel blob is 16-bit LZ4: the manifest says so for every layer, or the layer for itself. */
+export function isRgba16Layer(manifest: Pick<LopsyManifest, 'layerPixelFormat'>, layer: Pick<SerializedLayer, 'pixelFormat'>): boolean {
+  return manifest.layerPixelFormat === PIXEL_FORMAT_RGBA16_LZ4 || layer.pixelFormat === PIXEL_FORMAT_RGBA16_LZ4;
+}
+
+export interface SerializeOptions {
+  /** A Photonamous source block for the manifest. */
+  readonly photos?: PhotosSourceBlock;
+}
+
+/** Where a document belongs in a Photonamous library (spec 6.12). */
+export interface PhotosSourceBlock {
+  readonly libraryId: string;
+  readonly assetId: string;
+  readonly versionId: string;
+  readonly recipeHash: string;
+  /** The library's document asset, once the file has been saved to Photonamous. */
+  readonly documentId?: string;
+  /** The photo's camera metadata summary, as Photonamous sent it. */
+  readonly camera?: {
+    readonly make?: string;
+    readonly model?: string;
+    readonly lens?: string;
+    readonly iso?: number;
+    readonly shutter?: string;
+    readonly aperture?: number;
+    readonly focalLength?: number;
+    readonly capturedAt?: string;
+  };
+}
+
 export interface LopsyManifest {
   readonly version: number;
   readonly documentName: string;
@@ -61,6 +95,8 @@ export interface LopsyManifest {
   readonly guides?: readonly Guide[];
   /** How layer pixels are stored. Absent before v3 → `rgba8-gzip`. */
   readonly layerPixelFormat?: LayerPixelFormat;
+  /** Set when the document came from or was saved to Photonamous. Absent before v3. */
+  readonly photos?: PhotosSourceBlock;
 }
 
 // Serialized layer — all layer fields except pixel data (which is stored as blobs)
@@ -125,6 +161,15 @@ export interface SerializedLayer {
    * the layer's logical width/height. Absent in pre-fix v1 files. */
   readonly pixelWidth?: number;
   readonly pixelHeight?: number;
+  /** Raster layers: the recipe of the last Grade in Photonamous (provenance only). */
+  readonly gradeRecipe?: Readonly<Record<string, unknown>>;
+  /**
+   * `'rgba16-lz4'` for a 16-bit blob, in v3 files that early Photonamous
+   * builds wrote with 8-bit layers beside 16-bit ones. Never written now:
+   * the manifest's `layerPixelFormat` says it for every layer. Read with
+   * `isRgba16Layer`.
+   */
+  readonly pixelFormat?: typeof PIXEL_FORMAT_RGBA16_LZ4;
 }
 
 export function serializeLayer(
@@ -156,7 +201,7 @@ export function serializeLayer(
   };
 
   if (layer.type === 'raster') {
-    return { ...base, width: layer.width, height: layer.height };
+    return { ...base, width: layer.width, height: layer.height, ...(layer.gradeRecipe ? { gradeRecipe: layer.gradeRecipe } : {}) };
   }
   if (layer.type === 'text') {
     return {
@@ -229,7 +274,7 @@ export interface DocumentFile {
  * The current project as the bytes of a .lopsy file, after committing what
  * the file must hold. Throws when the engine has not started or a read fails.
  */
-export async function serializeProject(): Promise<DocumentFile> {
+export async function serializeProject(options: SerializeOptions = {}): Promise<DocumentFile> {
   if (!getEngine()) throw new Error('engine not ready.');
 
   finalizePendingStrokeGlobal();
@@ -295,7 +340,8 @@ export async function serializeProject(): Promise<DocumentFile> {
     dpi: doc.dpi,
     paths: state.paths,
     guides: useUIStore.getState().guides,
-    layerPixelFormat: 'rgba16-lz4',
+    layerPixelFormat: PIXEL_FORMAT_RGBA16_LZ4,
+    ...(options.photos ? { photos: options.photos } : {}),
   };
 
   const manifestJson = JSON.stringify(manifest);
@@ -327,8 +373,7 @@ export async function serializeProject(): Promise<DocumentFile> {
  * Save the current project to a .lopsy file and trigger a download.
  */
 export async function saveProject(): Promise<void> {
-  const engine = getEngine();
-  if (!engine) {
+  if (!getEngine()) {
     notifyError('Cannot save: engine not ready.');
     return;
   }

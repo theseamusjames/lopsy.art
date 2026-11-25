@@ -485,6 +485,195 @@ fn sensor_family_siblings(model: &str) -> &'static [&'static str] {
     }
 }
 
+// ── Presets in the Photonamous recipe's units ────────────────────────
+
+/// A preset as the Edit view's White balance menu offers it: the recipe's
+/// temperature and tint (−200..200, relative to the as-shot balance, in the
+/// RAW model of `develop_stats::RAW_TEMPERATURE_STOPS`), for one body.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct RecipeWbPreset {
+    pub name: String,
+    pub temperature: f32,
+    pub tint: f32,
+}
+
+/// The display name of a table illuminant, and its place in the menu.
+fn menu_entry(illuminant: &str) -> Option<(&'static str, u8)> {
+    Some(match illuminant {
+        "Daylight" => ("Daylight", 0),
+        "Cloudy" => ("Cloudy", 1),
+        "Shade" => ("Shade", 2),
+        "Incandescent" => ("Tungsten", 3),
+        "Daylight Fluorescent" => ("Fluorescent (daylight)", 4),
+        "Day White Fluorescent" => ("Fluorescent (day white)", 5),
+        "White Fluorescent" => ("Fluorescent (white)", 6),
+        "Cool White Fluorescent" => ("Fluorescent (cool white)", 7),
+        "Warm White Fluorescent" => ("Fluorescent (warm white)", 8),
+        "Fluorescent" => ("Fluorescent", 9),
+        "Flash" => ("Flash", 10),
+        "Underwater" => ("Underwater", 11),
+        _ => return None,
+    })
+}
+
+/// The table rows for `camera`, or for the first sensor-family sibling the
+/// table has when the exact body is missing.
+pub fn presets_for_camera(camera: &str) -> Vec<&'static WbPreset> {
+    let rows = |model: &str| -> Vec<&'static WbPreset> {
+        let cam = normalize(model);
+        FUJI_WB_PRESETS.iter().filter(|p| normalize(p.camera) == cam).collect()
+    };
+    let exact = rows(camera);
+    if !exact.is_empty() {
+        return exact;
+    }
+    sensor_family_siblings(camera).iter().map(|s| rows(s)).find(|r| !r.is_empty()).unwrap_or_default()
+}
+
+/// The recipe's (temperature, tint) whose white balance turns the as-shot
+/// multipliers into `preset`'s, unclamped. Inverts the app's `wbRatioFor`.
+pub fn recipe_temperature_tint(preset: [f32; 3], as_shot: [f32; 3]) -> (f32, f32) {
+    use crate::develop_stats::{RAW_TEMPERATURE_STOPS, RAW_TINT_STOPS};
+    let (r, g, b) = (preset[0] / as_shot[0], preset[1] / as_shot[1], preset[2] / as_shot[2]);
+    let t = (r / b).log2() / (2.0 * RAW_TEMPERATURE_STOPS) * 100.0;
+    let m = -(g / (r * b).sqrt()).log2() / RAW_TINT_STOPS * 100.0;
+    (t, m)
+}
+
+/// The menu of presets for `camera` shot at `as_shot` multipliers, in menu
+/// order, clamped to Temperature and Tint's −200..200 and rounded. A body missing
+/// from the table uses its sensor family's (`sensor_family_siblings`).
+pub fn recipe_presets(camera: &str, as_shot: [f32; 3]) -> Vec<RecipeWbPreset> {
+    let mut out: Vec<(u8, RecipeWbPreset)> = presets_for_camera(camera)
+        .into_iter()
+        .filter_map(|p| {
+            let (name, order) = menu_entry(p.illuminant)?;
+            let (t, m) = recipe_temperature_tint(p.multipliers, as_shot);
+            let end = crate::scene_tone::WB_SLIDER_END;
+            let slider = |v: f32| v.clamp(-end, end).round() + 0.0;
+            Some((order, RecipeWbPreset { name: name.to_string(), temperature: slider(t), tint: slider(m) }))
+        })
+        .collect();
+    out.sort_by_key(|(order, _)| *order);
+    out.dedup_by(|a, b| a.1.name == b.1.name);
+    out.into_iter().map(|(_, p)| p).collect()
+}
+
+/// How the recipe's temperature maps to a colour temperature for display:
+/// `kelvin = 1e6 / (mired_at_zero + mired_per_unit · temperature)`, and
+/// back, `temperature = (1e6 / kelvin − mired_at_zero) / mired_per_unit`.
+/// `as_shot_kelvin` is the value at temperature 0.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KelvinScale {
+    pub mired_at_zero: f32,
+    pub mired_per_unit: f32,
+    pub as_shot_kelvin: f32,
+}
+
+/// Nominal colour temperatures of the table's named illuminants.
+fn nominal_kelvin(illuminant: &str) -> Option<f32> {
+    match illuminant {
+        "Daylight" => Some(5500.0),
+        "Cloudy" => Some(6500.0),
+        "Shade" => Some(7500.0),
+        "Incandescent" => Some(3000.0),
+        k if k.ends_with('K') => k[..k.len() - 1].parse().ok(),
+        _ => None,
+    }
+}
+
+/// Fit the Kelvin scale for `camera` at `as_shot` from its presets with a
+/// known colour temperature (Daylight 5500 K, Cloudy 6500 K, Shade 7500 K,
+/// Incandescent 3000 K, and any "nnnnK" preset): a least-squares line of
+/// mireds against the recipe temperature. Raising the temperature slider
+/// renders warmer, as for a cooler light, so Kelvin rises with it, as in
+/// other raw editors. `None` with fewer than two anchors.
+pub fn kelvin_scale(camera: &str, as_shot: [f32; 3]) -> Option<KelvinScale> {
+    let points: Vec<(f32, f32)> = presets_for_camera(camera)
+        .into_iter()
+        .filter_map(|p| Some((recipe_temperature_tint(p.multipliers, as_shot).0, 1e6 / nominal_kelvin(p.illuminant)?)))
+        .collect();
+    if points.len() < 2 {
+        return None;
+    }
+    let n = points.len() as f32;
+    let (mx, my) = (points.iter().map(|p| p.0).sum::<f32>() / n, points.iter().map(|p| p.1).sum::<f32>() / n);
+    let sxx: f32 = points.iter().map(|p| (p.0 - mx) * (p.0 - mx)).sum();
+    if sxx < 1e-6 {
+        return None;
+    }
+    let slope = points.iter().map(|p| (p.0 - mx) * (p.1 - my)).sum::<f32>() / sxx;
+    let at_zero = my - slope * mx;
+    if at_zero <= 0.0 {
+        return None;
+    }
+    Some(KelvinScale { mired_at_zero: at_zero, mired_per_unit: slope, as_shot_kelvin: 1e6 / at_zero })
+}
+
+#[cfg(test)]
+mod recipe_tests {
+    use super::*;
+
+    #[test]
+    fn daylight_shot_at_daylight_is_zero_and_tungsten_is_cooler() {
+        let daylight = lookup_wb("X-T5", "Daylight").unwrap();
+        let presets = recipe_presets("X-T5", daylight);
+        assert_eq!(presets[0].name, "Daylight");
+        assert_eq!((presets[0].temperature, presets[0].tint), (0.0, 0.0));
+        let tungsten = presets.iter().find(|p| p.name == "Tungsten").unwrap();
+        assert!(tungsten.temperature < -30.0, "{tungsten:?}");
+        let shade = presets.iter().find(|p| p.name == "Shade").map(|p| p.temperature).unwrap_or(1.0);
+        assert!(shade > 0.0);
+        // X100VI is not in the table; its sensor family is.
+        assert!(!recipe_presets("X100VI", daylight).is_empty());
+    }
+
+    /// A preset past the old ±100 is offered at its own value up to ±200,
+    /// and one past that stops at 200.
+    #[test]
+    fn presets_are_clamped_to_200_not_100() {
+        let daylight = lookup_wb("X-T5", "Daylight").unwrap();
+        // Shot under a very warm light: the camera's Daylight is far warmer than as shot.
+        let as_shot = [daylight[0] * 0.55, 1.0, daylight[2] * 1.8];
+        let presets = recipe_presets("X-T5", as_shot);
+        let raw: Vec<f32> = presets_for_camera("X-T5")
+            .into_iter()
+            .filter(|p| menu_entry(p.illuminant).is_some())
+            .map(|p| recipe_temperature_tint(p.multipliers, as_shot).0)
+            .collect();
+        assert!(raw.iter().any(|t| t.abs() > 100.0 && t.abs() < 200.0), "{raw:?}");
+        assert!(presets.iter().all(|p| p.temperature.abs() <= 200.0 && p.tint.abs() <= 200.0));
+        assert!(presets.iter().any(|p| p.temperature.abs() > 100.0), "{presets:?}");
+        // Shot under a far warmer light still: the preset past the end stops at it.
+        let far = recipe_presets("X-T5", [daylight[0] * 0.2, 1.0, daylight[2] * 4.0]);
+        assert!(far.iter().any(|p| p.temperature.abs() == 200.0), "{far:?}");
+    }
+
+    #[test]
+    fn kelvin_scale_reads_daylight_at_about_5500() {
+        let daylight = lookup_wb("X-T5", "Daylight").unwrap();
+        let k = kelvin_scale("X-T5", daylight).unwrap();
+        assert!((k.as_shot_kelvin - 5500.0).abs() < 800.0, "{k:?}");
+        assert!(k.mired_per_unit < 0.0, "warmer slider, higher Kelvin");
+        let kelvin = |t: f32| 1e6 / (k.mired_at_zero + k.mired_per_unit * t);
+        assert!(kelvin(50.0) > kelvin(0.0) && kelvin(-50.0) < kelvin(0.0));
+        let t_back = (1e6 / kelvin(30.0) - k.mired_at_zero) / k.mired_per_unit;
+        assert!((t_back - 30.0).abs() < 1e-2);
+    }
+
+    #[test]
+    fn recipe_temperature_inverts_the_apps_white_balance() {
+        // wbRatioFor(T = 40, tint = −20) up to scale.
+        let (t, m) = (0.4f32, -0.2f32);
+        let ratio = [(0.6 * t).exp2(), (-0.4 * m).exp2(), (-0.6 * t).exp2()];
+        let as_shot = [1.8, 1.0, 1.6];
+        let preset = [as_shot[0] * ratio[0], ratio[1], as_shot[2] * ratio[2]];
+        let (rt, rm) = recipe_temperature_tint(preset, as_shot);
+        assert!((rt - 40.0).abs() < 1e-3 && (rm + 20.0).abs() < 1e-3, "{rt} {rm}");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

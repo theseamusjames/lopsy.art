@@ -1,0 +1,48 @@
+/*
+ * Along the bottom of the window, under Google's Picker, which is a
+ * dialog in the middle of it. Google gives its Picker and the shade
+ * behind it z-indexes in the thousands, above every layer this app has,
+ * so this goes above them by number rather than by token.
+ */
+.help {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-4);
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: max-content;
+  max-width: calc(100vw - var(--space-4) * 2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-tertiary);
+  box-shadow: var(--shadow-lg);
+  transform: translateX(-50%);
+}
+
+.words {
+  margin: 0;
+  font-size: var(--font-size-md);
+  line-height: 1.35;
+  color: var(--color-text-secondary);
+}
+
+.words strong {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.help button {
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .help {
+    flex-direction: column;
+    align-items: stretch;
+    width: auto;
+    padding: var(--space-3);
+  }
+}

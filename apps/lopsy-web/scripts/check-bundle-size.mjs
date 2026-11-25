@@ -38,9 +38,50 @@ const MARGIN = 0.03;
 // that did not raise the budget with them, so the check failed on every
 // PR, whether or not it touched the engine. The wasm binary was inside
 // the margin (1.8% raw, 0.6% gzip) and is re-based with it.
+//
+// The glue was raised for Photonamous' RAW develop exports (setRawDevelop,
+// clearRawDevelop, rafRenderLinearBand, rafRenderBinnedLinear,
+// rafDevelopDefaults, rafDevelopProfiles, readDevelopHistogram, autoTone,
+// rafAutoWhiteBalance) by what they measurably added to the wasm-bindgen
+// glue of a local release build: 7,596 B raw, 1,351 B gzip (+3.8 % and
+// +6.4 %, past the margin on their own).
+//
+// The wasm was raised to what CI measured with those exports in (run
+// 44283534311, commit 4c81d17: 4,366,533 B raw, 1,857,436 B gzip; +2.31 %
+// and +0.89 % over the old budget): still inside the margin, but the
+// colour controls that follow would otherwise eat the rest of it.
+//
+// The glue was raised again for Photonamous' colour, detail, areas and
+// finish exports (setImageColorGrading, setImageColorMixer, setImageDetail,
+// setImageLocalContrast, setImageAreas, setImageAreaOverlay,
+// setImageFinish, setImageDetailMaskView, setClippingWarning, their
+// clears, exportTiff16, sampleNeutralWhiteBalance, rafWhiteBalancePresets
+// and rafWhiteBalanceKelvin), to what a local build measured with them in:
+// 216,567 B raw, 24,208 B gzip. The glue is wasm-bindgen output, so CI
+// measures the same bytes (it did for the previous raise).
+//
+// Both were then set to what CI measured with the whole Photos develop
+// chain in (run 44313084566, commit d8018ba: wasm 4,459,984 B raw and
+// 1,893,525 B gzip, +2.14 % and +1.94 %; glue 217,124 B and 24,392 B):
+// the detail, local contrast, areas, finish and screen-only view passes,
+// the white-balance picker and presets, TIFF, and the decode limits. Every
+// develop pass compiles lazily, so Lopsy pays only the download.
+//
+// Raised for Photonamous' linear pipeline, to what a local release build
+// measures with all of it in and main merged (wasm 4,846,059 B raw and
+// 2,020,125 B gzip, +8.7 % and +6.7 %; glue 266,066 B and 34,038 B, +22.5 %
+// and +39.6 %). The wasm grew by the working space, tone, look and output
+// stages and their CPU references, highlight reconstruction, the linear
+// local contrast, the HDR file encoders (PQ PNG, gain maps and their JPEG
+// container), the ICC profiles built from primaries, and DNG as a RAW
+// photo with the two-illuminant colour method. The glue grew by their
+// exports: about sixty, most taking typed arrays, which is what
+// wasm-bindgen spends bytes on. CI's wasm differs from a local build's by
+// a fraction of a percent, inside the margin; re-base on its numbers when
+// it has run.
 const BUDGET = {
-  'lopsy_wasm_bg.wasm': { raw: 4_346_529, gzip: 1_851_498 },
-  'lopsy_wasm.js': { raw: 205_873, gzip: 22_066 },
+  'lopsy_wasm_bg.wasm': { raw: 4_846_059, gzip: 2_020_125 },
+  'lopsy_wasm.js': { raw: 266_066, gzip: 34_038 },
 };
 
 function format(bytes) {

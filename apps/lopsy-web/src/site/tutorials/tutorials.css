@@ -1,8 +1,9 @@
 /*
  * Styles for the static site pages: shared chrome plus the tutorials. Inlined
  * into every /tutorials/ and /blog/ page by the site Vite plugin (blog pages
- * add blog.css after it), so keep it small. Colors mirror src/styles/tokens.css;
- * sizes are larger than the editor's because these pages are for reading.
+ * add blog.css after it), so keep it small. Colors mirror the design tokens in
+ * packages/ui/src/styles/tokens.css; sizes are larger than the editor's because
+ * these pages are for reading.
  */
 
 @font-face {
@@ -822,8 +823,7 @@ kbd {
 .note {
   margin: 1em 0;
   padding: 12px 16px;
-  border-left: 3px solid var(--accent);
-  border-radius: 0 var(--radius) var(--radius) 0;
+  border-radius: var(--radius);
   background: var(--accent-subtle);
 }
 

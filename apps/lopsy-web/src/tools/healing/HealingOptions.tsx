@@ -1,6 +1,6 @@
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { useEditorStore } from '../../app/editor-store';
-import { Slider } from '../../components/Slider/Slider';
+import { Slider } from '@lopsy/ui/Slider';
 import { docScaledMax } from '../../utils/slider-ranges';
 import styles from '../../app/OptionsBar/OptionsBar.module.css';
 

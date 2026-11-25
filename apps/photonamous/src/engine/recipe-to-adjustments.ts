@@ -1,0 +1,205 @@
+/**
+ * Maps a recipe onto the engine's per-document image adjustments, the
+ * shader Lopsy's own Adjustments panel drives (adjustments.wgsl). This is
+ * the legacy path of develop-stages.ts: only an engine without the linear
+ * working space (the 8-bit fallback) renders an edit this way. The framing
+ * helpers below serve both paths.
+ *
+ * The engine takes the recipe's numbers as they are: exposure in EV, and
+ * contrast, highlights, shadows, whites, blacks, saturation, vibrance and
+ * vignette on -100..100 (the engine divides by 100 itself). A positive
+ * vignette darkens the corners, as Lopsy's Vignette does; a negative one
+ * lightens them.
+ *
+ * White balance is an approximation. The engine has no white-balance stage
+ * yet, so Temperature and Tint become a Photo Filter at full density with
+ * luminosity preserved: a per-channel gain (warmer raises red and lowers
+ * blue, more magenta lowers green) on the display-encoded image, rescaled
+ * to keep each pixel's luminance. It is a relative shift, not kelvin, and
+ * it runs after the tone controls rather than before them in linear light.
+ */
+
+import { GRADE_RANGES, HUE_BANDS, type QuarterTurns, type Recipe } from '@lopsy/photos-core/library/recipe';
+
+/**
+ * What the legacy path takes. Lopsy's adjustments (and its shader, which
+ * this app must not change), the old Color by hue and the old colour
+ * grading run ±100, so a recipe value past it is held there on this path:
+ * 150 renders as 100 on the 8-bit fallback.
+ */
+export const LEGACY_LIMIT = 100;
+
+const limit = (v: number) => Math.min(LEGACY_LIMIT, Math.max(-LEGACY_LIMIT, v));
+
+/**
+ * The recipe as the legacy path's calls take it: white balance, the tone
+ * sliders, Vibrance, Saturation, Color by hue and colour grading's
+ * luminance and balance held to ±100. The rest (detail, local contrast,
+ * haze, the finish) goes to the develop passes, which take the recipe's
+ * whole range on both paths, and is left as it is.
+ */
+export function limitForLegacy(recipe: Recipe): Recipe {
+  const { tone, color, whiteBalance, colorByHue, colorGrading } = recipe;
+  return {
+    ...recipe,
+    whiteBalance: { ...whiteBalance, temperature: limit(whiteBalance.temperature), tint: limit(whiteBalance.tint) },
+    tone: {
+      ...tone,
+      contrast: limit(tone.contrast),
+      highlights: limit(tone.highlights),
+      shadows: limit(tone.shadows),
+      whites: limit(tone.whites),
+      blacks: limit(tone.blacks),
+    },
+    color: { vibrance: limit(color.vibrance), saturation: limit(color.saturation) },
+    colorByHue: Object.fromEntries(
+      HUE_BANDS.map((band) => {
+        const h = colorByHue[band];
+        return [band, { hue: limit(h.hue), saturation: limit(h.saturation), luminance: limit(h.luminance) }];
+      }),
+    ) as unknown as Recipe['colorByHue'],
+    colorGrading: {
+      ...colorGrading,
+      ...Object.fromEntries(GRADE_RANGES.map((range) => [range, { ...colorGrading[range], luminance: limit(colorGrading[range].luminance) }])),
+      balance: limit(colorGrading.balance),
+    },
+  };
+}
+
+export interface PhotoFilter {
+  /** Per-channel gain, the largest of the three is 1. */
+  readonly r: number;
+  readonly g: number;
+  readonly b: number;
+  /** 0 turns the filter off. */
+  readonly density: number;
+}
+
+export interface EngineAdjustments {
+  readonly exposure: number;
+  readonly contrast: number;
+  readonly highlights: number;
+  readonly shadows: number;
+  readonly whites: number;
+  readonly blacks: number;
+  readonly saturation: number;
+  readonly vibrance: number;
+  readonly vignette: number;
+  readonly photoFilter: PhotoFilter;
+}
+
+/** Stops of red/blue gain at Temperature ±100. */
+export const TEMPERATURE_STOPS = 0.5;
+/** Stops of green gain at Tint ±100. */
+export const TINT_STOPS = 0.35;
+
+export const NO_PHOTO_FILTER: PhotoFilter = { r: 1, g: 1, b: 1, density: 0 };
+
+export function whiteBalanceFilter(temperature: number, tint: number): PhotoFilter {
+  if (temperature === 0 && tint === 0) return NO_PHOTO_FILTER;
+  const t = temperature / 100;
+  const m = tint / 100;
+  const r = 2 ** (TEMPERATURE_STOPS * t);
+  const g = 2 ** (-TINT_STOPS * m);
+  const b = 2 ** (-TEMPERATURE_STOPS * t);
+  const max = Math.max(r, g, b);
+  return { r: r / max, g: g / max, b: b / max, density: 1 };
+}
+
+/**
+ * `isRaw`: the photo goes through the engine's RAW develop stage
+ * (raw-develop.ts), which applies exposure and white balance in linear
+ * light, so they are left out here rather than applied twice.
+ */
+export function recipeToAdjustments(recipe: Recipe, options: { readonly isRaw?: boolean } = {}): EngineAdjustments {
+  const { tone, color, finish, whiteBalance } = recipe;
+  const isRaw = options.isRaw === true;
+  return {
+    exposure: isRaw ? 0 : tone.exposure,
+    contrast: tone.contrast,
+    highlights: tone.highlights,
+    shadows: tone.shadows,
+    whites: tone.whites,
+    blacks: tone.blacks,
+    // Monochrome on an image that is not RAW: no colour left after the
+    // adjustments' saturation (the RAW stage has its own, see raw-develop.ts).
+    saturation: !isRaw && recipe.profile.id === 'monochrome' ? -100 : color.saturation,
+    vibrance: color.vibrance,
+    vignette: finish.vignette,
+    photoFilter: isRaw ? NO_PHOTO_FILTER : whiteBalanceFilter(whiteBalance.temperature, whiteBalance.tint),
+  };
+}
+
+export function sameAdjustments(a: EngineAdjustments, b: EngineAdjustments): boolean {
+  return (
+    a.exposure === b.exposure &&
+    a.contrast === b.contrast &&
+    a.highlights === b.highlights &&
+    a.shadows === b.shadows &&
+    a.whites === b.whites &&
+    a.blacks === b.blacks &&
+    a.saturation === b.saturation &&
+    a.vibrance === b.vibrance &&
+    a.vignette === b.vignette &&
+    a.photoFilter.r === b.photoFilter.r &&
+    a.photoFilter.g === b.photoFilter.g &&
+    a.photoFilter.b === b.photoFilter.b &&
+    a.photoFilter.density === b.photoFilter.density
+  );
+}
+
+/** The framing the engine's layer texture is in: rotated clockwise, then mirrored left to right. */
+export interface Framing {
+  readonly rotate: QuarterTurns;
+  readonly flipH: boolean;
+}
+
+export type FramingOp = { readonly kind: 'rotate'; readonly clockwise: boolean } | { readonly kind: 'flipH' };
+
+function rotateOps(quarterTurnsClockwise: number): FramingOp[] {
+  const turns = ((quarterTurnsClockwise % 4) + 4) % 4;
+  if (turns === 0) return [];
+  if (turns === 3) return [{ kind: 'rotate', clockwise: false }];
+  return Array.from({ length: turns }, () => ({ kind: 'rotate', clockwise: true }) as const);
+}
+
+/**
+ * The texture operations that take an image framed as `from` to `to`: undo
+ * the mirror, rotate by the difference, mirror again. Mirroring after a
+ * rotation by θ equals rotating by -θ after mirroring, so undoing and
+ * redoing the mirror around the rotation is exact.
+ */
+export function framingOps(from: Framing, to: Framing): FramingOp[] {
+  const ops: FramingOp[] = [];
+  if (from.flipH) ops.push({ kind: 'flipH' });
+  ops.push(...rotateOps((to.rotate - from.rotate) / 90));
+  if (to.flipH) ops.push({ kind: 'flipH' });
+  const isNoop = ops.length === 2 && ops[0]?.kind === 'flipH' && ops[1]?.kind === 'flipH';
+  return isNoop ? [] : ops;
+}
+
+/** Image size after framing an oriented `width`×`height` image. */
+export function framedSize(width: number, height: number, rotate: QuarterTurns): { width: number; height: number } {
+  return rotate === 90 || rotate === 270 ? { width: height, height: width } : { width, height };
+}
+
+/** The recipe's straighten angle in degrees (framing.angle, −45..45); 0 when the recipe has none. */
+export function framingAngle(framing: Recipe['framing']): number {
+  const v = (framing as { readonly angle?: unknown }).angle;
+  return typeof v === 'number' && Number.isFinite(v) ? Math.max(-45, Math.min(45, v)) : 0;
+}
+
+export function framingFlipV(framing: Recipe['framing']): boolean {
+  return (framing as { readonly flipV?: unknown }).flipV === true;
+}
+
+/**
+ * Rotate, Flip and Flip vertical as the texture operations see them. A
+ * vertical flip is a horizontal one turned half a turn, so it folds into
+ * the other two.
+ */
+export function effectiveFraming(framing: Recipe['framing']): Framing {
+  const isFlipV = framingFlipV(framing);
+  const rotate = (((framing.rotate + (isFlipV ? 180 : 0)) % 360) as QuarterTurns);
+  return { rotate, flipH: framing.flipH !== isFlipV };
+}

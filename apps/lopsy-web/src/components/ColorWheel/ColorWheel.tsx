@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { HANDLES_ARROW_KEYS_ATTR } from '../../app/shortcuts/native-control-keys';
+import { HANDLES_ARROW_KEYS_ATTR } from '@lopsy/ui/a11y/arrow-keys';
 import { hsvToRgb } from '../../utils/color';
 import { createRepeatPressDetector } from '../../utils/repeat-press';
 import { pointerToWheel, stepWheel, wheelToPuck } from './color-wheel';

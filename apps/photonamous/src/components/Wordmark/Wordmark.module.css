@@ -1,0 +1,13 @@
+/* A block, so the line it would sit on adds no gap under it; its size is the img's own width and height. */
+.wordmark {
+  display: block;
+  flex: none;
+  user-select: none;
+}
+
+/* The start screen's: as wide as its column, up to the size it is drawn for. */
+.fluid {
+  width: 100%;
+  max-width: 560px;
+  height: auto;
+}

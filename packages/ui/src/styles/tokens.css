@@ -1,0 +1,111 @@
+:root {
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+
+  /* Colors — Dark theme (default) */
+  --color-bg-primary: #1e1e1e;
+  --color-bg-secondary: #252526;
+  --color-bg-tertiary: #2d2d2d;
+  --color-bg-hover: #383838;
+  --color-bg-active: #404040;
+  --color-bg-canvas: #3c3c3c;
+
+  --color-border: #404040;
+  --color-border-subtle: #333333;
+  --color-border-strong: #555555;
+
+  --color-text-primary: #e0e0e0;
+  --color-text-secondary: #a0a0a0;
+  --color-text-disabled: #606060;
+  /* Secondary text that stays 4.5:1 on every surface, hover and active rows included. */
+  --color-text-muted: #adadad;
+
+  --color-accent: #4a9eff;
+  --color-accent-hover: #5aafff;
+  --color-accent-active: #3a8eef;
+  --color-accent-subtle: rgba(74, 158, 255, 0.15);
+
+  /* The focus ring, and the edge of a control with no text of its own (a
+     text box): at least 3:1 against every surface (WCAG 2.2 AA). */
+  --color-focus-ring: #6cb6ff;
+  --color-control-edge: #8f8f8f;
+
+  --color-input-bg: #3d3d3d;
+
+  --color-error: #f44336;
+  --color-warning: #ff9800;
+  --color-success: #4caf50;
+
+  /* Filled buttons, primary and danger: white text on every state's
+     background is at least 4.5:1 (WCAG 2.2 AA), which on the accent and
+     error colours it is not. */
+  --color-primary-bg: #1f6fd6;
+  --color-primary-bg-hover: #1d64d1;
+  --color-primary-bg-active: #1a5fc9;
+  --color-primary-text: #ffffff;
+  --color-danger-bg: #c62828;
+  --color-danger-bg-hover: #b91c1c;
+  --color-danger-text: #ffffff;
+  /* A slider's fill, from where its value starts to the thumb: 3.3:1 against the track. */
+  --color-slider-fill: var(--color-primary-bg);
+
+  /* Radii */
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-round: 9999px;
+
+  /* Fonts */
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-weight-ui: 600;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+
+  /* Font sizes */
+  --font-size-xs: 10px;
+  --font-size-sm: 11px;
+  --font-size-md: 13px;
+  --font-size-lg: 15px;
+  --font-size-xl: 18px;
+
+  /* Z-index layers */
+  --z-canvas: 0;
+  --z-guides: 10;
+  --z-selection: 20;
+  --z-panels: 100;
+  --z-toolbar: 200;
+  /* Popovers anchored to the canvas: above panels/toolbars but below the
+     header so menu-bar dropdowns always draw over them. */
+  --z-canvas-popover: 250;
+  --z-header: 300;
+  --z-popover: 400;
+  --z-modal: 500;
+  --z-tooltip: 600;
+
+  /* Dock layers — scoped inside the dock host's stacking context */
+  --z-dock-splitter: 1;
+  --z-dock-floating: 20;
+  --z-dock-drop-indicator: 40;
+  --z-dock-drop-ghost: 41;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+
+  /* Transitions */
+  --transition-fast: 100ms ease;
+  --transition-normal: 200ms ease;
+
+  /* Panel sizes */
+  --toolbox-width: 44px;
+  --header-height: 36px;
+  --options-bar-height: 32px;
+  --status-bar-height: 24px;
+}

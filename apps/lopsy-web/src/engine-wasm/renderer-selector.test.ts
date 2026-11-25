@@ -135,4 +135,28 @@ describe('renderSelectorModule', () => {
     expect(withoutBuild).toContain('requestedRenderer("webgl", false)');
     expect(withoutBuild).not.toContain('pkg-wgpu');
   });
+
+  it('hands a page that chose wgpu a way back to WebGL when asked to', async () => {
+    const fallbacks: (() => Promise<void>)[] = [];
+    const withFallback = {
+      ...modules('wgpu'),
+      '/renderer-choice.ts': {
+        ...modules('wgpu')['/renderer-choice.ts'],
+        setWebglFallback: (fallBack: () => Promise<void>) => fallbacks.push(fallBack),
+      },
+    };
+    const selector = load(renderSelectorModule({ ...options, fallsBackInPage: true }), withFallback);
+    noted.length = 0;
+    await selector.init();
+    expect(selector.exported().createEngine('a canvas')).toBe('wgpu engine on a canvas');
+    expect(fallbacks).toHaveLength(1);
+    await fallbacks[0]?.();
+    expect(noted).toEqual(['wgpu', 'webgl']);
+    expect(selector.exported().Engine).toBe('webgl Engine');
+    expect(selector.exported().createEngine('a canvas')).toBe('webgl engine on a canvas');
+  });
+
+  it('offers no way back unless asked to', () => {
+    expect(renderSelectorModule(options)).not.toContain('setWebglFallback');
+  });
 });

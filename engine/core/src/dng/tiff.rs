@@ -27,12 +27,39 @@ pub enum TagId {
     BaselineExposure = 50730,
     WhiteLevel = 50717,
     BlackLevel = 50714,
+    BlackLevelRepeatDim = 50713,
+    BlackLevelDeltaH = 50715,
+    BlackLevelDeltaV = 50716,
     ForwardMatrix1 = 50964,
     ForwardMatrix2 = 50965,
     ProfileToneCurve = 50940,
     ProfileGainTableMap = 52525,
-    BaselineExposureOffset = 50731,
+    BaselineExposureOffset = 51109,
     CfaRepeatPatternDim = 33421,
+    Make = 271,
+    Model = 272,
+    UniqueCameraModel = 50708,
+    CfaPlaneColor = 50710,
+    CfaLayout = 50711,
+    DefaultCropOrigin = 50719,
+    DefaultCropSize = 50720,
+    CameraCalibration1 = 50723,
+    CameraCalibration2 = 50724,
+    AnalogBalance = 50727,
+    AsShotWhiteXY = 50729,
+    CalibrationIlluminant1 = 50778,
+    CalibrationIlluminant2 = 50779,
+    ActiveArea = 50829,
+    CameraCalibrationSignature = 50931,
+    ProfileCalibrationSignature = 50932,
+    ProfileHueSatMapData1 = 50938,
+    ProfileHueSatMapData2 = 50939,
+    ProfileLookTableData = 50982,
+    OpcodeList1 = 51008,
+    OpcodeList2 = 51009,
+    OpcodeList3 = 51022,
+    SemanticName = 52526,
+    ColorMatrix3 = 52531,
 }
 
 #[derive(Debug, Clone)]
@@ -153,6 +180,11 @@ impl<'a> TiffReader<'a> {
         Ok(Self { data, le, ifd0_offset })
     }
 
+    /// Whether the file is little-endian ("II").
+    pub fn is_little_endian(&self) -> bool {
+        self.le
+    }
+
     pub fn read_ifd(&self, index: usize) -> Result<Vec<IfdEntry>, String> {
         let mut offset = self.ifd0_offset;
         for _ in 0..index {
@@ -176,7 +208,7 @@ impl<'a> TiffReader<'a> {
 
     fn parse_ifd_at(&self, offset: u32) -> Result<Vec<IfdEntry>, String> {
         let pos = offset as usize;
-        if pos + 2 > self.data.len() {
+        if pos.saturating_add(2) > self.data.len() {
             return Err("IFD offset out of bounds".into());
         }
 
@@ -191,7 +223,11 @@ impl<'a> TiffReader<'a> {
             let tag = self.read_u16(entry_pos);
             let typ = self.read_u16(entry_pos + 2);
             let count = self.read_u32(entry_pos + 4);
-            let value_size = type_size(typ) * count as usize;
+            // The count is the file's: on a 32-bit target the size can
+            // overflow, so an entry whose size does not fit is skipped.
+            let Some(value_size) = type_size(typ).checked_mul(count as usize) else {
+                continue;
+            };
 
             let raw_bytes = if value_size <= 4 {
                 // Value fits inline in the 4-byte value/offset field
@@ -204,7 +240,7 @@ impl<'a> TiffReader<'a> {
                 bytes
             } else {
                 let data_offset = self.read_u32(entry_pos + 8) as usize;
-                if data_offset + value_size > self.data.len() {
+                if data_offset.checked_add(value_size).is_none_or(|end| end > self.data.len()) {
                     continue;
                 }
                 let mut bytes = self.data[data_offset..data_offset + value_size].to_vec();

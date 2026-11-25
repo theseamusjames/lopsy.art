@@ -1,27 +1,27 @@
 use crate::color::ColorSpace;
+use crate::colorimetry::{pcs_colorants, rgb_space, Mat3, RgbSpace, PCS_D50};
 
-/// Build an ICC v2 profile for the given color space.
-/// Returns a valid ICC profile binary that image viewers will recognize.
+/// The ICC profile that describes pixels in `color_space`.
 ///
-/// The sRGB profile keeps its historical byte layout because it is embedded
-/// in sRGB PSD exports, which must stay byte-identical. The Display P3
-/// profile is built with colorimetrically correct, Bradford-adapted
-/// colorants and the true sRGB transfer curve so that readers can convert
-/// wide-gamut exports accurately.
+/// sRGB, Rec. 2020 and linear sRGB are ICC v4 matrix/TRC display profiles
+/// built from each space's primaries and curve (`colorimetry`), the curve
+/// as a parametric curve, so the pixels `space_convert` writes and the
+/// profile that describes them come from the same numbers. Display P3 is
+/// a v2 profile with the sRGB curve as a table; it is right as it is and
+/// Lopsy's wide-gamut exports embed it, so it keeps its bytes.
 pub fn build_icc_profile(color_space: ColorSpace) -> Vec<u8> {
     match color_space {
-        ColorSpace::Srgb | ColorSpace::LinearSrgb => build_srgb_icc(),
+        ColorSpace::Srgb => build_v4_display_profile("sRGB", &rgb_space(ColorSpace::Srgb)),
+        ColorSpace::LinearSrgb => build_v4_display_profile("Linear sRGB", &rgb_space(ColorSpace::LinearSrgb)),
         ColorSpace::DisplayP3 => build_display_p3_icc(),
-        ColorSpace::Rec2020 => build_srgb_icc(), // Fallback for now
+        ColorSpace::Rec2020 => build_v4_display_profile("Rec. 2020", &rgb_space(ColorSpace::Rec2020)),
     }
 }
 
-fn build_srgb_icc() -> Vec<u8> {
-    // Minimal sRGB ICC v2 profile
-    // This is a hand-crafted minimal profile with:
-    // - Header (128 bytes)
-    // - Tag table
-    // - Required tags: profileDescriptionTag, mediaWhitePointTag, rXYZ/gXYZ/bXYZ, rTRC/gTRC/bTRC
+/// The sRGB profile Lopsy's sRGB PSD files have always embedded: a v2
+/// profile with a plain 2.2 gamma. PSD exports keep it so that they stay
+/// byte-identical; every other export uses `build_icc_profile`.
+pub fn legacy_srgb_icc_profile() -> Vec<u8> {
     build_rgb_icc_profile(
         b"sRGB",
         // D65 white point
@@ -30,119 +30,174 @@ fn build_srgb_icc() -> Vec<u8> {
         [0.4124, 0.2126, 0.0193],
         [0.3576, 0.7152, 0.1192],
         [0.1805, 0.0722, 0.9505],
-        // sRGB gamma ~2.2 (simplified as 2.2 curve)
         2.2,
     )
 }
 
 // ============================================================
-// Display P3 profile — colorimetrically correct ICC v2
+// ICC v4 display profiles
 // ============================================================
 
-/// CIE chromaticities for the D65 white point (x, y).
-const D65_XY: (f64, f64) = (0.3127, 0.3290);
+/// Profile version 4.3.
+const ICC_V4_VERSION: u32 = 0x0430_0000;
 
-/// Display P3 primaries as CIE chromaticities (x, y): red, green, blue.
-const P3_PRIMARIES_XY: [(f64, f64); 3] = [(0.680, 0.320), (0.265, 0.690), (0.150, 0.060)];
+/// The creation date every profile carries, fixed so that exports are
+/// reproducible: 2026-11-24 00:00:00.
+const PROFILE_DATE: [u16; 6] = [2026, 11, 24, 0, 0, 0];
 
-/// ICC PCS illuminant (D50) — exact values from the s15.16 encoding the
-/// spec mandates in the profile header (0xF6D6, 0x10000, 0xD32D).
-const PCS_D50: [f64; 3] = [
-    63190.0 / 65536.0, // 0.964202880859375
-    1.0,
-    54061.0 / 65536.0, // 0.824905395507813
-];
+const COPYRIGHT: &str = "No copyright, use freely";
 
-/// Bradford cone response matrix used for chromatic adaptation.
-const BRADFORD: [[f64; 3]; 3] = [
-    [0.8951, 0.2664, -0.1614],
-    [-0.7502, 1.7135, 0.0367],
-    [0.0389, -0.0685, 1.0296],
-];
-
-fn xy_to_xyz(x: f64, y: f64) -> [f64; 3] {
-    [x / y, 1.0, (1.0 - x - y) / y]
+/// The 128-byte header of an RGB display profile with an XYZ connection
+/// space. The caller patches in the size once the tags are placed.
+fn profile_header(version: u32) -> Vec<u8> {
+    let mut h = Vec::with_capacity(128);
+    h.extend_from_slice(&0u32.to_be_bytes()); // size
+    h.extend_from_slice(&[0u8; 4]); // preferred CMM: none
+    h.extend_from_slice(&version.to_be_bytes());
+    h.extend_from_slice(b"mntr");
+    h.extend_from_slice(b"RGB ");
+    h.extend_from_slice(b"XYZ ");
+    for v in PROFILE_DATE {
+        h.extend_from_slice(&v.to_be_bytes());
+    }
+    h.extend_from_slice(b"acsp");
+    h.extend_from_slice(&[0u8; 4]); // primary platform: none
+    h.extend_from_slice(&[0u8; 4]); // flags
+    h.extend_from_slice(&[0u8; 4]); // device manufacturer
+    h.extend_from_slice(&[0u8; 4]); // device model
+    h.extend_from_slice(&[0u8; 8]); // device attributes
+    h.extend_from_slice(&0u32.to_be_bytes()); // rendering intent: perceptual
+    for v in PCS_D50 {
+        h.extend_from_slice(&to_s15f16(v));
+    }
+    h.extend_from_slice(&[0u8; 4]); // creator: none
+    // The profile ID (MD5) stays zero, which ICC defines as "not computed".
+    h.resize(128, 0);
+    h
 }
 
-fn mat_mul(a: &[[f64; 3]; 3], b: &[[f64; 3]; 3]) -> [[f64; 3]; 3] {
-    let mut out = [[0.0; 3]; 3];
-    for (i, row) in out.iter_mut().enumerate() {
-        for (j, cell) in row.iter_mut().enumerate() {
-            *cell = (0..3).map(|k| a[i][k] * b[k][j]).sum();
-        }
+/// Lay out a profile: header, tag table, then each distinct tag's data on
+/// a 4-byte boundary. Tags given the same data share it.
+fn assemble_profile(version: u32, tags: &[(&[u8; 4], &[u8])]) -> Vec<u8> {
+    let mut profile = profile_header(version);
+    profile.extend_from_slice(&(tags.len() as u32).to_be_bytes());
+    let table_at = profile.len();
+    profile.resize(table_at + tags.len() * 12, 0);
+    let mut placed: Vec<(*const u8, u32)> = Vec::new();
+    for (i, (sig, data)) in tags.iter().enumerate() {
+        let offset = match placed.iter().find(|(p, _)| *p == data.as_ptr()) {
+            Some(&(_, at)) => at,
+            None => {
+                let at = profile.len() as u32;
+                write_padded(&mut profile, data);
+                placed.push((data.as_ptr(), at));
+                at
+            }
+        };
+        let entry = table_at + i * 12;
+        profile[entry..entry + 4].copy_from_slice(*sig);
+        profile[entry + 4..entry + 8].copy_from_slice(&offset.to_be_bytes());
+        profile[entry + 8..entry + 12].copy_from_slice(&(data.len() as u32).to_be_bytes());
+    }
+    let size = profile.len() as u32;
+    profile[0..4].copy_from_slice(&size.to_be_bytes());
+    profile
+}
+
+/// A v4 display profile for `space`: description, copyright, the D50
+/// media white point v4 requires of display profiles, the adaptation from
+/// the space's own white (`chad`), the three adapted colorants and one
+/// parametric curve shared by the three channels.
+fn build_v4_display_profile(name: &str, space: &RgbSpace) -> Vec<u8> {
+    let (colorants, chad) = pcs_colorants(space);
+    let [r, g, b] = quantized_colorants(&colorants);
+    let desc = build_mluc_tag(name);
+    let cprt = build_mluc_tag(COPYRIGHT);
+    let wtpt = build_xyz_tag(PCS_D50[0], PCS_D50[1], PCS_D50[2]);
+    let chad = build_chad_tag(&chad);
+    let rxyz = build_xyz_tag_fixed(r);
+    let gxyz = build_xyz_tag_fixed(g);
+    let bxyz = build_xyz_tag_fixed(b);
+    let trc = build_para_tag(space.transfer.icc_parametric());
+    assemble_profile(
+        ICC_V4_VERSION,
+        &[
+            (b"desc", &desc),
+            (b"cprt", &cprt),
+            (b"wtpt", &wtpt),
+            (b"chad", &chad),
+            (b"rXYZ", &rxyz),
+            (b"gXYZ", &gxyz),
+            (b"bXYZ", &bxyz),
+            (b"rTRC", &trc),
+            (b"gTRC", &trc),
+            (b"bTRC", &trc),
+        ],
+    )
+}
+
+/// The colorant columns in s15Fixed16, with blue's rounding chosen so that
+/// the three sum exactly to the header's D50: RGB white then lands exactly
+/// on the connection space's white, as a matrix profile's should.
+fn quantized_colorants(m: &Mat3) -> [[i32; 3]; 3] {
+    let q = |v: f64| (v * 65536.0).round() as i32;
+    let d50 = PCS_D50.map(q);
+    let mut out = [[0i32; 3]; 3];
+    for row in 0..3 {
+        out[0][row] = q(m[row][0]);
+        out[1][row] = q(m[row][1]);
+        out[2][row] = d50[row] - out[0][row] - out[1][row];
     }
     out
 }
 
-fn mat_vec(m: &[[f64; 3]; 3], v: &[f64; 3]) -> [f64; 3] {
-    [
-        m[0][0] * v[0] + m[0][1] * v[1] + m[0][2] * v[2],
-        m[1][0] * v[0] + m[1][1] * v[1] + m[1][2] * v[2],
-        m[2][0] * v[0] + m[2][1] * v[1] + m[2][2] * v[2],
-    ]
+/// `multiLocalizedUnicodeType` with one en-US record, as v4 requires for
+/// `desc` and `cprt`.
+fn build_mluc_tag(text: &str) -> Vec<u8> {
+    let utf16: Vec<u8> = text.encode_utf16().flat_map(|u| u.to_be_bytes()).collect();
+    let mut data = Vec::with_capacity(28 + utf16.len());
+    data.extend_from_slice(b"mluc");
+    data.extend_from_slice(&[0u8; 4]);
+    data.extend_from_slice(&1u32.to_be_bytes()); // records
+    data.extend_from_slice(&12u32.to_be_bytes()); // record size
+    data.extend_from_slice(b"enUS");
+    data.extend_from_slice(&(utf16.len() as u32).to_be_bytes());
+    data.extend_from_slice(&28u32.to_be_bytes()); // string offset from the tag's start
+    data.extend_from_slice(&utf16);
+    data
 }
 
-fn mat_inverse(m: &[[f64; 3]; 3]) -> [[f64; 3]; 3] {
-    let det = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
-        - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
-        + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
-    let inv_det = 1.0 / det;
-    [
-        [
-            (m[1][1] * m[2][2] - m[1][2] * m[2][1]) * inv_det,
-            (m[0][2] * m[2][1] - m[0][1] * m[2][2]) * inv_det,
-            (m[0][1] * m[1][2] - m[0][2] * m[1][1]) * inv_det,
-        ],
-        [
-            (m[1][2] * m[2][0] - m[1][0] * m[2][2]) * inv_det,
-            (m[0][0] * m[2][2] - m[0][2] * m[2][0]) * inv_det,
-            (m[0][2] * m[1][0] - m[0][0] * m[1][2]) * inv_det,
-        ],
-        [
-            (m[1][0] * m[2][1] - m[1][1] * m[2][0]) * inv_det,
-            (m[0][1] * m[2][0] - m[0][0] * m[2][1]) * inv_det,
-            (m[0][0] * m[1][1] - m[0][1] * m[1][0]) * inv_det,
-        ],
-    ]
+/// `parametricCurveType` function 3 from [g, a, b, c, d].
+fn build_para_tag(params: [f64; 5]) -> Vec<u8> {
+    let mut data = Vec::with_capacity(12 + 20);
+    data.extend_from_slice(b"para");
+    data.extend_from_slice(&[0u8; 4]);
+    data.extend_from_slice(&3u16.to_be_bytes());
+    data.extend_from_slice(&[0u8; 2]);
+    for v in params {
+        data.extend_from_slice(&to_s15f16(v));
+    }
+    data
 }
 
-/// Bradford chromatic adaptation matrix taking colors from `src_white`
-/// to `dst_white` (both as XYZ with Y = 1).
-fn bradford_adaptation(src_white: &[f64; 3], dst_white: &[f64; 3]) -> [[f64; 3]; 3] {
-    let cone_src = mat_vec(&BRADFORD, src_white);
-    let cone_dst = mat_vec(&BRADFORD, dst_white);
-    let scale = [
-        [cone_dst[0] / cone_src[0], 0.0, 0.0],
-        [0.0, cone_dst[1] / cone_src[1], 0.0],
-        [0.0, 0.0, cone_dst[2] / cone_src[2]],
-    ];
-    mat_mul(&mat_inverse(&BRADFORD), &mat_mul(&scale, &BRADFORD))
+fn build_xyz_tag_fixed(xyz: [i32; 3]) -> Vec<u8> {
+    let mut data = Vec::with_capacity(20);
+    data.extend_from_slice(b"XYZ ");
+    data.extend_from_slice(&[0u8; 4]);
+    for v in xyz {
+        data.extend_from_slice(&v.to_be_bytes());
+    }
+    data
 }
 
-/// RGB → XYZ matrix (columns are the colorant vectors) for the given
-/// primaries and white point, all relative to that white point.
-fn rgb_to_xyz_matrix(primaries_xy: &[(f64, f64); 3], white_xyz: &[f64; 3]) -> [[f64; 3]; 3] {
-    let p: Vec<[f64; 3]> = primaries_xy.iter().map(|&(x, y)| xy_to_xyz(x, y)).collect();
-    let m = [
-        [p[0][0], p[1][0], p[2][0]],
-        [p[0][1], p[1][1], p[2][1]],
-        [p[0][2], p[1][2], p[2][2]],
-    ];
-    let s = mat_vec(&mat_inverse(&m), white_xyz);
-    [
-        [m[0][0] * s[0], m[0][1] * s[1], m[0][2] * s[2]],
-        [m[1][0] * s[0], m[1][1] * s[1], m[1][2] * s[2]],
-        [m[2][0] * s[0], m[2][1] * s[1], m[2][2] * s[2]],
-    ]
-}
+// ============================================================
+// Display P3 profile: ICC v2
+// ============================================================
 
 /// Display P3 colorant columns, Bradford-adapted from D65 to the D50 PCS,
 /// plus the adaptation matrix itself (for the `chad` tag).
-fn p3_pcs_colorants() -> ([[f64; 3]; 3], [[f64; 3]; 3]) {
-    let d65 = xy_to_xyz(D65_XY.0, D65_XY.1);
-    let chad = bradford_adaptation(&d65, &PCS_D50);
-    let m_d65 = rgb_to_xyz_matrix(&P3_PRIMARIES_XY, &d65);
-    (mat_mul(&chad, &m_d65), chad)
+fn p3_pcs_colorants() -> (Mat3, Mat3) {
+    pcs_colorants(&rgb_space(ColorSpace::DisplayP3))
 }
 
 /// Number of samples in the TRC curve table. 1024 points keeps the
@@ -462,7 +517,61 @@ fn build_desc_tag(name: &[u8; 4]) -> Vec<u8> {
     data
 }
 
-/// Encode u16 RGBA pixel data as a 16-bit PNG with an embedded ICC profile.
+/// One PNG chunk to write between `IHDR` and `IDAT`: its type and data.
+/// The writer adds the length and CRC.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PngChunk {
+    pub kind: [u8; 4],
+    pub data: Vec<u8>,
+}
+
+/// The chunks that say what colour space a PNG's numbers are in, in the
+/// order they are written, all before `IDAT` as the PNG specification
+/// requires of `sRGB`, `cICP` and `iCCP`.
+///
+/// sRGB has the one-byte `sRGB` chunk, which every reader understands and
+/// which must not appear beside `iCCP`. Display P3 and Rec. 2020 have
+/// `cICP` (which readers that know it prefer) and then `iCCP` with the
+/// space's profile for those that do not. Later chunks that describe the
+/// same image (`mDCV`, `cLLI` for HDR) belong in this list too.
+pub fn png_color_chunks(color_space: ColorSpace) -> Vec<PngChunk> {
+    match color_space {
+        ColorSpace::DisplayP3 | ColorSpace::Rec2020 => {
+            let mut chunks: Vec<PngChunk> = cicp(color_space).into_iter().collect();
+            let name: &[u8] = match color_space {
+                ColorSpace::DisplayP3 => b"Display P3",
+                _ => b"Rec. 2020",
+            };
+            chunks.push(PngChunk {
+                kind: *b"iCCP",
+                data: build_iccp_chunk_payload(name, &build_icc_profile(color_space)),
+            });
+            chunks
+        }
+        // Rendering intent 0, perceptual.
+        ColorSpace::Srgb | ColorSpace::LinearSrgb => vec![PngChunk { kind: *b"sRGB", data: vec![0] }],
+    }
+}
+
+/// The `cICP` chunk for a space that has code points (ITU-T H.273):
+/// colour primaries, transfer characteristics, matrix coefficients (0,
+/// RGB) and full range (1). Display P3 is primaries 12 (SMPTE EG 432-1)
+/// with transfer 13 (the sRGB curve). Rec. 2020 is primaries 9 with
+/// transfer 1, the BT.709 OETF its pixels are encoded with
+/// (`colorimetry::Transfer::Bt709`); H.273 defines 1, 14 and 15 by the
+/// same formula.
+fn cicp(color_space: ColorSpace) -> Option<PngChunk> {
+    let (primaries, transfer) = match color_space {
+        ColorSpace::DisplayP3 => (12, 13),
+        ColorSpace::Rec2020 => (9, 1),
+        _ => return None,
+    };
+    Some(PngChunk { kind: *b"cICP", data: vec![primaries, transfer, 0, 1] })
+}
+
+/// Encode u16 RGBA pixel data as a 16-bit PNG tagged as `color_space`
+/// (`png_color_chunks`). The pixels must already be in that space: this
+/// only labels them (`space_convert` converts).
 pub fn encode_png_16(
     pixels: &[u16],
     width: u32,
@@ -484,25 +593,14 @@ pub fn encode_png_16(
         encoder.set_color(png::ColorType::Rgba);
         encoder.set_depth(png::BitDepth::Sixteen);
 
-        match color_space {
-            ColorSpace::DisplayP3 => {
-                // P3 needs an iCCP chunk — written manually after header
-            }
-            _ => {
-                encoder.set_source_srgb(png::SrgbRenderingIntent::Perceptual);
-            }
-        }
-
         let mut writer = encoder
             .write_header()
             .map_err(|e| format!("PNG header: {e}"))?;
 
-        // For Display P3, inject iCCP chunk before image data
-        if matches!(color_space, ColorSpace::DisplayP3) {
-            let icc_data = build_icc_profile(color_space);
-            let iccp_payload = build_iccp_chunk_payload(b"Display P3", &icc_data);
-            writer.write_chunk(png::chunk::iCCP, &iccp_payload)
-                .map_err(|e| format!("PNG iCCP: {e}"))?;
+        for chunk in png_color_chunks(color_space) {
+            writer
+                .write_chunk(png::chunk::ChunkType(chunk.kind), &chunk.data)
+                .map_err(|e| format!("PNG {}: {e}", String::from_utf8_lossy(&chunk.kind)))?;
         }
 
         let mut be_bytes = Vec::with_capacity(expected * 2);
@@ -595,7 +693,7 @@ mod tests {
 
     #[test]
     fn test_profile_size_matches() {
-        for cs in [ColorSpace::Srgb, ColorSpace::DisplayP3] {
+        for cs in [ColorSpace::Srgb, ColorSpace::DisplayP3, ColorSpace::Rec2020, ColorSpace::LinearSrgb] {
             let profile = build_icc_profile(cs);
             let declared_size = read_u32(&profile, 0);
             assert_eq!(declared_size as usize, profile.len());
@@ -706,12 +804,236 @@ mod tests {
         assert_eq!(entry(mid), expected);
     }
 
-    /// sRGB exports must stay byte-identical: the legacy sRGB profile
-    /// (embedded in sRGB PSD exports) must not change shape.
+    /// sRGB PSD exports must stay byte-identical: the legacy sRGB profile
+    /// they embed must not change shape.
     #[test]
     fn test_srgb_profile_layout_unchanged() {
-        let profile = build_icc_profile(ColorSpace::Srgb);
+        let profile = legacy_srgb_icc_profile();
         assert_eq!(read_u32(&profile, 128), 9, "legacy sRGB profile has 9 tags");
         assert_eq!(read_u32(&profile, 8), 0x02100000, "legacy version 2.1.0");
+        assert_eq!(profile.len(), 368);
+    }
+
+    /// A profile parsed back as a reader would, checking the structure
+    /// ICC requires: header fields, a tag table whose entries all point
+    /// inside the profile on 4-byte boundaries, and a 4-byte padded size.
+    struct Parsed<'a> {
+        bytes: &'a [u8],
+        tags: Vec<([u8; 4], usize, usize)>,
+    }
+
+    impl<'a> Parsed<'a> {
+        fn new(bytes: &'a [u8]) -> Self {
+            assert!(bytes.len() >= 132);
+            assert_eq!(read_u32(bytes, 0) as usize, bytes.len(), "declared size");
+            assert_eq!(bytes.len() % 4, 0, "profile size is a multiple of 4");
+            assert_eq!(&bytes[12..16], b"mntr");
+            assert_eq!(&bytes[16..20], b"RGB ");
+            assert_eq!(&bytes[20..24], b"XYZ ");
+            assert_eq!(&bytes[36..40], b"acsp");
+            assert_eq!(&bytes[68..80], &[0, 0, 0xF6, 0xD6, 0, 1, 0, 0, 0, 0, 0xD3, 0x2D], "D50 illuminant");
+            assert!(bytes[100..128].iter().all(|&b| b == 0), "reserved header bytes");
+            let count = read_u32(bytes, 128) as usize;
+            let table_end = 132 + count * 12;
+            let mut tags = Vec::new();
+            for i in 0..count {
+                let e = 132 + i * 12;
+                let sig: [u8; 4] = bytes[e..e + 4].try_into().unwrap();
+                let (off, size) = (read_u32(bytes, e + 4) as usize, read_u32(bytes, e + 8) as usize);
+                assert!(off >= table_end, "{sig:?} overlaps the tag table");
+                assert_eq!(off % 4, 0, "{sig:?} is 4-byte aligned");
+                assert!(off + size <= bytes.len(), "{sig:?} runs past the end");
+                assert!(!tags.iter().any(|(s, _, _)| *s == sig), "{sig:?} twice");
+                tags.push((sig, off, size));
+            }
+            Self { bytes, tags }
+        }
+
+        fn tag(&self, sig: &[u8; 4]) -> &'a [u8] {
+            let &(_, off, size) = self.tags.iter().find(|(s, _, _)| s == sig).unwrap_or_else(|| panic!("no {sig:?}"));
+            &self.bytes[off..off + size]
+        }
+
+        fn xyz(&self, sig: &[u8; 4]) -> [f64; 3] {
+            let t = self.tag(sig);
+            assert_eq!(&t[..4], b"XYZ ");
+            assert_eq!(t.len(), 20);
+            [from_s15f16(t, 8), from_s15f16(t, 12), from_s15f16(t, 16)]
+        }
+
+        fn xyz_raw(&self, sig: &[u8; 4]) -> [i32; 3] {
+            let t = self.tag(sig);
+            [8, 12, 16].map(|o| read_u32(t, o) as i32)
+        }
+
+        fn mluc_en_us(&self, sig: &[u8; 4]) -> String {
+            let t = self.tag(sig);
+            assert_eq!(&t[..4], b"mluc");
+            assert_eq!(read_u32(t, 8), 1, "one record");
+            assert_eq!(read_u32(t, 12), 12, "record size");
+            assert_eq!(&t[16..20], b"enUS");
+            let (len, off) = (read_u32(t, 20) as usize, read_u32(t, 24) as usize);
+            assert!(off + len <= t.len());
+            let units: Vec<u16> = t[off..off + len].chunks_exact(2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect();
+            String::from_utf16(&units).unwrap()
+        }
+
+        fn para(&self, sig: &[u8; 4]) -> [f64; 5] {
+            let t = self.tag(sig);
+            assert_eq!(&t[..4], b"para");
+            assert_eq!(u16::from_be_bytes([t[8], t[9]]), 3, "function type 3");
+            assert_eq!(t.len(), 12 + 5 * 4);
+            [12, 16, 20, 24, 28].map(|o| from_s15f16(t, o))
+        }
+    }
+
+    fn assert_close(what: &str, got: [f64; 3], want: [f64; 3], tol: f64) {
+        for i in 0..3 {
+            assert!((got[i] - want[i]).abs() < tol, "{what}: {got:?} vs {want:?}");
+        }
+    }
+
+    /// The v4 profiles parse, and carry what each space is made of.
+    #[test]
+    fn v4_profiles_parse_with_the_right_values() {
+        for (cs, name) in [(ColorSpace::Srgb, "sRGB"), (ColorSpace::Rec2020, "Rec. 2020"), (ColorSpace::LinearSrgb, "Linear sRGB")] {
+            let bytes = build_icc_profile(cs);
+            let p = Parsed::new(&bytes);
+            assert_eq!(read_u32(&bytes, 8), 0x0430_0000, "{name}: version 4.3");
+            assert_eq!(p.tags.len(), 10);
+            assert_eq!(p.mluc_en_us(b"desc"), name);
+            assert_eq!(p.mluc_en_us(b"cprt"), COPYRIGHT);
+            assert_close("wtpt", p.xyz(b"wtpt"), PCS_D50, 1e-9);
+            // RGB white lands exactly on D50.
+            let (r, g, b) = (p.xyz_raw(b"rXYZ"), p.xyz_raw(b"gXYZ"), p.xyz_raw(b"bXYZ"));
+            assert_eq!([r[0] + g[0] + b[0], r[1] + g[1] + b[1], r[2] + g[2] + b[2]], [0xF6D6, 0x10000, 0xD32D]);
+            // The three curves are one.
+            assert_eq!(p.tag(b"rTRC").as_ptr(), p.tag(b"gTRC").as_ptr());
+            assert_eq!(p.tag(b"rTRC").as_ptr(), p.tag(b"bTRC").as_ptr());
+            let want = crate::colorimetry::rgb_space(cs).transfer.icc_parametric();
+            let got = p.para(b"rTRC");
+            for i in 0..5 {
+                assert!((got[i] - want[i]).abs() <= 0.5 / 65536.0 + 1e-12, "{name} para[{i}]: {got:?} vs {want:?}");
+            }
+            // chad: Bradford D65 → D50 (Lindbloom).
+            let chad = p.tag(b"chad");
+            assert_eq!(&chad[..4], b"sf32");
+            assert_eq!(chad.len(), 8 + 36);
+            let expected = [1.0478112, 0.0228866, -0.0501270, 0.0295424, 0.9904844, -0.0170491, -0.0092345, 0.0150436, 0.7521316];
+            for (i, e) in expected.iter().enumerate() {
+                assert!((from_s15f16(chad, 8 + i * 4) - e).abs() < 1e-3, "chad[{i}]: {}", from_s15f16(chad, 8 + i * 4));
+            }
+        }
+    }
+
+    /// The well-known D50-adapted sRGB colorants, and the sRGB curve.
+    #[test]
+    fn srgb_profile_is_srgb() {
+        let bytes = build_icc_profile(ColorSpace::Srgb);
+        let p = Parsed::new(&bytes);
+        assert_close("rXYZ", p.xyz(b"rXYZ"), [0.4361, 0.2225, 0.0139], 2e-4);
+        assert_close("gXYZ", p.xyz(b"gXYZ"), [0.3851, 0.7169, 0.0971], 2e-4);
+        assert_close("bXYZ", p.xyz(b"bXYZ"), [0.1431, 0.0606, 0.7141], 2e-4);
+        let [g, a, b, c, d] = p.para(b"rTRC");
+        assert!((g - 2.4).abs() < 1e-4 && (a - 1.0 / 1.055).abs() < 1e-4 && (b - 0.055 / 1.055).abs() < 1e-4);
+        assert!((c - 1.0 / 12.92).abs() < 1e-4 && (d - 0.04045).abs() < 1e-4);
+    }
+
+    /// Rec. 2020's D50-adapted colorants (as in widely used Rec. 2020
+    /// profiles, e.g. Elle Stone's) and the BT.709 curve.
+    #[test]
+    fn rec2020_profile_is_rec2020() {
+        let bytes = build_icc_profile(ColorSpace::Rec2020);
+        let p = Parsed::new(&bytes);
+        assert_close("rXYZ", p.xyz(b"rXYZ"), [0.6734, 0.2790, -0.0019], 2e-4);
+        assert_close("gXYZ", p.xyz(b"gXYZ"), [0.1656, 0.6753, 0.0299], 2e-4);
+        assert_close("bXYZ", p.xyz(b"bXYZ"), [0.1251, 0.0456, 0.7969], 2e-4);
+        let [g, a, b, c, d] = p.para(b"rTRC");
+        assert!((g - 1.0 / 0.45).abs() < 1e-4 && (a - 1.0 / 1.0993).abs() < 1e-4 && (b - 0.0993 / 1.0993).abs() < 1e-4);
+        assert!((c - 1.0 / 4.5).abs() < 1e-4 && (d - 0.081243).abs() < 1e-4);
+    }
+
+    /// The Display P3 and legacy sRGB profiles are structurally valid too.
+    #[test]
+    fn every_profile_parses() {
+        for bytes in [build_icc_profile(ColorSpace::DisplayP3), legacy_srgb_icc_profile()] {
+            Parsed::new(&bytes);
+        }
+        let p3 = build_icc_profile(ColorSpace::DisplayP3);
+        let p = Parsed::new(&p3);
+        assert_eq!(read_u32(&p3, 8), 0x0240_0000);
+        for sig in [b"desc", b"cprt", b"wtpt", b"chad", b"rXYZ", b"gXYZ", b"bXYZ", b"rTRC", b"gTRC", b"bTRC"] {
+            p.tag(sig);
+        }
+    }
+
+    // ------------------------------------------------------------
+    // PNG chunks
+    // ------------------------------------------------------------
+
+    /// Every chunk of a PNG: type and data, each CRC checked.
+    fn png_chunks(png: &[u8]) -> Vec<([u8; 4], Vec<u8>)> {
+        assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
+        let mut out = Vec::new();
+        let mut i = 8;
+        while i < png.len() {
+            let len = read_u32(png, i) as usize;
+            let kind: [u8; 4] = png[i + 4..i + 8].try_into().unwrap();
+            let data = &png[i + 8..i + 8 + len];
+            let mut crc = flate2::Crc::new();
+            crc.update(&png[i + 4..i + 8 + len]);
+            assert_eq!(crc.sum(), read_u32(png, i + 8 + len), "{} CRC", String::from_utf8_lossy(&kind));
+            out.push((kind, data.to_vec()));
+            i += 12 + len;
+        }
+        assert_eq!(i, png.len());
+        out
+    }
+
+    fn kinds(chunks: &[([u8; 4], Vec<u8>)]) -> Vec<String> {
+        chunks.iter().map(|(k, _)| String::from_utf8_lossy(k).into_owned()).collect()
+    }
+
+    fn sample_png(cs: ColorSpace) -> Vec<u8> {
+        let px: Vec<u16> = (0..3 * 2 * 4).map(|i| (i * 2731) as u16).collect();
+        encode_png_16(&px, 3, 2, cs).unwrap()
+    }
+
+    #[test]
+    fn png_chunks_are_in_a_legal_order_with_correct_crcs() {
+        let srgb = png_chunks(&sample_png(ColorSpace::Srgb));
+        assert_eq!(kinds(&srgb), ["IHDR", "sRGB", "IDAT", "IEND"]);
+        assert_eq!(srgb[1].1, [0]);
+
+        for (cs, cicp, name) in [
+            (ColorSpace::DisplayP3, [12u8, 13, 0, 1], &b"Display P3"[..]),
+            (ColorSpace::Rec2020, [9, 1, 0, 1], &b"Rec. 2020"[..]),
+        ] {
+            let chunks = png_chunks(&sample_png(cs));
+            assert_eq!(kinds(&chunks), ["IHDR", "cICP", "iCCP", "IDAT", "IEND"], "{cs:?}");
+            assert_eq!(chunks[1].1, cicp);
+            // iCCP: name, NUL, method 0, then the zlib'd profile.
+            let iccp = &chunks[2].1;
+            assert_eq!(&iccp[..name.len()], name);
+            assert_eq!(&iccp[name.len()..name.len() + 2], &[0, 0]);
+            let mut profile = Vec::new();
+            std::io::Read::read_to_end(&mut flate2::read::ZlibDecoder::new(&iccp[name.len() + 2..]), &mut profile).unwrap();
+            assert_eq!(profile, build_icc_profile(cs));
+        }
+    }
+
+    /// A PNG reader reads each back with its pixels and colour information.
+    #[test]
+    fn png_reader_reads_the_tags() {
+        for cs in [ColorSpace::Srgb, ColorSpace::DisplayP3, ColorSpace::Rec2020] {
+            let png = sample_png(cs);
+            let mut reader = png::Decoder::new(std::io::Cursor::new(&png)).read_info().unwrap();
+            let mut buf = vec![0; reader.output_buffer_size()];
+            reader.next_frame(&mut buf).unwrap();
+            let info = reader.info();
+            assert_eq!(info.icc_profile.is_some(), cs != ColorSpace::Srgb, "{cs:?}");
+            assert_eq!(info.srgb.is_some(), cs == ColorSpace::Srgb, "{cs:?}");
+            assert_eq!(u16::from_be_bytes([buf[2], buf[3]]), 2731);
+        }
     }
 }

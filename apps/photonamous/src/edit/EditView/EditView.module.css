@@ -1,0 +1,326 @@
+.editView {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--header-height);
+  padding: 0 var(--space-3);
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border-subtle);
+  flex-shrink: 0;
+}
+
+.fileName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-ui);
+  color: var(--color-text-secondary);
+}
+
+/* The heading takes focus only to be read out when the view opens; it is not a control. */
+.fileName:focus {
+  outline: none;
+}
+
+.toolGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* The line between two groups of tools. */
+.toolDivider {
+  flex-shrink: 0;
+  width: 1px;
+  height: 16px;
+  background: var(--color-border);
+}
+
+.toolButton,
+.iconButton,
+.primaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  height: 28px;
+  padding: 0 var(--space-2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.iconButton {
+  width: 28px;
+  padding: 0;
+}
+
+.toolButton:hover:not(:disabled, [aria-disabled='true']),
+.iconButton:hover:not(:disabled, [aria-disabled='true']) {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.toolButton[aria-pressed='true'] {
+  background: var(--color-bg-active);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+/* Before and Split are on or off: on is blue, as a pressed IconButton is here and in Lopsy. */
+.iconButton[aria-pressed='true']:not(:disabled),
+.iconButton[aria-pressed='true']:hover:not(:disabled) {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+}
+
+.toolButton:disabled,
+.iconButton:disabled,
+.primaryButton:disabled,
+.toolButton[aria-disabled='true'],
+.primaryButton[aria-disabled='true'] {
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+.primaryButton {
+  background: var(--color-primary-bg);
+  color: var(--color-primary-text);
+}
+
+.primaryButton:hover:not(:disabled, [aria-disabled='true']) {
+  background: var(--color-primary-bg-hover);
+}
+
+.primaryButton:active:not(:disabled, [aria-disabled='true']) {
+  background: var(--color-primary-bg-active);
+}
+
+.primaryButton:disabled,
+.primaryButton[aria-disabled='true'] {
+  background: var(--color-bg-tertiary);
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* The photo, and under it the bar with the zoom, Before and Split. */
+.main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--color-bg-canvas);
+  cursor: grab;
+  touch-action: none;
+}
+
+.stage:active {
+  cursor: grabbing;
+}
+
+.stage:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: -2px;
+}
+
+.problem {
+  position: absolute;
+  top: var(--space-3);
+  left: 50%;
+  z-index: 2;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: calc(100% - var(--space-6));
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-danger-bg);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.beforeBadge {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+  pointer-events: none;
+}
+
+/* The panel that is open, if one is, and the toolbar at the right edge. */
+.side {
+  display: flex;
+  flex-shrink: 0;
+  min-height: 0;
+}
+
+.panel {
+  width: 300px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  background: var(--color-bg-secondary);
+  border-left: 1px solid var(--color-border-subtle);
+  /* Every slider's track starts and ends at the same place: room for the
+     longest label ("Large details") and the widest readout ("50000 K"). */
+  --slider-label-width: 72px;
+  --slider-value-width: 56px;
+}
+
+/* With the masks open the column does not scroll as a whole: the histogram stays, the masks scroll under it, and the Mask panel's bar stays at the foot. */
+.panel[data-panel='mask'] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel[data-panel='mask'] > :first-child {
+  flex-shrink: 0;
+}
+
+.panelFooter {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-3) var(--space-4);
+}
+
+.storedPreview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: var(--space-6);
+  pointer-events: none;
+}
+
+.loadingBadge {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  z-index: 1;
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  pointer-events: none;
+}
+
+.shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.shortcut {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+.shortcut dd {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.kbd {
+  padding: 1px var(--space-2);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+}
+
+.pixelReadout {
+  position: absolute;
+  left: var(--space-3);
+  bottom: var(--space-3);
+  padding: 2px var(--space-2);
+  background: rgb(0 0 0 / 55%);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  pointer-events: none;
+}
+
+.toolButton:focus-visible,
+.iconButton:focus-visible,
+.primaryButton:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Under the photo: the zoom level, Fit and Full at the left; Before and Split at the right. */
+.stageBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-bg-secondary);
+  border-top: 1px solid var(--color-border-subtle);
+}

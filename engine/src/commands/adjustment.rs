@@ -447,6 +447,46 @@ pub fn set_group_color_grading(engine: &mut EngineInner, group_id: &str, values:
     Ok(())
 }
 
+/// Colour grading on the document's own image adjustments, with the same
+/// 18-float block as `set_group_color_grading`. The compositor's adjustment
+/// pass applies it to the composite, after the RAW develop stage.
+pub fn set_image_color_grading(engine: &mut EngineInner, values: &[f32]) -> Result<(), String> {
+    if values.len() != 18 {
+        return Err("Color grading values must be exactly 18 floats".to_string());
+    }
+    if !values.iter().all(|v| v.is_finite()) {
+        return Err("Color grading values must be finite".to_string());
+    }
+    let adj = &mut engine.adjustments;
+    let wheel = |i: usize| [values[i], values[i + 1], values[i + 2], values[i + 3]];
+    adj.cg_shadows = wheel(0);
+    adj.cg_midtones = wheel(4);
+    adj.cg_highlights = wheel(8);
+    adj.cg_global = wheel(12);
+    adj.cg_exponent = values[16];
+    adj.cg_width = values[17];
+    adj.cg_enabled = true;
+    engine.needs_recomposite = true;
+    Ok(())
+}
+
+/// Turn the document's colour grading off, back to its defaults.
+pub fn clear_image_color_grading(engine: &mut EngineInner) {
+    reset_image_color_grading(&mut engine.adjustments);
+    engine.needs_recomposite = true;
+}
+
+pub(crate) fn reset_image_color_grading(adj: &mut crate::engine::ImageAdjustmentState) {
+    let defaults = crate::engine::ImageAdjustmentState::default();
+    adj.cg_enabled = false;
+    adj.cg_shadows = defaults.cg_shadows;
+    adj.cg_midtones = defaults.cg_midtones;
+    adj.cg_highlights = defaults.cg_highlights;
+    adj.cg_global = defaults.cg_global;
+    adj.cg_exponent = defaults.cg_exponent;
+    adj.cg_width = defaults.cg_width;
+}
+
 pub fn set_group_photo_filter(engine: &mut EngineInner, group_id: &str, r: f32, g: f32, b: f32, density: f32, preserve_luminosity: bool) -> Result<(), String> {
     let ga = engine.groups.adjustments.get_mut(group_id)
         .ok_or_else(|| "Group not found".to_string())?;

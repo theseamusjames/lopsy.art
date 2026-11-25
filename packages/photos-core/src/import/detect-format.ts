@@ -1,0 +1,33 @@
+import type { ImageFormat } from '../library/types';
+import { RAF_MAGIC, isPng, isWebp } from './containers';
+import { TiffTag, openTiff, readIfd } from './tiff';
+
+export const MIME_TYPES: Readonly<Record<ImageFormat, string>> = {
+  raf: 'image/x-fuji-raf',
+  dng: 'image/x-adobe-dng',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  lopsy: 'application/x-lopsy',
+};
+
+function startsWith(bytes: Uint8Array, text: string): boolean {
+  if (bytes.length < text.length) return false;
+  for (let i = 0; i < text.length; i++) if (bytes[i] !== text.charCodeAt(i)) return false;
+  return true;
+}
+
+/** Identifies a file from its magic bytes; null for anything import does not support. */
+export function detectFormat(bytes: Uint8Array): ImageFormat | null {
+  if (startsWith(bytes, RAF_MAGIC)) return 'raf';
+  if (startsWith(bytes, 'LOPSY\0')) return 'lopsy';
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'jpeg';
+  if (isPng(bytes)) return 'png';
+  if (isWebp(bytes)) return 'webp';
+  const tiff = openTiff(bytes);
+  if (tiff) {
+    const ifd0 = readIfd(tiff, tiff.firstIfd);
+    if (ifd0?.entries.has(TiffTag.DngVersion)) return 'dng';
+  }
+  return null;
+}

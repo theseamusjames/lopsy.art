@@ -652,56 +652,66 @@ pub fn fill_mask_with_value(
 // ============================================================
 
 pub fn upload_layer_pixels_compressed(engine: &mut EngineInner, layer_id: &str, compressed: &[u8]) -> Result<(), String> {
+    let (full_w, full_h, full_pixels) = decode_blob_u8(compressed, engine.texture_pool.max_size())?;
+    layer_manager::upload_pixels(&mut *engine, layer_id, &full_pixels, full_w, full_h, 0, 0)?;
+    Ok(())
+}
+
+/// Where a compressed blob's cropped pixels sit in its full-size layer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct BlobRect {
+    x: usize,
+    y: usize,
+    w: usize,
+    h: usize,
+    full_w: usize,
+    full_h: usize,
+}
+
+/// Read and check a blob's 24-byte geometry header. Blobs come from `.lopsy`
+/// files as well as the in-session backup, so nothing in the header is
+/// trusted: the crop must lie inside the full size, and neither side may
+/// exceed `max_side` (the GPU's texture limit), which also bounds what is
+/// allocated from it.
+fn parse_blob_rect(compressed: &[u8], max_side: u32) -> Result<BlobRect, String> {
     if compressed.len() < 24 {
         return Err("Compressed data too short (need at least 24-byte header)".to_string());
     }
-
-    // Read 24-byte header: crop_x, crop_y, crop_w, crop_h, full_w, full_h
-    let crop_x = i32::from_le_bytes([compressed[0], compressed[1], compressed[2], compressed[3]]);
-    let crop_y = i32::from_le_bytes([compressed[4], compressed[5], compressed[6], compressed[7]]);
-    let crop_w = i32::from_le_bytes([compressed[8], compressed[9], compressed[10], compressed[11]]);
-    let crop_h = i32::from_le_bytes([compressed[12], compressed[13], compressed[14], compressed[15]]);
-    let full_w = i32::from_le_bytes([compressed[16], compressed[17], compressed[18], compressed[19]]);
-    let full_h = i32::from_le_bytes([compressed[20], compressed[21], compressed[22], compressed[23]]);
-
-    if crop_w <= 0 || crop_h <= 0 || full_w <= 0 || full_h <= 0 {
+    let field = |i: usize| i32::from_le_bytes([compressed[i], compressed[i + 1], compressed[i + 2], compressed[i + 3]]);
+    let (x, y, w, h, full_w, full_h) = (field(0), field(4), field(8), field(12), field(16), field(20));
+    if w <= 0 || h <= 0 || full_w <= 0 || full_h <= 0 || x < 0 || y < 0 {
         return Err("Invalid dimensions in compressed header".to_string());
     }
+    if full_w as u32 > max_side || full_h as u32 > max_side {
+        return Err(format!("Layer of {full_w}x{full_h} exceeds the {max_side}px texture limit"));
+    }
+    if x as i64 + w as i64 > full_w as i64 || y as i64 + h as i64 > full_h as i64 {
+        return Err("Compressed crop lies outside the layer".to_string());
+    }
+    Ok(BlobRect { x: x as usize, y: y as usize, w: w as usize, h: h as usize, full_w: full_w as usize, full_h: full_h as usize })
+}
 
+/// Paste `cropped` (`rect.w`×`rect.h` pixels of `T` × 4 channels) into a
+/// zeroed full-size buffer.
+fn place_crop<T: Copy + Default>(rect: BlobRect, cropped: &[T]) -> Vec<T> {
+    let mut full = vec![T::default(); rect.full_w * rect.full_h * 4];
+    let len = rect.w * 4;
+    for row in 0..rect.h {
+        let dst = ((rect.y + row) * rect.full_w + rect.x) * 4;
+        full[dst..dst + len].copy_from_slice(&cropped[row * len..row * len + len]);
+    }
+    full
+}
+
+/// An 8-bit blob (24-byte header, then RGBA8 crop) as (width, height,
+/// full-size RGBA8).
+fn decode_blob_u8(compressed: &[u8], max_side: u32) -> Result<(u32, u32, Vec<u8>), String> {
+    let rect = parse_blob_rect(compressed, max_side)?;
     let pixel_data = &compressed[24..];
-    let expected_len = (crop_w as usize) * (crop_h as usize) * 4;
-    if pixel_data.len() < expected_len {
+    if pixel_data.len() < rect.w * rect.h * 4 {
         return Err("Snapshot pixel data shorter than header dimensions".to_string());
     }
-
-    // Reconstruct the full-size texture with the cropped content at its original
-    // offset. This ensures the layer position from the document state (set by
-    // syncLayers) renders content at the correct location.
-    let fw = full_w as usize;
-    let fh = full_h as usize;
-    let mut full_pixels = vec![0u8; fw * fh * 4];
-    let cw = crop_w as usize;
-    let cx = crop_x as usize;
-    let cy = crop_y as usize;
-    let ch = crop_h as usize;
-    for row in 0..ch {
-        let src_start = row * cw * 4;
-        let dst_start = ((cy + row) * fw + cx) * 4;
-        let len = cw * 4;
-        full_pixels[dst_start..dst_start + len]
-            .copy_from_slice(&pixel_data[src_start..src_start + len]);
-    }
-
-    layer_manager::upload_pixels(
-        &mut *engine,
-        layer_id,
-        &full_pixels,
-        full_w as u32,
-        full_h as u32,
-        0, 0,
-    )?;
-
-    Ok(())
+    Ok((rect.full_w as u32, rect.full_h as u32, place_crop(rect, pixel_data)))
 }
 
 /// A layer's content-cropped pixels as a 16-bit blob, LZ4-compressed
@@ -757,75 +767,44 @@ fn lz4_u16_blob(pixels: Vec<u16>, w: u32, h: u32) -> Vec<u8> {
 }
 
 pub fn upload_layer_pixels_compressed_u16(engine: &mut EngineInner, layer_id: &str, compressed: &[u8]) -> Result<(), String> {
-    if compressed.len() < 24 {
-        return Err("Compressed data too short (need at least 24-byte header)".to_string());
-    }
+    let (full_w, full_h, full_pixels) = decode_blob_u16(compressed, engine.texture_pool.max_size())?;
+    layer_manager::upload_pixels_u16(&mut *engine, layer_id, &full_pixels, full_w, full_h)?;
+    Ok(())
+}
 
-    let crop_x = i32::from_le_bytes([compressed[0], compressed[1], compressed[2], compressed[3]]);
-    let crop_y = i32::from_le_bytes([compressed[4], compressed[5], compressed[6], compressed[7]]);
-    let crop_w = i32::from_le_bytes([compressed[8], compressed[9], compressed[10], compressed[11]]);
-    let crop_h = i32::from_le_bytes([compressed[12], compressed[13], compressed[14], compressed[15]]);
-    let full_w = i32::from_le_bytes([compressed[16], compressed[17], compressed[18], compressed[19]]);
-    let full_h = i32::from_le_bytes([compressed[20], compressed[21], compressed[22], compressed[23]]);
+/// A 16-bit blob as (width, height, full-size RGBA u16). Two layouts: the
+/// 24-byte header then raw LE u16 (old), or a 32-byte header adding
+/// `flags` (0 raw, 1 RLE, 2 LZ4) and the uncompressed size. Every length is
+/// checked against the header's crop before anything is sliced.
+fn decode_blob_u16(compressed: &[u8], max_side: u32) -> Result<(u32, u32, Vec<u16>), String> {
+    let rect = parse_blob_rect(compressed, max_side)?;
+    let expected_raw_len = rect.w * rect.h * 4 * 2;
 
-    if crop_w <= 0 || crop_h <= 0 || full_w <= 0 || full_h <= 0 {
-        return Err("Invalid dimensions in compressed header".to_string());
-    }
-
-    let expected_u16_count = (crop_w as usize) * (crop_h as usize) * 4;
-    let expected_raw_len = expected_u16_count * 2;
-
-    // Detect format: 24-byte header + raw data (old) vs 28-byte header + RLE (new).
-    // Old format: data.len() == 24 + expected_raw_len
-    // New format: header[24..28] == flags, header[28..32] == uncompressed_size, then RLE
     let cropped_bytes: Vec<u8> = if compressed.len() == 24 + expected_raw_len {
-        // Old format: raw u16 bytes after 24-byte header
-        compressed[24..24 + expected_raw_len].to_vec()
+        compressed[24..].to_vec()
     } else if compressed.len() >= 32 {
         let flags = i32::from_le_bytes([compressed[24], compressed[25], compressed[26], compressed[27]]);
         let uncompressed_size = u32::from_le_bytes([compressed[28], compressed[29], compressed[30], compressed[31]]) as usize;
-        if flags == 2 {
-            lopsy_core::compress::lz4_decompress(&compressed[32..], uncompressed_size)
-        } else if flags == 1 {
-            lopsy_core::compress::rle_decompress_u16(&compressed[32..], uncompressed_size)
-        } else {
-            compressed[32..].to_vec()
+        if uncompressed_size != expected_raw_len {
+            return Err("Snapshot size does not match its header dimensions".to_string());
+        }
+        let payload = &compressed[32..];
+        match flags {
+            2 => lopsy_core::compress::lz4_decompress(payload, expected_raw_len)?,
+            1 => lopsy_core::compress::rle_decompress_u16(payload, expected_raw_len)?,
+            0 => payload.get(..expected_raw_len).ok_or("Snapshot pixel data shorter than header dimensions")?.to_vec(),
+            other => return Err(format!("Unknown snapshot compression {other}")),
         }
     } else {
         return Err("Snapshot data too short for any known format".to_string());
     };
-
-    // Decode LE u16 values from the (decompressed) byte stream
-    let cropped: Vec<u16> = cropped_bytes
-        .chunks_exact(2)
-        .map(|c| u16::from_le_bytes([c[0], c[1]]))
-        .collect();
-
-    // Reconstruct full-size u16 buffer
-    let fw = full_w as usize;
-    let fh = full_h as usize;
-    let mut full_pixels = vec![0u16; fw * fh * 4];
-    let cw = crop_w as usize;
-    let cx = crop_x as usize;
-    let cy = crop_y as usize;
-    let ch = crop_h as usize;
-    for row in 0..ch {
-        let src_start = row * cw * 4;
-        let dst_start = ((cy + row) * fw + cx) * 4;
-        let len = cw * 4;
-        full_pixels[dst_start..dst_start + len]
-            .copy_from_slice(&cropped[src_start..src_start + len]);
+    if cropped_bytes.len() != expected_raw_len {
+        return Err("Snapshot pixel data does not match its header dimensions".to_string());
     }
 
-    layer_manager::upload_pixels_u16(
-        &mut *engine,
-        layer_id,
-        &full_pixels,
-        full_w as u32,
-        full_h as u32,
-    )?;
-
-    Ok(())
+    let cropped: Vec<u16> = cropped_bytes.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+    drop(cropped_bytes);
+    Ok((rect.full_w as u32, rect.full_h as u32, place_crop(rect, &cropped)))
 }
 
 pub fn read_layer_thumbnail(engine: &EngineInner, layer_id: &str, max_size: u32) -> Read<Vec<u8>> {
@@ -918,6 +897,11 @@ pub fn live_gpu_snapshot_count(engine: &EngineInner) -> u32 {
     engine.snapshot_textures.iter().filter(|s| s.is_some()).count() as u32
 }
 
+/// The engine's id, which the host's lost-device announcement names it by.
+pub fn engine_id(engine: &EngineInner) -> u32 {
+    engine.gpu_ctx.engine_id()
+}
+
 /// Lose the GPU device on purpose, to rehearse recovery. Returns `false`
 /// on a backend that cannot: WebGL, where the page uses the
 /// `WEBGL_lose_context` extension instead.
@@ -938,4 +922,61 @@ pub fn effect_cache_stats(engine: &EngineInner) -> Vec<f64> {
         stats.hits as f64,
         stats.misses as f64,
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn header(x: i32, y: i32, w: i32, h: i32, fw: i32, fh: i32) -> Vec<u8> {
+        [x, y, w, h, fw, fh].iter().flat_map(|v| v.to_le_bytes()).collect()
+    }
+
+    fn u16_blob(flags: i32, payload: &[u8], uncompressed: usize, geom: [i32; 6]) -> Vec<u8> {
+        let mut b = header(geom[0], geom[1], geom[2], geom[3], geom[4], geom[5]);
+        b.extend_from_slice(&flags.to_le_bytes());
+        b.extend_from_slice(&(uncompressed as u32).to_le_bytes());
+        b.extend_from_slice(payload);
+        b
+    }
+
+    #[test]
+    fn a_valid_lz4_blob_lands_at_its_crop() {
+        let raw: Vec<u8> = (0..2 * 2 * 8).map(|i| i as u8).collect();
+        let blob = u16_blob(2, &lopsy_core::compress::lz4_compress(&raw), raw.len(), [1, 1, 2, 2, 4, 3]);
+        let (w, h, px) = decode_blob_u16(&blob, 4096).unwrap();
+        assert_eq!((w, h, px.len()), (4, 3, 4 * 3 * 4));
+        assert_eq!(px[(4 + 1) * 4], u16::from_le_bytes([0, 1]));
+        assert_eq!(px[0], 0);
+    }
+
+    #[test]
+    fn corrupt_blobs_are_errors_not_panics() {
+        let raw = vec![7u8; 2 * 2 * 8];
+        let lz4 = lopsy_core::compress::lz4_compress(&raw);
+        let cases: Vec<(&str, Vec<u8>)> = vec![
+            ("short header", vec![0; 10]),
+            ("crop past the right edge", u16_blob(2, &lz4, raw.len(), [3, 0, 2, 2, 4, 4])),
+            ("crop past the bottom", u16_blob(2, &lz4, raw.len(), [0, 3, 2, 2, 4, 4])),
+            ("negative crop origin", u16_blob(2, &lz4, raw.len(), [-1, 0, 2, 2, 4, 4])),
+            ("huge layer", u16_blob(2, &lz4, raw.len(), [0, 0, 2, 2, 1 << 30, 4])),
+            ("size disagrees with the header", u16_blob(2, &lz4, raw.len() + 8, [0, 0, 2, 2, 4, 4])),
+            ("truncated LZ4", u16_blob(2, &lz4[..lz4.len() / 2], raw.len(), [0, 0, 2, 2, 4, 4])),
+            ("garbage RLE", u16_blob(1, &[0x80, 1, 2], raw.len(), [0, 0, 2, 2, 4, 4])),
+            ("short raw payload", u16_blob(0, &raw[..10], raw.len(), [0, 0, 2, 2, 4, 4])),
+            ("unknown flags", u16_blob(9, &raw, raw.len(), [0, 0, 2, 2, 4, 4])),
+        ];
+        for (name, blob) in cases {
+            assert!(decode_blob_u16(&blob, 4096).is_err(), "{name}");
+        }
+        let mut u8_blob = header(3, 3, 2, 2, 4, 4);
+        u8_blob.extend_from_slice(&[1; 16]);
+        assert!(decode_blob_u8(&u8_blob, 4096).is_err(), "8-bit crop outside the layer");
+        let mut short = header(0, 0, 2, 2, 4, 4);
+        short.extend_from_slice(&[1; 15]);
+        assert!(decode_blob_u8(&short, 4096).is_err(), "8-bit data cut short");
+        let mut ok = header(2, 2, 2, 2, 4, 4);
+        ok.extend_from_slice(&[1; 16]);
+        assert_eq!(decode_blob_u8(&ok, 4096).unwrap().2[(2 * 4 + 2) * 4], 1);
+    }
 }

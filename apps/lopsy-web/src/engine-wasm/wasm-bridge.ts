@@ -319,6 +319,7 @@ import init, {
   floodFillGraduated,
 } from './pkg/lopsy_wasm';
 import { markMaskGpuDirty } from './mask-gpu-dirty';
+import { createReadbackQueue } from './readback-order';
 import { bumpTextLayoutGeneration } from './text-layout-generation';
 import { WASM_INIT_TIMING, recordStartupTiming } from './startup-timing';
 
@@ -637,109 +638,27 @@ export function bakeLayerEffects(engine: Engine, layerId: string, bakeMask: bool
   }
 }
 
-/**
- * What a wgpu export answers with while its readback is still out: the
- * command is parked in the engine under `lopsyTask` until `ready` resolves.
- */
-interface PendingReadback {
-  lopsyTask: number;
-  ready: Promise<void>;
-}
-
-function isPendingReadback(value: unknown): value is PendingReadback {
-  return typeof value === 'object' && value !== null && 'lopsyTask' in value;
-}
-
-/**
- * A readback whose engine was destroyed while it was out: after a lost
- * WebGPU device, or when the canvas unmounts. Its pixels no longer exist.
- */
-export class EngineGoneError extends Error {
-  constructor() {
-    super('The engine was destroyed while a readback was out');
-    this.name = 'EngineGoneError';
-  }
-}
-
 /** wasm-bindgen zeroes an object's pointer when it is freed. */
 function isFreed(engine: Engine): boolean {
   return (engine as unknown as { __wbg_ptr?: number }).__wbg_ptr === 0;
 }
 
-/**
- * Wait for a parked command's readback, resume it, and repeat until it
- * answers with its value. A command with several readbacks parks once for
- * each.
- */
-async function finishReadback<Result>(engine: Engine, pending: PendingReadback): Promise<Result> {
-  parkedReadbacks++;
-  try {
-    let step: unknown = pending;
-    while (isPendingReadback(step)) {
-      await step.ready;
-      if (isFreed(engine)) throw new EngineGoneError();
-      step = resumeTask(engine, step.lopsyTask);
-    }
-    return step as Result;
-  } finally {
-    parkedReadbacks--;
-  }
-}
+const readbacks = createReadbackQueue<Engine>(resumeTask, isFreed);
 
-let parkedReadbacks = 0;
+/** See `ReadbackQueue.asyncReadback` (readback-order.ts). */
+const asyncReadback = readbacks.asyncReadback;
 
 /**
- * How many readbacks are out: commands the engine has parked until their
- * pixels arrive, plus one while in-turn reads are waiting their turn or a
- * caller has yet to act on one that just answered. On WebGL only the
- * thumbnail and mask reads park, until their fence signals (#1767). A
+ * How many readbacks are out (`ReadbackQueue.parkedCount`). On WebGL only
+ * the thumbnail and mask reads park, until their fence signals (#1767). A
  * test that records the document's state waits for this to reach 0, since
  * work that follows a readback (a deferred crop, a thumbnail) has not
  * happened yet.
  */
 export function parkedReadbackCount(): number {
-  return parkedReadbacks + (turn === null ? 0 : 1);
+  return readbacks.parkedCount();
 }
 
-/**
- * Settles when every in-turn readback issued so far has answered and what
- * awaited it has run; null when none is out.
- */
-let turn: Promise<unknown> | null = null;
-
-/**
- * The turn passes a task after `until` settles, not in the same one: the
- * caller that awaited the readback acts on it some microtasks later, and
- * the next read must come after that.
- */
-function holdTurn(until: Promise<unknown>): void {
-  const mine: Promise<void> = until
-    .then(noop, noop)
-    .then(() => new Promise<void>((resolve) => setTimeout(resolve, 0)))
-    .then(() => {
-      if (turn === mine) turn = null;
-    });
-  turn = mine;
-}
-
-function noop(): void {}
-
-/**
- * Makes a function that reads pixels back from the GPU answer with a
- * Promise. WebGPU cannot read back synchronously: there the engine answers
- * with a parked command, which this waits out. On WebGL the read has
- * already happened and the Promise is resolved (or rejected, if the read
- * threw) on return.
- *
- * `order` matters only while a readback is out, so only on wgpu. A caller
- * usually changes the document with what it read: the crop of a layer left
- * behind, a flip, a fill. On WebGL nothing can come between such a read and
- * the change that follows it. So an `'in-turn'` read issued while another
- * is out waits for that one to answer and for its caller to act on it, and
- * then reads what that left. `'any-time'` is for reads nothing is changed
- * by, which need not wait and are not waited for: thumbnails, the
- * eyedropper.
- */
 /**
  * An export declared with `deferred_readback_export!` is typed `any`: it
  * answers its value, or a pending task on either backend. This restores
@@ -749,32 +668,6 @@ function answersLater<Args extends [Engine, ...unknown[]], Result>(
   read: (...args: Args) => unknown,
 ): (...args: Args) => Result {
   return read as (...args: Args) => Result;
-}
-
-function asyncReadback<Args extends [Engine, ...unknown[]], Result>(
-  read: (...args: Args) => Result,
-  order: 'in-turn' | 'any-time' = 'in-turn',
-): (...args: Args) => Promise<Result> {
-  return (...args: Args): Promise<Result> => {
-    const issue = (): { answer: Promise<Result>; isParked: boolean } => {
-      try {
-        const value: unknown = read(...args);
-        if (isPendingReadback(value)) return { answer: finishReadback<Result>(args[0], value), isParked: true };
-        return { answer: Promise.resolve(value as Result), isParked: false };
-      } catch (err) {
-        return { answer: Promise.reject(err), isParked: false };
-      }
-    };
-    if (order === 'any-time') return issue().answer;
-    if (turn === null) {
-      const issued = issue();
-      if (issued.isParked) holdTurn(issued.answer);
-      return issued.answer;
-    }
-    const answer = turn.then(() => issue().answer);
-    holdTurn(answer);
-    return answer;
-  };
 }
 
 export const compositeForExport = asyncReadback(rawCompositeForExport);

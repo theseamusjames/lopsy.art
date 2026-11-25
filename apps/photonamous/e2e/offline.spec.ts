@@ -1,0 +1,169 @@
+import { expect, test } from '@playwright/test';
+import { generatedJpeg, importFiles, tiles } from './library';
+
+/**
+ * Offline start (spec 5.7) on the production build (playwright.site.config.ts):
+ * the service worker serves the app shell, the library opens from the
+ * device, and changes made offline are kept and saved.
+ */
+test('the app starts offline and keeps working', async ({ page, context }) => {
+  const problems: string[] = [];
+  page.on('pageerror', (error) => problems.push(error.message));
+
+  await page.goto('/');
+  await page.getByRole('button', { name: /This browser/ }).click();
+  await expect(page.getByText('Your library is empty')).toBeVisible();
+  await importFiles(page, [{ name: 'offline.jpg', buffer: await generatedJpeg(page, 120) }]);
+  await page.getByRole('button', { name: /^All photos/ }).click();
+  await expect(tiles(page)).toHaveCount(1);
+  const id = (await tiles(page).first().getAttribute('data-asset-id')) ?? '';
+  const tile = page.locator(`[data-asset-id="${id}"]`);
+  await expect(page.getByRole('button', { name: /Saved/ })).toBeVisible({ timeout: 30_000 });
+
+  // The worker has installed and controls the page.
+  await expect
+    .poll(() => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state ?? null))
+    .toBe('activated');
+  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
+
+  await context.setOffline(true);
+  await page.reload();
+  await expect(tiles(page)).toHaveCount(1, { timeout: 30_000 });
+  await expect(tile.locator('img')).toBeVisible();
+  expect(await tile.locator('img').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+
+  // A change made offline is kept on the device.
+  await tile.click();
+  await page.keyboard.press('3');
+  await expect(tile).toHaveAttribute('data-rating', '3');
+  // The change reaches this device's store some milliseconds after it is made. Leaving the page in that
+  // same instant can lose it: measured on 2026-11-21, it survived a 60 ms wait and not a wait of none,
+  // and whether none is enough depends on the build. That window is a bug of its own, not this test's subject.
+  await page.waitForTimeout(300);
+
+  // A deep link reloads offline too: the shell serves every path.
+  await page.goto('/some/deep/link');
+  await expect(tiles(page)).toHaveCount(1, { timeout: 30_000 });
+
+  await context.setOffline(false);
+  await expect(tile).toHaveAttribute('data-rating', '3');
+  await expect(page.getByRole('button', { name: /Saved/ })).toBeVisible({ timeout: 30_000 });
+  await page.reload();
+  await expect(tile).toHaveAttribute('data-rating', '3', { timeout: 30_000 });
+  expect(problems).toEqual([]);
+});
+
+test('the engine build the page runs is kept for offline, and only that one', async ({ page, context }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: /This browser/ }).click();
+  await expect(page.getByText('Your library is empty')).toBeVisible();
+  await importFiles(page, [{ name: 'engine.jpg', buffer: await generatedJpeg(page, 200) }]);
+  await page.getByRole('button', { name: /^All photos/ }).click();
+  await expect(tiles(page)).toHaveCount(1);
+  await expect
+    .poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null))
+    .toBe(true);
+  const openInEdit = async () => {
+    await tiles(page).first().click();
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('edit-view')).toHaveAttribute('data-status', 'ready', { timeout: 60_000 });
+  };
+  await openInEdit();
+  const cachedWasm = () =>
+    page.evaluate(async () => {
+      const found: string[] = [];
+      for (const name of await caches.keys()) {
+        const cache = await caches.open(name);
+        found.push(...(await cache.keys()).map((request) => new URL(request.url).pathname).filter((path) => path.endsWith('.wasm')));
+      }
+      return found;
+    });
+  const fetched = await page.evaluate(() =>
+    performance
+      .getEntriesByType('resource')
+      .map((entry) => new URL(entry.name).pathname)
+      .filter((path) => path.endsWith('.wasm')),
+  );
+  expect(fetched).toHaveLength(1);
+  await expect.poll(cachedWasm).toEqual(fetched);
+
+  // And the Edit view opens offline from it.
+  await context.setOffline(true);
+  await page.reload();
+  await expect(tiles(page)).toHaveCount(1, { timeout: 30_000 });
+  await openInEdit();
+  await context.setOffline(false);
+});
+
+test('the Edit view opens offline though no photo was opened since the engine left the cache', async ({ page, context }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: /This browser/ }).click();
+  await expect(page.getByText('Your library is empty')).toBeVisible();
+  await importFiles(page, [{ name: 'update.jpg', buffer: await generatedJpeg(page, 40) }]);
+  await page.getByRole('button', { name: /^All photos/ }).click();
+  await expect(tiles(page)).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /Saved/ })).toBeVisible({ timeout: 30_000 });
+  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
+
+  const cachedWasm = () =>
+    page.evaluate(async () => {
+      const found: string[] = [];
+      for (const name of await caches.keys()) {
+        const cache = await caches.open(name);
+        found.push(...(await cache.keys()).map((request) => new URL(request.url).pathname).filter((path) => path.endsWith('.wasm')));
+      }
+      return found;
+    });
+  // What a new version's cache holds after its install: the shell without either engine build.
+  await page.evaluate(async () => {
+    for (const name of await caches.keys()) {
+      const cache = await caches.open(name);
+      for (const request of await cache.keys()) if (request.url.endsWith('.wasm')) await cache.delete(request);
+    }
+  });
+  expect(await cachedWasm()).toEqual([]);
+  // A fresh worker, as after the browser stopped the idle one, so nothing it remembers stands in for the cache.
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('ServiceWorker.enable');
+  await cdp.send('ServiceWorker.stopAllWorkers');
+
+  // The page starts on the library and no photo is opened: the engine's wasm is kept all the same.
+  await page.reload();
+  await expect(tiles(page)).toHaveCount(1, { timeout: 30_000 });
+  await expect.poll(cachedWasm, { timeout: 30_000 }).toHaveLength(1);
+
+  await context.setOffline(true);
+  await page.reload();
+  await expect(tiles(page)).toHaveCount(1, { timeout: 30_000 });
+  await tiles(page).first().click();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('edit-view')).toHaveAttribute('data-status', 'ready', { timeout: 60_000 });
+  await context.setOffline(false);
+});
+
+test('a cached file that another script on the origin changed is not served', async ({ page, context }) => {
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Photonamous' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
+
+  // What a script injected anywhere on the origin could do: replace the app's code in the shell cache.
+  const script = await page.evaluate(async () => {
+    const src = new URL(document.querySelector<HTMLScriptElement>('script[type="module"]')?.src ?? '').pathname;
+    const name = (await caches.keys()).find((key) => key.startsWith('photonamous-shell-')) ?? '';
+    const cache = await caches.open(name);
+    await cache.put(src, new Response('window.__evil = true;', { headers: { 'Content-Type': 'text/javascript' } }));
+    return { src, name };
+  });
+
+  // A fresh worker, as after the browser stopped the idle one.
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('ServiceWorker.enable');
+  await cdp.send('ServiceWorker.stopAllWorkers');
+
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Photonamous' })).toBeVisible();
+  expect(await page.evaluate(() => Reflect.get(window, '__evil'))).toBeUndefined();
+  const cached = await page.evaluate(async ({ src, name }) => (await (await caches.open(name)).match(src))?.text() ?? '', script);
+  expect(cached).not.toContain('__evil');
+  expect(cached.length).toBeGreaterThan(1000);
+});

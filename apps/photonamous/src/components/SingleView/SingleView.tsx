@@ -1,0 +1,150 @@
+import { useId, useRef, useState } from 'react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Paintbrush, SlidersHorizontal } from 'lucide-react';
+import type { AssetId } from '@lopsy/photos-core/library/types';
+import { useAsset } from '../../app/hooks';
+import { useUi } from '../../app/store';
+import { isDevelopable } from '../../library/develop-source';
+import { parseItem } from '../../library/items';
+import { backOut, openEdit, openFocusedInLopsy, runCommand, setLabel, setRating, toggleSetAside } from '../../app/commands';
+import { ImageX } from '../../icons/ImageX';
+import { Button } from '../Button/Button';
+import { IconButton } from '../IconButton/IconButton';
+import { LabelPicker } from '../LabelPicker/LabelPicker';
+import { VersionStrip } from '../VersionStrip/VersionStrip';
+import { DocumentList } from '../DocumentList/DocumentList';
+import { Preview, type ZoomPoint } from '../Preview/Preview';
+import { Stars } from '../Stars/Stars';
+import { useViewFocus } from './use-view-focus';
+import styles from './SingleView.module.css';
+
+interface SingleViewProps {
+  orderedIds: readonly AssetId[];
+  /** Full screen (`cull` in the code, the name it had): it fills the screen, and marking moves to the next photo. */
+  cull?: boolean;
+}
+
+export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
+  const focus = useUi((s) => s.selection.focus);
+  const asset = useAsset(focus === null ? null : parseItem(focus).assetId);
+  const index = focus === null ? -1 : orderedIds.indexOf(focus);
+  // Zoom belongs to one photo; moving on fits the next one again.
+  const [zoomed, setZoomed] = useState<{ id: AssetId; point: ZoomPoint } | null>(null);
+  const zoom = zoomed !== null && zoomed.id === focus ? zoomed.point : null;
+  const root = useRef<HTMLDivElement>(null);
+  const headingId = useId();
+  const hintId = useId();
+  useViewFocus(root);
+  const position = index >= 0 ? `${(index + 1).toLocaleString()} of ${orderedIds.length.toLocaleString()}` : '';
+
+  return (
+    <div
+      ref={root}
+      className={`${styles.view} ${cull ? styles.cull : ''}`}
+      tabIndex={-1}
+      // Cull covers the whole screen and the library behind it is inert: a modal dialog.
+      role={cull ? 'dialog' : 'region'}
+      aria-modal={cull ? true : undefined}
+      aria-label={cull ? `Full screen: ${asset?.fileName ?? 'no photo'}` : undefined}
+      aria-labelledby={cull ? undefined : headingId}
+      aria-describedby={cull ? hintId : undefined}
+    >
+      <div className={styles.top}>
+        <Button
+          variant="link"
+          size="sm"
+          className={styles.back}
+          onClick={backOut}
+          title={cull ? undefined : 'Back (Esc)'}
+        >
+          <ArrowLeft size={14} />
+          {cull ? 'Leave full screen' : 'Back'}
+        </Button>
+        <h1 id={headingId} className={styles.name}>
+          {asset?.fileName ?? 'No photo'}
+        </h1>
+        <span className={styles.position}>{position}</span>
+        <p className={styles.visuallyHidden} role="status">
+          {asset ? `${asset.fileName}, ${position}` : ''}
+        </p>
+      </div>
+
+      {asset && (
+        <div className={styles.actions}>
+          <div className={styles.labels}>
+            <LabelPicker value={asset.label} onChange={(l) => setLabel(l, orderedIds, [asset.id])} />
+          </div>
+          <div className={styles.rating}>
+            <Stars rating={asset.rating} size={18} onChange={(r) => setRating(r, orderedIds, [asset.id])} />
+          </div>
+          <div className={styles.edit}>
+            {/* A Lopsy document opens in Lopsy as its .lopsy; Edit works on its flattened render. */}
+            <IconButton
+              size="sm"
+              label={asset.kind === 'document' ? 'Open in Lopsy' : 'Edit in Lopsy'}
+              icon={<Paintbrush size={16} />}
+              onClick={openFocusedInLopsy}
+            />
+            {isDevelopable(asset) ? (
+              <IconButton
+                size="sm"
+                className={styles.editButton}
+                label="Edit"
+                title="Edit (Enter)"
+                icon={<SlidersHorizontal size={16} />}
+                onClick={openEdit}
+              />
+            ) : null}
+          </div>
+        </div>
+      )}
+
+      <div className={styles.stage}>
+        {focus !== null && asset ? (
+          <>
+            <Preview
+              key={focus}
+              itemId={focus}
+              zoom={zoom}
+              onZoom={(point) => setZoomed(point ? { id: focus, point } : null)}
+            />
+            {asset.setAside && <span className={styles.asideTag}>Dropped</span>}
+          </>
+        ) : (
+          <p className={styles.empty}>No photo to show.</p>
+        )}
+        <IconButton
+          className={`${styles.nav} ${styles.prev}`}
+          label="Previous photo (←)"
+          icon={<ChevronLeft size={24} />}
+          disabled={index <= 0}
+          onClick={() => runCommand('move-left', orderedIds)}
+        />
+        <IconButton
+          className={`${styles.nav} ${styles.next}`}
+          label="Next photo (→)"
+          icon={<ChevronRight size={24} />}
+          disabled={index < 0 || index >= orderedIds.length - 1}
+          onClick={() => runCommand('move-right', orderedIds)}
+        />
+      </div>
+
+      {asset && focus !== null && (
+        <div className={styles.versionsBar}>
+          <VersionStrip itemId={focus} className={styles.versions} />
+          <div className={styles.aside}>
+            {cull && (
+              <span id={hintId} className={styles.hint}>
+                1–5 rate · X drop · each moves on · Esc leaves
+              </span>
+            )}
+            <Button size="sm" variant={asset.setAside ? 'primary' : 'secondary'} onClick={() => toggleSetAside(orderedIds, [asset.id])}>
+              <ImageX size={14} />
+              {asset.setAside ? 'Bring back' : 'Drop'}
+            </Button>
+          </div>
+        </div>
+      )}
+      {asset && <DocumentList assetId={asset.id} />}
+    </div>
+  );
+}

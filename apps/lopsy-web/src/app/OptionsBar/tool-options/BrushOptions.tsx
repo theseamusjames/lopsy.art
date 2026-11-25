@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useToolSettingsStore } from '../../tool-settings-store';
 import { useUIStore } from '../../ui-store';
 import { useEditorStore } from '../../editor-store';
-import { Slider } from '../../../components/Slider/Slider';
+import { Slider } from '@lopsy/ui/Slider';
 import { SymmetryControls } from '../../../components/SymmetryControls/SymmetryControls';
 import { BrushThumbnail } from '../../../components/BrushModal/BrushThumbnail';
 import { docScaledMax } from '../../../utils/slider-ranges';

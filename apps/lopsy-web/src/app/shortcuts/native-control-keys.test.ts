@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { HANDLES_ARROW_KEYS_ATTR, isNativeArrowKeyTarget } from './native-control-keys';
+import { HANDLES_ARROW_KEYS_ATTR } from '@lopsy/ui/a11y/arrow-keys';
+import { isNativeArrowKeyTarget } from './native-control-keys';
 
 function input(type: string): HTMLInputElement {
   const el = document.createElement('input');

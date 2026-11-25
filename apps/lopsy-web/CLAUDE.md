@@ -53,7 +53,7 @@ src/
                     # family (layer/, filter/, ui/, ...); see Commands below.
                     # lopsy-api.ts is window.lopsy, set by the editor's
                     # entry (main.tsx)
-  components/       # Reusable UI components (Button, Slider, etc.)
+  components/       # Reusable UI components (Button, IconButton, etc.)
     ComponentName/
       ComponentName.tsx
       ComponentName.module.css
@@ -87,7 +87,6 @@ src/
                     # UI lives at panels/AdjustmentsPanel/ — there is no
                     # separate src/adjustments/ directory.
   icons/            # Custom SVG icon components (Lucide style)
-  styles/           # Global CSS: tokens.css, reset.css, fonts.css
   types/            # Shared TypeScript type definitions
   utils/            # Small pure utility functions
   site/tutorials/   # Static tutorial page generator (pure: parse, render).
@@ -104,13 +103,16 @@ e2e/                # Playwright end-to-end tests
 ```
 
 The Rust engine is not in this directory: it is `../../engine/`, built
-into `src/engine-wasm/pkg/` by `npm run wasm:build`.
+into `src/engine-wasm/pkg/` by `npm run wasm:build`. Neither is the UI this
+app shares with Photonamous: the design tokens, reset and fonts, the Slider
+and the rest of `@lopsy/ui` are in `../../packages/ui/` (its `README.md`
+lists them). `src/main.tsx` imports the three stylesheets from there.
 
 ## Styling
 
 - **CSS Modules only**. Every component gets a co-located `.module.css` file.
 - No inline styles. No CSS-in-JS. No style objects in TypeScript. Exception: a `style` prop may set **CSS custom properties only** (e.g. `style={{ '--menu-x': `${x}px` } as React.CSSProperties}`) to feed runtime-computed values (positions, swatch colors, drag offsets) into module CSS — never direct CSS properties.
-- Use CSS custom properties from `src/styles/tokens.css` for all colors, spacing, radii, shadows, font sizes, and z-index values.
+- Use CSS custom properties from `@lopsy/ui/styles/tokens.css` (`../../packages/ui/src/styles/tokens.css`) for all colors, spacing, radii, shadows, font sizes, and z-index values.
 - No CSS frameworks (no Tailwind, no Bootstrap, no styled-components).
 - Dark theme is the default. Light theme toggles via `.theme-light` on the root element.
 
@@ -321,6 +323,9 @@ React components or hooks: they must run with no UI mounted.
 - Props interfaces are defined in the component file, not in a separate types file.
 - Prefer composition over configuration. Small, focused components over large ones with many props.
 - No default exports. Use named exports.
+- A component Photonamous uses too belongs in `../../packages/ui` (`@lopsy/ui`),
+  under the same rules, and is imported from there: the Slider is
+  `@lopsy/ui/Slider`. Change its look there for both apps, not per app.
 
 ## Icons
 
@@ -349,12 +354,13 @@ React components or hooks: they must run with no UI mounted.
 ## Commands
 
 Every `npm run` script works from here or from the repository root, which
-forwards to this package. Tools run directly (`npx playwright test`,
-`npx tsc`, `npx vitest`) must be run from this directory: the configs are
-here.
+forwards to this package, except `dev`: at the root it starts Photonamous
+too, and `npm run dev:lopsy` there starts Lopsy alone. Tools run directly
+(`npx playwright test`, `npx tsc`, `npx vitest`) must be run from this
+directory: the configs are here.
 
 ```bash
-npm run dev          # Start Vite dev server
+npm run dev          # Start Vite dev server (at the root: npm run dev:lopsy)
 npm run build        # Production build
 npm run test         # Run Vitest unit tests
 npm run test:e2e     # Run Playwright E2E tests

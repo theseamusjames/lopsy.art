@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useToolSettingsStore } from '../../tool-settings-store';
 import { useEditorStore } from '../../editor-store';
 import { useUIStore } from '../../ui-store';
-import { Slider } from '../../../components/Slider/Slider';
+import { Slider } from '@lopsy/ui/Slider';
 import { FontPicker } from '../../../components/FontPicker/FontPicker';
 import { useFontEntry } from '../../local-fonts-store';
 import { extractFamilyName } from '../../../utils/font-loader';

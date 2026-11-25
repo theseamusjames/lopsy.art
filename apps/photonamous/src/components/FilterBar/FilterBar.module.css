@@ -1,0 +1,298 @@
+.bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  position: relative;
+  padding: var(--space-1) var(--space-3) var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+/* A hidden copy of the filters' buttons, kept only to measure: clipped to nothing, so it adds no width to scroll. */
+.measureClip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.measure {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: max-content;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 24px;
+  padding: 0 var(--space-2);
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+}
+
+.search:focus-within {
+  border-color: var(--color-accent);
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 1px;
+}
+
+.search input {
+  width: clamp(110px, 14vw, 180px);
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  outline: none;
+}
+
+.sort {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.sortLabel {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+/* Longhands: the right padding and background image are the arrow (styles/index.css). */
+.sort select {
+  height: 24px;
+  padding-left: var(--space-2);
+  background-color: var(--color-input-bg);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+}
+
+.sort select:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 1px;
+}
+
+.anchor {
+  position: relative;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 24px;
+  max-width: 260px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-round);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.chip:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 1px;
+}
+
+.chip[data-active='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-subtle);
+  color: var(--color-text-primary);
+}
+
+/* The filters as one menu, where the row is too narrow for them: a button beside the search field, the size of the order's arrow. */
+.allButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-width: 24px;
+  height: 24px;
+  padding: 0 var(--space-1);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.allButton:hover {
+  background: var(--color-bg-hover);
+}
+
+.allButton:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 1px;
+}
+
+/* On: blue with the number of filters in use, as a pressed icon button is blue. */
+.allButton[data-active='true'] {
+  background: var(--color-accent-subtle);
+  color: var(--ph-accent-text);
+}
+
+.allPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 240px;
+  max-height: min(60vh, 480px);
+  overflow-y: auto;
+}
+
+.facet {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.facetTitle {
+  padding: var(--space-1) var(--space-2) 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.allFooter {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--space-2);
+  margin-top: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+  min-width: 220px;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 28px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-md);
+  cursor: pointer;
+}
+
+.option:hover {
+  background: var(--color-bg-hover);
+}
+
+.option:focus-within {
+  background: var(--color-bg-hover);
+}
+
+.option input:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+}
+
+.option input {
+  accent-color: var(--color-accent);
+}
+
+.optionLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.count {
+  color: var(--ph-text-muted);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.none {
+  padding: var(--space-2);
+  color: var(--ph-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.end {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  /* At 320 px the order and Save search are wider than the row. */
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  margin-left: auto;
+}
+
+.naming {
+  display: inline-flex;
+  gap: var(--space-2);
+}
+
+.input {
+  height: 24px;
+  width: 180px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  outline: none;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 1px;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Placeholders carry instructions: the browser's grey is 2.4:1 on the field. */
+.input::placeholder,
+.search input::placeholder {
+  color: var(--ph-text-muted);
+}

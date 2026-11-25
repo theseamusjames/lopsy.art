@@ -1,0 +1,83 @@
+.screen {
+  position: relative;
+  height: 100%;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    'header header'
+    'sidebar main';
+  height: 100%;
+  background: var(--color-bg-primary);
+}
+
+.layout[data-info='true'] {
+  grid-template-columns: 220px minmax(0, 1fr) 280px;
+  grid-template-areas:
+    'header header header'
+    'sidebar main info';
+}
+
+/* Holds everything under the header for `inert`; the grid places its children as its own. */
+.body {
+  display: contents;
+}
+
+.main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.main:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: -2px;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 1180px) {
+  .layout {
+    grid-template-columns: 188px minmax(0, 1fr);
+  }
+
+  .layout[data-info='true'] {
+    grid-template-columns: 188px minmax(0, 1fr) 248px;
+  }
+}
+
+/* Narrow windows and 200 % zoom (1.4.10): one column that scrolls, the grid a screen tall in it. */
+@media (max-width: 760px) {
+  .screen {
+    overflow-y: auto;
+  }
+
+  .layout,
+  .layout[data-info='true'] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto max(320px, 85vh) auto;
+    grid-template-areas:
+      'header'
+      'sidebar'
+      'main'
+      'info';
+    height: auto;
+    min-height: 100%;
+  }
+}

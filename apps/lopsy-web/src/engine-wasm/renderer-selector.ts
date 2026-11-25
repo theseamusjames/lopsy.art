@@ -18,6 +18,11 @@
  * running package's; do not keep a class in a constant at load.
  *
  * A page that runs WebGL loads nothing of the wgpu build.
+ *
+ * With `fallsBackInPage`, a page that chose wgpu can still change to WebGL
+ * before it has made an engine: the module hands the choice module a
+ * function that does it (`setWebglFallback`). Photonamous uses it when the
+ * wgpu engine fails to start; Lopsy asks for a reload instead.
  */
 
 import type { Renderer } from './renderer-choice';
@@ -33,6 +38,11 @@ export interface SelectorOptions {
   choiceUrl: string;
   /** What a page that names no renderer gets. */
   defaultRenderer: Renderer;
+  /**
+   * Whether a page that chose wgpu may change to WebGL in the same load.
+   * The choice module must then export `setWebglFallback`.
+   */
+  fallsBackInPage?: boolean;
 }
 
 export interface GlueExport {
@@ -67,9 +77,11 @@ export function renderSelectorModule(options: SelectorOptions): string {
   const hasWgpuBuild = options.wgpuUrl !== null;
   const classes = options.exports.filter((item) => item.kind === 'class').map((item) => item.name);
   const functions = options.exports.filter((item) => item.kind === 'function').map((item) => item.name);
+  const choiceImports = ['canUseWebGpu', 'noteRunningRenderer', 'requestedRenderer'];
+  if (options.fallsBackInPage) choiceImports.push('setWebglFallback');
   const lines = [
     `import * as webgl from ${quote(options.webglUrl)};`,
-    `import { canUseWebGpu, noteRunningRenderer, requestedRenderer } from ${quote(options.choiceUrl)};`,
+    `import { ${choiceImports.join(', ')} } from ${quote(options.choiceUrl)};`,
     `let active = webgl;`,
     ...classes.map((name) => `export let ${name} = webgl.${name};`),
     // `apply` with `arguments` forwards a call without allocating.
@@ -83,9 +95,19 @@ export function renderSelectorModule(options: SelectorOptions): string {
       `    active = await import(${quote(options.wgpuUrl)});`,
       ...classes.map((name) => `    ${name} = active.${name};`),
       `    noteRunningRenderer('wgpu');`,
-      `    return active.default(input);`,
-      `  }`,
     );
+    if (options.fallsBackInPage) {
+      lines.push(
+        // The WebGL package finds its own wasm: `input` named the wgpu one's.
+        `    setWebglFallback(async () => {`,
+        `      await webgl.default();`,
+        `      active = webgl;`,
+        ...classes.map((name) => `      ${name} = webgl.${name};`),
+        `      noteRunningRenderer('webgl');`,
+        `    });`,
+      );
+    }
+    lines.push(`    return active.default(input);`, `  }`);
   }
   lines.push(`  noteRunningRenderer('webgl');`, `  return webgl.default(input);`, `}`, '');
   return lines.join('\n');

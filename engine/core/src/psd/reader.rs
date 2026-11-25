@@ -137,6 +137,12 @@ fn read_header(c: &mut PsdCursor) -> Result<PsdHeader, PsdError> {
     let color_mode = PsdColorMode::from_u16(color_mode)
         .ok_or(PsdError::UnsupportedColorMode(color_mode))?;
 
+    // PSD (version 1) caps each side at 30000 px. Checked here, before any
+    // plane is allocated from the header.
+    if width == 0 || height == 0 || width > 30_000 || height > 30_000 {
+        return Err(PsdError::InvalidLayerData(format!("unsupported PSD size {width}x{height}")));
+    }
+
     let depth = match depth_bits {
         8 => PsdDepth::Eight,
         16 => PsdDepth::Sixteen,

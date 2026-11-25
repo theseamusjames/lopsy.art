@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { ZoomReadout } from '@lopsy/ui/ZoomReadout';
+import { STATUS_ITEM_CLASS, StatusBar as Bar, StatusDivider, StatusItem, StatusNumber, StatusSpacer } from '@lopsy/ui/StatusBar';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { canvasColorSpace } from '../../engine/color-space';
@@ -6,15 +8,9 @@ import { getWasmMemoryBytes } from '../../engine-wasm/wasm-bridge';
 import { runningRenderer, type Renderer } from '../../engine-wasm/renderer-choice';
 import { isScreenHdr, onScreenHdrChange } from '../../engine-wasm/screen-output';
 import { colorModeLabel } from '../../utils/color-mode';
-import styles from './StatusBar.module.css';
 
 const colorSpaceLabel = canvasColorSpace === 'display-p3' ? 'Display P3' : 'sRGB';
 const RENDERER_LABELS: Record<Renderer, string> = { webgl: 'WebGL', wgpu: 'WebGPU' };
-
-// #671 zoom-scrub bounds: horizontal drag sweeps [10%, 400%] at ~1%/pixel.
-const ZOOM_SCRUB_MIN = 0.1;
-const ZOOM_SCRUB_MAX = 4.0;
-const ZOOM_SCRUB_PIXELS_PER_PERCENT = 1;
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 MB';
@@ -53,114 +49,44 @@ export function StatusBar() {
     store.setPan(0, 0);
   }, []);
 
-  // #671: click-drag on the zoom label scrubs the zoom horizontally at
-  // roughly 1%/pixel, clamped to [10%, 400%]. Uses a global listener set
-  // that we tear down unconditionally on pointer-up, blur, visibility
-  // change, or unmount — so alt-tab / focus loss can't leave it stuck
-  // reacting to mouse movement.
-  const scrubStateRef = useRef<{ startX: number; startZoom: number; active: boolean; pointerId: number } | null>(null);
-  const tearDownScrubRef = useRef<(() => void) | null>(null);
-
-  const endScrub = useCallback(() => {
-    const teardown = tearDownScrubRef.current;
-    if (teardown) teardown();
-  }, []);
-
-  useEffect(() => {
-    return () => endScrub();
-  }, [endScrub]);
-
-  const handleZoomPointerDown = useCallback((e: React.PointerEvent) => {
-    // Only respond to primary-button drags.
-    if (e.button !== 0) return;
-    const startX = e.clientX;
-    const startZoom = useEditorStore.getState().viewport.zoom;
-    scrubStateRef.current = { startX, startZoom, active: false, pointerId: e.pointerId };
-
-    const move = (ev: PointerEvent) => {
-      const scrub = scrubStateRef.current;
-      if (!scrub || ev.pointerId !== scrub.pointerId) return;
-      const deltaPx = ev.clientX - scrub.startX;
-      // Once we cross a small dead-zone, mark this as an active scrub so
-      // pointer-up doesn't also fire the click / double-click handler.
-      if (!scrub.active && Math.abs(deltaPx) < 2) return;
-      scrub.active = true;
-      const deltaPercent = deltaPx / ZOOM_SCRUB_PIXELS_PER_PERCENT; // 1% per pixel
-      const nextZoom = Math.max(
-        ZOOM_SCRUB_MIN,
-        Math.min(ZOOM_SCRUB_MAX, scrub.startZoom + deltaPercent / 100),
-      );
-      useEditorStore.getState().setZoom(nextZoom);
-    };
-    const up = () => {
-      endScrub();
-    };
-    const blur = () => {
-      endScrub();
-    };
-    const visibility = () => {
-      if (document.visibilityState !== 'visible') endScrub();
-    };
-
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
-    window.addEventListener('blur', blur);
-    document.addEventListener('visibilitychange', visibility);
-
-    tearDownScrubRef.current = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
-      window.removeEventListener('blur', blur);
-      document.removeEventListener('visibilitychange', visibility);
-      tearDownScrubRef.current = null;
-      scrubStateRef.current = null;
-    };
-  }, [endScrub]);
-
   return (
-    <footer className={styles.bar} role="status" aria-label="Status bar">
-      <span
-        className={`${styles.item} ${styles.zoom}`}
-        onDoubleClick={handleZoomDoubleClick}
-        onPointerDown={handleZoomPointerDown}
-        role="button"
-        tabIndex={0}
-        aria-label={`Zoom ${Math.round(zoom * 100)}%, drag to scrub or double-click to reset and recenter`}
-      >
-        {Math.round(zoom * 100)}%
-      </span>
-      <span className={styles.divider} />
-      <span className={styles.item}>
-        X: <span className={styles.number}>{cursorX}</span> Y:{' '}
-        <span className={styles.number}>{cursorY}</span>
-      </span>
-      <span className={styles.divider} />
-      <span className={styles.item}>
-        <span className={styles.number}>{docWidth}</span> x{' '}
-        <span className={styles.number}>{docHeight}</span> px
-      </span>
-      <span className={styles.spacer} />
+    <Bar>
+      {/* #671: drag left or right on it to zoom (1 % a pixel, 10 to 400 %); the readout is shared with Photonamous. */}
+      <ZoomReadout
+        zoom={zoom}
+        onZoom={(next) => useEditorStore.getState().setZoom(next)}
+        onReset={handleZoomDoubleClick}
+        className={STATUS_ITEM_CLASS}
+        hint="Drag left or right to zoom; double-click for 100% and to centre the canvas"
+      />
+      <StatusDivider />
+      <StatusItem>
+        X: <StatusNumber>{cursorX}</StatusNumber> Y: <StatusNumber>{cursorY}</StatusNumber>
+      </StatusItem>
+      <StatusDivider />
+      <StatusItem>
+        <StatusNumber>{docWidth}</StatusNumber> x <StatusNumber>{docHeight}</StatusNumber> px
+      </StatusItem>
+      <StatusSpacer />
       {memoryUsage && (
         <>
-          <span className={styles.item}>{memoryUsage}</span>
-          <span className={styles.divider} />
+          <StatusItem>{memoryUsage}</StatusItem>
+          <StatusDivider />
         </>
       )}
       {colorMode !== 'rgb' && (
         <>
-          <span className={`${styles.item} ${styles.colorMode}`}>{colorModeLabel(colorMode)}</span>
-          <span className={styles.divider} />
+          <StatusItem isEmphasized>{colorModeLabel(colorMode)}</StatusItem>
+          <StatusDivider />
         </>
       )}
       {renderer && (
         <>
-          <span className={styles.item}>{RENDERER_LABELS[renderer]}</span>
-          <span className={styles.divider} />
+          <StatusItem>{RENDERER_LABELS[renderer]}</StatusItem>
+          <StatusDivider />
         </>
       )}
-      <span className={styles.item}>{isHdr ? `${colorSpaceLabel} HDR` : colorSpaceLabel}</span>
-    </footer>
+      <StatusItem>{isHdr ? `${colorSpaceLabel} HDR` : colorSpaceLabel}</StatusItem>
+    </Bar>
   );
 }

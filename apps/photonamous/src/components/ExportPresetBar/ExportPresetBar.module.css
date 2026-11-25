@@ -1,0 +1,33 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Longhands: a select's right padding and background image are its arrow (styles/index.css). */
+.select,
+.input {
+  flex: 1;
+  /* A long preset name is cut off rather than pushing the bar out of its column. */
+  min-width: 0;
+  height: 28px;
+  padding-left: var(--space-2);
+  border: 1px solid var(--ph-control-edge);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-input-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-md);
+}
+
+.input {
+  padding-right: var(--space-2);
+  border-color: var(--color-accent);
+}
+
+.select:focus-visible,
+.input:focus-visible {
+  border-color: var(--ph-focus-ring);
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 1px;
+}

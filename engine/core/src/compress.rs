@@ -73,34 +73,36 @@ pub fn rle_compress(data: &[u8]) -> Vec<u8> {
     out
 }
 
-pub fn rle_decompress(data: &[u8], expected_len: usize) -> Vec<u8> {
-    assert!(expected_len % 4 == 0, "Expected length must be a multiple of 4 (RGBA)");
+/// Decode an RLE stream of `4`-byte pixels. Untrusted input (a `.lopsy`
+/// file) fails with an error, never a panic: a truncated tag, a stream that
+/// decodes past `expected_len` or one that stops short of it.
+pub fn rle_decompress(data: &[u8], expected_len: usize) -> Result<Vec<u8>, String> {
+    if expected_len % 4 != 0 {
+        return Err(format!("RLE: expected length {expected_len} is not a whole number of pixels"));
+    }
     let mut out = Vec::with_capacity(expected_len);
     let mut pos = 0;
-
     while pos < data.len() {
         let tag = data[pos];
         pos += 1;
-
-        if tag & 0x80 != 0 {
-            // Run
-            let count = (tag & 0x7F) as usize + 1;
-            let pixel = &data[pos..pos + 4];
-            pos += 4;
-            for _ in 0..count {
-                out.extend_from_slice(pixel);
-            }
+        let (count, bytes) = if tag & 0x80 != 0 {
+            ((tag & 0x7F) as usize + 1, 4)
         } else {
-            // Literal
-            let count = tag as usize + 1;
-            let bytes = count * 4;
-            out.extend_from_slice(&data[pos..pos + bytes]);
-            pos += bytes;
+            (1, (tag as usize + 1) * 4)
+        };
+        let chunk = data.get(pos..pos + bytes).ok_or("RLE: stream is truncated")?;
+        pos += bytes;
+        if out.len() + count * bytes > expected_len {
+            return Err("RLE: stream decodes past the expected length".to_string());
+        }
+        for _ in 0..count {
+            out.extend_from_slice(chunk);
         }
     }
-
-    assert_eq!(out.len(), expected_len, "Decompressed size mismatch");
-    out
+    if out.len() != expected_len {
+        return Err(format!("RLE: decoded {} bytes, expected {expected_len}", out.len()));
+    }
+    Ok(out)
 }
 
 // ---------------------------------------------------------------------------
@@ -117,14 +119,21 @@ pub fn lz4_compress(data: &[u8]) -> Vec<u8> {
     encoder.finish().expect("LZ4 frame finish failed")
 }
 
-pub fn lz4_decompress(data: &[u8], expected_len: usize) -> Vec<u8> {
+/// Decode an LZ4 frame that must hold exactly `expected_len` bytes. Corrupt
+/// or truncated input, or a frame that would decode to more (it is read
+/// through a cap, so it cannot balloon), fails with an error.
+pub fn lz4_decompress(data: &[u8], expected_len: usize) -> Result<Vec<u8>, String> {
     use lz4_flex::frame::FrameDecoder;
     use std::io::Read;
-    let mut decoder = FrameDecoder::new(data);
     let mut out = Vec::with_capacity(expected_len);
-    decoder.read_to_end(&mut out).expect("LZ4 frame decode failed");
-    assert_eq!(out.len(), expected_len, "LZ4 decompressed size mismatch");
-    out
+    FrameDecoder::new(data)
+        .take(expected_len as u64 + 1)
+        .read_to_end(&mut out)
+        .map_err(|e| format!("LZ4: {e}"))?;
+    if out.len() != expected_len {
+        return Err(format!("LZ4: decoded {} bytes, expected {expected_len}", out.len()));
+    }
+    Ok(out)
 }
 
 // ---------------------------------------------------------------------------
@@ -184,32 +193,36 @@ pub fn rle_compress_u16(data: &[u8]) -> Vec<u8> {
     out
 }
 
-pub fn rle_decompress_u16(data: &[u8], expected_len: usize) -> Vec<u8> {
-    assert!(expected_len % PIXEL_U16 == 0, "Expected length must be a multiple of 8 (RGBA u16)");
+/// Decode an RLE stream of `PIXEL_U16`-byte pixels. Untrusted input (a `.lopsy`
+/// file) fails with an error, never a panic: a truncated tag, a stream that
+/// decodes past `expected_len` or one that stops short of it.
+pub fn rle_decompress_u16(data: &[u8], expected_len: usize) -> Result<Vec<u8>, String> {
+    if expected_len % PIXEL_U16 != 0 {
+        return Err(format!("RLE: expected length {expected_len} is not a whole number of pixels"));
+    }
     let mut out = Vec::with_capacity(expected_len);
     let mut pos = 0;
-
     while pos < data.len() {
         let tag = data[pos];
         pos += 1;
-
-        if tag & 0x80 != 0 {
-            let count = (tag & 0x7F) as usize + 1;
-            let pixel = &data[pos..pos + PIXEL_U16];
-            pos += PIXEL_U16;
-            for _ in 0..count {
-                out.extend_from_slice(pixel);
-            }
+        let (count, bytes) = if tag & 0x80 != 0 {
+            ((tag & 0x7F) as usize + 1, PIXEL_U16)
         } else {
-            let count = tag as usize + 1;
-            let bytes = count * PIXEL_U16;
-            out.extend_from_slice(&data[pos..pos + bytes]);
-            pos += bytes;
+            (1, (tag as usize + 1) * PIXEL_U16)
+        };
+        let chunk = data.get(pos..pos + bytes).ok_or("RLE: stream is truncated")?;
+        pos += bytes;
+        if out.len() + count * bytes > expected_len {
+            return Err("RLE: stream decodes past the expected length".to_string());
+        }
+        for _ in 0..count {
+            out.extend_from_slice(chunk);
         }
     }
-
-    assert_eq!(out.len(), expected_len, "Decompressed size mismatch");
-    out
+    if out.len() != expected_len {
+        return Err(format!("RLE: decoded {} bytes, expected {expected_len}", out.len()));
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -221,7 +234,7 @@ mod tests {
         let data: Vec<u8> = Vec::new();
         let compressed = rle_compress(&data);
         assert!(compressed.is_empty());
-        let decompressed = rle_decompress(&compressed, 0);
+        let decompressed = rle_decompress(&compressed, 0).unwrap();
         assert!(decompressed.is_empty());
     }
 
@@ -232,7 +245,7 @@ mod tests {
         let compressed = rle_compress(&data);
         // Should compress very well — 1000 identical pixels
         assert!(compressed.len() < data.len() / 5, "Expected good compression, got {} -> {}", data.len(), compressed.len());
-        let decompressed = rle_decompress(&compressed, data.len());
+        let decompressed = rle_decompress(&compressed, data.len()).unwrap();
         assert_eq!(decompressed, data);
     }
 
@@ -243,7 +256,7 @@ mod tests {
         let data: Vec<u8> = pixel.iter().copied().cycle().take(2000).collect();
         let compressed = rle_compress(&data);
         assert!(compressed.len() < 100);
-        let decompressed = rle_decompress(&compressed, data.len());
+        let decompressed = rle_decompress(&compressed, data.len()).unwrap();
         assert_eq!(decompressed, data);
     }
 
@@ -259,7 +272,7 @@ mod tests {
             }
         }
         let compressed = rle_compress(&data);
-        let decompressed = rle_decompress(&compressed, data.len());
+        let decompressed = rle_decompress(&compressed, data.len()).unwrap();
         assert_eq!(decompressed, data);
     }
 
@@ -283,7 +296,7 @@ mod tests {
         }
 
         let compressed = rle_compress(&data);
-        let decompressed = rle_decompress(&compressed, data.len());
+        let decompressed = rle_decompress(&compressed, data.len()).unwrap();
         assert_eq!(decompressed, data);
     }
 
@@ -291,7 +304,7 @@ mod tests {
     fn roundtrip_single_pixel() {
         let data = vec![42, 128, 0, 255];
         let compressed = rle_compress(&data);
-        let decompressed = rle_decompress(&compressed, data.len());
+        let decompressed = rle_decompress(&compressed, data.len()).unwrap();
         assert_eq!(decompressed, data);
     }
 
@@ -301,7 +314,7 @@ mod tests {
         let compressed = rle_compress(&data);
         // Should be a run of 2: [0x81, 10, 20, 30, 40]
         assert_eq!(compressed.len(), 5);
-        let decompressed = rle_decompress(&compressed, data.len());
+        let decompressed = rle_decompress(&compressed, data.len()).unwrap();
         assert_eq!(decompressed, data);
     }
 
@@ -311,7 +324,7 @@ mod tests {
         let data: Vec<u8> = [100, 150, 200, 255].iter().copied().cycle().take(128 * 4).collect();
         let compressed = rle_compress(&data);
         assert_eq!(compressed.len(), 5); // one tag + 4 bytes
-        let decompressed = rle_decompress(&compressed, data.len());
+        let decompressed = rle_decompress(&compressed, data.len()).unwrap();
         assert_eq!(decompressed, data);
     }
 
@@ -321,7 +334,7 @@ mod tests {
         let data: Vec<u8> = [50, 60, 70, 80].iter().copied().cycle().take(200 * 4).collect();
         let compressed = rle_compress(&data);
         assert_eq!(compressed.len(), 10); // two runs of tag+4
-        let decompressed = rle_decompress(&compressed, data.len());
+        let decompressed = rle_decompress(&compressed, data.len()).unwrap();
         assert_eq!(decompressed, data);
     }
 
@@ -346,7 +359,7 @@ mod tests {
         let compressed = rle_compress(&data);
         let ratio = data.len() as f64 / compressed.len() as f64;
         assert!(ratio > 5.0, "Expected 5x+ compression on typical layer, got {ratio:.1}x");
-        let decompressed = rle_decompress(&compressed, data.len());
+        let decompressed = rle_decompress(&compressed, data.len()).unwrap();
         assert_eq!(decompressed, data);
     }
 
@@ -368,7 +381,7 @@ mod tests {
         let data: Vec<u8> = Vec::new();
         let compressed = rle_compress_u16(&data);
         assert!(compressed.is_empty());
-        let decompressed = rle_decompress_u16(&compressed, 0);
+        let decompressed = rle_decompress_u16(&compressed, 0).unwrap();
         assert!(decompressed.is_empty());
     }
 
@@ -378,7 +391,7 @@ mod tests {
         let data: Vec<u8> = pixel.iter().copied().cycle().take(1000 * 8).collect();
         let compressed = rle_compress_u16(&data);
         assert!(compressed.len() < data.len() / 5);
-        let decompressed = rle_decompress_u16(&compressed, data.len());
+        let decompressed = rle_decompress_u16(&compressed, data.len()).unwrap();
         assert_eq!(decompressed, data);
     }
 
@@ -391,7 +404,7 @@ mod tests {
             data.extend_from_slice(if i % 2 == 0 { &red } else { &blue });
         }
         let compressed = rle_compress_u16(&data);
-        let decompressed = rle_decompress_u16(&compressed, data.len());
+        let decompressed = rle_decompress_u16(&compressed, data.len()).unwrap();
         assert_eq!(decompressed, data);
     }
 
@@ -406,7 +419,7 @@ mod tests {
         }
         for _ in 0..100 { data.extend_from_slice(&white); }
         let compressed = rle_compress_u16(&data);
-        let decompressed = rle_decompress_u16(&compressed, data.len());
+        let decompressed = rle_decompress_u16(&compressed, data.len()).unwrap();
         assert_eq!(decompressed, data);
     }
 
@@ -414,7 +427,7 @@ mod tests {
     fn lz4_roundtrip_empty() {
         let data: Vec<u8> = Vec::new();
         let compressed = lz4_compress(&data);
-        let decompressed = lz4_decompress(&compressed, 0);
+        let decompressed = lz4_decompress(&compressed, 0).unwrap();
         assert!(decompressed.is_empty());
     }
 
@@ -423,7 +436,7 @@ mod tests {
         let data = vec![0u8; 1000 * 8];
         let compressed = lz4_compress(&data);
         assert!(compressed.len() < data.len() / 10);
-        let decompressed = lz4_decompress(&compressed, data.len());
+        let decompressed = lz4_decompress(&compressed, data.len()).unwrap();
         assert_eq!(decompressed, data);
     }
 
@@ -435,7 +448,7 @@ mod tests {
             data.extend_from_slice(&p);
         }
         let compressed = lz4_compress(&data);
-        let decompressed = lz4_decompress(&compressed, data.len());
+        let decompressed = lz4_decompress(&compressed, data.len()).unwrap();
         assert_eq!(decompressed, data);
     }
 
@@ -468,7 +481,29 @@ mod tests {
         let compressed = rle_compress_u16(&data);
         let ratio = data.len() as f64 / compressed.len() as f64;
         assert!(ratio > 5.0, "Expected 5x+ compression on sparse u16 layer, got {ratio:.1}x");
-        let decompressed = rle_decompress_u16(&compressed, data.len());
+        let decompressed = rle_decompress_u16(&compressed, data.len()).unwrap();
         assert_eq!(decompressed, data);
+    }
+
+    #[test]
+    fn corrupt_streams_fail_without_panicking() {
+        let pixels: Vec<u8> = (0..4000u32).map(|i| (i * 7 % 251) as u8).collect();
+        let rle = rle_compress_u16(&pixels);
+        let lz4 = lz4_compress(&pixels);
+        // Truncated.
+        assert!(rle_decompress_u16(&rle[..rle.len() / 2], pixels.len()).is_err());
+        assert!(lz4_decompress(&lz4[..lz4.len() / 2], pixels.len()).is_err());
+        // The wrong expected length, either way.
+        assert!(rle_decompress_u16(&rle, pixels.len() - 8).is_err());
+        assert!(rle_decompress_u16(&rle, pixels.len() + 8).is_err());
+        assert!(lz4_decompress(&lz4, pixels.len() - 1).is_err());
+        assert!(lz4_decompress(&lz4, pixels.len() + 1).is_err());
+        assert!(rle_decompress(&[0x85], 24).is_err(), "a run tag with no pixel after it");
+        assert!(rle_decompress(&[0x05, 1, 2], 24).is_err(), "a literal cut short");
+        assert!(rle_decompress(&[], 3).is_err());
+        // Garbage.
+        let garbage: Vec<u8> = (0..300u32).map(|i| (i * 131 % 256) as u8).collect();
+        assert!(lz4_decompress(&garbage, 1000).is_err());
+        let _ = rle_decompress_u16(&garbage, 1000 * 8);
     }
 }

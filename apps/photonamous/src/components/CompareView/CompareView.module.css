@@ -1,0 +1,170 @@
+.view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: var(--viewer-bg);
+}
+
+.view:focus-visible,
+.pane:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: -2px;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+}
+
+/* Back is grey wherever it is, and comes up to the text's colour under the pointer. */
+button.back {
+  color: var(--color-text-secondary);
+}
+
+button.back:hover {
+  color: var(--color-text-primary);
+}
+
+.hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.panes {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-auto-rows: 1fr;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.panes[data-count='3'] {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: var(--radius-md);
+  border: 2px solid transparent;
+  background: var(--tile-bg);
+  overflow: hidden;
+}
+
+.pane[data-focused='true'] {
+  border-color: var(--color-accent);
+}
+
+.image {
+  flex: 1;
+  min-height: 0;
+  padding: var(--space-2);
+}
+
+.caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-bg-secondary);
+}
+
+/*
+ * The tick that says "this one" when narrowing four photos to two, at the
+ * caption's right end. Drawn here, not by the browser: an empty box in
+ * the caption's own dark with a visible edge, filled with the
+ * buttons' blue and a white tick when on. The label around it is the 24 px target.
+ */
+.pick {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  cursor: pointer;
+}
+
+.pick input {
+  -webkit-appearance: none;
+  appearance: none;
+  display: grid;
+  place-content: center;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border: 1.5px solid var(--ph-control-edge);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+
+.pick input:hover {
+  border-color: var(--color-text-secondary);
+}
+
+.pick input:checked {
+  border-color: var(--color-primary-bg);
+  background: var(--color-primary-bg);
+}
+
+/* The tick: two sides of a small rotated box. */
+.pick input:checked::before {
+  content: '';
+  width: 5px;
+  height: 9px;
+  margin-top: -2px;
+  border: solid var(--color-primary-text);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.pick input:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  .pick input:checked {
+    background: Highlight;
+    border-color: Highlight;
+  }
+
+  .pick input:checked::before {
+    border-color: HighlightText;
+  }
+}
+
+.name {
+  flex: 1 1 100%;
+  min-width: 0;
+  font-size: var(--font-size-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .panes,
+  .panes[data-count='3'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

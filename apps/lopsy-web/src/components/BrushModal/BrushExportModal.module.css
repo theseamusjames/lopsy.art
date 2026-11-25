@@ -139,20 +139,20 @@
 }
 
 .exportButton {
-  background: var(--color-accent);
+  background: var(--color-primary-bg);
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   padding: var(--space-1) var(--space-4);
-  color: var(--color-text-on-accent, #fff);
+  color: var(--color-primary-text);
   font-family: var(--font-ui);
   font-size: var(--font-size-xs);
   font-weight: 600;
   cursor: pointer;
-  transition: opacity var(--transition-fast);
+  transition: background var(--transition-fast), opacity var(--transition-fast);
 }
 
 .exportButton:hover {
-  opacity: 0.9;
+  background: var(--color-primary-bg-hover);
 }
 
 .exportButton:disabled {

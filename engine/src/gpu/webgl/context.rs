@@ -4,6 +4,7 @@ use wasm_bindgen::JsCast;
 use super::framebuffer::FramebufferPool;
 use super::program::Linker;
 use super::texture_pool::TexturePool;
+use crate::gpu::loss::LossWatch;
 
 pub struct GpuContext {
     /// The WebGL context. Nothing outside `gpu/` can reach it: feature code
@@ -11,6 +12,9 @@ pub struct GpuContext {
     pub(in crate::gpu) gl: WebGl2RenderingContext,
     pub has_half_float: bool,
     pub has_float_blend: bool,
+    /// Only the engine's id is used here: a lost WebGL context is the
+    /// canvas's to announce, as `webglcontextlost`.
+    loss: LossWatch,
 }
 
 impl GpuContext {
@@ -57,6 +61,7 @@ impl GpuContext {
         );
 
         Ok(Self {
+            loss: LossWatch::new(),
             gl,
             has_half_float,
             has_float_blend,
@@ -72,6 +77,12 @@ impl GpuContext {
     /// Whether the canvas keeps values above 1.0.
     pub fn is_screen_hdr(&self) -> bool {
         false
+    }
+
+    /// The engine's id. WebGL never announces a loss itself, but the page
+    /// asks every engine for its id the same way on either backend.
+    pub fn engine_id(&self) -> u32 {
+        self.loss.engine_id()
     }
 
     /// Rehearsing a loss is the page's to do here, through the

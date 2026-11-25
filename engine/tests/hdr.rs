@@ -1,0 +1,817 @@
+//! The HDR output step and the HDR reads on a real GPU, with no browser:
+//! `cargo test -p lopsy-engine --features native --test hdr`.
+//!
+//! The headless context has no canvas, so nothing here shows what a
+//! browser's HDR canvas displays: these test the output step's maths on
+//! textures (against `lopsy_core::output`), the choice the live frame makes
+//! between the HDR and SDR outputs, and the float read the HDR encoders
+//! take, through the encoders. A machine with no GPU adapter skips them.
+
+use std::cell::RefCell;
+use std::future::Future;
+use std::task::{Context, Poll, Waker};
+
+use lopsy_core::output::{decode, OutputSettings, OutputTarget};
+use lopsy_core::working_space::{luma, Gamut};
+use lopsy_engine::engine::EngineInner;
+use lopsy_engine::gpu::context::GpuContext;
+use lopsy_engine::gpu::pass::Target;
+use lopsy_engine::gpu::read::Read;
+use lopsy_engine::gpu::shader::ShaderPrograms;
+use lopsy_engine::gpu::texture_pool::TextureHandle;
+use lopsy_engine::{commands, document::compositor, host};
+
+thread_local! {
+    /// Everything the engine logged as an error on this thread (see
+    /// `tests/render.rs`).
+    static ERRORS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+}
+
+fn record(level: host::LogLevel, message: &str) {
+    if level == host::LogLevel::Error {
+        ERRORS.with_borrow_mut(|errors| errors.push(message.to_string()));
+    }
+}
+
+fn block_on<F: Future>(future: F) -> F::Output {
+    let mut future = std::pin::pin!(future);
+    let mut cx = Context::from_waker(Waker::noop());
+    loop {
+        if let Poll::Ready(value) = future.as_mut().poll(&mut cx) {
+            return value;
+        }
+        std::thread::yield_now();
+    }
+}
+
+fn engine(width: u32, height: u32) -> Option<EngineInner> {
+    host::install(host::Host { log: record, now_ms: || 0.0, gpu_lost: |_, _, _| {} });
+    ERRORS.with_borrow_mut(Vec::clear);
+    let ctx = match block_on(GpuContext::headless()) {
+        Ok(ctx) => ctx,
+        Err(reason) => {
+            eprintln!("skipped: no GPU for an HDR test ({reason})");
+            return None;
+        }
+    };
+    let shaders = ShaderPrograms::compile_all(&ctx).expect("shaders compile");
+    let mut engine = EngineInner::new(ctx, shaders).expect("engine starts");
+    engine.set_document_size(width, height).expect("document size");
+    Some(engine)
+}
+
+fn now<T: 'static>(read: Read<T>) -> T {
+    block_on(read).expect("readback")
+}
+
+fn assert_no_gpu_errors() {
+    let errors = ERRORS.with_borrow(Vec::clone);
+    assert!(errors.is_empty(), "the engine logged errors: {errors:#?}");
+}
+
+fn layer_json(id: &str, width: u32, height: u32) -> String {
+    format!(
+        r#"{{"id":"{id}","name":"{id}","layer_type":"Raster","visible":true,"locked":false,
+            "opacity":1,"blend_mode":"Normal","x":0,"y":0,"width":{width},"height":{height},
+            "clip_to_below":false,"mask":null}}"#
+    )
+}
+
+/// The develop settings `tests/render.rs` uses: a base curve with its
+/// shoulder above 1, so rendered values reach above white.
+fn develop_settings() -> lopsy_core::raf::develop::RawDevelopSettings {
+    use lopsy_core::raf::{base_curves, develop};
+    develop::RawDevelopSettings {
+        wb_ratio: [1.0, 1.0, 1.0],
+        cam_to_rgb: [1.71, -0.62, -0.09, -0.21, 1.48, -0.27, 0.04, -0.47, 1.43],
+        exposure_ev: develop::baseline_exposure_ev(),
+        saturation: 1.2,
+        highlight_desaturation: true,
+        base_curve: Some(base_curves::curve_lut(base_curves::curve_for_film_mode(None)).to_vec()),
+        clip_levels: None,
+    }
+}
+
+/// `rgba` (straight RGBA f32, 16 wide) as a float texture.
+fn float_texture(engine: &mut EngineInner, rgba: &[f32]) -> TextureHandle {
+    let height = (rgba.len() / 64) as u32;
+    let handle = engine.texture_pool.acquire(16, height).expect("texture");
+    engine.texture_pool.upload_rgba_f32(handle, 0, 0, 16, height, rgba).expect("upload");
+    handle
+}
+
+fn floats(engine: &EngineInner, handle: TextureHandle) -> Vec<f32> {
+    let (w, h) = engine.texture_pool.get_size(handle).expect("size");
+    now(engine.gpu().read_rgba_f32(handle, 0, 0, w, h))
+}
+
+/// The output step on the GPU over `rendered` (16 wide), and the values the
+/// texture fed it (`rendered` as half floats).
+fn gpu_output(engine: &mut EngineInner, rendered: &[f32], settings: &OutputSettings) -> (Vec<f32>, Vec<f32>) {
+    let program = engine.shaders.output().expect("compiles");
+    let src = float_texture(engine, rendered);
+    let dst = engine.texture_pool.acquire(16, (rendered.len() / 64) as u32).expect("texture");
+    assert!(lopsy_engine::develop::output::pass(engine, &program, src, settings).draw(Target::Texture(dst)));
+    let fed = floats(engine, src);
+    let out = floats(engine, dst);
+    engine.texture_pool.release(src);
+    engine.texture_pool.release(dst);
+    (out, fed)
+}
+
+/// Every value of `gpu` within `ulps` half-float units in the last place
+/// of `expected` (relative, with a floor near 0).
+fn assert_within_halves(what: &str, gpu: &[f32], expected: &[f32], ulps: f32) {
+    assert_eq!(gpu.len(), expected.len(), "{what}");
+    let mut worst = 0.0f32;
+    for (i, (&g, &e)) in gpu.iter().zip(expected).enumerate() {
+        let ulp = e.abs().max(1.0 / 64.0) / 1024.0;
+        let off = (g - e).abs() / ulp;
+        worst = worst.max(off);
+        assert!(off <= ulps, "{what}: value {i} (pixel {}, channel {}) is {g}, the reference {e}: {off:.1} ulps", i / 4, i % 4);
+    }
+    eprintln!("{what}: worst {worst:.2} half-float ulps");
+}
+
+/// Rendered values that test every branch: a grey ramp past the peak,
+/// saturated colours inside and outside every target, negatives, alpha.
+fn picture() -> Vec<f32> {
+    let mut px = Vec::new();
+    for i in 0..32 {
+        let v = i as f32 / 31.0 * 6.0;
+        px.extend_from_slice(&[v, v, v, 1.0]);
+    }
+    let colours: [[f32; 3]; 16] = [
+        [0.4, 0.3, 0.25], [0.8, 0.1, 0.05], [0.05, 0.6, 0.1], [0.1, 0.15, 0.9],
+        [0.0, 0.5, 0.0], [0.6, 0.0, 0.6], [1.6, 0.9, 0.2], [3.0, 2.5, 0.1],
+        [0.02, 0.01, 0.4], [-0.05, 0.3, 0.2], [0.9, -0.1, -0.02], [6.0, 1.0, 0.3],
+        [0.0, 0.0, 0.0], [5.0, 0.2, 0.2], [2.4, 2.6, 3.9], [0.7, 0.7, 1.4],
+    ];
+    for (k, c) in colours.iter().enumerate() {
+        px.extend_from_slice(&[c[0], c[1], c[2], if k % 3 == 0 { 0.5 } else { 1.0 }]);
+    }
+    px
+}
+
+const HDR_TARGETS: [OutputTarget; 3] = [OutputTarget::ExtendedSrgb, OutputTarget::ExtendedDisplayP3, OutputTarget::LinearRec2020];
+
+/// The SDR target an HDR one shares its primaries with.
+fn sdr_twin(target: OutputTarget) -> OutputTarget {
+    match target {
+        OutputTarget::ExtendedSrgb => OutputTarget::Srgb,
+        OutputTarget::ExtendedDisplayP3 => OutputTarget::DisplayP3,
+        _ => OutputTarget::Rec2020,
+    }
+}
+
+#[test]
+fn the_hdr_output_matches_its_cpu_reference_for_every_target() {
+    let Some(mut engine) = engine(4, 4) else { return };
+    let rendered = picture();
+    for target in HDR_TARGETS {
+        for (source, peak) in [(Gamut::Rec2020, 4.0), (Gamut::Srgb, 4.0), (Gamut::Rec2020, 2.0), (Gamut::Rec2020, 1.0)] {
+            let s = OutputSettings::hdr(target, source, peak);
+            let (got, fed) = gpu_output(&mut engine, &rendered, &s);
+            let expected = lopsy_core::output::output_reference(&fed, 16, &s);
+            assert!(got.iter().any(|&v| v > 1.01) || peak == 1.0, "{target:?}: nothing above white");
+            assert_within_halves(&format!("HDR output to {target:?} from {source:?}, peak {peak}"), &got, &expected, 4.0);
+        }
+    }
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn a_scene_ramp_through_tone_and_each_hdr_output_matches_sdr_below_white_and_rises_to_the_peak() {
+    let Some(mut engine) = engine(4, 4) else { return };
+    commands::develop::set_raw_develop_json(&mut engine, &serde_json::to_string(&develop_settings()).unwrap()).expect("develop");
+    // Scene luminance 0..16, densest at the bottom, grey then warm.
+    let n = 256;
+    let lum: Vec<f32> = (0..n).map(|i| { let t = i as f32 / (n - 1) as f32; 16.0 * t * t * t }).collect();
+    let mut scene = Vec::new();
+    for &l in &lum {
+        scene.extend_from_slice(&[l, l, l, 1.0]);
+    }
+    for &l in &lum {
+        scene.extend_from_slice(&[1.3 * l, 0.9 * l, 0.6 * l, 1.0]);
+    }
+    let program = engine.shaders.tone().expect("compiles");
+    let src = float_texture(&mut engine, &scene);
+    let toned = engine.texture_pool.acquire(16, (scene.len() / 64) as u32).expect("texture");
+    let state = engine.raw_develop.as_ref().expect("state");
+    let (pass, _) = lopsy_engine::develop::tone::pass(&engine, &program, src, state);
+    assert!(pass.draw(Target::Texture(toned)));
+    let rendered = floats(&engine, toned);
+    let w2020 = luma(Gamut::Rec2020);
+    let y2020 = |p: &[f32]| w2020[0] * p[0] + w2020[1] * p[1] + w2020[2] * p[2];
+    let peak = 4.0;
+    for target in HDR_TARGETS {
+        let (hdr, _) = gpu_output(&mut engine, &rendered, &OutputSettings::hdr(target, Gamut::Rec2020, peak));
+        let (sdr, _) = gpu_output(&mut engine, &rendered, &OutputSettings::sdr(sdr_twin(target), Gamut::Rec2020, false));
+        let wt = luma(target.gamut());
+        let lin = |out: &[f32], t: OutputTarget, i: usize| [0, 1, 2].map(|c| decode(out[i * 4 + c], t.transfer()));
+        for (name, start) in [("grey", 0), ("warm", n)] {
+            let mut last = -1.0f32;
+            let mut above_white = 0;
+            for i in start..start + n {
+                let r = y2020(&rendered[i * 4..i * 4 + 3]);
+                let h = lin(&hdr, target, i);
+                let yh = wt[0] * h[0] + wt[1] * h[1] + wt[2] * h[2];
+                assert!(h.iter().all(|&v| v <= peak * (1.0 + 1e-3)), "{target:?} {name} at scene {}: {h:?} above the peak", lum[i - start]);
+                if name == "grey" {
+                    let spread = h[0].max(h[1]).max(h[2]) - h[0].min(h[1]).min(h[2]);
+                    assert!(spread <= 2e-3 * h[0].max(1.0 / 64.0), "{target:?}: grey at scene {} came out {h:?}", lum[i - start]);
+                }
+                if r <= 1.0 && name == "grey" {
+                    // Below the knee (white) the two renderings are the same
+                    // pixel: within the half-float rounding of the stores.
+                    let d = lin(&sdr, sdr_twin(target), i);
+                    for c in 0..3 {
+                        assert!((h[c] - d[c]).abs() <= 3e-3 * d[c].max(1.0 / 64.0), "{target:?} {name} at scene {}: HDR {h:?}, SDR {d:?}", lum[i - start]);
+                    }
+                }
+                if r > 1.0 {
+                    above_white += 1;
+                    assert!(yh > 1.0 - 1e-3, "{target:?} {name} at scene {}: rendered {r} is above white, HDR {yh} is not", lum[i - start]);
+                }
+                assert!(yh >= last - 2e-3 * last.max(1.0 / 64.0), "{target:?} {name}: HDR luminance falls at scene {}: {last} -> {yh}", lum[i - start]);
+                if last >= 0.0 {
+                    // Continuous: no step larger than the rendered one's,
+                    // with room for half-float rounding.
+                    let r0 = y2020(&rendered[(i - 1) * 4..(i - 1) * 4 + 3]);
+                    assert!(yh - last <= (r - r0).abs() + 4e-3 * yh.max(1.0 / 64.0), "{target:?} {name}: HDR jumps at scene {}: {last} -> {yh} (rendered {r0} -> {r})", lum[i - start]);
+                }
+                last = yh;
+            }
+            assert!(above_white > 10, "{target:?} {name}: the ramp hardly passes white");
+            assert!(last > 1.5, "{target:?} {name}: the top of the ramp is {last}");
+        }
+    }
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn a_grey_ramp_stays_grey_in_hdr() {
+    let Some(mut engine) = engine(4, 4) else { return };
+    let ramp: Vec<f32> = (0..64).flat_map(|i| { let v = i as f32 / 63.0 * 12.0; [v, v, v, 1.0] }).collect();
+    for target in HDR_TARGETS {
+        let (got, _) = gpu_output(&mut engine, &ramp, &OutputSettings::hdr(target, Gamut::Rec2020, 4.0));
+        for (i, p) in got.chunks(4).enumerate() {
+            let spread = p[0].max(p[1]).max(p[2]) - p[0].min(p[1]).min(p[2]);
+            assert!(spread <= 2e-3 * p[0].max(1.0 / 64.0), "{target:?}: grey {i} came out {p:?}");
+        }
+    }
+    assert_no_gpu_errors();
+}
+
+/// A RAW-like document: linear camera RGB whose brightness rises left to
+/// right past what the tone step renders as white, and whose colour
+/// changes top to bottom, so a flip or a shift between two reads shows.
+fn hdr_document(w: u32, h: u32) -> Option<EngineInner> {
+    hdr_document_of(w, h, |x, y| {
+        let l = 0.002 + 6.0 * x * x;
+        [l * (0.6 + 0.6 * y), l * 0.8, l * (1.2 - 0.6 * y), 1.0]
+    })
+}
+
+/// A RAW document in the working space whose linear camera RGB at
+/// (x, y) (each 0..=1 across the document) is `pixel(x, y)`.
+fn hdr_document_of(w: u32, h: u32, pixel: impl Fn(f32, f32) -> [f32; 4]) -> Option<EngineInner> {
+    let mut engine = engine(w, h)?;
+    commands::layer::add_layer(&mut engine, &layer_json("raw", w, h)).expect("layer");
+    let linear: Vec<f32> = (0..w * h)
+        .flat_map(|i| pixel((i % w) as f32 / (w - 1) as f32, (i / w) as f32 / (h - 1) as f32))
+        .collect();
+    commands::layer::upload_layer_pixels_f32_rect(&mut engine, "raw", w, h, 0, 0, w, h, &linear).expect("pixels");
+    commands::develop::set_raw_develop_json(&mut engine, &serde_json::to_string(&develop_settings()).unwrap()).expect("develop");
+    commands::develop::set_develop_working_space(&mut engine, true, 0).expect("working space");
+    Some(engine)
+}
+
+#[test]
+fn the_hdr_read_is_the_export_chain_then_the_file_output_and_survives_pq_png() {
+    let (w, h) = (32u32, 8u32);
+    let Some(mut engine) = hdr_document(w, h) else { return };
+    let hdr = now(commands::develop::read_hdr_output_f32(&mut engine, 4.0));
+    assert_eq!(hdr.len(), (w * h * 4) as usize);
+    // The read is the rendered image through the file output, at the
+    // document's size and whatever the screen is.
+    let rendered = now(commands::develop::read_rendered_f32(&mut engine));
+    let s = lopsy_engine::develop::output::hdr_settings_for(&engine, OutputTarget::LinearRec2020, 4.0);
+    let expected = lopsy_core::output::output_reference(&rendered, w, &s);
+    assert_within_halves("readHdrOutputF32 against the reference", &hdr, &expected, 4.0);
+    engine.set_screen_output(true, true);
+    assert_eq!(now(commands::develop::read_hdr_output_f32(&mut engine, 4.0)), hdr, "the read does not depend on the screen");
+    let wy = luma(Gamut::Rec2020);
+    let y = |p: &[f32]| wy[0] * p[0] + wy[1] * p[1] + wy[2] * p[2];
+    let top = hdr.chunks(4).map(y).fold(0.0f32, f32::max);
+    assert!(top > 1.5 && top < 4.0, "the brightest luminance is {top}");
+    assert!(hdr.chunks(4).all(|p| p[..3].iter().all(|&v| (0.0..=4.0).contains(&v)) && p[3] == 1.0));
+
+    // Through the PQ PNG and back: luminance within 0.1% (16-bit PQ steps
+    // are about 0.03% at these levels) plus a floor near black.
+    let png = lopsy_core::hdr_png::encode_pq_png(&hdr, w, h, lopsy_core::hdr_png::DEFAULT_SDR_WHITE_NITS).expect("PQ PNG");
+    let decoded = lopsy_core::decode::decode_png(&png).expect("decodes");
+    let lopsy_core::decode::DecodedPixels::RgbaF32(signal) = decoded.pixels else { panic!("a 16-bit PNG") };
+    let scale = lopsy_core::hdr_png::PQ_PEAK_NITS / f64::from(lopsy_core::hdr_png::DEFAULT_SDR_WHITE_NITS);
+    let mut worst = 0.0f64;
+    for (i, (want, got)) in hdr.chunks(4).zip(signal.chunks(4)).enumerate() {
+        let back: Vec<f32> = got[..3].iter().map(|&e| (lopsy_core::hdr_png::pq_decode(f64::from(e)) * scale) as f32).collect();
+        let (yw, yg) = (f64::from(y(want)), f64::from(y(&back)));
+        let off = (yg - yw).abs() / (yw + 1e-3);
+        worst = worst.max(off);
+        assert!(off <= 1e-3, "pixel {i}: luminance {yw} came back {yg}");
+    }
+    eprintln!("PQ PNG round trip: luminance within {:.4}%", worst * 100.0);
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn a_gain_map_from_the_hdr_read_and_the_8bit_export_rebuilds_the_hdr_luminance() {
+    use lopsy_core::color::ColorSpace;
+    use lopsy_core::gain_map::{compute_gain_map, GainMapScale, DEFAULT_OFFSET};
+    let (w, h) = (32u32, 8u32);
+    let Some(mut engine) = hdr_document(w, h) else { return };
+    let hdr = now(commands::develop::read_hdr_output_f32(&mut engine, 4.0));
+    let sdr = now(compositor::composite_for_export(&mut engine));
+    assert_eq!(sdr.len(), hdr.len(), "the same size");
+    let wy = luma(Gamut::Rec2020);
+    let ws = luma(Gamut::Srgb);
+    let decode8 = |v: u8| lopsy_core::working_space::srgb_decode(f32::from(v) / 255.0);
+    // The same picture in the same order: where the HDR picture is under
+    // white the SDR one has its luminance (the outputs agree there, but for
+    // the 8-bit step and the dither), and alpha is opaque in both.
+    let mut compared = 0;
+    for (i, (hp, sp)) in hdr.chunks(4).zip(sdr.chunks(4)).enumerate() {
+        assert_eq!((hp[3], sp[3]), (1.0, 255), "pixel {i}: straight, opaque alpha in both");
+        let yh = wy[0] * hp[0] + wy[1] * hp[1] + wy[2] * hp[2];
+        let ys = (0..3).map(|c| ws[c] * decode8(sp[c])).sum::<f32>();
+        if yh < 0.8 && hp[..3].iter().all(|&v| v < 0.8) {
+            compared += 1;
+            assert!((ys - yh).abs() <= 0.02 * yh + 2.0 / 255.0, "pixel {i} ({}, {}): SDR luminance {ys}, HDR {yh}", i as u32 % w, i as u32 / w);
+        }
+    }
+    assert!(compared > 40, "too few pixels under white to compare ({compared})");
+
+    let map = compute_gain_map(&hdr, &sdr, w, h, ColorSpace::Srgb, GainMapScale::Full).expect("gain map");
+    let m = map.metadata;
+    assert!(m.gain_map_max > 0.5, "the map holds highlights: {m:?}");
+    // As `gain_map.rs` documents and tests: applied to the SDR picture, the
+    // map gives back the HDR luminance to within half a code of its 8-bit
+    // step, `(Y + k) · (2^(span / 510) − 1)`.
+    let step = ((m.gain_map_max - m.gain_map_min) / 510.0).exp2() - 1.0;
+    let k = DEFAULT_OFFSET;
+    for (i, (hp, sp)) in hdr.chunks(4).zip(sdr.chunks(4)).enumerate() {
+        let code = f64::from(map.rgba[i * 4]);
+        let g = m.gain_map_min + (m.gain_map_max - m.gain_map_min) * code / 255.0;
+        let rebuilt: Vec<f64> = (0..3).map(|c| (f64::from(decode8(sp[c])) + m.offset_sdr) * g.exp2() - m.offset_hdr).collect();
+        let yg = (0..3).map(|c| f64::from(ws[c]) * rebuilt[c]).sum::<f64>();
+        let yw = f64::from(wy[0] * hp[0] + wy[1] * hp[1] + wy[2] * hp[2]);
+        assert!((yg - yw).abs() <= (yw + k) * step + 1e-5, "pixel {i}: rebuilt luminance {yg}, HDR {yw}");
+    }
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn with_the_hdr_view_off_an_hdr_screen_is_given_the_sdr_rendering() {
+    use lopsy_engine::develop::output::{live_settings, live_settings_on, settings_for, screen_target};
+    let (w, h) = (32u32, 8u32);
+    let Some(mut engine) = hdr_document(w, h) else { return };
+    // No canvas: the engine never claims an HDR screen, whatever was asked.
+    assert!(!engine.set_screen_output(true, true));
+    assert!(!engine.screen_is_hdr());
+    let sdr = settings_for(&engine, screen_target(&engine), false, true);
+    assert_eq!(live_settings(&engine), sdr, "an SDR surface shows the SDR rendering");
+    // The HDR view on: an HDR surface would be given the HDR canvas output.
+    assert!(engine.develop_hdr.on, "on by default");
+    let on = live_settings_on(&engine, true);
+    assert_eq!((on.target, on.peak, on.knee, on.dither), (OutputTarget::ExtendedDisplayP3, 4.0, 1.0, 0.0));
+    commands::develop::set_develop_hdr(&mut engine, true, 2.0);
+    assert_eq!(live_settings_on(&engine, true).peak, 2.0);
+    // Off: the same surface is given exactly the SDR rendering.
+    commands::develop::set_develop_hdr(&mut engine, false, 2.0);
+    assert!(engine.needs_recomposite);
+    assert_eq!(live_settings_on(&engine, true), sdr);
+
+    // And the frame: the composite after a live frame (what the final blit
+    // reads) is the rendered image through the SDR output, bit for bit
+    // the GPU's.
+    compositor::want_rendered(&mut engine);
+    compositor::render(&mut engine);
+    let frame = now(engine.gpu().read_rgba_f32(engine.composite_texture, 0, 0, w, h));
+    let rendered = engine.working_space.and_then(|ws| ws.rendered).expect("rendered");
+    let program = engine.shaders.output().expect("compiles");
+    let dst = engine.texture_pool.acquire(w, h).expect("texture");
+    let settings = live_settings_on(&engine, true);
+    assert!(lopsy_engine::develop::output::pass(&engine, &program, rendered, &settings).draw(Target::Texture(dst)));
+    assert_eq!(floats(&engine, dst), frame);
+    assert!(frame.iter().all(|&v| v <= 1.0), "nothing above white with the view off");
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn the_hdr_histogram_counts_the_hdr_rendering_from_black_to_the_peak() {
+    let Some(mut plain) = engine(4, 4) else { return };
+    assert!(block_on(commands::develop::read_hdr_histogram(&mut plain, 4.0)).is_err(), "no working space, no HDR histogram");
+    let (w, h) = (32u32, 8u32);
+    let Some(mut engine) = hdr_document(w, h) else { return };
+    let sdr = now(commands::develop::read_develop_histogram(&mut engine));
+    let hdr = now(commands::develop::read_hdr_histogram(&mut engine, 4.0));
+    assert_eq!(hdr.len(), sdr.len());
+    let n = lopsy_core::output::HDR_HISTOGRAM_BINS;
+    let white = lopsy_core::output::hdr_histogram_white_bin(4.0);
+    assert_eq!(hdr[3 * n..].iter().sum::<u32>(), w * h, "every pixel counted once");
+    let above: u32 = hdr[3 * n..].iter().enumerate().filter(|&(b, _)| b as f32 > white + 0.5).map(|(_, &c)| c).sum();
+    assert!(above > 0, "the highlights reach right of white");
+    // The SDR histogram has the brightest pixels at white; the HDR one
+    // has nothing at the peak, which the roll-off never reaches.
+    assert!(sdr[3 * n + 255] > 0 && hdr[3 * n + 255] == 0, "{} at white in SDR, {} at the peak in HDR", sdr[3 * n + 255], hdr[3 * n + 255]);
+    // At a peak of 1 the HDR histogram is the SDR one, but for values that
+    // round to one bin as an 8-bit read and to the next as a float.
+    let one = now(commands::develop::read_hdr_histogram(&mut engine, 1.0));
+    let moved: u32 = one.iter().zip(&sdr).map(|(a, b)| a.abs_diff(*b)).sum();
+    eprintln!("HDR histogram at a peak of 1: {moved} of {} counts differ from the SDR one", 4 * w * h);
+    assert!(moved <= w * h / 4, "{moved} counts differ from the SDR histogram");
+    assert_no_gpu_errors();
+}
+
+/// A frame that fails to composite is an error from the statistics read,
+/// not the statistics of the blank capture texture. A document wider than
+/// the GPU's largest texture makes the composite fail before the develop
+/// chain, where its scratch textures are sized.
+#[test]
+fn a_failed_frame_is_an_error_from_the_scene_statistics() {
+    let Some(mut engine) = hdr_document(32, 8) else { return };
+    assert!(block_on(commands::develop::read_scene_statistics(&mut engine)).is_ok());
+    engine.doc_width = engine.texture_pool.max_size() + 1;
+    let read = block_on(commands::develop::read_scene_statistics(&mut engine));
+    assert!(read.is_err(), "statistics of a frame that failed: {read:?}");
+}
+
+/// Textures the pool has lent out and not had back.
+fn textures_in_use(engine: &EngineInner) -> usize {
+    engine.texture_pool.live_entry_count() - engine.texture_pool.free_entry_count()
+}
+
+/// Live frames keep their rendered image (a document-sized float texture)
+/// only once a statistics read has asked for it. An engine that draws and
+/// exports never allocates it; the first histogram read draws the frame
+/// again and counts what an engine that kept it from the start counts;
+/// later reads use the kept image without drawing again; and turning the
+/// working space off gives the texture back.
+#[test]
+fn only_an_engine_that_reads_statistics_keeps_the_rendered_image() {
+    let (w, h) = (32u32, 8u32);
+    let Some(mut export) = hdr_document(w, h) else { return };
+    compositor::render(&mut export);
+    let before_export = textures_in_use(&export);
+    let _ = now(compositor::composite_for_export(&mut export));
+    let _ = now(commands::develop::read_hdr_output_f32(&mut export, 4.0));
+    compositor::render(&mut export);
+    assert_eq!(export.working_space.and_then(|ws| ws.rendered), None, "an exporting engine keeps no rendered image");
+    assert_eq!(textures_in_use(&export), before_export);
+
+    let Some(mut from_the_start) = hdr_document(w, h) else { return };
+    compositor::want_rendered(&mut from_the_start);
+    let expected = now(commands::develop::read_develop_histogram(&mut from_the_start));
+
+    let Some(mut engine) = hdr_document(w, h) else { return };
+    compositor::render(&mut engine);
+    let in_use = textures_in_use(&engine);
+    let first = now(commands::develop::read_develop_histogram(&mut engine));
+    assert_eq!(first, expected, "the first read draws the frame again and counts it");
+    assert_eq!(textures_in_use(&engine), in_use + 1, "one rendered image, kept from then on");
+    let rendered = engine.working_space.and_then(|ws| ws.rendered).expect("kept");
+    // Painted over, the kept image shows in the next read: it did not draw
+    // the frame again.
+    assert!(engine.gpu().clear(rendered, [0.0, 0.0, 0.0, 1.0]));
+    let second = now(commands::develop::read_develop_histogram(&mut engine));
+    assert_ne!(second, first, "the second read drew the frame again");
+    assert_eq!(second[3 * 256], w * h, "every pixel black");
+
+    commands::develop::set_develop_working_space(&mut engine, false, 0).expect("off");
+    assert_eq!(textures_in_use(&engine), in_use, "off gives the rendered image back");
+    assert_no_gpu_errors();
+}
+
+// ---------------------------------------------------------------------------
+// The sized export reads: the export chain, the rendered image box-reduced,
+// then the output step
+// ---------------------------------------------------------------------------
+
+/// The 2×2 box average of straight-alpha RGBA `src` (`w × h`, both even),
+/// averaged premultiplied and returned straight as the GPU reduction does.
+fn box_2x2(src: &[f32], w: u32, h: u32) -> Vec<f32> {
+    let mut out = Vec::with_capacity(src.len() / 4);
+    for y in 0..h / 2 {
+        for x in 0..w / 2 {
+            let mut acc = [0.0f32; 4];
+            for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                let i = (((2 * y + dy) * w + 2 * x + dx) * 4) as usize;
+                let a = src[i + 3];
+                for c in 0..3 {
+                    acc[c] += src[i + c] * a;
+                }
+                acc[3] += a;
+            }
+            let a = acc[3];
+            if a > 0.0 {
+                out.extend_from_slice(&[acc[0] / a, acc[1] / a, acc[2] / a, a / 4.0]);
+            } else {
+                out.extend_from_slice(&[0.0; 4]);
+            }
+        }
+    }
+    out
+}
+
+/// One half-float unit in the last place at `v`, with the floor
+/// `assert_within_halves` uses near 0.
+fn half_ulp(v: f32) -> f32 {
+    v.abs().max(1.0 / 64.0) / 1024.0
+}
+
+/// A grey ramp of linear camera RGB, rising left to right past white. The
+/// camera matrix's rows sum to 1, so grey stays grey, and the output step
+/// is then monotonic in the value.
+fn grey_ramp(x: f32, _y: f32) -> [f32; 4] {
+    let l = 0.002 + 6.0 * x * x;
+    [l, l, l, 1.0]
+}
+
+#[test]
+fn the_sized_reads_at_the_documents_own_size_are_the_full_size_reads() {
+    let (w, h) = (32u32, 8u32);
+    let Some(mut engine) = hdr_document(w, h) else { return };
+    let full = now(commands::develop::read_hdr_output_f32(&mut engine, 4.0));
+    let sized = now(commands::develop::read_hdr_output_f32_sized(&mut engine, 4.0, w, h));
+    assert_within_halves("readHdrOutputF32Sized at the document's size", &sized, &full, 1.0);
+    let full8 = now(compositor::composite_for_export(&mut engine));
+    let sized8 = now(commands::develop::composite_for_export_sized(&mut engine, w, h));
+    assert_eq!(sized8, full8, "compositeForExportSized at the document's size, dither included");
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn the_sized_hdr_read_at_half_size_is_the_output_step_on_the_rendered_image_averaged() {
+    let (w, h) = (64u32, 16u32);
+    let Some(mut engine) = hdr_document(w, h) else { return };
+    let full = now(commands::develop::read_hdr_output_f32(&mut engine, 4.0));
+    let rendered = now(commands::develop::read_rendered_f32(&mut engine));
+    let half = now(commands::develop::read_hdr_output_f32_sized(&mut engine, 4.0, w / 2, h / 2));
+    assert_eq!(half.len(), (w / 2 * h / 2 * 4) as usize);
+    // The method: the rendered image is averaged, then the output step runs
+    // on the average. Within the half-float rounding of the stores.
+    let s = lopsy_engine::develop::output::hdr_settings_for(&engine, OutputTarget::LinearRec2020, 4.0);
+    let expected = lopsy_core::output::output_reference(&box_2x2(&rendered, w, h), w / 2, &s);
+    assert_within_halves("the half-size read against the output of the averaged rendered image", &half, &expected, 4.0);
+    // Against the full-size read averaged: the output step is not linear
+    // (the roll-off above white, the gamut mapping), so averaging before it
+    // and after it differ by its curvature across a 2×2 block, which on this
+    // smooth gradient is within 1% of the value plus one half-float step.
+    let averaged = box_2x2(&full, w, h);
+    let mut worst = 0.0f32;
+    for (i, (&got, &want)) in half.iter().zip(&averaged).enumerate() {
+        let off = (got - want).abs();
+        worst = worst.max(off / want.abs().max(1.0 / 64.0));
+        assert!(off <= 0.01 * want.abs() + half_ulp(want), "value {i} (pixel {}, channel {}): {got}, the 2×2 average {want}", i / 4, i % 4);
+    }
+    eprintln!("half-size read against the full-size read averaged: worst {:.3}%", worst * 100.0);
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn a_sized_hdr_read_at_a_fractional_ratio_is_monotonic_along_a_ramp_and_stays_in_its_range() {
+    let (w, h) = (64u32, 16u32);
+    // A reduction that neither rings nor aliases keeps every pixel inside
+    // what the full-size read holds over its footprint.
+    let Some(mut engine) = hdr_document_of(w, h, grey_ramp) else { return };
+    let full = now(commands::develop::read_hdr_output_f32(&mut engine, 4.0));
+    // 2.37 times smaller across, 2.29 down: not the document's aspect.
+    let (sw, sh) = (27u32, 7u32);
+    let sized = now(commands::develop::read_hdr_output_f32_sized(&mut engine, 4.0, sw, sh));
+    assert_eq!(sized.len(), (sw * sh * 4) as usize);
+    let at = |v: &[f32], width: u32, x: u32, y: u32, c: u32| v[((y * width + x) * 4 + c) as usize];
+    let (fx, fy) = (w as f32 / sw as f32, h as f32 / sh as f32);
+    for y in 0..sh {
+        for c in 0..3 {
+            for x in 1..sw {
+                let (a, b) = (at(&sized, sw, x - 1, y, c), at(&sized, sw, x, y, c));
+                assert!(b >= a - half_ulp(a), "row {y}, channel {c}: falls from {a} to {b} at {x}");
+            }
+        }
+        for x in 0..sw {
+            // The footprint, and the texel beside it that a bilinear tap at
+            // its edge can reach.
+            let x0 = ((x as f32 * fx).floor() as u32).saturating_sub(1);
+            let x1 = (((x + 1) as f32 * fx).ceil() as u32 + 1).min(w);
+            let y0 = ((y as f32 * fy).floor() as u32).saturating_sub(1);
+            let y1 = (((y + 1) as f32 * fy).ceil() as u32 + 1).min(h);
+            for c in 0..4 {
+                let (mut lo, mut hi) = (f32::MAX, f32::MIN);
+                for sy in y0..y1 {
+                    for sx in x0..x1 {
+                        let v = at(&full, w, sx, sy, c);
+                        lo = lo.min(v);
+                        hi = hi.max(v);
+                    }
+                }
+                let v = at(&sized, sw, x, y, c);
+                assert!(v >= lo - half_ulp(lo) && v <= hi + half_ulp(hi), "pixel ({x}, {y}) channel {c}: {v} outside {lo}..{hi}");
+            }
+        }
+    }
+    let top = sized.chunks(4).map(|p| p[0]).fold(0.0f32, f32::max);
+    assert!(top > 1.5, "the ramp reaches above white: {top}");
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn the_sized_reads_are_one_picture_and_make_a_gain_map_that_rebuilds_the_hdr_luminance() {
+    use lopsy_core::color::ColorSpace;
+    use lopsy_core::gain_map::{compute_gain_map, GainMapScale, DEFAULT_OFFSET};
+    let (w, h) = (64u32, 16u32);
+    let Some(mut engine) = hdr_document(w, h) else { return };
+    let (sw, sh) = (40u32, 10u32);
+    let hdr = now(commands::develop::read_hdr_output_f32_sized(&mut engine, 4.0, sw, sh));
+    let sdr = now(commands::develop::composite_for_export_sized(&mut engine, sw, sh));
+    assert_eq!(hdr.len(), (sw * sh * 4) as usize);
+    assert_eq!(sdr.len(), hdr.len(), "the same size");
+    let wy = luma(Gamut::Rec2020);
+    let ws = luma(Gamut::Srgb);
+    let decode8 = |v: u8| lopsy_core::working_space::srgb_decode(f32::from(v) / 255.0);
+    // As for the full-size reads: below white the SDR picture has the HDR
+    // one's luminance, but for the 8-bit step and the dither.
+    let mut compared = 0;
+    for (i, (hp, sp)) in hdr.chunks(4).zip(sdr.chunks(4)).enumerate() {
+        assert_eq!((hp[3], sp[3]), (1.0, 255), "pixel {i}: straight, opaque alpha in both");
+        let yh = wy[0] * hp[0] + wy[1] * hp[1] + wy[2] * hp[2];
+        let ys = (0..3).map(|c| ws[c] * decode8(sp[c])).sum::<f32>();
+        if yh < 0.8 && hp[..3].iter().all(|&v| v < 0.8) {
+            compared += 1;
+            assert!((ys - yh).abs() <= 0.02 * yh + 2.0 / 255.0, "pixel {i} ({}, {}): SDR luminance {ys}, HDR {yh}", i as u32 % sw, i as u32 / sw);
+        }
+    }
+    assert!(compared > 60, "too few pixels under white to compare ({compared})");
+
+    let map = compute_gain_map(&hdr, &sdr, sw, sh, ColorSpace::Srgb, GainMapScale::Full).expect("gain map");
+    let m = map.metadata;
+    assert!(m.gain_map_max > 0.5, "the map holds highlights: {m:?}");
+    // The bound `gain_map.rs` documents: half a code of the map's 8-bit
+    // step, `(Y + k) · (2^(span / 510) − 1)`.
+    let step = ((m.gain_map_max - m.gain_map_min) / 510.0).exp2() - 1.0;
+    let k = DEFAULT_OFFSET;
+    for (i, (hp, sp)) in hdr.chunks(4).zip(sdr.chunks(4)).enumerate() {
+        let code = f64::from(map.rgba[i * 4]);
+        let g = m.gain_map_min + (m.gain_map_max - m.gain_map_min) * code / 255.0;
+        let rebuilt: Vec<f64> = (0..3).map(|c| (f64::from(decode8(sp[c])) + m.offset_sdr) * g.exp2() - m.offset_hdr).collect();
+        let yg = (0..3).map(|c| f64::from(ws[c]) * rebuilt[c]).sum::<f64>();
+        let yw = f64::from(wy[0] * hp[0] + wy[1] * hp[1] + wy[2] * hp[2]);
+        assert!((yg - yw).abs() <= (yw + k) * step + 1e-5, "pixel {i}: rebuilt luminance {yg}, HDR {yw}");
+    }
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn a_sized_read_that_would_enlarge_or_is_empty_is_an_error_and_every_path_gives_its_textures_back() {
+    let Some(mut plain) = engine(8, 8) else { return };
+    assert!(block_on(commands::develop::read_hdr_output_f32_sized(&mut plain, 4.0, 4, 4)).is_err(), "no working space, no HDR read");
+
+    let (w, h) = (32u32, 8u32);
+    let Some(mut engine) = hdr_document(w, h) else { return };
+    compositor::render(&mut engine);
+    let baseline = textures_in_use(&engine);
+    for (sw, sh) in [(w + 1, h), (w, h + 1), (2 * w, 2 * h), (0, 4), (4, 0)] {
+        let hdr = block_on(commands::develop::read_hdr_output_f32_sized(&mut engine, 4.0, sw, sh));
+        assert!(hdr.is_err(), "{sw}x{sh} of a {w}x{h} document: {hdr:?}");
+        let sdr = block_on(commands::develop::composite_for_export_sized(&mut engine, sw, sh));
+        assert!(sdr.is_err(), "{sw}x{sh} of a {w}x{h} document");
+        assert_eq!(textures_in_use(&engine), baseline, "after the {sw}x{sh} error");
+    }
+    for (sw, sh) in [(w, h), (16, 4), (5, 3)] {
+        assert_eq!(now(commands::develop::read_hdr_output_f32_sized(&mut engine, 4.0, sw, sh)).len(), (sw * sh * 4) as usize);
+        assert_eq!(now(commands::develop::composite_for_export_sized(&mut engine, sw, sh)).len(), (sw * sh * 4) as usize);
+        assert_eq!(textures_in_use(&engine), baseline, "after the {sw}x{sh} reads");
+        compositor::render(&mut engine);
+        assert_eq!(textures_in_use(&engine), baseline, "after the frame that follows the {sw}x{sh} reads");
+    }
+
+    // A reduction by more than one box pass averages (256 across) goes
+    // through a smaller image first (8 by 1, then 2 by 1: even footprints,
+    // where the box is exact), and gives it back.
+    let (w, h) = (512u32, 8u32);
+    let Some(mut engine) = hdr_document_of(w, h, grey_ramp) else { return };
+    compositor::render(&mut engine);
+    let baseline = textures_in_use(&engine);
+    let full = now(commands::develop::read_hdr_output_f32(&mut engine, 4.0));
+    let tiny = now(commands::develop::read_hdr_output_f32_sized(&mut engine, 4.0, 2, 1));
+    assert_eq!(textures_in_use(&engine), baseline, "after a reduction in two steps");
+    let (lo, hi) = full.chunks(4).fold((f32::MAX, f32::MIN), |(lo, hi), p| (lo.min(p[0]), hi.max(p[0])));
+    assert!(tiny[0] < tiny[4], "the left half is darker: {tiny:?}");
+    assert!(tiny.chunks(4).all(|p| p[0] >= lo && p[0] <= hi && p[0] == p[1] && p[1] == p[2] && p[3] == 1.0), "{tiny:?} inside {lo}..{hi}");
+    // Each half is the average of its rendered half, through the output
+    // step, within the half-float rounding of the two steps.
+    let rendered = now(commands::develop::read_rendered_f32(&mut engine));
+    let s = lopsy_engine::develop::output::hdr_settings_for(&engine, OutputTarget::LinearRec2020, 4.0);
+    let halves: Vec<f32> = (0..2)
+        .flat_map(|half| {
+            let mut sum = 0.0f64;
+            for y in 0..h {
+                for x in half * w / 2..(half + 1) * w / 2 {
+                    sum += f64::from(rendered[((y * w + x) * 4) as usize]);
+                }
+            }
+            let v = (sum / f64::from(w * h / 2)) as f32;
+            [v, v, v, 1.0]
+        })
+        .collect();
+    let expected = lopsy_core::output::output_reference(&halves, 2, &s);
+    assert_within_halves("a reduction in two steps against the output of the averages", &tiny, &expected, 4.0);
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn without_the_working_space_the_sized_8bit_read_is_the_export_averaged() {
+    let (w, h) = (16u32, 8u32);
+    let Some(mut engine) = engine(w, h) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("paint", w, h)).expect("layer");
+    let pixels: Vec<u8> = (0..w * h).flat_map(|i| [(i % w * 16) as u8, (i / w * 32) as u8, 200, 255]).collect();
+    commands::layer::upload_layer_pixels(&mut engine, "paint", &pixels, w, h, 0, 0).expect("pixels");
+    let full = now(compositor::composite_for_export(&mut engine));
+    assert_eq!(now(commands::develop::composite_for_export_sized(&mut engine, w, h)), full, "at the document's size");
+    let half = now(commands::develop::composite_for_export_sized(&mut engine, w / 2, h / 2));
+    let as_floats: Vec<f32> = full.iter().map(|&v| f32::from(v) / 255.0).collect();
+    let expected = box_2x2(&as_floats, w, h);
+    for (i, (&got, &want)) in half.iter().zip(&expected).enumerate() {
+        assert!((f32::from(got) - want * 255.0).abs() <= 1.0, "value {i}: {got}, the 2×2 average {}", want * 255.0);
+    }
+    assert_no_gpu_errors();
+}
+
+/// `hdr_document` sharpened, with grain and a vignette after sharpening, so
+/// both the stage the mask view replaces and one after it change pixels.
+fn sharpened_document(w: u32, h: u32) -> Option<EngineInner> {
+    let mut engine = hdr_document(w, h)?;
+    commands::develop::set_image_detail(&mut engine, &[120.0, 1.0, 20.0, 0.0, 0.0, 0.0, 1.0]).expect("detail");
+    commands::develop::set_image_finish(&mut engine, &[-30.0, 50.0, 0.0, 50.0, 25.0, 30.0, 50.0, 7.0, 1.0]).expect("finish");
+    Some(engine)
+}
+
+/// Everything the statistics read: the histogram, the HDR histogram, a
+/// sampled colour at each end of the ramp, and the kept rendered image.
+fn statistics(engine: &mut EngineInner) -> (Vec<u32>, Vec<u32>, Vec<u8>, Vec<u8>, Vec<f32>) {
+    let histogram = now(commands::develop::read_develop_histogram(engine));
+    let hdr = now(commands::develop::read_hdr_histogram(engine, 4.0));
+    let dark = now(commands::drawing::sample_color(engine, 3.0, 4.0, 3));
+    let bright = now(commands::drawing::sample_color(engine, 28.0, 4.0, 3));
+    let rendered = now(commands::develop::read_rendered_f32(engine));
+    (histogram, hdr, dark, bright, rendered)
+}
+
+#[test]
+fn the_statistics_read_the_photo_while_the_sharpening_mask_view_is_on() {
+    let (w, h) = (32u32, 8u32);
+    let Some(mut engine) = sharpened_document(w, h) else { return };
+    let off = statistics(&mut engine);
+    compositor::render(&mut engine);
+    let screen_off = now(engine.gpu().read_rgba_f32(engine.composite_texture, 0, 0, w, h));
+
+    commands::develop::set_image_detail_mask_view(&mut engine, true);
+    compositor::render(&mut engine);
+    let screen_on = now(engine.gpu().read_rgba_f32(engine.composite_texture, 0, 0, w, h));
+    assert_ne!(screen_on, screen_off, "the mask shows on screen");
+    // The photo, not the mask: the same reads as with the view off. The
+    // kept image is the chain with real sharpening, so they are equal.
+    let on = statistics(&mut engine);
+    assert_eq!(on.0, off.0, "readDevelopHistogram");
+    assert_eq!(on.1, off.1, "readHdrHistogram");
+    assert_eq!((&on.2, &on.3), (&off.2, &off.3), "sampleColor");
+    assert_eq!(on.4, off.4, "readRenderedF32");
+
+    // The screen is the frame it always was: an engine that keeps no
+    // rendered image (so never splits the chain) draws the same mask view.
+    let Some(mut plain) = sharpened_document(w, h) else { return };
+    commands::develop::set_image_detail_mask_view(&mut plain, true);
+    compositor::render(&mut plain);
+    assert!(plain.working_space.is_some_and(|ws| !ws.keep_rendered));
+    assert_eq!(now(plain.gpu().read_rgba_f32(plain.composite_texture, 0, 0, w, h)), screen_on, "the mask view on screen");
+
+    // Off again, the statistics and the screen are as before.
+    commands::develop::set_image_detail_mask_view(&mut engine, false);
+    compositor::render(&mut engine);
+    assert_eq!(now(engine.gpu().read_rgba_f32(engine.composite_texture, 0, 0, w, h)), screen_off);
+    assert_eq!(statistics(&mut engine), off);
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn the_mask_view_split_holds_no_texture_after_the_frame() {
+    let (w, h) = (32u32, 8u32);
+    let Some(mut engine) = sharpened_document(w, h) else { return };
+    let _ = now(commands::develop::read_develop_histogram(&mut engine));
+    compositor::render(&mut engine);
+    let in_use = textures_in_use(&engine);
+    commands::develop::set_image_detail_mask_view(&mut engine, true);
+    compositor::render(&mut engine);
+    assert_eq!(textures_in_use(&engine), in_use, "the split borrows only scratch B");
+    assert_no_gpu_errors();
+}

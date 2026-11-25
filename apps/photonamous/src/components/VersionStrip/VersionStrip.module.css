@@ -1,0 +1,159 @@
+/* New version moves to a line of its own only when not even one chip would fit beside it. */
+.strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+  font-size: var(--font-size-sm);
+}
+
+/* The selected version's box: drawn like a chip, with the word in front. */
+.selected,
+.version {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-round);
+  padding-right: 2px;
+  white-space: nowrap;
+}
+
+.selected {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding-left: var(--space-2);
+}
+
+.label {
+  flex: none;
+  color: var(--ph-accent-text);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/*
+ * The other versions take the room the row has, at least about one chip's,
+ * and scroll sideways on their own when that is not enough. The padding
+ * keeps their focus rings inside the scroller's clip; the margin takes it
+ * back out of the layout.
+ */
+.chips {
+  display: flex;
+  flex: 1 1 128px;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: max-content;
+  margin: -3px;
+  padding: 3px;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+
+.name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  min-height: 24px;
+  padding: 2px var(--space-2);
+  overflow: hidden;
+  border: none;
+  border-radius: var(--radius-round);
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.name:hover {
+  background: var(--color-bg-hover);
+}
+
+.name:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: -2px;
+}
+
+/* The version on screen, the one Edit edits: the box or a chip, or the dropdown showing one. */
+.selected[data-on-screen='true'],
+.version[data-on-screen='true'],
+.select[data-on-screen='true'] {
+  border-color: var(--color-success);
+}
+
+.input {
+  flex: none;
+  height: 24px;
+  width: 140px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  outline: none;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 1px;
+}
+
+/* More versions than chips: the dropdown of the others, then the check and the bin of the one it shows. */
+.other {
+  display: inline-flex;
+  flex: 1 1 160px;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: max-content;
+}
+
+/* The arrow and the right padding are the app's for every select. */
+.select {
+  min-width: 6rem;
+  max-width: 16rem;
+  height: 26px;
+  padding-left: var(--space-2);
+  margin-right: var(--space-1);
+  border: 1px solid var(--ph-control-edge);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-input-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  text-overflow: ellipsis;
+}
+
+.select:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 1px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.add {
+  flex: none;
+}

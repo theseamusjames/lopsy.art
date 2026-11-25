@@ -1,0 +1,117 @@
+.container {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  min-width: var(--slider-label-width, 40px);
+}
+
+.slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 10px;
+  background-color: #1e1e1e;
+  /* The fill: from where the value starts to the thumb's centre (Slider.tsx sets the two edges). */
+  background-image: linear-gradient(
+    to right,
+    transparent var(--slider-fill-from, 0%),
+    var(--color-slider-fill) var(--slider-fill-from, 0%),
+    var(--color-slider-fill) var(--slider-fill-to, 0%),
+    transparent var(--slider-fill-to, 0%)
+  );
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-xs);
+  outline: none;
+  min-width: 60px;
+  cursor: ew-resize;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  background: var(--color-input-bg);
+  /* A quiet edge, by choice: the thumb is read from its shape, the fill and the value beside it. */
+  border: 1px solid var(--color-border-subtle);
+  cursor: ew-resize;
+}
+
+.slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-subtle);
+  cursor: ew-resize;
+}
+
+.slider:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -2px;
+}
+
+.valueWrapper {
+  display: flex;
+  align-items: center;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  height: 24px;
+  overflow: hidden;
+}
+
+.valueInput {
+  width: var(--slider-value-width, 40px);
+  padding: 0 var(--space-1);
+  background: transparent;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  outline: none;
+  text-align: right;
+}
+
+.valueInput:focus {
+  color: var(--color-text-primary);
+}
+
+.valueInput:focus-visible {
+  outline: none;
+}
+
+.valueWrapper:has(.valueInput:focus-visible) {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -2px;
+}
+
+.suffix {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  padding-right: var(--space-1);
+}
+
+.container[data-disabled] .slider,
+.container[data-disabled] .valueWrapper {
+  opacity: 0.4;
+}
+
+.slider:disabled {
+  cursor: default;
+}
+
+.slider:disabled::-webkit-slider-thumb {
+  cursor: default;
+}
+
+.slider:disabled::-moz-range-thumb {
+  cursor: default;
+}

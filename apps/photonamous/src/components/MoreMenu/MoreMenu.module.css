@@ -1,0 +1,75 @@
+.anchor {
+  position: relative;
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: var(--z-popover);
+  display: flex;
+  flex-direction: column;
+  min-width: 240px;
+  gap: 2px;
+  padding: var(--space-2);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-md);
+  text-align: left;
+  cursor: pointer;
+}
+
+.item:hover:not([aria-disabled='true']),
+.item:focus-visible {
+  background: var(--color-bg-hover);
+}
+
+.item:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: -2px;
+}
+
+.item[aria-disabled='true'] {
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+.icon {
+  padding-top: 2px;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.hint {
+  color: var(--ph-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.check {
+  color: var(--color-accent);
+  margin-top: 2px;
+}
+
+/* Lined up with the button's left edge where there is room (menu-side.ts); with its right edge otherwise. */
+.menu[data-side='start'] {
+  right: auto;
+  left: 0;
+}

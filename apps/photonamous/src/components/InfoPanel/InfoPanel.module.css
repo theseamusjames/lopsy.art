@@ -1,0 +1,190 @@
+.panel {
+  grid-area: info;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background: var(--color-bg-secondary);
+  border-left: 1px solid var(--color-border);
+  font-size: var(--font-size-md);
+}
+
+.empty {
+  padding: var(--space-4);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.head {
+  padding: var(--space-3) var(--space-4) var(--space-2);
+}
+
+.title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-ui);
+  overflow-wrap: anywhere;
+}
+
+.muted {
+  margin-top: var(--space-1);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.fieldLabel {
+  min-width: 44px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+}
+
+.input,
+.textarea {
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-md);
+  outline: none;
+}
+
+.input {
+  height: 28px;
+}
+
+.textarea {
+  resize: vertical;
+  line-height: 1.4;
+}
+
+.input:focus,
+.textarea:focus {
+  border-color: var(--color-accent);
+}
+
+.input:focus-visible,
+.textarea:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 1px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 24px;
+  padding: 0 0 0 var(--space-2);
+  border-radius: var(--radius-round);
+  background: var(--color-bg-active);
+  font-size: var(--font-size-sm);
+}
+
+.chip[data-partial='true'] {
+  background: transparent;
+  border: 1px dashed var(--color-border-strong);
+}
+
+.chipCount {
+  color: var(--ph-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.chipRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-round);
+  background: transparent;
+  color: var(--ph-text-muted);
+  cursor: pointer;
+}
+
+.chipRemove:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: -2px;
+}
+
+.chipRemove:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 24px;
+  font-size: var(--font-size-md);
+  cursor: pointer;
+}
+
+.check input {
+  accent-color: var(--color-accent);
+}
+
+.facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.fact {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.fact dt {
+  color: var(--color-text-secondary);
+}
+
+.fact dd {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .panel {
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+  }
+}
+
+/* Placeholders carry instructions: the browser's grey is 2.4:1 on the field. */
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--ph-text-muted);
+}

@@ -464,8 +464,20 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
     engine.effect_cache.end_frame(&mut unused);
     fx_cache::delete_textures(engine, unused);
 
-    // 4. Apply image adjustments (exposure, contrast, etc.) if any are active
-    apply_image_adjustments(engine);
+    // 4. The develop chain: a RAW composite developed, then the image
+    // adjustments (exposure, contrast, etc.) and the develop stages that
+    // are active; with the working space, the output step for the screen.
+    run_live_develop_chain(engine);
+    if engine.working_space.is_some() {
+        // For the HDR canvas when the screen is HDR and the HDR view is on,
+        // otherwise for the screen's SDR space. No dither here: the final
+        // blit dithers an 8-bit screen.
+        let screen = crate::develop::output::live_settings(engine);
+        apply_output(engine, &screen);
+    }
+    // The selected area's mask, on screen only: exports composite again.
+    apply_areas(engine, AreasMode::Overlay);
+    apply_clipping_warning(engine);
 
     // 4b. Quick mask overlay: translucent blue tint over unselected areas
     if engine.quick_mask_texture.is_some() {
@@ -508,22 +520,47 @@ pub fn render(engine: &mut EngineInner) {
 }
 
 /// The document composited at 16 bits and encoded as a PNG. `color_space`
-/// 1 tags it Display P3; anything else sRGB.
+/// 1 tags it Display P3, 2 Rec. 2020; anything else sRGB. With the working
+/// space, its pixels are rendered for that space by the output step.
 pub fn export_png_16(engine: &mut EngineInner, color_space: u8) -> Read<Vec<u8>> {
     let (doc_w, doc_h) = (engine.doc_width, engine.doc_height);
     let cs = match color_space {
         1 => lopsy_core::color::ColorSpace::DisplayP3,
+        2 => lopsy_core::color::ColorSpace::Rec2020,
         _ => lopsy_core::color::ColorSpace::Srgb,
     };
-    composite_for_export_u16(engine)
+    composite_for_export_u16_to(engine, export_target(color_space))
         .and_then(move |pixels| lopsy_core::export::encode_png_16(&pixels, doc_w, doc_h, cs))
+}
+
+/// The document composited at 16 bits, as `export_png_16` composites it,
+/// and encoded as a Deflate-compressed 16-bit RGBA TIFF with the same
+/// colour space's ICC profile (`lopsy_core::tiff`). `color_space` 1 is
+/// Display P3, 2 Rec. 2020; anything else sRGB.
+pub fn export_tiff_16(engine: &mut EngineInner, color_space: u8) -> Read<Vec<u8>> {
+    let (doc_w, doc_h) = (engine.doc_width, engine.doc_height);
+    let cs = match color_space {
+        1 => lopsy_core::color::ColorSpace::DisplayP3,
+        2 => lopsy_core::color::ColorSpace::Rec2020,
+        _ => lopsy_core::color::ColorSpace::Srgb,
+    };
+    composite_for_export_u16_to(engine, export_target(color_space))
+        .and_then(move |pixels| lopsy_core::tiff::encode_tiff_16(&pixels, doc_w, doc_h, cs))
 }
 
 /// Draw the composite texture to the screen canvas through the viewport
 /// transform. On its own this is the whole frame when only screen-space
 /// state changed (pan, zoom, channel visibility): the composite texture
 /// still holds the current document, so no layer is re-blended.
+///
+/// A headless engine has no canvas, so there is nothing to draw: the
+/// composite texture is the frame, and what reads the live frame (the
+/// develop histogram, the screen-only views) reads that texture.
 pub fn present(engine: &mut EngineInner) -> Result<(), String> {
+    if !engine.gpu().has_screen() {
+        engine.needs_present = false;
+        return Ok(());
+    }
     let (screen_w, screen_h) = engine.gpu().screen_size()?;
     let channel_mask = engine.overlays.channel_mask;
     engine
@@ -1436,7 +1473,60 @@ fn render_stroke_apply(engine: &EngineInner, layer: &StrokeLayer, stroke: &Strok
 /// the composite texture over the background colour. Shared by the 8- and 16-bit export paths; unlike
 /// `composite` it has no in-progress stroke / preview handling and no
 /// group pre-adjustment cache.
-fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
+fn composite_layers_for_export(engine: &mut EngineInner, output: ExportOutput) -> Result<(), String> {
+    composite_layers_for_export_with(engine, ExportFinish::Full { with_adjustments: false, output })
+}
+
+/// How far `composite_layers_for_export_with` takes the composite.
+#[derive(Clone, Copy, PartialEq)]
+enum ExportFinish {
+    /// Every stage the export applies after the layers, the image
+    /// adjustments only `with_adjustments`, and with the working space the
+    /// output step for `output`.
+    Full { with_adjustments: bool, output: ExportOutput },
+    /// As `Full`, but stopping before the output step: with the working
+    /// space the composite is left rendered linear Rec. 2020, for a sized
+    /// export to resample before its own output step.
+    Rendered { with_adjustments: bool },
+    /// The blended layers only: no RAW develop or any later stage.
+    LayersOnly,
+}
+
+/// What an export's pixels are for, when the document has the working
+/// space: the output step's target, whether they are read as 8 bits
+/// (dithered, for a RAW photo), and for an HDR target its peak in units of
+/// SDR white (ignored for an SDR one).
+#[derive(Clone, Copy, PartialEq)]
+pub struct ExportOutput {
+    pub target: lopsy_core::output::OutputTarget,
+    pub is_8bit: bool,
+    pub peak: f32,
+}
+
+impl ExportOutput {
+    /// An SDR export's output.
+    const fn sdr(target: lopsy_core::output::OutputTarget, is_8bit: bool) -> Self {
+        ExportOutput { target, is_8bit, peak: 1.0 }
+    }
+}
+
+/// The output of an export's `color_space` code (0 sRGB, 1 Display P3,
+/// 2 Rec. 2020); an unknown code is sRGB, as the exports have always read it.
+fn export_target(color_space: u8) -> lopsy_core::output::OutputTarget {
+    lopsy_core::output::OutputTarget::from_code(color_space).unwrap_or(lopsy_core::output::OutputTarget::Srgb)
+}
+
+/// The document's layers composited into the composite texture, before the
+/// RAW develop stage and everything after it: for a RAW document, camera
+/// RGB at the as-shot white balance. The next frame rebuilds the live
+/// composite.
+pub fn composite_layers_only(engine: &mut EngineInner) -> Result<(), String> {
+    let result = composite_layers_for_export_with(engine, ExportFinish::LayersOnly);
+    engine.needs_recomposite = true;
+    result
+}
+
+fn composite_layers_for_export_with(engine: &mut EngineInner, finish: ExportFinish) -> Result<(), String> {
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
     let bg = engine.bg_color;
@@ -1556,14 +1646,36 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
         }
     }
 
+    let (with_adjustments, output) = match finish {
+        ExportFinish::LayersOnly => return Ok(()),
+        ExportFinish::Full { with_adjustments, output } => (with_adjustments, Some(output)),
+        ExportFinish::Rendered { with_adjustments } => (with_adjustments, None),
+    };
+    // Exports develop a RAW composite as the live frame does.
+    run_develop_chain(engine, ChainRun::Export { with_adjustments });
+    if let Some(output) = output.filter(|_| engine.working_space.is_some()) {
+        let settings = export_output_settings(engine, output, with_adjustments);
+        apply_output(engine, &settings);
+    }
     Ok(())
+}
+
+/// The output step's settings for an export's `output`, after a chain that
+/// applied the image adjustments when `with_adjustments`.
+fn export_output_settings(engine: &EngineInner, output: ExportOutput, with_adjustments: bool) -> lopsy_core::output::OutputSettings {
+    if output.target.is_hdr() {
+        crate::develop::output::hdr_settings_for(engine, output.target, output.peak)
+    } else {
+        crate::develop::output::settings_for(engine, output.target, output.is_8bit, with_adjustments)
+    }
 }
 
 /// Composite for export — render to FBO, readPixels
 pub fn composite_for_export(engine: &mut EngineInner) -> Read<Vec<u8>> {
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
-    if let Err(e) = composite_layers_for_export(engine) {
+    let output = ExportOutput::sdr(lopsy_core::output::OutputTarget::Srgb, true);
+    if let Err(e) = composite_layers_for_export(engine, output) {
         return Read::failed(e);
     }
     // The export render replaced the live composite (no quick mask, no
@@ -1594,7 +1706,8 @@ async fn with_composite_for_reuse<T>(
 ) -> Result<T, String> {
     let lab = cx.with(|engine| -> Result<_, String> {
         let (doc_w, doc_h) = (engine.doc_width, engine.doc_height);
-        composite_layers_for_export(engine)?;
+        // The composite is copied at the layer's precision, not read as bytes.
+        composite_layers_for_export(engine, ExportOutput::sdr(lopsy_core::output::OutputTarget::Srgb, false))?;
         // The live composite was replaced; the next frame must rebuild it.
         engine.needs_recomposite = true;
         let is_lab = engine.doc_color_mode == 1;
@@ -1661,16 +1774,22 @@ pub fn decode_native_color_mode(doc_color_mode: u32, pixels: &mut [u8]) {
 }
 
 /// Composite for export at 16-bit precision — same pipeline as
-/// `composite_for_export` but reads back as u16 RGBA.
+/// `composite_for_export` but reads back as u16 RGBA, with the image
+/// adjustments, and with the working space rendered for sRGB.
 pub fn composite_for_export_u16(engine: &mut EngineInner) -> Read<Vec<u16>> {
+    composite_for_export_u16_to(engine, lopsy_core::output::OutputTarget::Srgb)
+}
+
+/// `composite_for_export_u16` with the working space rendered for `target`
+/// (not dithered).
+pub fn composite_for_export_u16_to(engine: &mut EngineInner, target: lopsy_core::output::OutputTarget) -> Read<Vec<u16>> {
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
-    if let Err(e) = composite_layers_for_export(engine) {
+    let finish = ExportFinish::Full { with_adjustments: true, output: ExportOutput::sdr(target, false) };
+    if let Err(e) = composite_layers_for_export_with(engine, finish) {
         return Read::failed(e);
     }
     engine.needs_recomposite = true;
-
-    apply_image_adjustments(engine);
 
     let is_lab = engine.doc_color_mode == 1;
     engine.gpu().read_rgba_u16(engine.composite_texture, 0, 0, doc_w, doc_h).map(move |mut pixels| {
@@ -1693,6 +1812,204 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Read<Vec<u16>> {
         }
         pixels
     })
+}
+
+/// The document composited as `composite_for_export` composites it (the
+/// image adjustments left out, as there; the working space never runs them
+/// anyway), then the output step for an HDR file: linear Rec. 2020, 1.0 =
+/// SDR white, highlights rolled off toward `peak` (units of SDR white,
+/// through `lopsy_core::output::hdr_peak`). Read as 32-bit float RGBA,
+/// straight alpha, `doc_width × doc_height` texels from the top row: what
+/// `lopsy_core::hdr_png::encode_pq_png` and `gain_map::compute_gain_map`
+/// take. At the document's size, whatever the screen is. Fails without the
+/// working space, since without it nothing is linear or above white.
+pub fn composite_for_export_hdr_f32(engine: &mut EngineInner, peak: f32) -> Read<Vec<f32>> {
+    if engine.working_space.is_none() {
+        return Read::failed("The document has no working space".to_string());
+    }
+    let (doc_w, doc_h) = (engine.doc_width, engine.doc_height);
+    let output = ExportOutput { target: lopsy_core::output::OutputTarget::LinearRec2020, is_8bit: false, peak };
+    if let Err(e) = composite_layers_for_export(engine, output) {
+        return Read::failed(e);
+    }
+    engine.needs_recomposite = true;
+    engine.gpu().read_rgba_f32(engine.composite_texture, 0, 0, doc_w, doc_h)
+}
+
+/// The widest footprint, in source texels on an axis, of which one
+/// `thumbnail_box.wgsl` pass averages every texel (its 64 taps per axis,
+/// two texels apart). Past it the shader subsamples, which can alias.
+const BOX_STEP_MAX: u32 = 128;
+
+/// How much each step but the last of a longer reduction shrinks an axis.
+const BOX_STEP: u32 = 64;
+
+/// The sizes a box reduction from `from` to `to` passes through, `to`
+/// last. One step when no axis shrinks by more than `BOX_STEP_MAX`;
+/// otherwise images `BOX_STEP` times smaller (never below `to`) first, so
+/// every step averages every texel it covers. Each intermediate image is at
+/// most a 64th of `from` on each axis.
+pub(crate) fn reduction_steps(from: (u32, u32), to: (u32, u32)) -> Vec<(u32, u32)> {
+    let mut steps = Vec::new();
+    let mut at = from;
+    while at.0 > to.0.saturating_mul(BOX_STEP_MAX) || at.1 > to.1.saturating_mul(BOX_STEP_MAX) {
+        at = (at.0.div_ceil(BOX_STEP).max(to.0), at.1.div_ceil(BOX_STEP).max(to.1));
+        steps.push(at);
+    }
+    steps.push(to);
+    steps
+}
+
+/// A sized export's `width × height`: not empty, and no larger than the
+/// document on either axis, since a sized export only reduces. The aspect
+/// ratio is the caller's: each axis is scaled on its own.
+fn sized_export_size(engine: &EngineInner, width: u32, height: u32) -> Result<(u32, u32), String> {
+    let (doc_w, doc_h) = (engine.doc_width, engine.doc_height);
+    if width == 0 || height == 0 {
+        return Err(format!("An export of {width}x{height} pixels is empty"));
+    }
+    if width > doc_w || height > doc_h {
+        return Err(format!("An export of {width}x{height} is larger than the {doc_w}x{doc_h} document: a sized export only reduces"));
+    }
+    Ok((width, height))
+}
+
+/// The composite (document-sized, straight alpha) box-reduced to `size`
+/// into scratch A's texels (0, 0) to `size`. `thumbnail_box.wgsl` averages
+/// each output pixel's whole footprint in premultiplied colour and returns
+/// straight alpha: exactly for a footprint of one texel (a copy) or an even
+/// number of them, and for any other through 2×2 bilinear taps spread evenly
+/// over it, a box softened by about a texel, so a large reduction does not
+/// alias. A reduction past `BOX_STEP_MAX` goes through smaller pooled images
+/// (`reduction_steps`), each given back on every path.
+fn reduce_composite_into_scratch_a(engine: &mut EngineInner, size: (u32, u32)) -> Result<(), String> {
+    let steps = reduction_steps((engine.doc_width, engine.doc_height), size);
+    let mut source = engine.composite_texture;
+    let mut held: Option<TextureHandle> = None;
+    let mut result = Ok(());
+    for (i, &(w, h)) in steps.iter().enumerate() {
+        let target = if i + 1 == steps.len() {
+            None
+        } else {
+            match engine.texture_pool.acquire(w, h) {
+                Ok(texture) => Some(texture),
+                Err(e) => {
+                    result = Err(e);
+                    break;
+                }
+            }
+        };
+        let params = crate::gpu::params::core::ThumbnailBoxParams {
+            dst_size: [w as f32, h as f32],
+            channel: crate::document::thumbnail_gpu::COLOUR,
+        };
+        let pass = engine
+            .pass(&engine.shaders.thumbnail_box, params)
+            .texture("u_tex", source)
+            .blend(Blend::Off)
+            .viewport(0, 0, w as i32, h as i32);
+        let is_drawn = match target {
+            Some(texture) => pass.draw(Target::Texture(texture)),
+            None => pass.draw(Target::Framebuffer(engine.scratch_fbo_a)),
+        };
+        engine.gpu().unbind_textures(1);
+        // The previous step's image has been read by this pass.
+        if let Some(old) = held.take() {
+            engine.texture_pool.release(old);
+        }
+        held = target;
+        if !is_drawn {
+            result = Err("The export's reduction did not draw".to_string());
+            break;
+        }
+        if let Some(texture) = target {
+            source = texture;
+        }
+    }
+    if let Some(texture) = held {
+        engine.texture_pool.release(texture);
+    }
+    result
+}
+
+/// The export chain for `output` at `size`: every stage at the document's
+/// size up to the output step, the rendered image box-reduced to `size`
+/// (`reduce_composite_into_scratch_a`), then, with the working space, the
+/// output step on the reduced image. Reducing before the output step makes
+/// the HDR and SDR pictures of one size from one resampled image, so a gain
+/// map between them is consistent. Sharpening, grain and every blur run at
+/// the document's size, with the document's `pixelScale`, and are reduced
+/// with the rest: what an export made at full size and then scaled down
+/// shows, as the resized 8-bit export does through the canvas copy.
+///
+/// Returns the texture whose texels (0, 0) to `size` hold the result:
+/// the composite after the output step, or scratch A without the working
+/// space (sRGB-encoded values, reduced as they are). No document-sized
+/// texture is acquired beyond the composite and scratch A that the
+/// full-size export uses.
+fn render_export_sized(engine: &mut EngineInner, output: ExportOutput, size: (u32, u32)) -> Result<TextureHandle, String> {
+    // The export render replaces the live composite whatever happens next.
+    engine.needs_recomposite = true;
+    let with_adjustments = false;
+    composite_layers_for_export_with(engine, ExportFinish::Rendered { with_adjustments })?;
+    reduce_composite_into_scratch_a(engine, size)?;
+    if engine.working_space.is_none() {
+        return Ok(engine.scratch_texture_a);
+    }
+    let settings = export_output_settings(engine, output, with_adjustments);
+    let program = engine.shaders.output()?;
+    // The output step reads each texel at its own position and dithers by
+    // it, so drawing the reduced image's rectangle is the step at `size`.
+    let is_drawn = crate::develop::output::pass(engine, &program, engine.scratch_texture_a, &settings)
+        .blend(Blend::Off)
+        .viewport(0, 0, size.0 as i32, size.1 as i32)
+        .draw(Target::Framebuffer(engine.composite_fbo));
+    engine.gpu().unbind_textures(1);
+    if is_drawn {
+        Ok(engine.composite_texture)
+    } else {
+        Err("The export's output step did not draw".to_string())
+    }
+}
+
+/// `composite_for_export` at `width × height` (each at most the document's,
+/// neither 0): RGBA8 sRGB, straight alpha, `width × height × 4` bytes, rows
+/// from the top. The same chain, then the rendered image box-reduced on the
+/// GPU (`render_export_sized`), then the output step for sRGB, dithered for
+/// a RAW photo as the full-size read is. Without the working space the
+/// chain's sRGB-encoded result is reduced. The picture
+/// `composite_for_export_hdr_f32_sized` makes at the same size, as an SDR
+/// rendering: the two make a gain map. Fails for an empty size or one
+/// larger than the document. The next frame rebuilds the live composite.
+pub fn composite_for_export_sized(engine: &mut EngineInner, width: u32, height: u32) -> Read<Vec<u8>> {
+    let output = ExportOutput::sdr(lopsy_core::output::OutputTarget::Srgb, true);
+    let texture = match sized_export_size(engine, width, height).and_then(|size| render_export_sized(engine, output, size)) {
+        Ok(texture) => texture,
+        Err(e) => return Read::failed(e),
+    };
+    let doc_color_mode = engine.doc_color_mode;
+    engine.gpu().read_rgba(texture, 0, 0, width, height).map(move |mut pixels| {
+        decode_native_color_mode(doc_color_mode, &mut pixels);
+        pixels
+    })
+}
+
+/// `composite_for_export_hdr_f32` at `width × height` (each at most the
+/// document's, neither 0): linear Rec. 2020 RGBA f32, straight alpha,
+/// 1.0 = SDR white, up to `peak`, `width × height × 4` floats, rows from
+/// the top. The same chain, then the rendered image box-reduced on the GPU
+/// (`render_export_sized`), then the output step for the HDR file. Fails
+/// without the working space, and for an empty size or one larger than
+/// the document. The next frame rebuilds the live composite.
+pub fn composite_for_export_hdr_f32_sized(engine: &mut EngineInner, peak: f32, width: u32, height: u32) -> Read<Vec<f32>> {
+    if engine.working_space.is_none() {
+        return Read::failed("The document has no working space".to_string());
+    }
+    let output = ExportOutput { target: lopsy_core::output::OutputTarget::LinearRec2020, is_8bit: false, peak };
+    match sized_export_size(engine, width, height).and_then(|size| render_export_sized(engine, output, size)) {
+        Ok(texture) => engine.gpu().read_rgba_f32(texture, 0, 0, width, height),
+        Err(e) => Read::failed(e),
+    }
 }
 
 /// Replace a layer's pixels with the layer and its effects, rendered onto a
@@ -1805,7 +2122,7 @@ fn vignette_pass<'a>(engine: &'a EngineInner, source: TextureHandle, amount: f32
 }
 
 /// Returns true if any adjustment in the state is non-default (i.e., would change pixels).
-fn has_any_adjustment(adj: &crate::engine::ImageAdjustmentState) -> bool {
+pub(crate) fn has_any_adjustment(adj: &crate::engine::ImageAdjustmentState) -> bool {
     adj.exposure.abs() > 1e-6
         || adj.contrast.abs() > 1e-6
         || adj.highlights.abs() > 1e-6
@@ -1828,6 +2145,770 @@ fn has_any_adjustment(adj: &crate::engine::ImageAdjustmentState) -> bool {
         || adj.invert
         || adj.has_gradient_map
         || adj.cg_enabled
+}
+
+/// Develop the composite in place when a RAW develop stage is set: composite
+/// -> scratch A through `raw_develop.wgsl`, then copied back texel for texel.
+/// A no-op when `engine.raw_develop` is `None`.
+fn apply_raw_develop(engine: &EngineInner) {
+    let Some(state) = engine.raw_develop.as_ref() else {
+        return;
+    };
+    let program = match engine.shaders.raw_develop() {
+        Ok(program) => program,
+        Err(e) => {
+            crate::host::log(crate::host::LogLevel::Error, &format!("RAW develop shader: {e}"));
+            return;
+        }
+    };
+    let (pass, units) = crate::develop::pass(engine, &program, engine.composite_texture, state);
+    let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
+    engine.gpu().unbind_textures(units);
+    if !is_drawn {
+        return;
+    }
+    doc_pass(engine, &engine.shaders.copy_exact, ())
+        .texture("u_tex", engine.scratch_texture_a)
+        .draw(Target::Framebuffer(engine.composite_fbo));
+}
+
+// ---------------------------------------------------------------------------
+// The develop chain (`develop/mod.rs` has the stage table)
+// ---------------------------------------------------------------------------
+
+/// Which run of the develop chain.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ChainRun {
+    /// The live frame: sharpening may show its mask instead.
+    Live,
+    /// The live frame's photo while the sharpening mask view is on: as
+    /// `Live`, with real sharpening in place of the mask. What the
+    /// statistics keep (`run_live_develop_chain`).
+    LivePhoto,
+    /// An export. The 16-bit exports apply the image adjustments; the 8-bit
+    /// export and Flatten never have in Lopsy, and still do not.
+    Export { with_adjustments: bool },
+}
+
+impl ChainRun {
+    fn applies_adjustments(self) -> bool {
+        !matches!(self, ChainRun::Export { with_adjustments: false })
+    }
+}
+
+/// What the image is in between the working space's entry and its output
+/// step, for the stages there.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum StageSpace {
+    /// Rendered linear Rec. 2020.
+    Rendered,
+    /// sRGB-encoded values in sRGB primaries, extended past 0..1
+    /// (`develop::working_space::Conversion::ToDisplay`).
+    Display,
+}
+
+/// A stage between the RAW (or input) step and the output step.
+struct MiddleStage {
+    /// What it works on with the working space. Without one, everything is
+    /// display-encoded and no stage is wrapped.
+    space: StageSpace,
+    /// Whether it changes the image in this run: the chain converts only
+    /// for a stage that does, so with none of them on it never leaves the
+    /// working space.
+    draws: fn(&EngineInner, ChainRun) -> bool,
+    apply: fn(&mut EngineInner, ChainRun),
+}
+
+/// The stages in order. Without the working space every stage is drawn as
+/// it always was and none is wrapped. With it, a `Display` stage still
+/// assumes sRGB-encoded values, and the chain runs consecutive ones inside
+/// one conversion there and one back; a `Rendered` stage works on rendered
+/// linear Rec. 2020. Noise reduction and haze have run on scene data by
+/// then (`scene_stages`), so their entries here draw only without it. The image adjustments (Lopsy's), the old colour by hue
+/// and the old areas pass do not run at all with the working space: the
+/// tone pass (`enter_working_space`) and the look pass do their jobs.
+/// Each `apply` checks what its `draws` checks, since the chain calls
+/// `apply` whatever `draws` says.
+const MIDDLE_STAGES: [MiddleStage; 9] = [
+    MiddleStage {
+        // With the working space, noise reduction runs on scene data before
+        // the tone pass (`scene_stages`).
+        space: StageSpace::Display,
+        draws: |e, _| e.working_space.is_none() && e.detail.is_some_and(|d| d.reduces_noise()),
+        apply: |e, _| {
+            if e.working_space.is_none() {
+                crate::develop::detail::apply_noise_reduction(e);
+            }
+        },
+    },
+    MiddleStage {
+        // With the working space, large and small details on rendered
+        // linear data (haze ran on scene data before the tone pass);
+        // without it, the old stage on encoded values with haze.
+        space: StageSpace::Rendered,
+        draws: |e, _| match e.working_space {
+            Some(_) => e.local_contrast.is_some_and(|l| lopsy_core::linear_detail::local_contrast_draws(&l)),
+            None => e.local_contrast.is_some_and(|l| l.is_active()),
+        },
+        apply: |e, _| match e.working_space {
+            Some(_) => crate::develop::detail::apply_local_contrast_linear(e),
+            None => crate::develop::detail::apply_local_contrast(e),
+        },
+    },
+    MiddleStage {
+        space: StageSpace::Display,
+        draws: image_adjustments_draw,
+        apply: |e, run| {
+            if image_adjustments_draw(e, run) {
+                apply_image_adjustments(e);
+            }
+        },
+    },
+    MiddleStage {
+        space: StageSpace::Display,
+        draws: |e, _| e.working_space.is_none() && e.color_mixer.is_some(),
+        apply: |e, _| {
+            if e.working_space.is_none() {
+                apply_color_mixer(e);
+            }
+        },
+    },
+    MiddleStage {
+        space: StageSpace::Rendered,
+        draws: |e, _| look_draws(e),
+        apply: |e, _| {
+            if look_draws(e) {
+                apply_look(e, &crate::develop::look::document_run(e));
+            }
+        },
+    },
+    MiddleStage {
+        space: StageSpace::Display,
+        draws: |e, _| e.working_space.is_none() && e.areas.as_ref().is_some_and(|v| v.len() >= lopsy_core::areas::STRIDE),
+        apply: |e, _| {
+            if e.working_space.is_none() {
+                apply_areas(e, AreasMode::Apply);
+            }
+        },
+    },
+    MiddleStage {
+        // With the working space each layer converts for its display-encoded
+        // stages itself; without it nothing is converted.
+        space: StageSpace::Rendered,
+        draws: |e, _| {
+            let count = e.areas.as_ref().map_or(0, |v| v.len() / lopsy_core::areas::STRIDE);
+            let ws = e.working_space.is_some();
+            e.area_layers.iter().take(count).any(|l| l.as_ref().is_some_and(|l| area_layer_draws(l, ws)))
+        },
+        apply: |e, _| apply_area_layers(e),
+    },
+    MiddleStage {
+        space: StageSpace::Display,
+        draws: sharpening_draws,
+        apply: |e, run| match run {
+            ChainRun::Live => crate::develop::detail::apply_sharpening_live(e),
+            ChainRun::LivePhoto | ChainRun::Export { .. } => crate::develop::detail::apply_sharpening(e),
+        },
+    },
+    MiddleStage {
+        space: StageSpace::Display,
+        draws: |e, _| e.finish.is_some_and(|f| f.is_active()),
+        apply: |e, _| apply_finish(e),
+    },
+];
+
+/// Whether Lopsy's image adjustments (stage 5) run: never with the working
+/// space.
+fn image_adjustments_draw(e: &EngineInner, run: ChainRun) -> bool {
+    e.working_space.is_none()
+        && run.applies_adjustments()
+        && (has_any_adjustment(&e.adjustments) || e.adjustments.vignette.abs() > 1e-6)
+}
+
+/// Whether the document's look pass runs: only with the working space.
+pub fn look_draws(e: &EngineInner) -> bool {
+    e.working_space.is_some() && crate::develop::look::document_run(e).draws()
+}
+
+/// The develop chain over the composite, from the RAW step to the last
+/// stage before the output step. With the working space the composite is
+/// rendered linear Rec. 2020 afterwards; without it, everything is as it
+/// always was.
+fn run_develop_chain(engine: &mut EngineInner, run: ChainRun) {
+    enter_develop_chain(engine);
+    let space = run_middle_stages(engine, run, &MIDDLE_STAGES, StageSpace::Rendered);
+    back_to_rendered(engine, space);
+}
+
+/// The chain's start: the RAW step, and with the working space its entry
+/// (`enter_working_space`), after which the composite is rendered data.
+fn enter_develop_chain(engine: &mut EngineInner) {
+    apply_raw_develop(engine);
+    if engine.working_space.is_some() {
+        enter_working_space(engine);
+    }
+}
+
+/// `stages` over the composite, which is in `space` when they start; with
+/// the working space each stage that draws is converted into its own space
+/// first. Returns the space the composite is left in.
+fn run_middle_stages(engine: &mut EngineInner, run: ChainRun, stages: &[MiddleStage], mut space: StageSpace) -> StageSpace {
+    let has_working_space = engine.working_space.is_some();
+    for stage in stages {
+        if has_working_space && stage.space != space && (stage.draws)(engine, run) {
+            convert_composite(engine, conversion_between(space, stage.space));
+            space = stage.space;
+        }
+        (stage.apply)(engine, run);
+    }
+    space
+}
+
+/// The composite, in `space` after the middle stages, back to rendered data.
+fn back_to_rendered(engine: &EngineInner, space: StageSpace) {
+    if space != StageSpace::Rendered {
+        convert_composite(engine, conversion_between(space, StageSpace::Rendered));
+    }
+}
+
+/// Where sharpening (stage 8) is in `MIDDLE_STAGES`.
+const SHARPENING_STAGE: usize = 7;
+
+/// Whether sharpening draws in `run`: in the live frame its mask draws in
+/// its place while the mask view is on, whether or not it sharpens.
+fn sharpening_draws(e: &EngineInner, run: ChainRun) -> bool {
+    match run {
+        ChainRun::Live => e.detail.is_some_and(|d| d.sharpens() || e.detail_mask_view),
+        ChainRun::LivePhoto | ChainRun::Export { .. } => e.detail.is_some_and(|d| d.sharpens()),
+    }
+}
+
+/// The live frame's develop chain, and with the working space its rendered
+/// image kept for the statistics (`keep_rendered`). The kept image is the
+/// photo, never a screen-only view. While the sharpening mask view draws
+/// and the image is kept, the chain splits at sharpening: the composite
+/// there is set aside in scratch B (which nothing else holds across these
+/// stages), sharpening and the stages after it run for real and that result
+/// is kept, then the set-aside composite comes back and the same stages run
+/// with the mask for the screen. Sharpening and finish run twice then, and
+/// only then: with the view off, or with nothing asking for the kept image,
+/// the frame is the chain once, as it always was.
+fn run_live_develop_chain(engine: &mut EngineInner) {
+    let keeps = engine.working_space.is_some_and(|ws| ws.keep_rendered);
+    let splits = keeps && engine.detail_mask_view && sharpening_draws(engine, ChainRun::Live);
+    if !splits {
+        run_develop_chain(engine, ChainRun::Live);
+        if engine.working_space.is_some() {
+            log_kept(keep_rendered(engine));
+        }
+        return;
+    }
+    enter_develop_chain(engine);
+    let (before, after) = MIDDLE_STAGES.split_at(SHARPENING_STAGE);
+    let space = run_middle_stages(engine, ChainRun::Live, before, StageSpace::Rendered);
+    doc_pass(engine, &engine.shaders.copy_exact, ())
+        .texture("u_tex", engine.composite_texture)
+        .draw(Target::Framebuffer(engine.scratch_fbo_b));
+    engine.gpu().unbind_textures(1);
+    let photo = run_middle_stages(engine, ChainRun::LivePhoto, after, space);
+    back_to_rendered(engine, photo);
+    log_kept(keep_rendered(engine));
+    doc_pass(engine, &engine.shaders.copy_exact, ())
+        .texture("u_tex", engine.scratch_texture_b)
+        .draw(Target::Framebuffer(engine.composite_fbo));
+    engine.gpu().unbind_textures(1);
+    let screen = run_middle_stages(engine, ChainRun::Live, after, space);
+    back_to_rendered(engine, screen);
+}
+
+fn log_kept(result: Result<(), String>) {
+    if let Err(e) = result {
+        crate::host::log(crate::host::LogLevel::Error, &format!("Rendered image: {e}"));
+    }
+}
+
+fn conversion_between(from: StageSpace, to: StageSpace) -> crate::develop::working_space::Conversion {
+    use crate::develop::working_space::Conversion;
+    match (from, to) {
+        (StageSpace::Rendered, StageSpace::Display) => Conversion::ToDisplay,
+        _ => Conversion::FromDisplay,
+    }
+}
+
+/// Into the working space after the RAW step: the tone step for a RAW
+/// photo (the RAW step left scene data), the input step for any other;
+/// then the stages on scene data (`scene_stages`). The tone pass also holds
+/// tone on scene data; a photo that is not RAW runs it only when that has
+/// something to do.
+fn enter_working_space(engine: &mut EngineInner) {
+    let Some(ws) = engine.working_space else { return };
+    if engine.raw_develop.is_none() {
+        convert_composite(engine, crate::develop::working_space::Conversion::Input(ws.source));
+    }
+    scene_stages(engine);
+    capture_scene(engine);
+    match &engine.raw_develop {
+        Some(state) => apply_tone(engine, Some(state)),
+        None if crate::develop::tone::scene_is_active(engine) => apply_tone(engine, None),
+        None => {}
+    }
+}
+
+/// The stages on scene data, before the tone pass (and before the scene
+/// statistics are read, so they describe what the tone pass sees): noise
+/// reduction, today's algorithm inside the display encoding, which keeps
+/// values above 1 and below 0, then haze (`lopsy_core::linear_detail`).
+/// Each is skipped when it has nothing to do.
+fn scene_stages(engine: &mut EngineInner) {
+    use crate::develop::working_space::Conversion;
+    if engine.detail.is_some_and(|d| d.reduces_noise()) {
+        convert_composite(engine, Conversion::ToDisplay);
+        crate::develop::detail::apply_noise_reduction_scene(engine);
+        convert_composite(engine, Conversion::FromDisplay);
+    }
+    crate::develop::detail::apply_haze(engine);
+}
+
+/// The scene image, before the tone pass, box-downscaled into
+/// `engine.scene_capture` when a statistics read asked for it.
+fn capture_scene(engine: &EngineInner) {
+    let Some(target) = engine.scene_capture else { return };
+    let Some((tw, th)) = engine.texture_pool.get_size(target) else { return };
+    let params = crate::gpu::params::core::ThumbnailBoxParams { dst_size: [tw as f32, th as f32], channel: -1 };
+    engine
+        .pass(&engine.shaders.thumbnail_box, params)
+        .texture("u_tex", engine.composite_texture)
+        .draw(Target::Texture(target));
+    engine.gpu().unbind_textures(1);
+}
+
+/// `pass`, which reads the composite, drawn into scratch A over the
+/// document and copied back over the composite texel for texel. `units` is
+/// how many texture units the pass bound.
+fn through_scratch_a<P>(engine: &EngineInner, pass: Pass<'_, P>, units: u32) {
+    let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
+    engine.gpu().unbind_textures(units);
+    if !is_drawn {
+        return;
+    }
+    doc_pass(engine, &engine.shaders.copy_exact, ())
+        .texture("u_tex", engine.scratch_texture_a)
+        .draw(Target::Framebuffer(engine.composite_fbo));
+}
+
+fn convert_composite(engine: &EngineInner, conversion: crate::develop::working_space::Conversion) {
+    let program = match engine.shaders.working_space() {
+        Ok(program) => program,
+        Err(e) => {
+            crate::host::log(crate::host::LogLevel::Error, &format!("Working space shader: {e}"));
+            return;
+        }
+    };
+    let pass = crate::develop::working_space::pass(engine, &program, engine.composite_texture, conversion);
+    through_scratch_a(engine, pass, 1);
+}
+
+fn apply_tone(engine: &EngineInner, raw: Option<&crate::develop::RawDevelopState>) {
+    let program = match engine.shaders.tone() {
+        Ok(program) => program,
+        Err(e) => {
+            crate::host::log(crate::host::LogLevel::Error, &format!("Tone shader: {e}"));
+            return;
+        }
+    };
+    let (pass, units) = crate::develop::tone::pass_for(engine, &program, engine.composite_texture, raw);
+    through_scratch_a(engine, pass, units);
+}
+
+/// The look pass over the composite in place, with `run`'s settings.
+fn apply_look(engine: &EngineInner, run: &crate::develop::look::LookRun) {
+    let program = match engine.shaders.look() {
+        Ok(program) => program,
+        Err(e) => {
+            crate::host::log(crate::host::LogLevel::Error, &format!("Look shader: {e}"));
+            return;
+        }
+    };
+    let (pass, units) = crate::develop::look::pass(engine, &program, engine.composite_texture, run);
+    through_scratch_a(engine, pass, units);
+}
+
+/// The output step over the composite in place: rendered linear Rec. 2020
+/// to `settings`' target.
+fn apply_output(engine: &EngineInner, settings: &lopsy_core::output::OutputSettings) {
+    let program = match engine.shaders.output() {
+        Ok(program) => program,
+        Err(e) => {
+            crate::host::log(crate::host::LogLevel::Error, &format!("Output shader: {e}"));
+            return;
+        }
+    };
+    let pass = crate::develop::output::pass(engine, &program, engine.composite_texture, settings);
+    through_scratch_a(engine, pass, 1);
+}
+
+/// Keep the live frame's rendered image (the composite now, before the
+/// output step) in the working space's own texture, for the statistics and
+/// the float read, once one of them has asked (`want_rendered`).
+fn keep_rendered(engine: &mut EngineInner) -> Result<(), String> {
+    let Some(mut ws) = engine.working_space.filter(|ws| ws.keep_rendered) else { return Ok(()) };
+    let size = (engine.doc_width, engine.doc_height);
+    let texture = match ws.rendered.filter(|&t| engine.texture_pool.get_size(t) == Some(size)) {
+        Some(texture) => texture,
+        None => {
+            if let Some(old) = ws.rendered.take() {
+                engine.texture_pool.release(old);
+            }
+            engine.working_space = Some(ws);
+            let texture = engine.texture_pool.acquire(size.0, size.1)?;
+            ws.rendered = Some(texture);
+            engine.working_space = Some(ws);
+            texture
+        }
+    };
+    doc_pass(engine, &engine.shaders.copy_exact, ())
+        .texture("u_tex", engine.composite_texture)
+        .draw(Target::Texture(texture));
+    engine.gpu().unbind_textures(1);
+    Ok(())
+}
+
+/// What a read of the rendered image calls first (the statistics through
+/// `statistics_image` and `hdr_statistics_image`, and the float read): from
+/// now on live frames keep their rendered image, and if they did not until
+/// now the frame is drawn again so there is one to read. Without the
+/// working space it does nothing.
+pub fn want_rendered(engine: &mut EngineInner) {
+    let Some(ws) = engine.working_space.as_mut() else { return };
+    if ws.keep_rendered {
+        return;
+    }
+    ws.keep_rendered = true;
+    engine.needs_recomposite = true;
+    render(engine);
+}
+
+/// The last live frame's rendered image through the output step for sRGB,
+/// with no dither, in scratch A, inside `rect` (the whole document when
+/// `None`): what the statistics read, whatever the screen is. `None` when
+/// the document has no working space or no frame has been drawn with it.
+pub fn statistics_image(engine: &EngineInner, rect: Option<Rect>) -> Option<TextureHandle> {
+    let settings = crate::develop::output::settings_for(engine, lopsy_core::output::OutputTarget::Srgb, false, true);
+    rendered_through(engine, rect, &settings)
+}
+
+/// The last live frame's rendered image through the HDR output for the
+/// HDR canvas in sRGB primaries with `peak`, in scratch A: what the HDR
+/// histogram reads, whatever the screen is. `None` as for
+/// `statistics_image`.
+pub fn hdr_statistics_image(engine: &EngineInner, peak: f32) -> Option<TextureHandle> {
+    let settings = crate::develop::output::hdr_settings_for(engine, lopsy_core::output::OutputTarget::ExtendedSrgb, peak);
+    rendered_through(engine, None, &settings)
+}
+
+/// The last live frame's rendered image through the output step for
+/// `settings`, in scratch A, inside `rect` (the whole document when `None`).
+fn rendered_through(engine: &EngineInner, rect: Option<Rect>, settings: &lopsy_core::output::OutputSettings) -> Option<TextureHandle> {
+    let rendered = engine.working_space?.rendered.filter(|&t| engine.texture_pool.get(t).is_some())?;
+    let program = match engine.shaders.output() {
+        Ok(program) => program,
+        Err(e) => {
+            crate::host::log(crate::host::LogLevel::Error, &format!("Output shader: {e}"));
+            return None;
+        }
+    };
+    let pass = crate::develop::output::pass(engine, &program, rendered, settings);
+    let scissor = rect.map_or(Scissor::Off, Scissor::Rect);
+    let is_drawn = over_document(engine, pass).scissor(scissor).draw(Target::Framebuffer(engine.scratch_fbo_a));
+    engine.gpu().unbind_textures(1);
+    is_drawn.then_some(engine.scratch_texture_a)
+}
+
+/// The shaped vignette and grain over the composite, last in the develop
+/// chain, when set and active.
+fn apply_finish(engine: &EngineInner) {
+    let Some(s) = engine.finish.filter(lopsy_core::finish::FinishSettings::is_active) else {
+        return;
+    };
+    let program = match engine.shaders.finish() {
+        Ok(program) => program,
+        Err(e) => {
+            crate::host::log(crate::host::LogLevel::Error, &format!("Finish shader: {e}"));
+            return;
+        }
+    };
+    let params = crate::gpu::params::develop::FinishParams {
+        vignette: [s.vignette, s.size, s.roundness, s.feather],
+        grain: [s.grain, s.grain_size, s.roughness, s.pixel_scale],
+        doc_size: [engine.doc_width as f32, engine.doc_height as f32],
+        seed: s.seed,
+    };
+    let pass = engine.pass(&program, params).texture("u_tex", engine.composite_texture);
+    let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
+    engine.gpu().unbind_textures(1);
+    if !is_drawn {
+        return;
+    }
+    doc_pass(engine, &engine.shaders.copy_exact, ())
+        .texture("u_tex", engine.scratch_texture_a)
+        .draw(Target::Framebuffer(engine.composite_fbo));
+}
+
+/// The clipping warning over the live composite (never in exports): blue
+/// where any channel is at or below 0, red where any is at or above 1, or
+/// at the peak in the HDR view.
+fn apply_clipping_warning(engine: &EngineInner) {
+    let (shadows, highlights) = engine.clipping_warning;
+    if !shadows && !highlights {
+        return;
+    }
+    let program = match engine.shaders.clip_warning() {
+        Ok(program) => program,
+        Err(e) => {
+            crate::host::log(crate::host::LogLevel::Error, &format!("Clipping warning shader: {e}"));
+            return;
+        }
+    };
+    // With the working space the frame has been through the output step,
+    // which brings every channel inside 0..1 (SDR) or 0..the peak (the HDR
+    // view): what clips on screen is what shows as 0 or as the top, within
+    // half an 8-bit step. The HDR canvas holds the peak encoded with the
+    // sRGB curve, so the top is that.
+    let margin = if engine.working_space.is_some() { 0.5 / 255.0 } else { 0.0 };
+    // Exactly 1 otherwise: the sRGB curve at 1 rounds a hair under it.
+    let white = if engine.working_space.is_some() && crate::develop::output::live_is_hdr(engine) {
+        lopsy_core::working_space::srgb_encode(crate::develop::output::live_peak(engine))
+    } else {
+        1.0
+    };
+    let params = crate::gpu::params::develop::ClipWarningParams { shadows: i32::from(shadows), highlights: i32::from(highlights), margin, white };
+    let pass = engine.pass(&program, params).texture("u_tex", engine.composite_texture);
+    let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
+    engine.gpu().unbind_textures(1);
+    if !is_drawn {
+        return;
+    }
+    doc_pass(engine, &engine.shaders.copy_exact, ())
+        .texture("u_tex", engine.scratch_texture_a)
+        .draw(Target::Framebuffer(engine.composite_fbo));
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AreasMode {
+    Apply,
+    Overlay,
+}
+
+/// The document's areas over the composite in place (`Apply`), or the red
+/// mask overlay of `engine.area_overlay` (`Overlay`, live frame only). A
+/// no-op without areas, or for `Overlay` without a valid index.
+fn apply_areas(engine: &EngineInner, mode: AreasMode) {
+    let Some(values) = engine.areas.as_ref() else {
+        return;
+    };
+    let count = (values.len() / lopsy_core::areas::STRIDE) as i32;
+    if count == 0 || (mode == AreasMode::Overlay && !(0..count).contains(&engine.area_overlay)) {
+        return;
+    }
+    let program = match engine.shaders.areas() {
+        Ok(program) => program,
+        Err(e) => {
+            crate::host::log(crate::host::LogLevel::Error, &format!("Areas shader: {e}"));
+            return;
+        }
+    };
+    let params = crate::gpu::params::develop::AreasParams {
+        areas: crate::gpu::uniforms::Vec4Array::from_floats(values),
+        count,
+        mode: if mode == AreasMode::Overlay { 1 } else { 0 },
+        overlay: engine.area_overlay.max(0),
+    };
+    let pass = engine.pass(&program, params).texture("u_tex", engine.composite_texture);
+    let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
+    engine.gpu().unbind_textures(1);
+    if !is_drawn {
+        return;
+    }
+    doc_pass(engine, &engine.shaders.copy_exact, ())
+        .texture("u_tex", engine.scratch_texture_a)
+        .draw(Target::Framebuffer(engine.composite_fbo));
+}
+
+/// Each area's layer, in the areas' order, after the areas pass
+/// (`lopsy_core::areas`, "An area's layer"). For an area that was given
+/// settings of its own (`engine.area_layers`), the composite is kept aside,
+/// run through the document's develop stages again with the area's settings
+/// in place of the document's, and laid back over what was kept with the
+/// area's mask as its opacity (`area_layer.wgsl`). An area without any draws
+/// nothing.
+fn apply_area_layers(engine: &mut EngineInner) {
+    let Some(values) = engine.areas.clone() else {
+        return;
+    };
+    let stride = lopsy_core::areas::STRIDE;
+    let count = (values.len() / stride).min(engine.area_layers.len());
+    for index in 0..count {
+        let ws = engine.working_space.is_some();
+        let Some(layer) = engine.area_layers[index].clone().filter(|l| area_layer_draws(l, ws)) else {
+            continue;
+        };
+        if let Err(e) = area_layer(engine, &values[index * stride..(index + 1) * stride], layer) {
+            crate::host::log(crate::host::LogLevel::Error, &format!("Area layer: {e}"));
+            return;
+        }
+    }
+}
+
+/// Whether a layer would change the image: a stage of it is set and on.
+/// With the working space (`ws`) its Whites, Blacks and Vibrance act in the
+/// document's tone and look passes, not here, and its image adjustments
+/// and old colour by hue are not used.
+fn area_layer_draws(layer: &crate::engine::AreaLayer, ws: bool) -> bool {
+    let wrapped = layer.detail.is_some_and(|d| d.reduces_noise() || d.sharpens())
+        || layer.local_contrast.is_some_and(|l| l.is_active())
+        || layer.finish.is_some();
+    if ws {
+        return wrapped || area_look_run(layer).draws();
+    }
+    wrapped || has_any_adjustment(&layer.adjustments) || layer.color_mixer.is_some()
+}
+
+/// An area layer's own run of the look pass: its Color by hue, grade and
+/// curves.
+fn area_look_run(layer: &crate::engine::AreaLayer) -> crate::develop::look::LookRun<'static> {
+    let look = layer.look.filter(crate::develop::look::AreaLook::runs_look);
+    crate::develop::look::area_run(look, layer.look_curves)
+}
+
+/// An area layer's stages with the working space: its look pass on the
+/// rendered image; its noise reduction inside the display encoding; its
+/// haze and its large and small details on the rendered image, with the
+/// document's linear stages (an area's layer runs after the tone pass, so
+/// its haze acts on rendered data); then its sharpening and finish inside
+/// the display encoding. With no local contrast or haze, noise reduction,
+/// sharpening and finish share one trip into the encoding and back.
+fn area_layer_working_space(engine: &mut EngineInner, layer: &crate::engine::AreaLayer) {
+    use crate::develop::working_space::Conversion;
+    let run = area_look_run(layer);
+    if run.draws() {
+        apply_look(engine, &run);
+    }
+    // The document's settings step aside for the area's, and each stage
+    // logs its own failure, so nothing here returns before they are back.
+    let document = (
+        std::mem::replace(&mut engine.detail, layer.detail),
+        std::mem::replace(&mut engine.local_contrast, layer.local_contrast),
+        std::mem::replace(&mut engine.finish, layer.finish),
+    );
+    let noise = layer.detail.is_some_and(|d| d.reduces_noise());
+    let late = layer.detail.is_some_and(|d| d.sharpens()) || layer.finish.is_some_and(|f| f.is_active());
+    let wrapped = |engine: &mut EngineInner, stages: &[fn(&mut EngineInner)]| {
+        convert_composite(engine, Conversion::ToDisplay);
+        for stage in stages {
+            stage(engine);
+        }
+        convert_composite(engine, Conversion::FromDisplay);
+    };
+    let sharpen: fn(&mut EngineInner) = crate::develop::detail::apply_sharpening;
+    let reduce_noise: fn(&mut EngineInner) = crate::develop::detail::apply_noise_reduction;
+    let finish: fn(&mut EngineInner) = |e| apply_finish(e);
+    if layer.local_contrast.is_some_and(|l| l.is_active()) {
+        if noise {
+            wrapped(engine, &[reduce_noise]);
+        }
+        // Haze and the two details on the rendered image: the document's
+        // linear stages, through the area's mask.
+        crate::develop::detail::apply_haze(engine);
+        crate::develop::detail::apply_local_contrast_linear(engine);
+        if late {
+            wrapped(engine, &[sharpen, finish]);
+        }
+    } else if noise || late {
+        wrapped(engine, &[reduce_noise, sharpen, finish]);
+    }
+    (engine.detail, engine.local_contrast, engine.finish) = document;
+}
+
+/// An area layer's stages without the working space, as they always ran.
+fn area_layer_display(engine: &mut EngineInner, layer: crate::engine::AreaLayer) {
+    // The document's settings step aside for the area's, and the stages run as
+    // they do for the document. Each logs its own failure, so nothing here
+    // returns before the document's settings are back.
+    let document = (
+        std::mem::replace(&mut engine.adjustments, layer.adjustments),
+        std::mem::replace(&mut engine.color_mixer, layer.color_mixer),
+        std::mem::replace(&mut engine.detail, layer.detail),
+        std::mem::replace(&mut engine.local_contrast, layer.local_contrast),
+        std::mem::replace(&mut engine.finish, layer.finish),
+    );
+    crate::develop::detail::apply_noise_reduction(engine);
+    crate::develop::detail::apply_local_contrast(engine);
+    apply_image_adjustments(engine);
+    apply_color_mixer(engine);
+    crate::develop::detail::apply_sharpening(engine);
+    apply_finish(engine);
+    (engine.adjustments, engine.color_mixer, engine.detail, engine.local_contrast, engine.finish) = document;
+}
+
+fn area_layer(engine: &mut EngineInner, area: &[f32], layer: crate::engine::AreaLayer) -> Result<(), String> {
+    let program = engine.shaders.area_layer()?;
+    let (w, h) = (engine.doc_width, engine.doc_height);
+    // The image as it is, kept while the stages below work on the composite.
+    let original = engine.texture_pool.acquire(w, h)?;
+    let is_kept = doc_pass(engine, &engine.shaders.copy_exact, ())
+        .texture("u_tex", engine.composite_texture)
+        .draw(Target::Texture(original));
+    engine.gpu().unbind_textures(1);
+    if !is_kept {
+        engine.texture_pool.release(original);
+        return Err("the composite could not be kept".to_string());
+    }
+
+    if engine.working_space.is_some() {
+        area_layer_working_space(engine, &layer);
+    } else {
+        area_layer_display(engine, layer);
+    }
+
+    let params = crate::gpu::params::develop::AreaLayerParams { area: Vec4Array::from_floats(area) };
+    let pass = engine.pass(&program, params).texture("u_tex", original).texture("u_adjusted", engine.composite_texture);
+    let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
+    engine.gpu().unbind_textures(2);
+    engine.texture_pool.release(original);
+    if is_drawn {
+        doc_pass(engine, &engine.shaders.copy_exact, ())
+            .texture("u_tex", engine.scratch_texture_a)
+            .draw(Target::Framebuffer(engine.composite_fbo));
+    }
+    Ok(())
+}
+
+/// Color by hue over the composite in place when it is set: composite ->
+/// scratch A through `color_mixer.wgsl`, then copied back texel for texel.
+/// A no-op when `engine.color_mixer` is `None`.
+fn apply_color_mixer(engine: &EngineInner) {
+    let Some(values) = engine.color_mixer.as_ref() else {
+        return;
+    };
+    let params = crate::gpu::params::develop::ColorMixerParams {
+        values: crate::gpu::uniforms::Vec4Array::from_floats(values),
+    };
+    let program = match engine.shaders.color_mixer() {
+        Ok(program) => program,
+        Err(e) => {
+            crate::host::log(crate::host::LogLevel::Error, &format!("Color mixer shader: {e}"));
+            return;
+        }
+    };
+    let pass = engine.pass(&program, params).texture("u_tex", engine.composite_texture);
+    let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
+    engine.gpu().unbind_textures(1);
+    if !is_drawn {
+        return;
+    }
+    doc_pass(engine, &engine.shaders.copy_exact, ())
+        .texture("u_tex", engine.scratch_texture_a)
+        .draw(Target::Framebuffer(engine.composite_fbo));
 }
 
 /// Apply image adjustments (exposure, contrast, highlights, shadows, whites, blacks)
@@ -1873,4 +2954,34 @@ fn apply_adjustments_to_texture(engine: &EngineInner, target: DocTarget, adj: &I
         engine.scratch_texture_a
     };
     copy_doc(engine, result, target.fbo, Scissor::Off);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{reduction_steps, sharpening_draws, ChainRun, EngineInner, MIDDLE_STAGES, SHARPENING_STAGE};
+
+    #[test]
+    fn the_sharpening_stage_index_names_sharpening() {
+        let at_index: fn(&EngineInner, ChainRun) -> bool = MIDDLE_STAGES[SHARPENING_STAGE].draws;
+        assert!(std::ptr::fn_addr_eq(at_index, sharpening_draws as fn(&EngineInner, ChainRun) -> bool));
+    }
+
+    #[test]
+    fn a_reduction_within_one_box_footprint_is_one_step() {
+        assert_eq!(reduction_steps((7728, 5152), (2048, 1365)), vec![(2048, 1365)]);
+        assert_eq!(reduction_steps((7728, 5152), (7728, 5152)), vec![(7728, 5152)]);
+        assert_eq!(reduction_steps((1280, 640), (10, 5)), vec![(10, 5)]);
+    }
+
+    #[test]
+    fn a_longer_reduction_steps_down_so_no_step_skips_a_texel() {
+        assert_eq!(reduction_steps((7728, 5152), (16, 11)), vec![(121, 81), (16, 11)]);
+        let steps = reduction_steps((100_000, 8), (1, 1));
+        assert_eq!(steps.last(), Some(&(1, 1)));
+        let mut at = (100_000u32, 8u32);
+        for &step in &steps {
+            assert!(at.0 <= step.0 * 128 && at.1 <= step.1 * 128, "{at:?} -> {step:?}");
+            at = step;
+        }
+    }
 }

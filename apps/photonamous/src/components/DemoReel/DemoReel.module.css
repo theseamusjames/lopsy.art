@@ -1,0 +1,43 @@
+/* Fills whatever box the start screen gives it; the film covers the box. */
+.reel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000000;
+}
+
+/*
+ * The film is 6:5, the shape of two thirds of a 16:9 window, so `cover`
+ * crops little on common screens. Its titles are set in the middle with
+ * room at their sides, so what is cropped is never type.
+ */
+.video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+/* For assistive technology only: what the film shows and says. */
+.spoken {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Dark enough behind its icon for 3:1 on any frame of the film. */
+.toggle {
+  position: absolute;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--ph-control-edge);
+}

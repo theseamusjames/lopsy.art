@@ -33,6 +33,16 @@ brotli = { version = "3", default-features = false, features = ["std"] }
 name = "render"
 required-features = ["native"]
 
+# The HDR output step and the HDR reads on a real GPU; see the file's header.
+[[test]]
+name = "hdr"
+required-features = ["native"]
+
+# Golden renders of real RAW files; see the file's header.
+[[test]]
+name = "golden"
+required-features = ["native"]
+
 [build-dependencies]
 lopsy-shaderc = { path = "shaderc" }
 

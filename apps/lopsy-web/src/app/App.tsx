@@ -44,7 +44,14 @@ import { useDraggablePanel } from './hooks/useDraggablePanel';
 import { useDockedPanelAnchor } from './hooks/useDockedPanelAnchor';
 import { useReleaseToolbarButtonFocus } from './toolbar-button-focus';
 import { openProjectFromQuery } from '../io/project-url';
+import { openPhotosHandoffFromQuery, saveDocumentToPhotos, backToPhotos } from '../io/photos-handoff/photos-handoff';
+import { activePhotosSession, usePhotosHandoffStore } from '../io/photos-handoff/photos-handoff-store';
+import { PhotosHandoffBar } from '../components/PhotosHandoffBar/PhotosHandoffBar';
 import styles from './App.module.css';
+
+const handleSaveToPhotos = (): void => {
+  void saveDocumentToPhotos();
+};
 
 interface AppProps {
   /** checkWebGL2Support(), asked once by the entry so the page and window.lopsy agree. */
@@ -79,7 +86,10 @@ export function App({ hasWebGL2 }: AppProps) {
   }, [documentReady, createDocument]);
   useEffect(() => {
     void openProjectFromQuery();
+    void openPhotosHandoffFromQuery();
   }, []);
+  const photosHandoff = activePhotosSession(usePhotosHandoffStore((s) => s.session), doc.id);
+  const photosSaveStatus = usePhotosHandoffStore((s) => s.status);
   useEffect(() => {
     const isPWA = window.matchMedia('(display-mode: standalone)').matches;
     if (!isPWA) return;
@@ -237,6 +247,14 @@ export function App({ hasWebGL2 }: AppProps) {
       <div className={styles.header}>
         <MenuBar />
         <OptionsBar />
+        {photosHandoff && (
+          <PhotosHandoffBar
+            name={photosHandoff.name}
+            status={photosSaveStatus}
+            onSave={handleSaveToPhotos}
+            onBack={backToPhotos}
+          />
+        )}
       </div>
       <div
         className={styles.body}

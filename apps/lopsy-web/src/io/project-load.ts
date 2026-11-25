@@ -16,49 +16,13 @@ import { loadDocumentFonts } from '../app/load-document-fonts';
 import type { Layer, RasterLayer, TextLayer, ShapeLayer, GroupLayer } from '../types/layers';
 import type { Color } from '../types/color';
 import type { AdjustmentNode } from '../types/adjustment-nodes';
-import { FORMAT_VERSION, type LopsyManifest, type SerializedLayer } from './project-save';
+import { FORMAT_VERSION, isRgba16Layer, type SerializedLayer } from './project-save';
+import { inflateExact, pixelBlobSize, readProjectContainer } from './project-format';
+import { getMaxDocumentSide } from '../engine-wasm/gpu-limits';
 import { effectsForFormatVersion, parseStoredEffects } from './layer-effects-format';
 import { parseStoredColorSpans } from '../tools/text/text-color-spans';
 
-const LOPSY_MAGIC = new Uint8Array([0x4c, 0x4f, 0x50, 0x53, 0x59, 0x00]); // "LOPSY\0"
 const SUPPORTED_VERSION = FORMAT_VERSION;
-
-function parseMagicAndVersion(view: DataView): { version: number } | null {
-  if (view.byteLength < 12) return null;
-  for (let i = 0; i < LOPSY_MAGIC.length; i++) {
-    if (view.getUint8(i) !== LOPSY_MAGIC[i]) return null;
-  }
-  const version = view.getUint16(6, true);
-  return { version };
-}
-
-async function decompressBytes(compressed: Uint8Array): Promise<Uint8Array> {
-  const stream = new DecompressionStream('gzip');
-  const writer = stream.writable.getWriter();
-  // Copy to plain ArrayBuffer to satisfy WritableStreamDefaultWriter overloads
-  // which require ArrayBufferView<ArrayBuffer> (not SharedArrayBuffer).
-  const copyBuf = new Uint8Array(compressed.length);
-  copyBuf.set(compressed);
-  writer.write(copyBuf);
-  writer.close();
-
-  const chunks: Uint8Array[] = [];
-  const reader = stream.readable.getReader();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-  }
-
-  const totalLen = chunks.reduce((s, c) => s + c.length, 0);
-  const result = new Uint8Array(totalLen);
-  let offset = 0;
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return result;
-}
 
 /**
  * Rebuild a layer from its manifest entry. `formatVersion` is the file's
@@ -87,11 +51,13 @@ export function deserializeLayer(s: SerializedLayer, formatVersion: number = SUP
   };
 
   if (s.type === 'raster') {
+    const gradeRecipe = s.gradeRecipe;
     const layer: RasterLayer = {
       ...base,
       type: 'raster',
       width: s.width ?? 0,
       height: s.height ?? 0,
+      ...(gradeRecipe && typeof gradeRecipe === 'object' && !Array.isArray(gradeRecipe) ? { gradeRecipe } : {}),
     };
     return layer;
   }
@@ -196,45 +162,12 @@ export async function loadProjectOrThrow(file: File): Promise<LoadedProject> {
     await initWasm();
 
     const arrayBuffer = await file.arrayBuffer();
-    const view = new DataView(arrayBuffer);
-
-    const header = parseMagicAndVersion(view);
-    if (!header) {
-      throw new Error('Not a valid .lopsy file — missing magic bytes.');
-    }
-    if (header.version > SUPPORTED_VERSION) {
-      throw new Error(`This .lopsy file was saved with a newer version of Lopsy (format v${header.version}). Please update the app.`);
-    }
-
-    const manifestByteLen = view.getUint32(8, true);
-    const manifestStart = 12;
-    const manifestBytes = new Uint8Array(arrayBuffer, manifestStart, manifestByteLen);
-    const manifest = JSON.parse(new TextDecoder().decode(manifestBytes)) as LopsyManifest;
-
-    // Parse the blob size table
-    const blobTableStart = manifestStart + manifestByteLen;
-    const blobTableView = new DataView(arrayBuffer, blobTableStart);
-    const blobCount = blobTableView.getUint32(0, true);
-    // The table itself must fit in the file — rejects corrupt/malicious
-    // counts before the read loop walks off the end of the buffer.
-    if (4 + blobCount * 4 > blobTableView.byteLength) {
-      throw new Error(`Corrupt .lopsy file: blob table claims ${blobCount} entries but the file is too small`);
-    }
-    const blobSizes: number[] = [];
-    for (let i = 0; i < blobCount; i++) {
-      blobSizes.push(blobTableView.getUint32(4 + i * 4, true));
-    }
-
-    // Slice out the individual blobs
-    let blobDataOffset = blobTableStart + 4 + blobCount * 4;
-    const blobs: Uint8Array[] = [];
-    for (const size of blobSizes) {
-      blobs.push(new Uint8Array(arrayBuffer, blobDataOffset, size));
-      blobDataOffset += size;
-    }
-
-    // Count pixel blobs vs mask blobs from the manifest
-    const pixelBlobCount = manifest.layers.filter((l) => l.pixelDataIndex >= 0).length;
+    // Everything in the file is checked before the open document is replaced.
+    const { version, manifest, blobs, pixelBlobCount } = readProjectContainer(arrayBuffer, {
+      maxSide: getMaxDocumentSide(),
+      supportedVersion: SUPPORTED_VERSION,
+    });
+    const header = { version };
 
     // Create fresh document with correct dimensions
     useEditorStore.getState().createDocument(manifest.documentWidth, manifest.documentHeight, true);
@@ -312,19 +245,27 @@ export async function loadProjectOrThrow(file: File): Promise<LoadedProject> {
         const blob = blobs[s.pixelDataIndex];
         if (!blob) continue;
 
-        if (manifest.layerPixelFormat === 'rgba16-lz4') {
-          // Placed at the layer's x/y, which flushLayerSync gave the engine above.
-          uploadLayerPixelsCompressedU16(engine, s.id, blob);
+        if (isRgba16Layer(manifest, s)) {
+          // The blob carries its own geometry; it is placed at the layer's
+          // x/y, which flushLayerSync gave the engine above.
+          try {
+            uploadLayerPixelsCompressedU16(engine, s.id, blob);
+          } catch (err) {
+            // A corrupt blob that passed the header checks fails in the
+            // engine's decoder; report it as this layer's, not as a crash.
+            throw new Error(`the pixels of layer "${s.name}" could not be decoded (${describeError(err)}).`);
+          }
           continue;
         }
 
-        const decompressed = await decompressBytes(blob);
         // Prefer the recorded blob dimensions; fall back to the layer's logical
         // size for older files. Text/shape layers must use the blob dimensions
         // because their logical width/height don't describe the bitmap.
-        const w = s.pixelWidth ?? s.width ?? 0;
-        const h = s.pixelHeight ?? s.height ?? 0;
+        const { width: w, height: h } = pixelBlobSize(s);
         if (w > 0 && h > 0) {
+          // Inflated with a cap of exactly the layer's size, so a small blob
+          // can never unpack into more memory than the layer needs.
+          const decompressed = await inflateExact(blob, w * h * 4);
           uploadLayerPixels(engine, s.id, decompressed, w, h, s.x, s.y);
         }
       }

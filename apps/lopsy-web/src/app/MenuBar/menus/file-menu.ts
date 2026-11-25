@@ -19,6 +19,8 @@ export { importPsdFile, exportPsdFile };
 
 import { saveProject } from '../../../io/project-save';
 import { loadProject } from '../../../io/project-load';
+import { addDocumentToPhotos } from '../../../io/photos-handoff/photos-handoff';
+import { isPhotosEnabled } from '../../../io/photos-handoff/photos-url';
 
 // Re-export ExportFormat and ExportOptions from export-logic so the rest of
 // the codebase imports from one place.
@@ -204,6 +206,8 @@ export function createFileMenu(): MenuDef {
       { separator: true, label: '' },
       commandItem('Save Project', 'ui.file.save-project', undefined, '⌘S'),
       commandItem('Open Project...', 'ui.file.open-project'),
+      // Only builds that name Photonamous' URL (VITE_PHOTONAMOUS_URL) offer the handoff.
+      ...(isPhotosEnabled() ? [{ label: 'Add to Photonamous', action: () => { void addDocumentToPhotos(); } }] : []),
       { separator: true, label: '' },
       commandItem('Export…', 'ui.dialog.export', undefined, '⌥⇧⌘E'),
       commandItem('Quick Export PNG', 'ui.file.quick-export-png', undefined, '⇧⌘E'),

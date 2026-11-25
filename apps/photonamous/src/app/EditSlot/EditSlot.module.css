@@ -1,0 +1,37 @@
+.frame {
+  position: relative;
+  height: 100%;
+}
+
+.download {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-8);
+  transform: translateX(-50%);
+  z-index: var(--z-popover);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 280px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  box-shadow: var(--shadow-md);
+  font-size: var(--font-size-sm);
+}
+
+.bar {
+  display: block;
+  height: 4px;
+  border-radius: var(--radius-round);
+  background: var(--color-bg-active);
+  overflow: hidden;
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  width: var(--fraction);
+  background: var(--color-accent);
+}

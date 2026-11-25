@@ -312,6 +312,27 @@ texel in the page and compare the whole texture (quantise to fp16 when
 `EXT_color_buffer_float` exists, else u8). See
 `apps/lopsy-web/e2e/mask-dab-scissor-1020.spec.ts`.
 
+## A module's `outline: none` loses to reset.css's `:focus-visible` ring
+
+`@lopsy/ui/styles/reset.css` draws the default focus ring with
+`:focus-visible { outline: … }`, specificity (0,1,0), and both apps import
+it after their components (last in `main.tsx`), so it comes later in the
+cascade than every CSS Module. A module rule of the same specificity, such
+as `.slider { outline: none }`, therefore loses and the reset's ring still
+shows; Storybook imports the reset first, so there it wins, and the two
+disagree. To change or remove a ring, write the module's own
+`:focus-visible` rule (`.slider:focus-visible { … }`, (0,2,0)), as the
+shared Slider does.
+
+## E2E: a native `<input type="range">` ignores synthetic key events
+
+`locator.dispatchEvent('keydown', …)` runs the page's handlers but not the
+browser's default action, so a native range never moves. Use
+`page.keyboard.press` or `down` (trusted events). A held key is
+`keyboard.down` repeated, then one `keyboard.up`: one key-up, so one commit
+from the shared Slider. In Chromium, Page Up and Page Down step a tenth of
+the range, and a press on the track moves the value to it before any drag.
+
 ## Content bounds of a GPU texture: reduce on the GPU, don't read it back
 
 `content_bounds_gpu::texture_content_bounds` folds a texture into a
@@ -600,9 +621,12 @@ nothing" bugs.
 `useKeyboardShortcuts` listens on `window` in the capture phase, so it runs
 before any React handler and `stopPropagation` in the control is too late.
 A `role="slider"` div that handles arrows would step itself *and* nudge the
-active layer. Put `HANDLES_ARROW_KEYS_ATTR` (`native-control-keys.ts`) on the
-element to opt out, as `ColorWheel` does. Native range, radio and select
-controls are already exempt.
+active layer. Put `HANDLES_ARROW_KEYS_ATTR` (`@lopsy/ui/a11y/arrow-keys`) on
+the element to opt out, as `ColorWheel` and `@lopsy/ui`'s `ZoomReadout` do;
+`native-control-keys.ts` reads it. Native range, radio and select controls
+are already exempt. Photonamous's Edit view listens in the bubble phase, so
+there `stopPropagation` is enough; a shared control that owns the arrows
+does both.
 
 ## Splitting a raw-decode stage into bands: prove the halo, don't guess it
 
@@ -653,6 +677,9 @@ value is then the x it was pulled from.
 `npm run wasm:build` has wasm-pack download binaryen for `wasm-opt`; when
 the sandbox can't reach that GitHub release the build fails. `npm run
 wasm:build:dev` skips `wasm-opt` and is enough for running e2e tests.
+`npm run wasm:build:noopt` is a release build without `wasm-opt`: a third of
+the dev build's size and much faster at decoding (a 40 MP RAF is slow in the
+dev build). Use it for anything that opens real photos.
 
 ## WebGL: unbind sampler units before drawing into a texture the compositor samples
 On WebGL a draw into a texture that is still bound to a texture unit for
@@ -683,6 +710,137 @@ resampling's coverage divided back out. While a transform is still pending
 the store's `selection` deliberately holds the *pre-transform* mask and
 bounds; the float and the ants re-derive from it through `uiStore.transform`.
 
+## Sandbox: Playwright wants a Chromium build that is not installed
+`npm run wgsl:check` (and any Playwright launch) can fail with "Executable
+doesn't exist at /opt/pw-browsers/chromium_headless_shell-1208/..." while
+`/opt/pw-browsers` holds a different build (1243). Downloading browsers is
+blocked, so run a copy of the script that imports `@playwright/test` by
+absolute path and passes `executablePath:
+'/opt/pw-browsers/chromium_headless_shell-<build>/chrome-headless-shell-linux64/chrome-headless-shell'`
+to `chromium.launch`. Headless WebGPU (SwiftShader) and WebGL both work
+that way. There is no Vulkan adapter either, so the native render tests
+(`--features native`) skip themselves.
+
+## Sandbox disk: cargo targets and production builds fill the allowance
+The session's writable disk is a fixed allowance, so `df -h /` shows
+"Avail" near 0 when it is spent, and pushes then fail with ENOSPC (the
+pre-push hook writes). With several agent worktrees, the big users are
+each worktree's `engine/target` (3–7 GB apiece) and production builds:
+`apps/lopsy-web/dist` is about 900 MB because of the tutorials. A
+worktree that only needs the engine can copy
+`apps/lopsy-web/src/engine-wasm/pkg` from one that built it instead of
+building its own, and production builds should be deleted after the test
+that needed them.
+
+## Photonamous tests: real RAFs and import order
+Photonamous' RAF e2e reads real camera files from `LOPSY_RAF_SAMPLES`: clone
+github.com/theseamusjames/sample-raf-images (sandboxes often have it at
+`/home/user/theseamusjames/sample-raf-images`). Never fabricate one. The
+importer prepares files concurrently, so of two identical files in one
+batch, either may be kept and the other marked duplicate: a test with the
+default concurrency must not assume which (CI saw both orders).
+
+Where Playwright's pinned Chromium build is missing (see "Sandbox:
+Playwright wants a Chromium build that is not installed"), each suite has
+its own way in: Photonamous' configs take `PLAYWRIGHT_CHROMIUM_EXECUTABLE` or
+fall back to `$PLAYWRIGHT_BROWSERS_PATH/chromium_headless_shell`;
+photos-core's browser harness takes `PW_CHROMIUM_PATH` (and run it with
+`CI=1`, or it may reuse another worktree's server on its fixed port);
+Lopsy's configs need a wrapper config that sets
+`launchOptions.executablePath` and `--project=chromium`. Seeded or
+many-scenario Vitest tests need an explicit timeout: Vitest's 5 s default
+fails them on a loaded machine.
+
+## Photonamous accessibility: browser facts that bit
+- Chromium fires `focusout` on a focused element when it is removed from
+  the DOM, so "close on focus out" code also runs on re-renders that
+  replace the focused node.
+- `inert` does not apply through an element with `display: contents`; put
+  it on a real box.
+- Input placeholders render #757575 unless styled, which fails 4.5:1 on
+  Photonamous' dark surfaces: give them `--ph-text-muted`.
+- Setting `inert` on the page behind a dialog in the same render as
+  React StrictMode's double effect sends the dialog's returned focus to
+  the wrong place; Photonamous applies it a frame later.
+
+## Photonamous e2e: Lopsy's side of a handoff without Lopsy
+A spec can play Lopsy with `context.route` on Lopsy's origin (the dev
+default `http://localhost:5173`) serving a page that speaks
+`packages/handoff`'s messages: say `lopsy:ready`, take `photos:document`,
+answer `lopsy:received`, send `lopsy:save` (a `.lopsy` needs only its
+`LOPSY\0` magic; the render must be a real PNG). That makes a real
+document in a test library in seconds, with no Lopsy server and none on
+that port reached: `e2e/edit-documents.spec.ts`. Read a popup's address
+with `waitForURL`; `url()` straight after the `page` event can be empty.
+And the grid's ids (`useOrderedIds`, the filmstrip's source) are item ids:
+`assetId#versionId` for the versions of an open stack, so resolve them
+with `parseItem` (`library/items.ts`), never `view.assets.get(id)`.
+
+## UI preference: no coloured left border as an indicator
+A coloured left border (or any edge stripe, such as an inset box-shadow
+bar) used to mark state or kind is always wrong, in either app and on the
+sites. What replaces it depends on the context; choose what fits: a dot
+beside the label, an icon, a check, a fill, or a word. Examples in the
+code: Photonamous' History, Versions and Masks lists mark the current or
+selected row with a 6 px accent dot (every row keeps the dot's slot, so
+labels line up); Lopsy's toasts show their kind with a dot in its colour;
+tutorial notes are a tinted box.
+
+
+## Stopping a dev server that npm started: kill its process group
+`npm run dev` runs the script through `sh -c`, and on Linux (dash) that
+shell does not hand over to Vite: killing the npm process leaves Vite
+running, holding its port. `scripts/dev.mjs` (the root `npm run dev`)
+starts each app as its own process group and signals the group, so npm,
+the shell and Vite stop together; it forwards Ctrl+C itself, since those
+groups don't get the terminal's.
+
+## Library writes: test them on the real session, not the fake
+The app's `?backend=fake` session (`apps/photonamous/src/app/fake/`)
+never validates ops, so a malformed write passes there and fails only on
+a real library (`photos-core`'s session rejects it as "not bounded JSON",
+and the user sees nothing). `recipeFields` once copied every object leaf
+as a crop rectangle, which broke New version, Rotate, Flip and Reset on
+any photo with an area. Cover library writes with `openLibrary` and
+`TestAdapter` (`packages/photos-core/src/library/areas.test.ts`), and
+write a recipe's object leaves with `recipeLeafJson`.
+
+## Primary buttons: the shared colours, even when a dialog draws its own
+Use `Button variant="primary"`. A dialog that styles its own primary
+button (several of Lopsy's do: `.applyButton`, `.createButton`,
+`.exportButton`) takes `@lopsy/ui`'s `--color-primary-bg`, `-hover`,
+`-active` and `--color-primary-text`, never `--color-accent` under white
+text (2.75:1). The accent stays for selection, toggles and borders.
+
+## Photonamous on both engine builds
+Photonamous runs the wgpu build by default (`src/engine/renderer-choice.ts`,
+through Lopsy's `scripts/vite-plugin-renderer.ts` with options). The e2e
+suite follows `PHOTONAMOUS_RENDERER` (`wgpu` by default, or `webgl`) for
+the dev server and the browser flags at once; `e2e/renderer.spec.ts`
+checks the page ran it. Engine exports whose type differs by build
+(`createEngine`, readbacks) come from `src/engine/wasm.ts`, and ESLint
+refuses them from the glue. In dev, `performance` resource entries ending
+`.wasm?import&url` are the dev server's modules for `?url` imports, not
+downloads of the wasm. Edits under `apps/photonamous/src` or its Vite
+config while a Playwright run is going reload or restart its dev server
+and fail tests at random: wait for the run to end.
+
+## Decoding a Display P3 PNG for a P3 canvas
+In Chromium, `createImageBitmap(p3Png)` with the default
+`colorSpaceConversion` keeps the file's P3 colours when the bitmap is drawn
+into a `display-p3` canvas (checked for an 8-bit iCCP PNG and a 16-bit cICP
+PNG: P3 red stays 255, 0, 0). `colorSpaceConversion: 'none'` is wrong
+there: the numbers are taken as sRGB and converted (P3 red became 234, 51,
+35). Keep 'none' for data that is not colour, such as the gain map.
+
+## Photonamous' screen-only views and reads
+With the working space, `sampleColor`, `readDevelopHistogram` and
+`readHdrHistogram` read the kept rendered image, taken before the area
+overlay and the clipping warning are drawn, so they need no views-off scope.
+The sharpening mask view is drawn inside the live develop chain, but the
+engine now reads the photo under it for those three reads (their doc
+comments say so), so the app's linear path never opens the scope for them,
+whatever view is on. The legacy (8-bit) path still holds every view off.
 ## Glyph outlines are filled by our own rasterizer, not zeno
 
 zeno (swash's `Render`) sums signed area per pixel and clamps it, so where

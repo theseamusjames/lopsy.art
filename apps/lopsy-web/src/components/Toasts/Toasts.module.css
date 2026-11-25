@@ -19,17 +19,27 @@
   background: var(--color-bg-secondary);
   color: var(--color-text-primary);
   box-shadow: var(--shadow-lg);
-  border-left: 3px solid var(--color-border);
   font-size: var(--font-size-md);
   pointer-events: auto;
 }
 
-.error {
-  border-left-color: var(--color-error);
+/* The toast's kind: a dot beside the first line of the message. */
+.toast::before {
+  content: '';
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 0.45em;
+  border-radius: 50%;
+  background: var(--color-border-strong);
 }
 
-.info {
-  border-left-color: var(--color-accent);
+.error::before {
+  background: var(--color-error);
+}
+
+.info::before {
+  background: var(--color-accent);
 }
 
 .message {

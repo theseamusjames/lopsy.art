@@ -1,0 +1,15 @@
+.wrapper {
+  position: relative;
+}
+
+.popup {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: var(--z-popover);
+  width: 278px;
+}
+
+.hidden {
+  display: none;
+}
