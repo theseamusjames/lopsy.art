@@ -13,7 +13,8 @@
  *   the old Color by hue and colour grading. It is the only thing that
  *   renders there, and it is kept apart so that it can be deleted in one
  *   cut when the fallback goes. Those take ±100, so a slider past it is
- *   held at 100 there (`limitForLegacy`); the linear path takes ±150.
+ *   held at 100 there (`limitForLegacy`); the linear path takes ±150,
+ *   and ±200 for Temperature and Tint.
  *
  * Detail, local contrast, haze, the finish and the areas' built-in sliders
  * take the same calls on both paths.

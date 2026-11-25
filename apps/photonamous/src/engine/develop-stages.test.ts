@@ -165,7 +165,7 @@ describe('developStages', () => {
       'tone.whites': -130,
       'tone.blacks': 150,
       'whiteBalance.mode': 'custom',
-      'whiteBalance.temperature': -150,
+      'whiteBalance.temperature': -200,
       'whiteBalance.tint': 140,
       'color.vibrance': 150,
       'color.saturation': 125,
@@ -180,7 +180,7 @@ describe('developStages', () => {
     });
     const linear = developStages(wide, { isRaw: false, path: 'linear' });
     if (linear.path !== 'linear') throw new Error('linear');
-    expect(Array.from(linear.tone)).toEqual([0, -150, 140, 150, -150, 120, -130, 150]);
+    expect(Array.from(linear.tone)).toEqual([0, -200, 140, 150, -150, 120, -130, 150]);
     expect(Array.from(linear.look.slice(0, 5))).toEqual([150, 125, -150, 150, 0]);
 
     const legacy = developStages(wide, { isRaw: false, path: 'legacy' });

@@ -31,9 +31,11 @@ describe('recipeFromPaths', () => {
       return r ? [r.min, r.max] : null;
     };
     const wide = [-150, 150];
-    for (const path of ['whiteBalance.temperature', 'whiteBalance.tint', 'tone.contrast', 'tone.highlights', 'tone.shadows', 'tone.whites', 'tone.blacks']) {
+    for (const path of ['tone.contrast', 'tone.highlights', 'tone.shadows', 'tone.whites', 'tone.blacks']) {
       expect(range(path), path).toEqual(wide);
     }
+    // Temperature and Tint run further: a camera's own presets do.
+    for (const path of ['whiteBalance.temperature', 'whiteBalance.tint']) expect(range(path), path).toEqual([-200, 200]);
     for (const path of ['color.vibrance', 'color.saturation', 'localContrast.large', 'localContrast.small', 'colorByHue.red.saturation']) {
       expect(range(path), path).toEqual([-100, 150]);
     }
@@ -56,7 +58,8 @@ describe('recipeFromPaths', () => {
     expect(range('framing.angle')).toEqual([-45, 45]);
     // A mask's sliders, and its own settings, as the photo's.
     const id = 'area-1';
-    for (const key of ['contrast', 'highlights', 'shadows', 'temperature', 'tint']) expect(range(`areas.${id}.adjustments.${key}`), key).toEqual(wide);
+    for (const key of ['contrast', 'highlights', 'shadows']) expect(range(`areas.${id}.adjustments.${key}`), key).toEqual(wide);
+    for (const key of ['temperature', 'tint']) expect(range(`areas.${id}.adjustments.${key}`), key).toEqual([-200, 200]);
     expect(range(`areas.${id}.adjustments.saturation`)).toEqual([-100, 150]);
     expect(range(`areas.${id}.adjustments.localContrast`)).toEqual([-100, 150]);
     expect(range(`areas.${id}.adjustments.exposure`)).toEqual([-4, 4]);
@@ -68,7 +71,7 @@ describe('recipeFromPaths', () => {
       sanitizeRecipeValues({
         'tone.highlights': -150,
         'tone.shadows': 151,
-        'whiteBalance.temperature': 150,
+        'whiteBalance.temperature': 200,
         'whiteBalance.tint': -1000,
         'color.saturation': -150,
         'color.vibrance': 150,
@@ -78,8 +81,8 @@ describe('recipeFromPaths', () => {
     ).toEqual({
       'tone.highlights': -150,
       'tone.shadows': 150,
-      'whiteBalance.temperature': 150,
-      'whiteBalance.tint': -150,
+      'whiteBalance.temperature': 200,
+      'whiteBalance.tint': -200,
       'color.saturation': -100,
       'color.vibrance': 150,
       'finish.vignette': 100,

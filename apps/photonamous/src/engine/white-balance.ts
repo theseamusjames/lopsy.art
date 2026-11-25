@@ -7,7 +7,7 @@
 export interface WhiteBalancePresetValues {
   readonly id: string;
   readonly name: string;
-  /** Recipe units, relative to as shot (−150..150). */
+  /** Recipe units, relative to as shot (−200..200). */
   readonly temperature: number;
   readonly tint: number;
 }

@@ -134,7 +134,7 @@ describe('crs: edit mapping', () => {
     expect(kelvinForTemperature(SCALE, 0)).toBe(5000);
     for (const t of [-90, -30, 0, 25, 80]) expect(temperatureForKelvin(SCALE, kelvinForTemperature(SCALE, t)!)).toBeCloseTo(t, 6);
     expect(temperatureForKelvin(SCALE, 1_000_000)).toBeCloseTo(132.67, 2);
-    expect(temperatureForKelvin(SCALE, 1000)).toBe(-150);
+    expect(temperatureForKelvin(SCALE, 1000)).toBe(-200);
   });
 
   it('writes a value past their end at their end, and reads it back as that', () => {
@@ -151,8 +151,8 @@ describe('crs: edit mapping', () => {
       'finish.grain.size': 150,
       'tone.highlights': -80,
       'whiteBalance.mode': 'custom',
-      'whiteBalance.temperature': 150,
-      'whiteBalance.tint': -150,
+      'whiteBalance.temperature': 200,
+      'whiteBalance.tint': -200,
     });
     const asset = { id: 'a', format: 'jpeg', rating: 0, setAside: false, label: null, keywords: [], title: null, caption: null } as unknown as Asset;
     const version = { id: 'v', assetId: 'a', name: 'Original', recipe } as unknown as Version;
@@ -174,11 +174,11 @@ describe('crs: edit mapping', () => {
     ]) {
       expect(text, attr).toContain(attr);
     }
-    // RAW: Kelvin stays within theirs, and our Tint of 150 is their 225, written at their 150.
+    // RAW: Kelvin stays within theirs, and our Tint of 200 is their 300, written at their 150.
     const raw = writeXmp({ ...asset, format: 'raf' } as Asset, version, { kelvinScale: SCALE });
     expect(raw).toContain('crs:Tint="-150"');
     const kelvin = Number(/crs:Temperature="(\d+)"/.exec(raw)?.[1]);
-    // Temperature 150 is past infinite Kelvin on this scale: their warmest.
+    // Temperature 200 is past infinite Kelvin on this scale: their warmest.
     expect(kelvin).toBeGreaterThanOrEqual(2000);
     expect(kelvin).toBeLessThanOrEqual(50000);
   });

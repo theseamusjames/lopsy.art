@@ -7,7 +7,7 @@
  * the same number gives the same direction and a similar strength, not
  * the same picture. Where the ranges differ the value is scaled or
  * clamped, as each row says. Many of our sliders run to 150 where theirs
- * stop at 100 ("ours" below): a value of ours past their end is written at
+ * stop at 100, and Temperature and Tint to 200 ("ours" below): a value of ours past their end is written at
  * their end, the nearest they can hold, and reading one back gives that end.
  *
  * | crs: property                        | Their range     | Recipe path                    | Mapping |
@@ -41,10 +41,10 @@
  * | GrainFrequency                       | 0..100 (50)     | finish.grain.roughness         | x1, approximate (theirs is how fine the pattern is); the same |
  * | ToneCurvePV2012[Red,Green,Blue]      | "x, y" 0..255   | curves.luminance, .red, …      | /255; endpoints added when missing; more than 16 points, or x not increasing, is skipped |
  * | WhiteBalance                         | As Shot, Custom…| whiteBalance.mode              | As Shot -> asShot (Temperature and Tint ignored); anything else -> custom, when its values map |
- * | Temperature (RAW)                    | 2000..50000 K   | whiteBalance.temperature       | only with the photo's `KelvinScale`: (1e6/K - miredAtZero) / miredPerUnit, held to ours, -150..150; without it, skipped (As Shot); written within 2000..50000 K |
- * | Temperature (JPEG, TIFF)             | -100..100       | whiteBalance.temperature       | x1; ours -150..150, written within theirs |
- * | Tint (RAW)                           | -150..150       | whiteBalance.tint              | /1.5, only with the scale; approximate: it takes the camera's as-shot tint as 0; ours -150..150 is theirs -225..225, written within theirs |
- * | Tint (JPEG, TIFF)                    | -100..100       | whiteBalance.tint              | x1; ours -150..150, written within theirs |
+ * | Temperature (RAW)                    | 2000..50000 K   | whiteBalance.temperature       | only with the photo's `KelvinScale`: (1e6/K - miredAtZero) / miredPerUnit, held to ours, -200..200; without it, skipped (As Shot); written within 2000..50000 K |
+ * | Temperature (JPEG, TIFF)             | -100..100       | whiteBalance.temperature       | x1; ours -200..200, written within theirs |
+ * | Tint (RAW)                           | -150..150       | whiteBalance.tint              | /1.5, only with the scale; approximate: it takes the camera's as-shot tint as 0; ours -200..200 is theirs -300..300, written within theirs |
+ * | Tint (JPEG, TIFF)                    | -100..100       | whiteBalance.tint              | x1; ours -200..200, written within theirs |
  * | CropAngle                            | -45..45 deg     | framing.angle                  | x1; see read.ts for the crop itself |
  *
  * Unmapped: PostCropVignetteStyle and PostCropVignetteHighlightContrast,
@@ -53,7 +53,7 @@
  * camera profiles (crs:CameraProfile, crs:Look).
  */
 
-import { CURVE_CHANNELS, DEFAULT_RECIPE, GRADE_RANGES, HUE_BANDS, MAX_CURVE_POINTS, recipeToPaths } from '../library/recipe';
+import { CURVE_CHANNELS, DEFAULT_RECIPE, GRADE_RANGES, HUE_BANDS, MAX_CURVE_POINTS, recipeToPaths, WB_SLIDER_END } from '../library/recipe';
 import type { CurveChannel, CurvePoint, GradeRange, HueBand, Recipe, RecipeLeaf } from '../library/recipe';
 
 /** A crs: number read as the recipe path's value, times `scale`. */
@@ -74,7 +74,7 @@ const THEIR_KELVIN = { min: 2000, max: 50000 } as const;
 /** Their RAW Tint. */
 const THEIR_RAW_TINT = { min: -150, max: 150 } as const;
 /** The end of our Temperature and Tint, as the recipe's ranges have it. */
-const OUR_WB_END = 150;
+const OUR_WB_END = WB_SLIDER_END;
 
 function within(value: number, range: { readonly min: number; readonly max: number } | undefined): number {
   return range ? Math.min(range.max, Math.max(range.min, value)) : value;
@@ -187,7 +187,7 @@ export function kelvinForTemperature(scale: KelvinScale, temperature: number): n
   return mired > 0 ? 1e6 / mired : null;
 }
 
-/** The RAW recipe temperature for a Kelvin value on this body, clamped to the slider's ±150. */
+/** The RAW recipe temperature for a Kelvin value on this body, clamped to the slider's ±200. */
 export function temperatureForKelvin(scale: KelvinScale, kelvin: number): number {
   const t = (1e6 / kelvin - scale.miredAtZero) / scale.miredPerUnit;
   return Math.max(-OUR_WB_END, Math.min(OUR_WB_END, Math.round(t * 100) / 100)) + 0; // + 0 turns -0 into 0

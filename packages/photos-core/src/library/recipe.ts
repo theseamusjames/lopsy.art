@@ -163,9 +163,9 @@ export interface Recipe {
   readonly profile: { readonly id: string };
   readonly whiteBalance: {
     readonly mode: 'asShot' | 'custom';
-    /** Relative shift, −150 (cooler) to 150 (warmer). Kelvin needs camera data (spec E9). */
+    /** Relative shift, −200 (cooler) to 200 (warmer). Kelvin needs camera data (spec E9). */
     readonly temperature: number;
-    /** Relative shift, −150 (greener) to 150 (more magenta). */
+    /** Relative shift, −200 (greener) to 200 (more magenta). */
     readonly tint: number;
   };
   readonly tone: {
@@ -239,8 +239,19 @@ export interface RecipeRange {
  */
 export const SLIDER_END = 150;
 
+/**
+ * The far end of Temperature and Tint, the photo's and a mask's
+ * (`WB_SLIDER_END` in the engine's `lopsy_core::scene_tone`). They run
+ * further than the other sliders because a camera's own white-balance
+ * presets do: a photo shot under warm light needs more than 150 to reach
+ * some of them.
+ */
+export const WB_SLIDER_END = 200;
+
 /** ±150: a slider open at both ends. */
 const WIDE: RecipeRange = { min: -SLIDER_END, max: SLIDER_END, step: 1 };
+/** ±200: Temperature and Tint. */
+const WHITE_BALANCE: RecipeRange = { min: -WB_SLIDER_END, max: WB_SLIDER_END, step: 1 };
 /**
  * −100..150: a slider whose −100 is a real end (Saturation, Vibrance and a
  * band's saturation take chroma to 0 there; a local-contrast slider takes
@@ -256,8 +267,8 @@ const AMOUNT: RecipeRange = { min: 0, max: SLIDER_END, step: 1 };
  * is a real one, each named beside it.
  */
 export const RECIPE_RANGES: Readonly<Record<string, RecipeRange>> = {
-  'whiteBalance.temperature': WIDE,
-  'whiteBalance.tint': WIDE,
+  'whiteBalance.temperature': WHITE_BALANCE,
+  'whiteBalance.tint': WHITE_BALANCE,
   // Stops.
   'tone.exposure': { min: -5, max: 5, step: 0.01 },
   'tone.contrast': WIDE,
@@ -321,8 +332,8 @@ export const RECIPE_RANGES: Readonly<Record<string, RecipeRange>> = {
   'areas.*.adjustments.contrast': WIDE,
   'areas.*.adjustments.highlights': WIDE,
   'areas.*.adjustments.shadows': WIDE,
-  'areas.*.adjustments.temperature': WIDE,
-  'areas.*.adjustments.tint': WIDE,
+  'areas.*.adjustments.temperature': WHITE_BALANCE,
+  'areas.*.adjustments.tint': WHITE_BALANCE,
   'areas.*.adjustments.saturation': FLOOR_AT_GREY,
   'areas.*.adjustments.localContrast': FLOOR_AT_GREY,
   'areas.*.geometry.x0': { min: -1, max: 2, step: 0.001 },

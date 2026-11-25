@@ -969,12 +969,21 @@ was.
     The 8-bit fallback holds tone, white balance, Vibrance, Saturation,
     Color by hue and the grade at ±100 where the app builds its calls,
     so Lopsy's adjustment shader and ranges are unchanged, and the old
-    areas pass holds a mask's sliders at ±100 itself. White-balance
-    presets clamp to ±150: on the eight samples 9 presets were cut off at
-    ±100 (Tungsten on DSCF7863, DSCF8078 and DSCF8267, six on DSCF8169,
-    shot under warm light) and 2 still are, DSCF8169's Cloudy (+173) and
-    Daylight Fluorescent (+191) (`core/tests/raf_wb_presets.rs` prints
-    them). XMP export writes a value past Adobe's range at its end.
+    areas pass holds a mask's sliders at ±100 itself. XMP export writes
+    a value past Adobe's range at its end.
+59. **Temperature and Tint run to ±200**, the photo's and a mask's
+    (`WB_SLIDER_END`, in the engine and the recipe); the other sliders
+    stay at 150. The reason is the camera's presets, which clamp to the
+    same end: on the eight samples 9 presets were cut off at ±100
+    (Tungsten on DSCF7863, DSCF8078 and DSCF8267, six on DSCF8169, shot
+    under warm light), 2 still were at ±150, DSCF8169's Cloudy (+173)
+    and Daylight Fluorescent (+191), and none is at ±200
+    (`core/tests/raf_wb_presets.rs` prints them). White balance is a
+    power of two of the value, so a value within the old range renders
+    as before and the golden renders did not move. Through a mask the
+    blended white balance now reaches ±400. The Kelvin readout still
+    shows "—" where a body's fitted scale passes infinite Kelvin, which
+    is before +200 on seven of the eight samples.
 
 ### Verified at the end
 
