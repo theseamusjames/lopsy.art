@@ -26,7 +26,7 @@ The cut, as recorded on 2026-11-24 on the app's default renderer, WebGPU (24.1 s
 | 5 | no-servers | 1.1 | **No servers.** over the darkened editor. |
 | 6 | own-cloud | 1.2 | **Your own cloud storage.**, a cut from the last with the dark held between them. |
 | 7 | drive | 4.3 | drive.google.com, clicked through: the pointer opens Originals in the library's folder, then 2026, then 2026-10-25, and the camera pulls back over that day's four RAW files. |
-| 8 | free-end | 5.6 | **Completely free.** in the dark over a photograph edited in the app, held longer than the other titles (1.8 s); then a dissolve: the dark lifts as the title goes, and only when it has gone do the wordmark and, close under it, **RAW editing. Your cloud storage. Completely free.** (the start screen's tagline) come up. |
+| 8 | free-end | 5.6 | **Completely free.** in the dark over a photograph edited in the app, held longer than the other titles (1.8 s); then a dissolve: the dark lifts as the title goes, and only when it has gone do the wordmark in colour (the start screen's, `photonamous-wordmark-color-1440.png`) and, close under it, **RAW editing. Your cloud storage. Completely free.** (the start screen's tagline) come up. |
 
 ## The files
 
@@ -49,7 +49,7 @@ Not committed (too large, and not the repository's):
 
 | What | Where it was on 2026-11-24 |
 |---|---|
-| The master: the same cut at visually lossless quality (H.264, CRF 14, 19 MB), to encode from again without recording | `samples/photonamous-demo-reel/demo-reel-master.mp4` in the main checkout (`/samples` is git-ignored), with `contact-sheet.jpg` beside it: 36 frames of the cut in order, at 0.05, 0.8, 1.6, 2.2, 2.6, 3.2, 3.8, 4.4, 5.2, 6, 7, 7.8, 8.6, 9.2, 9.8, 10.4, 11, 11.6, 12, 12.4, 13, 13.6, 14.2, 15, 16, 17, 18, 18.6, 19.2, 20, 21, 22, 22.6, 23.2, 23.7 and 24.05 s |
+| The master: the same cut at visually lossless quality (H.264, CRF 14, 19 MB), to encode from again without recording | `samples/photonamous-demo-reel/demo-reel-master.mp4` in the main checkout (`/samples` is git-ignored), with `contact-sheet.jpg` beside it, the white end card's master as `demo-reel-master-white.mp4`, and a still of each end card (`end-card-white.jpg`, `end-card-colour.jpg`). The contact sheet is 36 frames of the cut in order, at 0.05, 0.8, 1.6, 2.2, 2.6, 3.2, 3.8, 4.4, 5.2, 6, 7, 7.8, 8.6, 9.2, 9.8, 10.4, 11, 11.6, 12, 12.4, 13, 13.6, 14.2, 15, 16, 17, 18, 18.6, 19.2, 20, 21, 22, 22.6, 23.2, 23.7 and 24.05 s |
 | The 45 sample photos (30 JPEG, 15 named `.RAF`) the library was built from | `apps/photonamous/public/samples/` in the main checkout. **They should not stay under `public/`**: a production build would ship and precache all 1.2 GB. `samples/photonamous-demo-reel/photos/` is the place for them. |
 | `DSCF8078.RAF`, the photo the timelapse edits | https://github.com/theseamusjames/sample-raf-images |
 
@@ -82,8 +82,8 @@ the end card (default `e2e/demo-reel-end.jpg`).
 ```bash
 ffmpeg -i src/components/DemoReel/demo-reel.av1.mp4 \
   -vf "scale=480:400,mpdecimate=hi=200:lo=100:frac=0.1,showinfo" -f null - 2>&1 | grep -c pts_time
-# The good AV1 cuts of 2026-11-21 and 2026-11-24 have 473 and 472 (the masters, 461 and 462);
-# a take on a loaded machine had 434.
+# The good AV1 cuts of 2026-11-21 and 2026-11-24 (white end card) have 473 and 472 (the masters, 461 and 462),
+# the colour end card's 479 (master 463); a take on a loaded machine had 434.
 ```
 
 ```bash
@@ -101,6 +101,7 @@ done
 | The end card's line | `TAGLINE` in `demo-reel.record.ts`; then the same two places. It is the start screen's tagline (`StartScreen.tsx`), word for word: change both together. It breaks only between its sentences (`taglineHtml`). |
 | The titles' look | `#reel-title` in `stageScript` (Inter 900, 136 px, upper case, letters set just closer than normal: at -0.05em they touched). The last title is not on the app's page: it is `.title` in `END_CARD_CSS`, set the same way. |
 | The last title, its hold and the dissolve | The last shot in the script: the words are passed to `endPage`, the hold is the wait before `end` is added, and the dissolve is the `.end` rules in `END_CARD_CSS`. The wordmark waits `END_TITLE_OUT_MS` for the title to go; the space between the wordmark and the line is `.card`'s `gap`. |
+| The wordmark on the end card | `END_WORDMARK` in `demo-reel.record.ts`: the colour mark, as the start screen draws it. `photonamous-wordmark-1440.png` is the white one at the same size and shape. |
 | The photograph behind the last shot | Replace `e2e/demo-reel-end.jpg`, or name another with `REEL_END`. |
 | A shot's length | The number passed to `shot(page, id, seconds, ...)`. |
 | The order, or a shot | The numbered blocks in the `test` at the foot of the script. Each `clips.push(await shot(...))` is one shot; cuts are hard, in that order. |

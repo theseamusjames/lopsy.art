@@ -29,7 +29,7 @@ is `docs/photonamous-spec.md`; running and setup are in
   and "In your web browser."; before and after under the split divider;
   "No servers."; "Your own cloud storage."; the library in Google Drive,
   clicked through from its folder to a day's originals; "Completely
-  free.", which dissolves into an end card, the wordmark and the start screen's
+  free.", which dissolves into an end card, the wordmark in colour and the start screen's
   line, "RAW editing. Your cloud storage. Completely free.", over a
   photograph from the library.
   It starts by itself, muted,

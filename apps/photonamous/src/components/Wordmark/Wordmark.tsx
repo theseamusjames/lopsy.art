@@ -40,8 +40,9 @@ interface WordmarkProps {
  * An image, so its name is its `alt`.
  *
  * `photonamous-wordmark-1440.png`, the one-colour mark at the start
- * screen's largest size, is not drawn here: the demo film's end card is
- * recorded with it (`e2e/demo-reel.record.ts`).
+ * screen's largest size, is not drawn here. The demo film's end card is
+ * recorded with the colour mark (`END_WORDMARK` in
+ * `e2e/demo-reel.record.ts`); this file is for an end card in white.
  */
 export function Wordmark({ size }: WordmarkProps) {
   if (size === 'start') {

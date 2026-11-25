@@ -335,6 +335,13 @@ const DRIVE_LEVELS: readonly { readonly file: string; readonly opens: number | n
 /** Where the list's rows are in those pictures, in their own pixels, and where on a row the pointer rests. */
 const DRIVE_ROWS = { top: 316, height: 96, pointerX: 250 };
 
+/**
+ * The wordmark on the end card: the colour mark, the start screen's own drawing at its largest
+ * (Wordmark.tsx, size "start"). `photonamous-wordmark-1440.png` beside it is the one-colour mark at the
+ * same size and shape, for an end card in white.
+ */
+const END_WORDMARK = 'photonamous-wordmark-color-1440.png';
+
 /** How long the last title takes to go. The wordmark waits for it: the two are never on screen together. */
 const END_TITLE_OUT_MS = 650;
 
@@ -806,7 +813,7 @@ test('record the demo reel', async ({ page, baseURL }) => {
 
   // 8. The last title, held longer than the others, and a dissolve into the end card: the wordmark and the
   // line, over a photograph from the library.
-  const wordmarkUrl = `${baseURL}/src/components/Wordmark/photonamous-wordmark-1440.png`;
+  const wordmarkUrl = `${baseURL}/src/components/Wordmark/${END_WORDMARK}`;
   const endHtml = endPage(endPhoto().toString('base64'), fontUrl, wordmarkUrl, 'Completely<br>free.');
   await page.setContent('<!doctype html><html><body style="background:#000"></body></html>');
   clips.push(
