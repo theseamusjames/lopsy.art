@@ -44,11 +44,13 @@ const chromium = {
 };
 
 const PREVIEW_SPEC = /build-preview\.spec\.ts/;
+// Needs a build that names Photonamous' URL; it runs under playwright.photos.config.ts.
+// A project's testIgnore replaces the top-level one, so each project lists it again.
+const PHOTOS_SPECS = /photos-(handoff|grade)\.spec\.ts$/;
 
 export default defineConfig({
   testDir: './e2e',
-  // Needs a build that names Photonamous' URL; it runs under playwright.photos.config.ts.
-  testIgnore: [/photos-(handoff|grade)\.spec\.ts$/],
+  testIgnore: PHOTOS_SPECS,
   timeout: 600000,
   workers: 2,
   retries: 1,
@@ -60,13 +62,13 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testIgnore: PREVIEW_SPEC,
+      testIgnore: [PREVIEW_SPEC, PHOTOS_SPECS],
       use: chromium,
     },
     {
       name: 'firefox',
       // The command-API specs test the commands, not the browser: one engine is enough.
-      testIgnore: [/e2e[\\/]api[\\/]/, PREVIEW_SPEC],
+      testIgnore: [/e2e[\\/]api[\\/]/, PREVIEW_SPEC, PHOTOS_SPECS],
       use: {
         ...devices['Desktop Firefox'],
         launchOptions: {
