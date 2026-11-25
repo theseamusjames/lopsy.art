@@ -90,6 +90,37 @@ test('search engines may list it', async ({ page }) => {
   for (const { path } of DOCUMENTS) expect(listed).toContain(`<loc>https://photonamous.com${path}</loc>`);
 });
 
+test('a shared link shows the preview image', async ({ page }) => {
+  await page.goto('/');
+  const meta = (key: string) => page.locator(`meta[property="${key}"], meta[name="${key}"]`);
+  const image = await meta('og:image').getAttribute('content');
+  // Link previews need an absolute URL, on the one address the site is listed under.
+  expect(image).toBe('https://photonamous.com/og-image.jpg');
+  await expect(meta('twitter:card')).toHaveAttribute('content', 'summary_large_image');
+  await expect(meta('twitter:image')).toHaveAttribute('content', image ?? '');
+  await expect(meta('og:image:alt')).toHaveAttribute('content', /\S/);
+  await expect(meta('twitter:image:alt')).toHaveAttribute('content', /\S/);
+  await expect(meta('og:image:width')).toHaveAttribute('content', '1200');
+  await expect(meta('og:image:height')).toHaveAttribute('content', '630');
+
+  // This build serves it, as the type the page says it is.
+  const path = new URL(image ?? '').pathname;
+  const response = await page.request.get(path);
+  expect(response.status()).toBe(200);
+  expect(response.headers()['content-type']).toBe(await meta('og:image:type').getAttribute('content'));
+  expect(response.headers()['content-type']).toMatch(/^image\//);
+  const size = await page.evaluate(async (path) => {
+    const bitmap = await createImageBitmap(await (await fetch(path)).blob());
+    return { width: bitmap.width, height: bitmap.height };
+  }, path);
+  expect(size).toEqual({ width: 1200, height: 630 });
+
+  // The app never shows it, so the service worker leaves it to the network.
+  const manifest = await (await page.request.get('/sw.js')).text();
+  expect(manifest).toContain('"/manifest.webmanifest"');
+  expect(manifest).not.toContain(`"${path}"`);
+});
+
 test('a deep link gets the app', async ({ page }) => {
   const problems = watch(page);
   const response = await page.goto('/some/deep/link');

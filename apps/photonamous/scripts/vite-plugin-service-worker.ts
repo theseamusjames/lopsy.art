@@ -8,7 +8,7 @@ import type { Plugin, ResolvedConfig } from 'vite';
  * `<base>sw.js`, a fixed name so its scope is the app's base, and writes
  * the precache manifest into it once the build is on disk: every file
  * written (the hashed JS and CSS, the engine's wasm, the public fonts,
- * icons and manifest) with the SHA-256 of its bytes. The engine's two
+ * icons and manifest; not the files in SKIPPED) with the SHA-256 of its bytes. The engine's two
  * wasm builds are listed but cached on demand (ON_DEMAND), not at install. The page itself is
  * precached as the base URL (`/`), since Pages answers `/index.html`
  * with a redirect to it. The cache version is a hash
@@ -28,11 +28,12 @@ const ENTRY = 'src/sw/service-worker.ts';
 const WORKER_FILE = 'sw.js';
 const PLACEHOLDER = '__PRECACHE_MANIFEST__';
 /**
- * Files Pages reads as configuration, and nothing a page loads; and the
- * start screen's demo reel, megabytes a signed-in user never plays (its
- * poster is precached, so the start screen is whole offline without it).
+ * Files Pages reads as configuration, and nothing a page loads; the start
+ * screen's demo reel, megabytes a signed-in user never plays (its poster is
+ * precached, so the start screen is whole offline without it); and the
+ * social preview image, which only link previews fetch.
  */
-const SKIPPED = [/^_headers$/, /^_redirects$/, /\.map$/, /^edit-harness\.html$/, /^sw\.js$/, /\.mp4$/];
+const SKIPPED = [/^_headers$/, /^_redirects$/, /\.map$/, /^edit-harness\.html$/, /^sw\.js$/, /\.mp4$/, /^og-image\.jpg$/];
 /**
  * Files in the manifest that the install leaves out: the engine's two wasm
  * builds (WebGL and WebGPU), of which a page runs one. The page asks the

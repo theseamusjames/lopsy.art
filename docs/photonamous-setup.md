@@ -163,6 +163,25 @@ is a trailer recorded from the app itself, not edited by hand.
 `docs/photonamous-demo-reel.md` says how it is made, what each of its
 files is, and how to record it again or change it.
 
+**The link preview** (`apps/photonamous/public/og-image.jpg`, the page's
+`og:image` and `twitter:image`) is made from the app too: a RAW photo
+(`DSCF8005.RAF` from the sample RAF images) in the Edit view's split before
+and after, divider half way, captured from the full-size image on the
+machine's GPU in sRGB and scaled to 1200 × 630. The edit and the crop are
+`apps/photonamous/e2e/og-image-edit.json`. To make it again, from
+`apps/photonamous` (needs Playwright's full Chromium,
+`npx playwright install chromium`):
+
+```bash
+OG_RAW=<path to DSCF8005.RAF> VITE_PORT=5189 npx playwright test -c e2e/og-image.config.ts
+```
+
+It writes `public/og-image.jpg`, and the same picture at 500 and 300 px
+wide into `test-results/og-image/` to judge it at the sizes a card is
+shown (delete `test-results/` after). `OG_EDITS=<file.json>` adds other edits
+to compare (`e2e/og-image.record.ts`). The service worker does not
+precache it: only link previews fetch it.
+
 **Add from Google Drive** shows Google's Picker in one of two ways
 (`apps/photonamous/src/import/drive-picker.ts` chooses):
 
