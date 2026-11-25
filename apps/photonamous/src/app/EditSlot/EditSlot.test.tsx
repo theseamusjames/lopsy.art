@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AssetId, NewAsset, VersionId } from '@lopsy/photos-core/library/types';
+import { DEFAULT_RECIPE, PIPELINE_VERSION } from '@lopsy/photos-core/library/recipe';
 import type { EditViewProps } from '../../edit/EditView/EditView';
 import { versionItemId } from '../../library/items';
 import { setBackend } from '../backend-registry';
@@ -171,5 +172,36 @@ describe('a Lopsy document saved without a render, asked for in the Edit view', 
     });
     expect(onClose).toHaveBeenCalledTimes(2);
     expect(openInLopsy).not.toHaveBeenCalled();
+  });
+});
+
+describe('a version edited with a newer pipeline than this build’s', () => {
+  function showNewer(): void {
+    const { assetId } = session.addAsset(photo('DSCF0001.RAF', 1));
+    const versionId = session.createVersion(assetId, 'Newer', { ...DEFAULT_RECIPE, pipeline: PIPELINE_VERSION + 1 });
+    show(assetId, versionId);
+  }
+
+  it('is not opened in the Edit view: a plain message says the app needs updating', () => {
+    showNewer();
+    expect(rendered.props).toBeNull();
+    expect(host.querySelector('[data-testid="edit-view"]')).toBeNull();
+    expect(host.querySelector('h1')?.textContent).toBe('DSCF0001.RAF');
+    expect(host.textContent).toContain('This version was edited with a newer version of Photonamous');
+    expect([...host.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Reload', 'Back']);
+  });
+
+  it('goes back without changing the version', () => {
+    showNewer();
+    const before = session.getView();
+    act(() => [...host.querySelectorAll('button')].find((b) => b.textContent === 'Back')?.click());
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(session.getView()).toBe(before);
+  });
+
+  it('opens a version of this build’s pipeline as before', () => {
+    const { assetId, versionId } = session.addAsset(photo('DSCF0002.RAF', 2));
+    show(assetId, versionId);
+    expect(rendered.props?.version.id).toBe(versionId);
   });
 });

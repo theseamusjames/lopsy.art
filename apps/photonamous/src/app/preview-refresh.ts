@@ -14,7 +14,7 @@
  */
 
 import { isDevelopable } from '../library/develop-source';
-import { isPreviewCurrent } from '@lopsy/photos-core/library/pipeline';
+import { isNewerPipeline, isPreviewCurrent } from '@lopsy/photos-core/library/pipeline';
 import { recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Asset, LibraryView, PreviewRef, Version, VersionId } from '@lopsy/photos-core/library/types';
 import type { EditPreviews } from './backend';
@@ -47,9 +47,18 @@ export function isStale(version: Version, hash: string): boolean {
   return !isPreviewCurrent(version.thumb, version, hash) || !isPreviewCurrent(version.screen, version, hash);
 }
 
-/** Whether a version's previews are behind its recipe and can be made again. */
+/**
+ * Whether a version's previews are behind its recipe and can be made
+ * again. A version from a newer pipeline cannot be: this build would
+ * render it wrong, so the newer build's previews stay.
+ */
 export function awaitsPreviews(view: LibraryView, version: Version, hashOf: (recipe: Recipe) => string = cachedRecipeHash): boolean {
-  return !version.deleted && renderable(view.assets.get(version.assetId)) && isStale(version, hashOf(version.recipe));
+  return (
+    !version.deleted &&
+    !isNewerPipeline(version.recipe) &&
+    renderable(view.assets.get(version.assetId)) &&
+    isStale(version, hashOf(version.recipe))
+  );
 }
 
 /** Versions whose previews do not show their recipe. */

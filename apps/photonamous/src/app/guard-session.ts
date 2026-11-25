@@ -1,13 +1,15 @@
 /**
  * Wraps a LibrarySession so a command refused because another tab took
  * the library over (LibraryLockLostError), or because the library was made
- * by a newer app (LibraryReadOnlyError), shows a message instead of
+ * by a newer app (LibraryReadOnlyError), or a version that was edited
+ * with a newer pipeline (NewerPipelineError), shows a message instead of
  * throwing into a click handler.
  */
 
 import type { LibrarySession } from '@lopsy/photos-core/library/types';
 import { LibraryLockLostError, LOCK_LOST_MESSAGE } from '@lopsy/photos-core/library/lock';
 import { LibraryReadOnlyError } from '@lopsy/photos-core/library/session';
+import { NewerPipelineError } from '@lopsy/photos-core/library/pipeline';
 
 /** The session methods that change the library. */
 export const COMMANDS: ReadonlySet<string> = new Set([
@@ -47,6 +49,7 @@ export const READ_ONLY_MESSAGE = 'This library was made by a newer version of Ph
 export function refusalMessage(error: unknown): string | null {
   if (error instanceof LibraryLockLostError) return error.message;
   if (error instanceof LibraryReadOnlyError) return READ_ONLY_MESSAGE;
+  if (error instanceof NewerPipelineError) return error.message;
   return null;
 }
 

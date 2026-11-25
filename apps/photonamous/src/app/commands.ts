@@ -15,6 +15,7 @@ import { showErrorToast, showToast } from './toasts';
 import { plural } from '../import/import-summary';
 import { findPreset } from '@lopsy/photos-core/library/presets';
 import { DEFAULT_RECIPE, isDefaultRecipe } from '@lopsy/photos-core/library/recipe';
+import { isNewerPipeline } from '@lopsy/photos-core/library/pipeline';
 import { asGroupIds, pasteRecipeValues, pickRecipeValues } from '../library/recipe-copy';
 import { EMPTY_SELECTION, moveFocus, nextAfterRemoval, orderedSelection, selectAll, selectOne, targetIds } from '../library/selection';
 
@@ -151,7 +152,8 @@ export function resetEdits(): void {
   const view = s.getView();
   const edited = currentVersions()
     .map((v) => view.versions.get(v.versionId))
-    .filter((version) => version !== undefined && !isDefaultRecipe(version.recipe));
+    // A version from a newer pipeline is never written here (photos-core pipeline.ts).
+    .filter((version) => version !== undefined && !isDefaultRecipe(version.recipe) && !isNewerPipeline(version.recipe));
   if (edited.length === 0) {
     showToast(currentVersions().length === 0 ? 'Select photos to reset first.' : 'Nothing to reset: no edits here.');
     return;

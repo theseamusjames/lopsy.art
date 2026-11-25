@@ -5,7 +5,9 @@ import { MemoryLocalStore } from '@lopsy/photos-core/library/local-store';
 import { openLibrary } from '@lopsy/photos-core/library/session';
 import { NoopLibraryLock } from '@lopsy/photos-core/library/lock';
 import { recipeHash, DEFAULT_RECIPE, PIPELINE_VERSION } from '@lopsy/photos-core/library/recipe';
+import { isPreviewCurrent } from '@lopsy/photos-core/library/pipeline';
 import { PreviewRefresher, staleVersions, type PreviewRefresherOptions } from './preview-refresh';
+import { FakeSession } from './fake/fake-session';
 
 async function library(): Promise<{ session: LibrarySession; assetId: string; versionId: VersionId }> {
   const adapter = new MemoryAdapter();
@@ -220,6 +222,38 @@ describe('background previews', () => {
     // It may reuse the first version's new render, never the files the other pipeline made.
     expect(session.getView().versions.get(second)?.thumb).toMatchObject({ pipeline: PIPELINE_VERSION });
     expect(session.getView().versions.get(second)?.thumb?.fileId).not.toBe('other-thumb');
+  });
+
+  it('leaves a version from a newer pipeline alone: this build would render it wrong', async () => {
+    const fake = new FakeSession('memory', 'Test');
+    const { assetId } = fake.addAsset({
+      kind: 'original',
+      fileId: 'original',
+      sha256: 'x',
+      fileName: 'a.jpg',
+      byteSize: 3,
+      format: 'jpeg',
+      mimeType: 'image/jpeg',
+      capturedAt: null,
+      importedAt: '2026-01-01T00:00:00Z',
+      importId: 'i',
+      width: 3,
+      height: 2,
+      orientation: 1,
+      camera: null,
+      lens: null,
+      exposure: null,
+      gps: null,
+      pairedWith: null,
+      source: null,
+      renderFileId: null,
+    });
+    const newer = fake.createVersion(assetId, 'Newer', { ...DEFAULT_RECIPE, pipeline: PIPELINE_VERSION + 1 });
+    const view = fake.getView();
+    const version = view.versions.get(newer);
+    expect(version && isPreviewCurrent(version.thumb, version)).toBe(false);
+    expect(staleVersions(view).map((t) => t.versionId)).not.toContain(newer);
+    await fake.close();
   });
 
   it('waits while paused (the Edit view is open)', async () => {

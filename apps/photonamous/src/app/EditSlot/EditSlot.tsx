@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Paintbrush } from 'lucide-react';
+import { Paintbrush, RotateCw } from 'lucide-react';
 import type { Asset, AssetId, Json, PresetId, PreviewRef, VersionId } from '@lopsy/photos-core/library/types';
 import type { Recipe, RecipeGroupId } from '@lopsy/photos-core/library/recipe';
+import { isNewerPipeline } from '@lopsy/photos-core/library/pipeline';
 import type { FilmstripItem } from '../../edit/Filmstrip/Filmstrip';
 import { pasteRecipeValues, type CopiedEdits } from '../../library/recipe-copy';
 import { versionsByAsset, type ItemId } from '../../library/items';
@@ -164,6 +165,21 @@ export function EditSlot({ assetId, versionId, onClose }: EditSlotProps) {
         }}
       >
         This Lopsy document was saved without a flattened picture to edit here. Open it in Lopsy and save it to Photonamous again.
+      </EditNotice>
+    );
+  }
+
+  // Edited on a newer build: this one would render it wrong, and writing to it would lose what it does not know.
+  if (isNewerPipeline(version.recipe)) {
+    return (
+      <EditNotice
+        heading={asset.fileName}
+        documentTitle={`${asset.fileName} – needs a newer Photonamous`}
+        onClose={onClose}
+        action={{ label: 'Reload', icon: <RotateCw size={14} />, onClick: () => window.location.reload() }}
+      >
+        This version was edited with a newer version of Photonamous, so this one can neither show nor change its edits. Reload
+        to update the app. Until then the version stays exactly as it is.
       </EditNotice>
     );
   }

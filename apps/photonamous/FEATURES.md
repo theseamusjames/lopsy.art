@@ -339,6 +339,14 @@ of originals. A document without a render opens only in Lopsy: should the
 Edit view be asked for one, it names the document, says it was saved
 without a picture to edit here, and offers **Open in Lopsy** and **Back**.
 
+A version edited with a newer version of Photonamous (a newer editing
+engine, opened in an older copy of the app the browser still has) does
+not open here either: the Edit view names the photo, says the app needs
+updating to show or change its edits, and offers **Reload** and **Back**.
+Nothing in the app changes such a version meanwhile: a preset, pasted
+edits or Reset from the grid passes it by, and its previews stay the ones
+the newer version made.
+
 - **Loading and working size.** RAF decodes on a pool of workers into the
   engine's RAW develop stage; DNG through the engine's decoder; 16-bit PNG
   at full depth; JPEG and WebP through the browser. Editing starts on a
