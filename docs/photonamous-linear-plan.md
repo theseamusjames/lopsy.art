@@ -165,11 +165,11 @@ Read from the code on this branch. Each item names the file to look in.
 
 ### Versions and tests
 
-- **The pipeline version is never saved.** `PIPELINE_VERSION` is 1 and a
-  version stores only the settings that differ from the default, so no
-  recipe has a `pipeline` field in storage
-  (`packages/photos-core/src/library/session.ts`). Changing the number
-  would relabel every edit ever made. Previews do not record it either.
+- **The pipeline version is saved** (section 8, Done): each version
+  records `recipe.pipeline` when it is made and each preview the
+  pipeline that rendered it; versions and previews from before read as 1
+  (`packages/photos-core/src/library/pipeline.ts`). There is only
+  version 1, so no edit is migrated yet.
 - **No golden images.** The browser tests compare means and channel
   differences. In the engine, only the RAW step, colour by hue and the
   mask layer are compared with their CPU references on the GPU; noise
@@ -639,6 +639,13 @@ was.
 
 ### Done
 
+- **Saving the pipeline version** (Phase 0, item 4, the "Before launch"
+  note): every new version writes `recipe.pipeline` once in the op that
+  creates it and every preview reference records the pipeline that
+  rendered it (both read as 1 when missing); a preview from another
+  pipeline is re-rendered as a stale one is, and a version from a newer
+  pipeline than the build's is never written and does not open in the
+  Edit view (`packages/photos-core/src/library/pipeline.ts`).
 - **Phase 0, items 5 to 7** (the test bed): golden renders of the eight
   sample RAF files times four sets of settings
   (`engine/tests/golden.rs`, fingerprints in `engine/tests/golden/`);
@@ -968,5 +975,3 @@ was.
   level from a file tag (decision 26).
 - **Frames at 100% on a full-resolution photo** miss 30 fps
   (decision 55): the chain needs to render the visible part only.
-- **Saving the pipeline version** with edits and previews: before
-  launch, as section 4 says.
