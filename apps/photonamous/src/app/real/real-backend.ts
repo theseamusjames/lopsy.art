@@ -13,6 +13,7 @@ import { openBrowserStorage, openPickedFolder } from '@lopsy/photos-core/storage
 import { GoogleDriveAdapter } from '@lopsy/photos-core/storage/google-drive/drive-adapter';
 import { IndexedDbUploadSessionStore } from '@lopsy/photos-core/storage/google-drive/upload-sessions';
 import { AccountMismatchError, fetchDriveAccountId, GoogleTokenSource } from '@lopsy/photos-core/auth/google-token-source';
+import { renewOnClicks } from './gesture-refresh';
 import { isStorageError } from '@lopsy/photos-core/storage/errors';
 import { resumeImports, startImport } from '@lopsy/photos-core/import/importer';
 import { OpfsStagingStore, type StagingStore } from '@lopsy/photos-core/import/staging';
@@ -83,6 +84,8 @@ interface SessionExtras {
   readonly owner: string;
   readonly label: string;
   readonly tokenSource: GoogleTokenSource | null;
+  /** Stops offering clicks to the token source (`renewOnClicks`); null where there is no token. */
+  readonly stopRenewing: (() => void) | null;
   /** Device caches; null for the browser's own storage, whose files are already on the device. */
   readonly caches: AccountCaches | null;
   readonly staging: StagingStore | null;
@@ -247,7 +250,8 @@ export class RealBackend implements PhotosBackend {
       optional(() => OpfsStagingStore.open(session.libraryId)),
       optional(() => IndexedDbImportQueueStore.open()),
     ]);
-    this.extras.set(session, { kind, raw: rawSession, owner: opened.owner, label: opened.label, tokenSource: opened.tokenSource, caches, staging, queue });
+    const stopRenewing = opened.tokenSource ? renewOnClicks(opened.tokenSource) : null;
+    this.extras.set(session, { kind, raw: rawSession, owner: opened.owner, label: opened.label, tokenSource: opened.tokenSource, stopRenewing, caches, staging, queue });
     if (kind === 'google-drive' && caches) void this.applyKeepOriginals(session, loadKeepOriginals()).catch(() => undefined);
     setPreviewSource(caches ? { read: (s, ref) => caches.previews.readPreview(s.adapter, ref.fileId) } : null);
     saveLastConnection({ kind, label: opened.label, ...(kind === 'google-drive' ? { accountId: opened.owner } : {}) });
@@ -613,6 +617,7 @@ export class RealBackend implements PhotosBackend {
     this.refreshers.get(session)?.stop();
     this.refreshers.delete(session);
     const tokenSource = this.extras.get(session)?.tokenSource;
+    this.extras.get(session)?.stopRenewing?.();
     this.keepState.get(session)?.download?.stop();
     this.keepState.delete(session);
     setPreviewSource(null);

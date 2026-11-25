@@ -10,10 +10,18 @@
  * the account (`fetchDriveAccountId`). Without an email there is no login
  * hint, so Google's popup shows its account chooser.
  *
- * The token model has no refresh token, so a new token needs GIS's popup.
- * `getToken` tries a silent refresh (prompt 'none') when under five minutes
- * remain, and throws 'auth' once the token has run out; the UI then shows
- * Reconnect, whose click calls `requestInteractive`.
+ * The token model has no refresh token, so a new token needs GIS's popup,
+ * and a browser lets a page open a popup only from a click or key press.
+ * So the token is renewed from the user's own clicks: once it is 45 minutes
+ * old, `refreshOnGesture`, called from any click, asks Google for a new one
+ * without showing anything (prompt 'none'). If Google has to ask something
+ * first (several accounts are signed in and it cannot tell which), the next
+ * click opens its window properly; if the user closes that, nothing more is
+ * tried and the token runs its hour. `getToken` still tries a silent
+ * refresh of its own when under five minutes remain, which works only where
+ * the browser lets that popup through, and throws 'auth' once the token has
+ * run out; the UI then shows Reconnect, whose click calls
+ * `requestInteractive`.
  */
 
 import { StorageError } from '../storage/errors';
@@ -26,6 +34,14 @@ export const DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 export const GOOGLE_SCOPES = DRIVE_FILE_SCOPE;
 const REFRESH_MARGIN_MS = 5 * 60 * 1000;
 const MIN_VALIDITY_MS = 60 * 1000;
+/** How old a token is when a click renews it. Google's tokens last an hour. */
+export const GESTURE_REFRESH_AGE_MS = 45 * 60 * 1000;
+/**
+ * How long to leave it after a click whose popup the browser refused: the
+ * click was spent on something else that needed it (a file dialog, another
+ * window). Short, so one of the next clicks does it.
+ */
+export const GESTURE_RETRY_MS = 15 * 1000;
 /** Where builds that asked for the email kept it as a login hint. Never written now; removed when found. */
 export const LEGACY_LOGIN_HINT_KEY = 'photonamous.google-email';
 
@@ -86,10 +102,40 @@ export class AccountMismatchError extends StorageError {
 interface Grant {
   readonly value: string;
   readonly expiresAt: number;
+  readonly grantedAt: number;
 }
 
+/** Why Google's window gave no token: what a renewal does next depends on it. */
+type SignInFailureReason = 'blocked' | 'closed' | 'refused';
+
+class SignInFailure extends StorageError {
+  constructor(
+    message: string,
+    readonly reason: SignInFailureReason,
+  ) {
+    super('auth', message);
+    this.name = 'SignInFailure';
+  }
+}
+
+/** GIS's `error_callback` types, as its documentation lists them. */
+function failureReason(type: string | undefined): SignInFailureReason {
+  if (type === 'popup_failed_to_open') return 'blocked';
+  if (type === 'popup_closed') return 'closed';
+  return 'refused';
+}
+
+/**
+ * Where renewing from clicks stands for the current token: 'silent' asks
+ * without showing anything, 'ask' lets Google show its window, 'off' leaves
+ * the token to run out.
+ */
+type GestureRefresh = 'silent' | 'ask' | 'off';
+
 export class GoogleTokenSource implements TokenSource {
-  private token: { readonly value: string; readonly expiresAt: number } | null = null;
+  private token: Grant | null = null;
+  private gestureRefresh: GestureRefresh = 'silent';
+  private gestureNotBefore = 0;
   private client: TokenClient | null = null;
   private oauth2: Oauth2 | null = null;
   private pending: { resolve: (grant: Grant) => void; reject: (error: unknown) => void } | null = null;
@@ -125,6 +171,38 @@ export class GoogleTokenSource implements TokenSource {
     return this.request(this.token === null && this.options.expectedAccountId === undefined ? 'consent' : '');
   }
 
+  /**
+   * Renews a token that is 45 minutes old. Call it from every click: a
+   * browser opens Google's popup only then, and it does nothing until the
+   * token is old enough. The token in use stays good whatever happens here.
+   * Resolves true when a new token was taken.
+   */
+  async refreshOnGesture(): Promise<boolean> {
+    const token = this.token;
+    if (!token || this.inFlight) return false;
+    const now = this.now();
+    // Run out: Reconnect, which says what is happening, is the way back.
+    if (token.expiresAt - now <= MIN_VALIDITY_MS) return false;
+    if (now - token.grantedAt < GESTURE_REFRESH_AGE_MS) return false;
+    if (this.gestureRefresh === 'off' || now < this.gestureNotBefore) return false;
+    const isSilent = this.gestureRefresh === 'silent';
+    try {
+      await this.request(isSilent ? 'none' : '', 'keep-current');
+      return true;
+    } catch (error) {
+      if (error instanceof SignInFailure && error.reason === 'blocked') {
+        this.gestureNotBefore = this.now() + GESTURE_RETRY_MS;
+      } else if (isSilent && !(error instanceof AccountMismatchError)) {
+        // Google needs to ask something: let the next click show its window.
+        this.gestureRefresh = 'ask';
+      } else {
+        // The window was closed, or another account was picked: do not open it again unasked.
+        this.gestureRefresh = 'off';
+      }
+      return false;
+    }
+  }
+
   invalidate(): void {
     this.token = null;
   }
@@ -136,7 +214,11 @@ export class GoogleTokenSource implements TokenSource {
     if (token) await revokeToken(token.value);
   }
 
-  private request(prompt: string): Promise<string> {
+  /**
+   * `onMismatch` says what a grant for another account does to the token
+   * in use: a sign-in drops it, a renewal keeps it.
+   */
+  private request(prompt: string, onMismatch: 'drop-current' | 'keep-current' = 'drop-current'): Promise<string> {
     if (this.inFlight) return this.inFlight;
     const flight = this.ensureClient()
       .then(
@@ -146,7 +228,7 @@ export class GoogleTokenSource implements TokenSource {
             client.requestAccessToken({ prompt });
           }),
       )
-      .then((grant) => this.accept(grant));
+      .then((grant) => this.accept(grant, onMismatch));
     this.inFlight = flight;
     const clear = (): void => {
       if (this.inFlight === flight) this.inFlight = null;
@@ -172,28 +254,32 @@ export class GoogleTokenSource implements TokenSource {
       client_id: this.options.clientId,
       scope: GOOGLE_SCOPES,
       callback: (response) => this.onResponse(response),
-      error_callback: (error) => this.settle(new StorageError('auth', error.message ?? `Google sign-in failed (${error.type ?? 'unknown'})`)),
+      error_callback: (error) =>
+        this.settle(new SignInFailure(error.message ?? `Google sign-in failed (${error.type ?? 'unknown'})`, failureReason(error.type))),
     });
     return this.client;
   }
 
   /** Keeps a grant once it is known to be for the expected account. */
-  private async accept(grant: Grant): Promise<string> {
+  private async accept(grant: Grant, onMismatch: 'drop-current' | 'keep-current'): Promise<string> {
     const expected = this.options.expectedAccountId;
     if (expected !== undefined) {
       const actual = await fetchDriveAccountId(grant.value, this.options.fetch);
       if (actual !== expected) {
-        this.token = null;
+        if (onMismatch === 'drop-current') this.token = null;
         throw new AccountMismatchError(actual);
       }
     }
     this.token = grant;
+    // A new token starts over: its own renewal asks silently first.
+    this.gestureRefresh = 'silent';
+    this.gestureNotBefore = 0;
     return grant.value;
   }
 
   private onResponse(response: TokenResponse): void {
     if (response.error || !response.access_token) {
-      this.settle(new StorageError('auth', response.error_description ?? response.error ?? 'Google returned no token'));
+      this.settle(new SignInFailure(response.error_description ?? response.error ?? 'Google returned no token', 'refused'));
       return;
     }
     if (!this.oauth2?.hasGrantedAllScopes(response, DRIVE_FILE_SCOPE)) {
@@ -203,7 +289,8 @@ export class GoogleTokenSource implements TokenSource {
       return;
     }
     const seconds = Number(response.expires_in ?? 3600);
-    this.settle(null, { value: response.access_token, expiresAt: this.now() + (Number.isFinite(seconds) ? seconds : 3600) * 1000 });
+    const now = this.now();
+    this.settle(null, { value: response.access_token, expiresAt: now + (Number.isFinite(seconds) ? seconds : 3600) * 1000, grantedAt: now });
   }
 
   private settle(error: StorageError | null, grant?: Grant): void {

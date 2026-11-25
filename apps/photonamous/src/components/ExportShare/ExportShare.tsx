@@ -70,7 +70,7 @@ export function ExportShare({ session, folder, photoCount }: ExportShareProps) {
   };
 
   return (
-    <div className={styles.share}>
+    <div className={styles.share} data-keeps-gesture>
       <div className={styles.actions}>
         {folder.webLink !== null && (
           <Button size="sm" onClick={() => window.open(folder.webLink ?? '', '_blank', 'noopener')}>

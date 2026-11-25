@@ -63,8 +63,15 @@ is `docs/photonamous-spec.md`; running and setup are in
   browser, and to refuse a reconnect with the wrong account, it reads
   Drive's own opaque ID for the account and nothing else about it. With
   no email to hint with, Google's window shows its account chooser.
-  Tokens stay in memory. When a token can no longer be refreshed, the header offers
-  **Reconnect Google Drive**; nothing else is lost.
+  Tokens stay in memory. Google's token lasts an hour and can only be
+  renewed through Google's own window, which a browser opens from a
+  click; so once the token is 45 minutes old, the next ordinary click in
+  the app renews it. Google's window opens and closes by itself. If
+  several Google accounts are signed in, Google cannot tell which is
+  meant and the click after that shows its account chooser once; closing
+  it leaves things as they are. When a token does run out (the app was
+  left untouched past the hour), the header offers **Reconnect Google
+  Drive**; nothing else is lost.
 - **Add from Google Drive…** (the Import menu, Drive libraries only):
   picks photos already in Drive with Google's Picker and adds them to the
   library; Settings chooses whether they are moved into `Originals/` or
