@@ -27,6 +27,7 @@ load this package's stories) and tests, following
 | `@lopsy/ui/a11y/use-menu-keys` | A menu's keyboard: arrows, Home and End, letters, Escape and Tab |
 | `@lopsy/ui/a11y/radio-keys` | A group of `role="radio"` buttons as one Tab stop, moved with the arrows |
 | `@lopsy/ui/a11y/use-announcement` | The text for a polite live region, said once a state has settled |
+| `@lopsy/ui/a11y/use-select-on-focus` | A text field whose whole text is selected when it takes focus, also after a click in Safari (whose mouseup would otherwise drop the selection) |
 
 Import the three stylesheets once, from the app's entry point: fonts,
 tokens, then reset. Both apps import them after their components, so the

@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState, type CSSProperties } from 'react';
+import { useSelectOnFocus } from '../a11y/use-select-on-focus';
 import styles from './Slider.module.css';
 
 export interface SliderProps {
@@ -137,6 +138,11 @@ export function Slider({
 }: SliderProps) {
   const [localValue, setLocalValue] = useState(String(value));
   const [isFocused, setIsFocused] = useState(false);
+  // Typing in the value box replaces the value, also after a click in Safari.
+  const selectOnFocus = useSelectOnFocus(() => {
+    setIsFocused(true);
+    setLocalValue(format(value));
+  });
   // The value the last change set, until it is committed: onCommit reports
   // it even when the parent has not re-rendered with it yet.
   const changedTo = useRef<number | null>(null);
@@ -263,11 +269,7 @@ export function Slider({
             disabled={disabled}
             aria-label={label ? `${label} value` : 'Value'}
             onChange={(e) => setLocalValue(e.target.value)}
-            onFocus={(e) => {
-              setIsFocused(true);
-              setLocalValue(format(value));
-              e.target.select();
-            }}
+            {...selectOnFocus}
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}
             onClick={(e) => e.stopPropagation()}

@@ -131,6 +131,25 @@ test.describe('Edit view on a JPEG', () => {
     await expect(fit).toHaveAttribute('aria-pressed', 'true');
   });
 
+  test('a click in a slider’s value selects it, so what is typed replaces it', async ({ page }) => {
+    // In Safari the click's mouseup would put the caret after the 0, and "30" would make "030".
+    const readout = page.getByLabel('Contrast value', { exact: true });
+    await readout.click();
+    await page.keyboard.type('30');
+    await expect(readout).toHaveValue('30');
+    await page.keyboard.press('Enter');
+    await expect(readout).toHaveValue('+30');
+    // Enter left the field. Clicked again it is selected again; a click in it while it has focus places the caret as usual.
+    const selection = () => readout.evaluate((el: HTMLInputElement) => [el.selectionStart, el.selectionEnd, el.value.length]);
+    await readout.click();
+    await expect.poll(selection).toEqual([0, 3, 3]);
+    await readout.click();
+    await expect.poll(async () => {
+      const [start, end] = await selection();
+      return start === end;
+    }).toBe(true);
+  });
+
   test('undo and redo sit after the tools, not beside rotate', async ({ page }) => {
     const undo = (await page.getByRole('button', { name: 'Undo', exact: true }).boundingBox())!;
     const redo = (await page.getByRole('button', { name: 'Redo', exact: true }).boundingBox())!;

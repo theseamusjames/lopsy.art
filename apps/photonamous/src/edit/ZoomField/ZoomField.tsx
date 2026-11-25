@@ -1,5 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { ZOOM_SCRUB_MAX, ZOOM_SCRUB_MIN, steppedZoom } from '@lopsy/ui/ZoomReadout';
+import { useSelectOnFocus } from '@lopsy/ui/a11y/use-select-on-focus';
 import { formatZoom, parseZoomText } from '../zoom-text';
 import styles from './ZoomField.module.css';
 
@@ -38,6 +39,8 @@ export function ZoomField({
   const inputRef = useRef<HTMLInputElement>(null);
   const selectNext = useRef(false);
   const hintId = useId();
+  // A click selects the level, so typing replaces it, also in Safari.
+  const selectOnFocus = useSelectOnFocus();
   const shown = formatZoom(zoom);
 
   // After Enter, a step or Escape the field keeps focus with its new text selected, ready for the next level.
@@ -82,7 +85,7 @@ export function ZoomField({
         value={typed ?? shown}
         disabled={isDisabled}
         data-testid={testId}
-        onFocus={(e) => e.target.select()}
+        {...selectOnFocus}
         onChange={(e) => setTyped(e.target.value)}
         onBlur={() => {
           if (typed !== null) take(typed);
