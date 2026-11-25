@@ -363,6 +363,14 @@ async function getSelectionState(page: Page) {
 // Test
 // ---------------------------------------------------------------------------
 
+/**
+ * The Image menu's button in the menu bar. `text=Image` also matches the
+ * page's hidden note for agents, which the menu bar covers.
+ */
+function imageMenu(page: Page) {
+  return page.getByRole('navigation', { name: 'Application menu' }).getByText('Image', { exact: true });
+}
+
 test.describe('Composition 2: Geometric Design', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
@@ -776,13 +784,13 @@ test.describe('Composition 2: Geometric Design', () => {
     const beforeFlip = await snapshot(page);
 
     // Flip horizontal via Image menu
-    await page.click('text=Image');
+    await imageMenu(page).click();
     await page.waitForTimeout(200);
     await page.click('text=Flip Horizontal');
     await page.waitForTimeout(300);
 
     // Flip vertical via Image menu
-    await page.click('text=Image');
+    await imageMenu(page).click();
     await page.waitForTimeout(200);
     await page.click('text=Flip Vertical');
     await page.waitForTimeout(300);
@@ -796,7 +804,7 @@ test.describe('Composition 2: Geometric Design', () => {
     expect(pixelDiff(beforeFlip, afterFlip)).toBeLessThan(50);
 
     // Rotate 90° CW via Image menu
-    await page.click('text=Image');
+    await imageMenu(page).click();
     await page.waitForTimeout(200);
     await page.click('text=Rotate 90');
     await page.waitForTimeout(300);
