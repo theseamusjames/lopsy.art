@@ -13,6 +13,7 @@ import { openBrowserStorage, openPickedFolder } from '@lopsy/photos-core/storage
 import { GoogleDriveAdapter } from '@lopsy/photos-core/storage/google-drive/drive-adapter';
 import { IndexedDbUploadSessionStore } from '@lopsy/photos-core/storage/google-drive/upload-sessions';
 import { AccountMismatchError, fetchDriveAccountId, GoogleTokenSource } from '@lopsy/photos-core/auth/google-token-source';
+import { afterDialog } from '../after-dialog';
 import { renewOnClicks } from './gesture-refresh';
 import { isStorageError } from '@lopsy/photos-core/storage/errors';
 import { resumeImports, startImport } from '@lopsy/photos-core/import/importer';
@@ -583,10 +584,13 @@ export class RealBackend implements PhotosBackend {
           notify();
           if (webLink !== null) {
             const where = session.adapter.kind === 'google-drive' ? 'Drive' : 'storage';
-            showToast(`Exported to “${request.name}”. Share it from the sync panel.`, 12_000, {
-              label: `Show in ${where}`,
-              run: () => window.open(webLink, '_blank', 'noopener'),
-            });
+            // After the Export dialog, which is still open and says the export is done: a toast now would sit on its Done button.
+            afterDialog('export', () =>
+              showToast(`Exported to “${request.name}”. Share it from the sync panel.`, 12_000, {
+                label: `Show in ${where}`,
+                run: () => window.open(webLink, '_blank', 'noopener'),
+              }),
+            );
           }
         }
         return snapshot;
