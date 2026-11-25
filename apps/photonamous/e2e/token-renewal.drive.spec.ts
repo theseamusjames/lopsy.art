@@ -1,4 +1,4 @@
-import { expect, test, type Page } from './test';
+import { BLOB_BODY_SKIP, expect, test, type Page } from './test';
 import { gisStubInitScript, routeFakeDrive } from '../../../packages/photos-core/src/storage/google-drive/playwright-fake-drive';
 import { generatedJpeg, importFiles, tiles } from './library';
 
@@ -21,6 +21,8 @@ async function prompts(page: Page): Promise<string[]> {
     });
   });
 }
+
+test.skip(BLOB_BODY_SKIP.skip, BLOB_BODY_SKIP.reason);
 
 test('a click renews a Google token that is 45 minutes old, and not before', async ({ page }) => {
   await page.clock.install();

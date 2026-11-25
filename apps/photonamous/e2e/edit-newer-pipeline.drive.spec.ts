@@ -1,4 +1,4 @@
-import { expect, test, type Page } from './test';
+import { BLOB_BODY_SKIP, expect, test, type Page } from './test';
 import { gisStubInitScript, routeFakeDrive } from '../../../packages/photos-core/src/storage/google-drive/playwright-fake-drive';
 import { GoogleDriveAdapter } from '../../../packages/photos-core/src/storage/google-drive/drive-adapter';
 import { StaticTokenSource } from '../../../packages/photos-core/src/auth/static-token-source';
@@ -23,6 +23,8 @@ async function signIn(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Try it now' }).click();
   await page.getByRole('button', { name: 'Continue with Google' }).click();
 }
+
+test.skip(BLOB_BODY_SKIP.skip, BLOB_BODY_SKIP.reason);
 
 test('a version from a newer pipeline is shown as needing an update, and left as it is', async ({ page, browser }) => {
   test.setTimeout(180_000);

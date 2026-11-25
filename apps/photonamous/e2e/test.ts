@@ -45,6 +45,37 @@ export const test =
       })
     : base;
 
+/**
+ * The keys that move focus to the next and the previous control. Safari's
+ * Tab skips buttons, links and sliders unless the person has turned on
+ * "Press Tab to highlight each item"; Option-Tab moves through every
+ * control, and Playwright's WebKit does the same. Specs that Tab through
+ * buttons or sliders press these, so they test the app and not that setting.
+ */
+export const tabKey = suiteBrowser === 'webkit' ? 'Alt+Tab' : 'Tab';
+export const shiftTabKey = suiteBrowser === 'webkit' ? 'Alt+Shift+Tab' : 'Shift+Tab';
+
+/**
+ * Whether a click on a button focuses it. Safari leaves focus where it was
+ * (on the page) when a button is clicked, and Playwright's WebKit does the
+ * same; a spec checking that a clicked button keeps focus checks it only
+ * where the browser gives it.
+ */
+export const clickFocusesButtons = suiteBrowser !== 'webkit';
+
+/**
+ * Why the Drive specs that upload do not run in WebKit: Playwright's
+ * WebKit gives page routing no body for a request whose body is a Blob
+ * (`postDataBuffer()` is null; strings and byte arrays come through), and
+ * the Drive adapter uploads Blobs, so photos-core's fake Drive would see
+ * every upload empty. Safari itself sends them; only the test's view of
+ * them is missing.
+ */
+export const BLOB_BODY_SKIP = {
+  skip: suiteBrowser === 'webkit',
+  reason: 'Playwright’s WebKit hides Blob request bodies from page routing, so the fake Drive cannot read uploads',
+} as const;
+
 type StorageStateOption = BrowserContextOptions['storageState'];
 
 /**

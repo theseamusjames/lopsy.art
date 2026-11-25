@@ -1,4 +1,4 @@
-import { expect, test } from './test';
+import { clickFocusesButtons, expect, test } from './test';
 import { axeViolations } from './axe';
 
 /**
@@ -11,7 +11,14 @@ test('the start screen and the three steps', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Photonamous' })).toBeVisible({ timeout: 15_000 });
   expect(await axeViolations(page), 'start screen').toEqual([]);
 
-  await page.getByRole('button', { name: 'Try it now' }).click();
+  const tryIt = page.getByRole('button', { name: 'Try it now' });
+  if (clickFocusesButtons) {
+    await tryIt.click();
+  } else {
+    // Safari does not focus a clicked button, so there is no focus to give back: open it from the keyboard.
+    await tryIt.focus();
+    await page.keyboard.press('Enter');
+  }
   const steps = page.getByRole('dialog', { name: 'How it works' });
   await expect(steps).toBeVisible();
   await expect(steps.getByRole('heading', { level: 3 })).toHaveText([

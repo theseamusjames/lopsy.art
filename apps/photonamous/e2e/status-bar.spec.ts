@@ -1,7 +1,7 @@
 import { expect, test, type Page } from './test';
 import { waitForReady } from './harness';
 import { generatedJpeg, importFiles, tiles } from './library';
-import { suiteRenderer } from './gpu-args';
+import { isChromium, suiteRenderer } from './gpu-args';
 
 /**
  * The status bar along the bottom of the window (src/components/AppStatusBar):
@@ -46,8 +46,9 @@ test('the library: photos shown and selected, the renderer and the display', asy
   // The previews were rendered by the engine, so the build that runs is known; each item says what it is.
   await expect(page.getByTestId('status-renderer')).toHaveText(`Renderer: ${RENDERER_NAMES[suiteRenderer]}`);
   await expect(page.getByTestId('status-display')).toHaveText(/^Display: (sRGB|Display P3)$/);
-  // The headless browser's display is sRGB (playwright.config.ts gives it no colour profile).
-  await expect(page.getByTestId('status-display')).toHaveText('Display: sRGB');
+  // Headless Chromium's display is sRGB (playwright.config.ts gives it no colour profile); Playwright's
+  // WebKit and Firefox report the machine's own display, which may be Display P3.
+  if (isChromium) await expect(page.getByTestId('status-display')).toHaveText('Display: sRGB');
   // The name is said, not shown.
   const name = await page.getByTestId('status-renderer').getByText('Renderer:').boundingBox();
   expect(name?.width ?? 0).toBeLessThanOrEqual(1);

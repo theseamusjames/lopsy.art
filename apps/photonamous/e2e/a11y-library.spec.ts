@@ -1,5 +1,6 @@
-import { expect, test, type Page } from './test';
+import { expect, shiftTabKey, test, type Page } from './test';
 import { generatedJpeg, importFiles } from './library';
+import { isChromium } from './gpu-args';
 
 /**
  * The library by keyboard and screen reader (WCAG 2.2 AA), through the UI:
@@ -141,7 +142,7 @@ test('the date tree opens by keyboard, its arrow beside the row rather than insi
   await expect(year).toHaveAttribute('aria-current', 'page');
 
   // The arrow comes just before its row in the tab order, and neither is inside the other.
-  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press(shiftTabKey);
   const arrow = page.locator(':focus');
   await expect(arrow).toHaveAttribute('aria-expanded', 'false');
   // Named for the year it opens, once: "Open 2026".
@@ -292,6 +293,11 @@ test('Full screen is a dialog; leaving it is announced and focus returns to the 
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('status').filter({ hasText: 'Left full screen' })).toBeAttached();
+  // Firefox and WebKit spend Escape on leaving the browser's full screen and
+  // never pass it to the page, which then ends Full screen as for the
+  // browser's own controls, in Single view (LibraryScreen). Chromium's
+  // headless shell passes the key on, so only there does it reach backOut.
+  if (!isChromium) return;
   await expect(cell(page, 'c.jpg')).toBeFocused();
 });
 

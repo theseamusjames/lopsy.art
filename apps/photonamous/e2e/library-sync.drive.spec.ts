@@ -1,4 +1,4 @@
-import { expect, test, type Page } from './test';
+import { BLOB_BODY_SKIP, expect, test, type Page } from './test';
 import { gisStubInitScript, routeFakeDrive } from '../../../packages/photos-core/src/storage/google-drive/playwright-fake-drive';
 import type { FakeDrive } from '../../../packages/photos-core/src/storage/google-drive/fake-drive';
 import { generatedJpeg, importFiles, tiles } from './library';
@@ -35,6 +35,8 @@ async function signIn(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Try it now' }).click();
   await page.getByRole('button', { name: 'Continue with Google' }).click();
 }
+
+test.skip(BLOB_BODY_SKIP.skip, BLOB_BODY_SKIP.reason);
 
 test('Google Drive: the library in Drive, and a second device sees it', async ({ page, browser }) => {
   const drive = await routeFakeDrive(page.context());

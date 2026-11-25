@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from './test';
+import { expect, tabKey, test, type Locator, type Page } from './test';
 import { openGeneratedImage, openHarness, waitForReady } from './harness';
 
 /**
@@ -155,7 +155,7 @@ test('from the keyboard the arrow keys move the options, Enter and Space send th
   await openPhoto(page);
   const { bar, grip, stage } = await openCrop(page);
   // The four edges come first, then the grip.
-  for (let i = 0; i < 4; i++) await page.keyboard.press('Tab');
+  for (let i = 0; i < 4; i++) await page.keyboard.press(tabKey);
   await expect(grip).toBeFocused();
   const frame = await settledFrame(page, stage);
   const start = await edgesOf(bar);

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from './test';
+import { clickFocusesButtons, expect, test, type Page } from './test';
 import { imageStats, openGeneratedImage, openHarness, waitForReady } from './harness';
 
 /**
@@ -103,7 +103,7 @@ test('a section’s eye shows the photo without that section, and the edit keeps
   const toneSection = edits.getByRole('region', { name: 'Tone', exact: true });
   await eye.click();
   await expect(eye).toHaveAttribute('aria-pressed', 'true');
-  await expect(eye).toBeFocused();
+  if (clickFocusesButtons) await expect(eye).toBeFocused();
   await expect(badge).toHaveText('Without Tone');
   await expect(toneSection.getByRole('heading')).toHaveText('Tone, in use, hidden');
   await expect.poll(() => shownMean(page)).toBeLessThan(unedited + 10);

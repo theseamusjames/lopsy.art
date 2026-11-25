@@ -1,4 +1,4 @@
-import { expect, test, type Page } from './test';
+import { expect, tabKey, test, type Page } from './test';
 import { imageStats, openFlatImage, openGeneratedImage, openHarness, settledPreview, waitForPreview, waitForReady } from './harness';
 import { generatedJpeg, importFiles, tiles } from './library';
 
@@ -179,7 +179,7 @@ test('a radial mask is added, shaped and renamed by keyboard', async ({ page }) 
   await position.focus();
   await page.keyboard.press('Enter');
   await expect(position).toHaveAttribute('aria-expanded', 'true');
-  await page.keyboard.press('Tab');
+  await page.keyboard.press(tabKey);
   const shape = panel.getByRole('group', { name: 'Mask 1 position' });
   const centreX = shape.getByRole('slider', { name: 'Center X' });
   await expect(centreX).toBeFocused();

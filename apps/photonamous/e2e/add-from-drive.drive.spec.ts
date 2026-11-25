@@ -1,4 +1,4 @@
-import { expect, test, type Page } from './test';
+import { BLOB_BODY_SKIP, expect, test, type Page } from './test';
 import {
   gisStubInitScript,
   pickerStubInitScript,
@@ -47,6 +47,8 @@ async function expectPhotos(page: Page, count: number): Promise<void> {
   await page.getByRole('button', { name: /^All photos/ }).click();
   await expect(tiles(page)).toHaveCount(count);
 }
+
+test.skip(BLOB_BODY_SKIP.skip, BLOB_BODY_SKIP.reason);
 
 test("Google Drive: a photo picked in Google's Picker, in the page, is added", async ({ page, context }) => {
   const drive = await routeFakeDrive(context);
