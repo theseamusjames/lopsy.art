@@ -1019,3 +1019,8 @@ was.
   level from a file tag (decision 26).
 - **Frames at 100% on a full-resolution photo** miss 30 fps
   (decision 55): the chain needs to render the visible part only.
+- **Hue at the gamut's edge under heavy Saturation**: at +100 and above
+  a saturated orange turns pinkish red, because the output step's gamut
+  compression does not hold hue there. Left for after launch (the
+  owner's call); the review picture is the cocktail in
+  `samples/linear-pipeline-review/sliders-150/`.
