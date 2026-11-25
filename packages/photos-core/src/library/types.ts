@@ -119,6 +119,11 @@ export interface PreviewRef {
   readonly fileId: FileId;
   /** The recipe the preview was rendered from (recipe.ts `recipeHash`). */
   readonly recipeHash: string;
+  /**
+   * The rendering pipeline that made it (recipe.ts `PIPELINE_VERSION`). A
+   * reference stored before previews recorded it reads as 1.
+   */
+  readonly pipeline: number;
   readonly width: number;
   readonly height: number;
 }

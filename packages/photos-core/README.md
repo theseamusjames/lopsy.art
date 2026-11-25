@@ -69,6 +69,13 @@ Photonamous/                 role library
     write it (`editRecipe` and `sanitizeRecipeValues` drop it), and a
     whole-recipe write (`setRecipe`, a reset) writes the given recipe's.
     A version without it (written before it was recorded) reads as 1.
+  - A version's `thumb` and `screen` fields point at its previews:
+    `{ fileId, recipeHash, pipeline, width, height }`. `pipeline` is the
+    pipeline that rendered the file, kept in the reference so every device
+    sees it; one without it reads as 1. A preview is current when
+    `isPreviewCurrent` (`library/pipeline.ts`) says so: the version's
+    recipe hash, rendered by this build's pipeline. A stale one is
+    rendered again in the background (the app's `preview-refresh.ts`).
 - **Segments**:
   - Segments are written only by their own device, and never rewritten.
     Only the roll-up (`rollup.ts`) merges a device's own small segments.

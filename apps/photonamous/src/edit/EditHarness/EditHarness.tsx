@@ -4,7 +4,7 @@ import type { Asset, Json, Preset, PreviewRef, Version } from '@lopsy/photos-cor
 import { EditView } from '../EditView/EditView';
 import type { FilmstripItem } from '../Filmstrip/Filmstrip';
 import { applyChanges } from '../edit-controls';
-import { pickGroups } from '@lopsy/photos-core/library/recipe';
+import { PIPELINE_VERSION, pickGroups } from '@lopsy/photos-core/library/recipe';
 import { BUILT_IN_PRESETS } from '@lopsy/photos-core/library/presets';
 import { formatOf, harnessAsset, harnessVersion } from './harness-asset';
 import { historySteps } from './recipe-history';
@@ -28,7 +28,7 @@ declare global {
 }
 
 function previewRef(hash: string, blob: Blob): PreviewRef {
-  return { fileId: `preview-${hash}-${blob.size}`, recipeHash: hash, width: 0, height: 0 };
+  return { fileId: `preview-${hash}-${blob.size}`, recipeHash: hash, pipeline: PIPELINE_VERSION, width: 0, height: 0 };
 }
 
 const OPENABLE = /\.(raf|dng|jpe?g|png|webp)$/i;

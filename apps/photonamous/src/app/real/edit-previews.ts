@@ -7,6 +7,8 @@
 import type { LibrarySession, PreviewRef, VersionId } from '@lopsy/photos-core/library/types';
 import type { PreviewCache } from '@lopsy/photos-core/cache/preview-cache';
 import { PREVIEW_SIZES } from '@lopsy/photos-core/import/importer';
+import { isPreviewCurrent } from '@lopsy/photos-core/library/pipeline';
+import { PIPELINE_VERSION } from '@lopsy/photos-core/library/recipe';
 import type { EditPreviews } from '../backend';
 
 /** The preview file's name: one per version, size and edit. */
@@ -34,7 +36,7 @@ export async function storeEditPreviews(
 ): Promise<void> {
   const version = session.getView().versions.get(versionId);
   if (!version) return;
-  if (version.thumb?.recipeHash === previews.recipeHash && version.screen?.recipeHash === previews.recipeHash) return;
+  if (isPreviewCurrent(version.thumb, version, previews.recipeHash) && isPreviewCurrent(version.screen, version, previews.recipeHash)) return;
   const oldThumb = version.thumb?.fileId ?? null;
   const oldScreen = version.screen?.fileId ?? null;
   const refs: Partial<Record<'thumb' | 'screen', PreviewRef>> = {};
@@ -51,7 +53,8 @@ export async function storeEditPreviews(
       blob,
     );
     await cache?.put(stored.id, blob).catch(() => undefined);
-    refs[size] = { fileId: stored.id, recipeHash: previews.recipeHash, width, height };
+    // Rendered here, so by this build's pipeline.
+    refs[size] = { fileId: stored.id, recipeHash: previews.recipeHash, pipeline: PIPELINE_VERSION, width, height };
   }
   let recordError: unknown = null;
   try {

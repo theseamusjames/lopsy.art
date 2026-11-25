@@ -4,7 +4,7 @@ import { MemoryAdapter } from '@lopsy/photos-core/storage/memory-adapter';
 import { MemoryLocalStore } from '@lopsy/photos-core/library/local-store';
 import { openLibrary } from '@lopsy/photos-core/library/session';
 import { NoopLibraryLock } from '@lopsy/photos-core/library/lock';
-import { recipeHash, DEFAULT_RECIPE } from '@lopsy/photos-core/library/recipe';
+import { recipeHash, DEFAULT_RECIPE, PIPELINE_VERSION } from '@lopsy/photos-core/library/recipe';
 import { PreviewRefresher, staleVersions, type PreviewRefresherOptions } from './preview-refresh';
 
 async function library(): Promise<{ session: LibrarySession; assetId: string; versionId: VersionId }> {
@@ -32,7 +32,7 @@ async function library(): Promise<{ session: LibrarySession; assetId: string; ve
     source: null,
     renderFileId: null,
   });
-  const ref = (size: string): PreviewRef => ({ fileId: `${versionId}-${size}`, recipeHash: recipeHash(DEFAULT_RECIPE), width: 3, height: 2 });
+  const ref = (size: string): PreviewRef => ({ fileId: `${versionId}-${size}`, recipeHash: recipeHash(DEFAULT_RECIPE), pipeline: PIPELINE_VERSION, width: 3, height: 2 });
   session.setPreview(versionId, 'thumb', ref('thumb'));
   session.setPreview(versionId, 'screen', ref('screen'));
   return { session, assetId, versionId };
@@ -77,7 +77,7 @@ function harness(session: LibrarySession, render?: PreviewRefresherOptions['rend
       }),
     store: async (versionId, previews) => {
       h.stored.push({ versionId, hash: previews.recipeHash });
-      const ref = (size: string): PreviewRef => ({ fileId: `${versionId}-${size}-${previews.recipeHash}`, recipeHash: previews.recipeHash, width: 3, height: 2 });
+      const ref = (size: string): PreviewRef => ({ fileId: `${versionId}-${size}-${previews.recipeHash}`, recipeHash: previews.recipeHash, pipeline: PIPELINE_VERSION, width: 3, height: 2 });
       session.setPreview(versionId, 'thumb', ref('thumb'));
       session.setPreview(versionId, 'screen', ref('screen'));
     },
@@ -129,7 +129,7 @@ describe('background previews', () => {
     const bare = lopsyDocument('old.lopsy', null);
     for (const versionId of [rendered, bare]) {
       for (const size of ['thumb', 'screen'] as const) {
-        session.setPreview(versionId, size, { fileId: `${versionId}-${size}`, recipeHash: recipeHash(DEFAULT_RECIPE), width: 3, height: 2 });
+        session.setPreview(versionId, size, { fileId: `${versionId}-${size}`, recipeHash: recipeHash(DEFAULT_RECIPE), pipeline: PIPELINE_VERSION, width: 3, height: 2 });
       }
       session.editRecipe(versionId, { 'tone.exposure': 0.5 }, 'Exposure');
     }
@@ -191,6 +191,35 @@ describe('background previews', () => {
     expect(h.reused).toEqual([second]);
     expect(h.renders).toEqual([]);
     expect(session.getView().versions.get(second)?.thumb?.fileId).toBe(session.getView().versions.get(versionId)?.thumb?.fileId);
+  });
+
+  it('renders again a version whose previews another pipeline rendered, once', async () => {
+    const { session, versionId } = await library();
+    const hash = recipeHash(DEFAULT_RECIPE);
+    for (const size of ['thumb', 'screen'] as const) {
+      session.setPreview(versionId, size, { fileId: `other-${size}`, recipeHash: hash, pipeline: PIPELINE_VERSION + 1, width: 3, height: 2 });
+    }
+    expect(staleVersions(session.getView()).map((t) => t.versionId)).toEqual([versionId]);
+    const h = harness(session);
+    await h.settle();
+    expect(h.stored).toEqual([{ versionId, hash }]);
+    expect(session.getView().versions.get(versionId)?.thumb?.pipeline).toBe(PIPELINE_VERSION);
+    expect(staleVersions(session.getView())).toEqual([]);
+    expect(h.refresher.getProgress().failed).toBe(0);
+  });
+
+  it('does not reuse previews another pipeline rendered', async () => {
+    const { session, assetId, versionId } = await library();
+    const hash = recipeHash(DEFAULT_RECIPE);
+    for (const size of ['thumb', 'screen'] as const) {
+      session.setPreview(versionId, size, { fileId: `other-${size}`, recipeHash: hash, pipeline: PIPELINE_VERSION + 1, width: 3, height: 2 });
+    }
+    const h = harness(session);
+    const second = session.createVersion(assetId, 'Version 2');
+    await h.settle();
+    // It may reuse the first version's new render, never the files the other pipeline made.
+    expect(session.getView().versions.get(second)?.thumb).toMatchObject({ pipeline: PIPELINE_VERSION });
+    expect(session.getView().versions.get(second)?.thumb?.fileId).not.toBe('other-thumb');
   });
 
   it('waits while paused (the Edit view is open)', async () => {

@@ -21,7 +21,7 @@ import type { PhotosLibrarySession } from '@lopsy/photos-core/library/session';
 import type { FileId, StoredFile } from '@lopsy/photos-core/storage/types';
 import { sha256Hex } from '@lopsy/photos-core/import/hash';
 import { newId } from '@lopsy/photos-core/library/ids';
-import { DEFAULT_RECIPE, recipeHash } from '@lopsy/photos-core/library/recipe';
+import { DEFAULT_RECIPE, PIPELINE_VERSION, recipeHash } from '@lopsy/photos-core/library/recipe';
 
 export const LOPSY_MIME_TYPE = 'application/x-lopsy';
 export const PREVIEW_SIZES = { thumb: 512, screen: 2048 } as const;
@@ -117,7 +117,13 @@ async function renderPreviews(
       },
       rendered.blob,
     );
-    session.setPreview(versionId, size, { fileId: stored.id, recipeHash: hash, width: rendered.width, height: rendered.height });
+    session.setPreview(versionId, size, {
+      fileId: stored.id,
+      recipeHash: hash,
+      pipeline: PIPELINE_VERSION,
+      width: rendered.width,
+      height: rendered.height,
+    });
     // Trash only what nothing points at any more (the rule app/real/edit-previews.ts
     // follows): the old file once the version shows the new one; else the new
     // file, which the session did not take (the recipe moved on meanwhile).

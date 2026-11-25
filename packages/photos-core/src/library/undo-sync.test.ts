@@ -160,10 +160,10 @@ describe('stale local writes', () => {
     const { a, versionId } = await twoDevices();
     const oldHash = recipeHash(a.getView().versions.get(versionId)!.recipe);
     a.editRecipe(versionId, { 'tone.exposure': 1 }, 'Exposure');
-    a.setPreview(versionId, 'thumb', { fileId: 'old', recipeHash: oldHash, width: 512, height: 512 });
+    a.setPreview(versionId, 'thumb', { fileId: 'old', recipeHash: oldHash, pipeline: 1, width: 512, height: 512 });
     expect(a.getView().versions.get(versionId)?.thumb).toBeNull();
     const hash = recipeHash(a.getView().versions.get(versionId)!.recipe);
-    a.setPreview(versionId, 'thumb', { fileId: 'new', recipeHash: hash, width: 512, height: 512 });
+    a.setPreview(versionId, 'thumb', { fileId: 'new', recipeHash: hash, pipeline: 1, width: 512, height: 512 });
     expect(a.getView().versions.get(versionId)?.thumb?.fileId).toBe('new');
   });
 });

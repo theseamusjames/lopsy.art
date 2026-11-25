@@ -2,8 +2,9 @@
  * Keeps every version's previews in step with its recipe (spec 6.9), for
  * edits made outside the Edit view: a preset or a paste from the grid, a
  * new version, a change synced from another device. A version is stale
- * when its recipe's hash differs from its thumb's or screen preview's
- * `recipeHash`, or it has none.
+ * when its thumb or screen preview is not current (`isPreviewCurrent`):
+ * missing, rendered from another recipe (its `recipeHash`), or rendered by
+ * an older pipeline than this build's.
  *
  * Stale versions are rendered one at a time in the background. Repeated
  * changes to one version coalesce to its latest hash; a render whose hash
@@ -13,6 +14,7 @@
  */
 
 import { isDevelopable } from '../library/develop-source';
+import { isPreviewCurrent } from '@lopsy/photos-core/library/pipeline';
 import { recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Asset, LibraryView, PreviewRef, Version, VersionId } from '@lopsy/photos-core/library/types';
 import type { EditPreviews } from './backend';
@@ -42,7 +44,7 @@ function renderable(asset: Asset | undefined): asset is Asset {
 }
 
 export function isStale(version: Version, hash: string): boolean {
-  return version.thumb?.recipeHash !== hash || version.screen?.recipeHash !== hash;
+  return !isPreviewCurrent(version.thumb, version, hash) || !isPreviewCurrent(version.screen, version, hash);
 }
 
 /** Whether a version's previews are behind its recipe and can be made again. */
@@ -68,7 +70,8 @@ export function reusablePreviews(
   if (!version) return null;
   for (const other of view.versions.values()) {
     if (other.id === version.id || other.deleted || other.assetId !== version.assetId) continue;
-    if (other.thumb?.recipeHash === target.hash && other.screen?.recipeHash === target.hash) {
+    // Only previews current for this version: the same recipe, rendered by this build's pipeline.
+    if (other.thumb && other.screen && isPreviewCurrent(other.thumb, version, target.hash) && isPreviewCurrent(other.screen, version, target.hash)) {
       return { thumb: other.thumb, screen: other.screen };
     }
   }

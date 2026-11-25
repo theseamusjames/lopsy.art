@@ -97,7 +97,7 @@ describe('openLibrary', () => {
     session.restoreAssets([assetId]);
     const v2 = session.createVersion(assetId, 'B&W', undefined);
     session.renameVersion(v2, 'Mono');
-    session.setPreview(v2, 'thumb', { fileId: 'p1', recipeHash: DEFAULT_HASH, width: 512, height: 341 });
+    session.setPreview(v2, 'thumb', { fileId: 'p1', recipeHash: DEFAULT_HASH, pipeline: 1, width: 512, height: 341 });
     const album = session.createAlbum('Trip');
     session.setAlbumMember(album, assetId, true);
     session.renameAlbum(album, 'Trip 2026');

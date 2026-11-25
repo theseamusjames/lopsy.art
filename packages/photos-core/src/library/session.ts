@@ -672,6 +672,8 @@ class Session implements PhotosLibrarySession {
     const value: Json = {
       fileId: preview.fileId,
       recipeHash: preview.recipeHash,
+      // In the reference, so every device knows which pipeline rendered the shared file.
+      pipeline: preview.pipeline,
       width: preview.width,
       height: preview.height,
     };

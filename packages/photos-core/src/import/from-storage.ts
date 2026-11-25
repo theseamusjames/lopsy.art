@@ -8,7 +8,7 @@
  */
 
 import type { OriginalsCache } from '../cache/originals-cache';
-import { DEFAULT_RECIPE, recipeHash } from '../library/recipe';
+import { DEFAULT_RECIPE, PIPELINE_VERSION, recipeHash } from '../library/recipe';
 import type { Recipe } from '../library/recipe';
 import type { AlbumId, AssetId, LibrarySession, LibraryView, NewAsset, VersionId } from '../library/types';
 import { isStorageError } from '../storage/errors';
@@ -395,7 +395,14 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
       preview.blob,
       { signal: abort.signal },
     );
-    session.setPreview(versionId, size, { fileId: stored.id, recipeHash: previewRecipeHash, width: preview.width, height: preview.height });
+    session.setPreview(versionId, size, {
+      fileId: stored.id,
+      recipeHash: previewRecipeHash,
+      // As at import (importer.ts): the camera's picture stands in for the default recipe on this pipeline.
+      pipeline: PIPELINE_VERSION,
+      width: preview.width,
+      height: preview.height,
+    });
   };
 
   let pairOf = new Map<string, string>();

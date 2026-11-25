@@ -9,7 +9,7 @@ import { RECIPE_PREFIX, type EntityRecord, type MergeStore, type ChangedEntity }
 import { OverlayMap } from './overlay-map';
 import { exportSettingsFromJson } from '../export/types';
 import { BUILT_IN_EXPORT_PRESETS, BUILT_IN_PREFIX, BUILT_IN_PRESETS } from './presets';
-import { isRecipeGroupId, recipeFromPaths, sanitizeRecipeValues } from './recipe';
+import { isRecipeGroupId, pipelineFrom, recipeFromPaths, sanitizeRecipeValues } from './recipe';
 import type {
   Album,
   AlbumMember,
@@ -89,10 +89,11 @@ function source(value: Json | undefined): Asset['source'] {
 
 function preview(value: Json | undefined): PreviewRef | null {
   if (!isRecord(value)) return null;
-  const { fileId, recipeHash, width, height } = value;
+  const { fileId, recipeHash, width, height, pipeline } = value;
   if (typeof fileId !== 'string' || typeof recipeHash !== 'string') return null;
   if (typeof width !== 'number' || typeof height !== 'number') return null;
-  return { fileId, recipeHash, width, height };
+  // A reference stored before previews recorded their pipeline was rendered by the first one.
+  return { fileId, recipeHash, pipeline: pipelineFrom(pipeline), width, height };
 }
 
 function rating(value: Json | undefined): Rating {

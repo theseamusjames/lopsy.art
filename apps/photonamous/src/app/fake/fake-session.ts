@@ -30,6 +30,7 @@ import type {
 import {
   DEFAULT_RECIPE,
   isRecipeGroupId,
+  PIPELINE_VERSION,
   pickGroups,
   recipeFromPaths,
   recipeHash,
@@ -90,7 +91,7 @@ export function fakePreviewRef(assetId: AssetId, size: 'thumb' | 'screen', recip
   const edge = size === 'thumb' ? 512 : 2048;
   const width = aspect >= 1 ? edge : Math.round(edge * aspect);
   const height = aspect >= 1 ? Math.round(edge / aspect) : edge;
-  return { fileId: `fake-preview:${assetId}:${size}`, recipeHash: recipeHash(recipe), width, height };
+  return { fileId: `fake-preview:${assetId}:${size}`, recipeHash: recipeHash(recipe), pipeline: PIPELINE_VERSION, width, height };
 }
 
 interface FakeLibState {

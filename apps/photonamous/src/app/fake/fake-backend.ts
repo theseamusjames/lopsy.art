@@ -10,6 +10,7 @@ import type { PreviewRefresher } from '../preview-refresh';
 import type { ImportItem, ImportJob, ImportOptions, ImportProgress } from '@lopsy/photos-core/import/types';
 import type { FileId, StorageQuota } from '@lopsy/photos-core/storage/types';
 import type { RepairReport } from '@lopsy/photos-core/library/repair';
+import { PIPELINE_VERSION } from '@lopsy/photos-core/library/recipe';
 import {
   browserStorageChoices,
   storageEnv,
@@ -332,6 +333,7 @@ export class FakeBackend implements PhotosBackend {
       session.setPreview(versionId, size, {
         fileId,
         recipeHash: previews.recipeHash,
+        pipeline: PIPELINE_VERSION,
         width: old?.width ?? (size === 'thumb' ? 512 : 2048),
         height: old?.height ?? (size === 'thumb' ? 341 : 1365),
       });

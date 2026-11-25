@@ -10,7 +10,7 @@
  */
 
 import { findPreset } from '../library/presets';
-import { DEFAULT_RECIPE, recipeFromPaths, recipeHash, recipeToPaths } from '../library/recipe';
+import { DEFAULT_RECIPE, PIPELINE_VERSION, recipeFromPaths, recipeHash, recipeToPaths } from '../library/recipe';
 import type { Recipe } from '../library/recipe';
 import type { AlbumId, AssetId, LibrarySession, LibraryView, NewAsset, VersionId } from '../library/types';
 import { isStorageError } from '../storage/errors';
@@ -617,7 +617,9 @@ function runJob(setup: JobSetup): ImportJob {
 
   // Previews are made from the camera's JPEG, not from the recipe, so they
   // carry the default recipe's hash: a preset applied at import then shows
-  // them as stale until the engine renders the edit.
+  // them as stale until the engine renders the edit. They stand in for the
+  // default recipe on this build's pipeline, so they record it: a later
+  // pipeline renders them again, as it does every preview made before it.
   const previewRecipeHash = recipeHash(DEFAULT_RECIPE);
 
   const uploadPreview = async (assetId: AssetId, versionId: VersionId, size: 'thumb' | 'screen', preview: RenderedPreview) => {
@@ -634,6 +636,7 @@ function runJob(setup: JobSetup): ImportJob {
     session.setPreview(versionId, size, {
       fileId: stored.id,
       recipeHash: previewRecipeHash,
+      pipeline: PIPELINE_VERSION,
       width: preview.width,
       height: preview.height,
     });

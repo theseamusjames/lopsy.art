@@ -4,7 +4,7 @@ import { MemoryAdapter } from '@lopsy/photos-core/storage/memory-adapter';
 import { MemoryLocalStore, type LocalStore, type LocalStorePatch } from '@lopsy/photos-core/library/local-store';
 import { openLibrary } from '@lopsy/photos-core/library/session';
 import { NoopLibraryLock } from '@lopsy/photos-core/library/lock';
-import { recipeHash, DEFAULT_RECIPE } from '@lopsy/photos-core/library/recipe';
+import { recipeHash, DEFAULT_RECIPE, PIPELINE_VERSION } from '@lopsy/photos-core/library/recipe';
 import { guardSession } from '../guard-session';
 import { trashAssets, trashLeftoverOriginals, TrashRefusedError, untrashAssets } from './trash-assets';
 import { storeEditPreviews } from './edit-previews';
@@ -42,7 +42,7 @@ async function libraryWithPhoto() {
     source: null,
     renderFileId: null,
   });
-  const ref: PreviewRef = { fileId: preview.id, recipeHash: recipeHash(DEFAULT_RECIPE), width: 3, height: 2 };
+  const ref: PreviewRef = { fileId: preview.id, recipeHash: recipeHash(DEFAULT_RECIPE), pipeline: 1, width: 3, height: 2 };
   session.setPreview(versionId, 'thumb', ref);
   session.setPreview(versionId, 'screen', ref);
   return { adapter, session, assetId, versionId, originalId: original.id, previewId: preview.id };
@@ -140,6 +140,18 @@ describe('storeEditPreviews', () => {
     expect(version?.thumb?.recipeHash).toBe(recipeHash(recipe));
     expect(version?.thumb?.fileId).not.toBe(previewId);
     expect(await adapter.getFile(previewId)).toBeNull();
+  });
+
+  it('records the pipeline that rendered them, and replaces previews of the same edit from another pipeline', async () => {
+    const { session, versionId, previewId } = await libraryWithPhoto();
+    const hash = recipeHash(DEFAULT_RECIPE);
+    for (const size of ['thumb', 'screen'] as const) {
+      session.setPreview(versionId, size, { fileId: previewId, recipeHash: hash, pipeline: PIPELINE_VERSION + 1, width: 3, height: 2 });
+    }
+    await storeEditPreviews(session, versionId, { ...previews, recipeHash: hash }, null, measure);
+    const version = session.getView().versions.get(versionId);
+    expect(version?.thumb).toMatchObject({ recipeHash: hash, pipeline: PIPELINE_VERSION });
+    expect(version?.thumb?.fileId).not.toBe(previewId);
   });
 
   it('keeps the old previews, and drops the new files, when the version did not take them', async () => {

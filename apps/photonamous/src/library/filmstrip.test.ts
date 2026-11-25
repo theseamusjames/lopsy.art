@@ -6,7 +6,7 @@ import { openVersions } from './finding';
 import { versionItemId } from './items';
 import { makeAsset, makeView } from './test-fixtures';
 
-const thumb = (fileId: string): PreviewRef => ({ fileId, recipeHash: 'h', width: 512, height: 341 });
+const thumb = (fileId: string): PreviewRef => ({ fileId, recipeHash: 'h', pipeline: 1, width: 512, height: 341 });
 const version = (id: string, assetId: string, name: string, extra: Partial<Version> = {}): Version => ({
   id,
   assetId,

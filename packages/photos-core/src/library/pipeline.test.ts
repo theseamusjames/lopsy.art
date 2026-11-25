@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { decodeSegment, encodeSegment, segmentName } from './journal';
 import { MemoryLocalStore } from './local-store';
-import { DEFAULT_RECIPE, PIPELINE_VERSION, recipeFromPaths } from './recipe';
+import { isPreviewCurrent } from './pipeline';
+import { DEFAULT_RECIPE, PIPELINE_VERSION, recipeFromPaths, recipeHash } from './recipe';
 import { openLibrary } from './session';
 import { TestAdapter } from './test-support/test-adapter';
-import type { Json, LibrarySession, NewAsset, Op, OpEnvelope } from './types';
+import type { Json, LibrarySession, NewAsset, Op, OpEnvelope, PreviewRef, Version } from './types';
 import { OP_SCHEMA_VERSION } from './validate';
 
 function photo(n: number): NewAsset {
@@ -148,5 +149,94 @@ describe('the pipeline a version was edited with', () => {
     expect(recipeFromPaths({ pipeline: 'two' }).pipeline).toBe(1);
     expect(recipeFromPaths({ pipeline: 1.5 }).pipeline).toBe(1);
     expect(recipeFromPaths({ pipeline: 3 }).pipeline).toBe(3);
+  });
+});
+
+describe('the pipeline a preview was rendered by', () => {
+  it('round-trips through the journal to another device and through a snapshot', async () => {
+    const adapter = new TestAdapter();
+    const a = await openLibrary({ adapter, store: new MemoryLocalStore(), autoSync: false, snapshotEvery: 1 });
+    const { versionId } = a.addAsset(photo(1));
+    const hash = recipeHash(DEFAULT_RECIPE);
+    a.setPreview(versionId, 'thumb', { fileId: 'thumb-1', recipeHash: hash, pipeline: PIPELINE_VERSION, width: 512, height: 341 });
+    a.setPreview(versionId, 'screen', { fileId: 'screen-1', recipeHash: hash, pipeline: PIPELINE_VERSION, width: 2048, height: 1365 });
+    await a.syncNow();
+    const [, , stored] = versionWrites(await storedOps(adapter, a), versionId);
+    expect(stored?.['screen']).toEqual({ fileId: 'screen-1', recipeHash: hash, pipeline: PIPELINE_VERSION, width: 2048, height: 1365 });
+    // A new device starts from the snapshot the first one wrote.
+    const b = await open(adapter);
+    await b.syncNow();
+    expect(b.getView().versions.get(versionId)?.thumb).toEqual({ fileId: 'thumb-1', recipeHash: hash, pipeline: PIPELINE_VERSION, width: 512, height: 341 });
+  });
+
+  it('reads as pipeline 1 from a reference stored before previews recorded it', async () => {
+    const adapter = new TestAdapter();
+    const writer = await open(adapter);
+    writer.setSetting('grid.size', 3);
+    const hash = recipeHash(DEFAULT_RECIPE);
+    await writeRawOps(adapter, writer, [
+      assetOp('asset-old', 'version-old'),
+      {
+        t: 'set',
+        kind: 'version',
+        id: 'version-old',
+        fields: {
+          assetId: 'asset-old',
+          name: 'Original',
+          createdAt: '2026-11-01T00:00:00.000Z',
+          thumb: { fileId: 'old-thumb', recipeHash: hash, width: 512, height: 341 },
+          screen: { fileId: 'old-screen', recipeHash: hash, pipeline: 'one', width: 2048, height: 1365 },
+          deleted: false,
+        },
+      },
+    ]);
+    const reader = await open(adapter);
+    await reader.syncNow();
+    const version = reader.getView().versions.get('version-old');
+    expect(version?.thumb).toEqual({ fileId: 'old-thumb', recipeHash: hash, pipeline: 1, width: 512, height: 341 });
+    expect(version?.screen?.pipeline).toBe(1);
+    // Everything was pipeline 1, so what was current stays current.
+    expect(version && isPreviewCurrent(version.thumb, version)).toBe(true);
+  });
+});
+
+describe('isPreviewCurrent', () => {
+  const recipe = { ...DEFAULT_RECIPE, tone: { ...DEFAULT_RECIPE.tone, exposure: 1 } };
+  const hash = recipeHash(recipe);
+  const version = (pipeline: number): Version => ({
+    id: 'v',
+    assetId: 'a',
+    name: 'Original',
+    recipe: { ...recipe, pipeline },
+    createdAt: '',
+    thumb: null,
+    screen: null,
+    deleted: false,
+  });
+  const preview = (over: Partial<PreviewRef> = {}): PreviewRef => ({
+    fileId: 'f',
+    recipeHash: recipeHash({ ...recipe, pipeline: over.pipeline ?? PIPELINE_VERSION }),
+    pipeline: PIPELINE_VERSION,
+    width: 512,
+    height: 512,
+    ...over,
+  });
+
+  it('is true for a preview of the same recipe, rendered by this pipeline for a version of this pipeline', () => {
+    expect(isPreviewCurrent(preview(), version(PIPELINE_VERSION))).toBe(true);
+    expect(isPreviewCurrent(preview(), version(PIPELINE_VERSION), hash)).toBe(true);
+  });
+
+  it('is false when there is no preview, or it shows another edit', () => {
+    expect(isPreviewCurrent(null, version(PIPELINE_VERSION))).toBe(false);
+    expect(isPreviewCurrent(preview({ recipeHash: 'something-else' }), version(PIPELINE_VERSION))).toBe(false);
+  });
+
+  it('is false when another pipeline rendered it or the version is from a newer pipeline', () => {
+    const newer = PIPELINE_VERSION + 1;
+    expect(isPreviewCurrent(preview({ pipeline: newer }), version(PIPELINE_VERSION))).toBe(false);
+    // A version from a newer pipeline is never current here, even with that pipeline's own preview.
+    const v = version(newer);
+    expect(isPreviewCurrent(preview({ pipeline: newer, recipeHash: recipeHash(v.recipe) }), v)).toBe(false);
   });
 });
