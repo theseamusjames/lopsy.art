@@ -228,6 +228,7 @@ test.describe('the command API', () => {
       'filter.pattern-fill', 'filter.pixel-stretch', 'filter.pixelate', 'filter.posterize', 'filter.radial-blur',
       'filter.smoke', 'filter.solarize', 'filter.sunburst', 'filter.surface-blur', 'filter.texture',
       'filter.threshold', 'filter.tilt-shift', 'filter.unsharp-mask', 'filter.voronoi',
+      'guestbook.sign',
       'guide.add', 'guide.clear', 'guide.list', 'guide.remove',
       'history.redo', 'history.undo',
       'image.auto', 'image.border', 'image.canvas-size', 'image.crop', 'image.crop-to-selection', 'image.flip-layer', 'image.rotate',

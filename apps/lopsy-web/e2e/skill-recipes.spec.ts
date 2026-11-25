@@ -235,7 +235,7 @@ test.describe('SKILL.md', () => {
   test.describe('snippets', () => {
     test('every snippet is one this spec checks', () => {
       expect([...snippets().keys()].sort()).toEqual(
-        ['describe-family', 'describe-list', 'describe-op', 'download', 'fetch-image', 'first-call', 'renderer'],
+        ['describe-family', 'describe-list', 'describe-op', 'download', 'fetch-image', 'first-call', 'guestbook', 'renderer'],
       );
     });
 
@@ -345,6 +345,19 @@ test.describe('SKILL.md', () => {
       };
       const placed = info.result.layers.find((layer) => layer.id === (outcome as { result: { id: string } }).result.id);
       expect(placed?.name).toBe('Pasted Layer');
+    });
+
+    test('the guestbook snippet leaves its note with the page\'s analytics', async ({ page }) => {
+      await openEditor(page);
+      // The dev server has no analytics (Cloudflare adds it in production), so a stand-in takes the event.
+      await page.evaluate(() => {
+        const tracked: unknown[][] = [];
+        Object.assign(window, { __tracked: tracked, zaraz: { track: (...call: unknown[]) => void tracked.push(call) } });
+      });
+      expect(await page.evaluate(snippet('guestbook'))).toEqual({ ok: true, result: { signed: true } });
+      const tracked = await page.evaluate(() => (window as unknown as { __tracked: unknown[][] }).__tracked);
+      expect(tracked).toEqual([['guestbook', { note: 'Ada, Lisbon, Example-1: hello, the gradients are lovely' }]]);
+      expect(SKILL).toContain('to 100 characters');
     });
 
     test('the renderer expression names the WebGL renderer', async ({ page }) => {

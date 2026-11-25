@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CommandError, SettleTimeoutError } from './command';
 import { createRegistry } from './registry';
-import { LOPSY_ERROR_CODES, NO_WEBGL2_MESSAGE, createLopsyApi } from './lopsy-api';
+import { GUESTBOOK_OP, LOPSY_ERROR_CODES, NO_WEBGL2_MESSAGE, createLopsyApi } from './lopsy-api';
 import { CANVAS_DRAG_MESSAGE, LIVE_PREVIEW_MESSAGE } from './preflight';
 
 afterEach(() => {
@@ -68,6 +68,29 @@ function setup({ hasWebGL2 = true }: { hasWebGL2?: boolean } = {}) {
   });
   return { api: createLopsyApi(registry, { hasWebGL2: () => hasWebGL2 }), registry, log };
 }
+
+describe('lopsy.guestbook', () => {
+  it('runs guestbook.sign with the note, and answers as run does', async () => {
+    const { api, registry } = setup();
+    const notes: string[] = [];
+    registry.define({
+      id: GUESTBOOK_OP,
+      summary: 'Signs the guestbook.',
+      surface: 'document',
+      settles: false,
+      params: { note: { type: 'string', minLength: 1 } },
+      run: ({ note }) => {
+        notes.push(note);
+        return { signed: true };
+      },
+    });
+    expect(await api.guestbook('hello from a test')).toEqual({ ok: true, result: { signed: true } });
+    expect(notes).toEqual(['hello from a test']);
+    expect(await api.guestbook(undefined)).toMatchObject({ ok: false, error: { name: 'CommandError', code: 'invalid' } });
+    expect(await api.guestbook(42)).toMatchObject({ ok: false, error: { code: 'invalid' } });
+    expect(notes).toHaveLength(1);
+  });
+});
 
 describe('lopsy.describe', () => {
   it('lists the document commands only, as JSON', () => {

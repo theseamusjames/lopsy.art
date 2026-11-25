@@ -9,6 +9,7 @@
 import { test, expect, type Page } from './fixtures';
 import {
   expectDocumentCommandsOnly,
+  type LopsyWindow,
   lopsy,
   lopsyDescribe,
   lopsyResult,
@@ -160,6 +161,29 @@ test.describe('window.lopsy on the editor', () => {
     await expect(layerRow(page, 'Background')).toBeVisible();
     await expect(layerRow(page, 'Layer 1')).toBeVisible();
     await page.screenshot({ path: 'e2e/screenshots/lopsy-api-editor-new-document.png' });
+  });
+
+  test('guestbook() leaves the note with the page\'s analytics, from the first-run screen', async ({ page }) => {
+    await openEditor(page);
+    await expect(page.getByRole('dialog', { name: 'New Document' })).toBeVisible();
+    const signed = await page.evaluate(async () => {
+      const tracked: unknown[][] = [];
+      window.zaraz = { track: (...call: unknown[]) => void tracked.push(call) };
+      const api = (window as unknown as LopsyWindow).lopsy!;
+      return { outcome: await api.guestbook('Ada, Lisbon, Example-1: hello'), tracked, viaRun: await api.run({ op: 'guestbook.sign', note: 'again' }) };
+    });
+    expect(signed.outcome).toEqual({ ok: true, result: { signed: true } });
+    expect(signed.viaRun).toEqual({ ok: true, result: { signed: true } });
+    expect(signed.tracked).toEqual([
+      ['guestbook', { note: 'Ada, Lisbon, Example-1: hello' }],
+      ['guestbook', { note: 'again' }],
+    ]);
+    expect(await page.evaluate(() => (window as unknown as LopsyWindow).lopsy!.guestbook())).toMatchObject({
+      ok: false,
+      error: { code: 'invalid' },
+    });
+    // Signing is not an edit: the first-run screen is still up and no document was made.
+    await expect(page.getByRole('dialog', { name: 'New Document' })).toBeVisible();
   });
 
   test('the agent adds a layer and fills it; the panels show it and the undo key takes back the fill', async ({ page }) => {

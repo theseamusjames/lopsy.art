@@ -45,6 +45,11 @@ export interface LopsyApi {
    * as code 'internal' and is logged with console.error.
    */
   run(invocation: unknown): Promise<LopsyOutcome>;
+  /**
+   * Leaves a note in the guestbook, for an agent to say hello: `run` with
+   * `{ op: 'guestbook.sign', note }`, so the outcome is that command's.
+   */
+  guestbook(note: unknown): Promise<LopsyOutcome>;
 }
 
 /** The registry functions the API is built on. */
@@ -66,6 +71,9 @@ declare global {
     lopsy?: LopsyApi;
   }
 }
+
+/** The command `lopsy.guestbook(note)` runs (src/commands/guestbook/guestbook.ts). */
+export const GUESTBOOK_OP = 'guestbook.sign';
 
 const SURFACE = 'document' satisfies CommandSurface;
 const DOCUMENT_ONLY: RunOptions = { surface: SURFACE };
@@ -99,17 +107,19 @@ function unavailable(isBatch: boolean): LopsyOutcome {
 }
 
 export function createLopsyApi(source: LopsyApiSource, environment: LopsyEnvironment): LopsyApi {
+  async function run(invocation: unknown): Promise<LopsyOutcome> {
+    const isBatch = Array.isArray(invocation);
+    if (!environment.hasWebGL2()) return unavailable(isBatch);
+    try {
+      if (isBatch) return { ok: true, results: await source.runAll(invocation, DOCUMENT_ONLY) };
+      return { ok: true, result: await source.runInvocation(invocation, DOCUMENT_ONLY) };
+    } catch (error) {
+      return failure(error, isBatch);
+    }
+  }
   return Object.freeze({
     describe: () => source.describe(SURFACE),
-    async run(invocation: unknown): Promise<LopsyOutcome> {
-      const isBatch = Array.isArray(invocation);
-      if (!environment.hasWebGL2()) return unavailable(isBatch);
-      try {
-        if (isBatch) return { ok: true, results: await source.runAll(invocation, DOCUMENT_ONLY) };
-        return { ok: true, result: await source.runInvocation(invocation, DOCUMENT_ONLY) };
-      } catch (error) {
-        return failure(error, isBatch);
-      }
-    },
+    run,
+    guestbook: (note: unknown) => run({ op: GUESTBOOK_OP, note }),
   });
 }
