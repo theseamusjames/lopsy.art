@@ -191,7 +191,7 @@ npm run test:e2e:site      # builds, runs site.spec.ts and offline.spec.ts again
 REEL_PHOTOS=<library folder> REEL_HERO=<DSCF8078.RAF> npm exec -w photonamous -- playwright test -c e2e/demo-reel.config.ts
 
 # The link preview, public/og-image.jpg, made from the app (docs/photonamous-setup.md, section 3)
-OG_RAW=<DSCF8005.RAF> npm exec -w photonamous -- playwright test -c e2e/og-image.config.ts
+OG_RAW=<DSCF8078.RAF> npm exec -w photonamous -- playwright test -c e2e/og-image.config.ts
 ```
 
 The service worker (`src/sw/`, emitted as `/sw.js` by

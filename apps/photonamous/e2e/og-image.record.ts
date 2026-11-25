@@ -1,17 +1,17 @@
 /**
- * Makes the social preview image, public/og-image.jpg: a RAW photo opened
- * in a library in this browser, edited with the settings in
- * og-image-edit.json, shown in the Edit view's split before and after with
- * the divider half way, captured from the full-size image and scaled to
- * 1200 × 630. Everything in the picture is the app: the photograph on both
- * sides, the divider, its knob and the Before and After labels. See
- * og-image.config.ts for how to run it.
+ * Makes the social preview image, public/og-image.jpg: the whole app, the
+ * Edit view of the start screen's trailer, with the trailer's hero photo in
+ * the split before and after, divider half way. The photo is OG_RAW
+ * (DSCF8078.RAF, the drink), opened in a library in this browser; the edit
+ * is the trailer's own, demo-reel-edit.json, sent step by step the way the
+ * Edit view sends its own (as demo-reel.record.ts does), so the sliders and
+ * History show its real values. See og-image.config.ts for how to run it.
  *
- * OG_EDITS: a JSON file of other edits to compare in the same run
- * ([{ name, changes }], changes as og-image-edit.json has them, each made
- * on top of the one before); they go to OG_OUT, not public/.
- * OG_OUT (default test-results/og-image) also gets each image at 500 and
- * 300 px wide, the sizes a card is often shown at, to judge it there.
+ * The window is WINDOW's size in CSS pixels at the config's device scale,
+ * captured whole and scaled to 1200 × 630. OG_COMPARE=1 also captures the
+ * other compositions tried (COMPOSITIONS) into OG_OUT.
+ * OG_OUT (default test-results/og-image) gets every image at 500 and
+ * 300 px wide too, the sizes a card is often shown at, to judge it there.
  */
 import { expect, test, type Page } from '@playwright/test';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -25,34 +25,49 @@ const raw = process.env.OG_RAW ?? '';
 const outDir = process.env.OG_OUT ?? join(here, '../test-results/og-image');
 const publicImage = join(here, '../public/og-image.jpg');
 
-/** Recipe paths and their values, as LibrarySession.editRecipe takes them: a crop is an object, a curve its points. */
-type Changes = Record<string, number | string | boolean | null | { readonly [key: string]: number } | readonly { readonly x: number; readonly y: number }[]>;
-interface Edit {
-  readonly name: string;
-  readonly changes: Changes;
-}
-
 const OG_WIDTH = 1200;
 const OG_HEIGHT = 630;
-/**
- * The photograph's width on the page, in CSS pixels. The split view's
- * divider, knob and labels are sized in CSS pixels, so this sets how large
- * they come out on the card: at 400 the labels are about 30 px tall at
- * 1200 px wide, still readable on a card 500 px wide. With the config's six
- * device pixels to the CSS pixel the capture is 2400 px wide, twice the
- * card's size.
- */
-const PHOTO_CSS_WIDTH = 400;
 
-async function editRecipe(page: Page, edit: Edit): Promise<void> {
+interface Composition {
+  readonly name: string;
+  /** The window, in CSS pixels, the card's shape. */
+  readonly width: number;
+  readonly height: number;
+  /** The photo's zoom as a percentage of its full size, or null for Fit. */
+  readonly zoom: number | null;
+}
+
+/**
+ * The one made for public/og-image.jpg: the window at the card's size, so
+ * the interface reads at its natural size, and the photo at 10 % (Fit is
+ * about 6 % here), so the glass fills the stage and the before and after
+ * still read on a card 500 px wide. The stage shows the photo's middle,
+ * the divider half way across it; the Before and After labels, at the
+ * photo's top corners, are out of view.
+ */
+const WINDOW: Composition = { name: 'og-image', width: 1200, height: 630, zoom: 10 };
+/** The others tried, made with OG_COMPARE=1. */
+const COMPOSITIONS: readonly Composition[] = [
+  { name: 'window-1200-fit', width: 1200, height: 630, zoom: null },
+  { name: 'window-1440-fit', width: 1440, height: 756, zoom: null },
+  { name: 'window-1440-zoomed', width: 1440, height: 756, zoom: 12 },
+];
+
+interface EditStep extends ReadonlyArray<unknown> {
+  readonly 0: string;
+  readonly 1: Record<string, unknown>;
+}
+const EDIT = JSON.parse(readFileSync(join(here, 'demo-reel-edit.json'), 'utf8')) as { photo: string; steps: EditStep[] };
+
+async function applyStep(page: Page, [label, changes]: EditStep): Promise<void> {
   await page.evaluate(
-    async ({ changes, label }) => {
+    async ({ label, changes }) => {
       const { useUi } = await import('/src/app/store.ts');
       const { connection, editing } = useUi.getState();
       if (!connection || !editing) throw new Error('No photo is open in the Edit view');
       connection.session.editRecipe(editing.versionId, changes, label);
     },
-    { changes: edit.changes, label: edit.name },
+    { label, changes },
   );
 }
 
@@ -61,11 +76,8 @@ async function renderCounts(page: Page): Promise<string> {
   return page.evaluate(() => JSON.stringify((window as unknown as { __lopsyRenderCounts?: unknown }).__lopsyRenderCounts ?? null));
 }
 
-/** Makes an edit and waits for the Edit view to render it and then to rest: a full-size render takes seconds. */
-async function editAndSettle(page: Page, edit: Edit): Promise<void> {
-  const before = await renderCounts(page);
-  await editRecipe(page, edit);
-  await expect.poll(() => renderCounts(page), { timeout: 120_000 }).not.toBe(before);
+/** Waits until the engine has rendered nothing for three seconds: a full-size render takes seconds. */
+async function settle(page: Page): Promise<void> {
   let last = await renderCounts(page);
   let since = Date.now();
   while (Date.now() - since < 3000) {
@@ -78,23 +90,14 @@ async function editAndSettle(page: Page, edit: Edit): Promise<void> {
   }
 }
 
-/** Where the photograph is on the page, as the split view lays its divider over it. */
-async function photoBox(page: Page): Promise<{ x: number; y: number; width: number; height: number }> {
-  return page.getByTestId('split-divider').evaluate((el: HTMLElement) => {
-    const stage = el.parentElement?.getBoundingClientRect() ?? new DOMRect();
-    const px = (name: string) => parseFloat(el.style.getPropertyValue(name)) || 0;
-    return { x: stage.left + px('--split-left'), y: stage.top + px('--split-top'), width: px('--split-width'), height: px('--split-height') };
-  });
-}
-
-/** Captures the photograph until two captures a few seconds apart are the same: the edit and the before have both settled. */
+/** Captures the window until two captures a few seconds apart are the same: the edit and the before have both settled. */
 async function settledCapture(page: Page): Promise<Buffer> {
   let last: Buffer | null = null;
   for (let i = 0; i < 20; i++) {
-    await page.waitForTimeout(2000);
+    await settle(page);
     await expect(page.getByTestId('split-before')).toBeVisible();
     await expect(page.getByTestId('loading-badge')).toHaveCount(0);
-    const shot = await page.screenshot({ clip: await photoBox(page), animations: 'disabled', caret: 'hide' });
+    const shot = await page.screenshot({ animations: 'disabled', caret: 'hide' });
     if (last && shot.equals(last)) return shot;
     last = shot;
   }
@@ -113,7 +116,7 @@ async function scaled(page: Page, png: Buffer, width: number, type: 'image/jpeg'
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error('no 2d context');
       ctx.drawImage(bitmap, 0, 0);
-      const blob = await canvas.convertToBlob({ type, quality: 0.92 });
+      const blob = await canvas.convertToBlob({ type, quality: 0.9 });
       const out = new Uint8Array(await blob.arrayBuffer());
       let text = '';
       for (let i = 0; i < out.length; i += 0x8000) text += String.fromCharCode(...out.subarray(i, i + 0x8000));
@@ -124,12 +127,25 @@ async function scaled(page: Page, png: Buffer, width: number, type: 'image/jpeg'
   return Buffer.from(base64, 'base64');
 }
 
+/** Sizes the window, frames the photo and takes away the pointer and focus, so nothing shows that a user did not leave. */
+async function compose(page: Page, composition: Composition): Promise<void> {
+  await page.setViewportSize({ width: composition.width, height: composition.height });
+  const edit = page.getByTestId('edit-view');
+  await edit.getByRole('button', { name: 'Fit', exact: true }).click();
+  if (composition.zoom !== null) {
+    const field = page.getByTestId('zoom-readout');
+    await field.fill(`${composition.zoom}%`);
+    await field.press('Enter');
+    await expect(field).toHaveValue(`${composition.zoom}%`);
+  }
+  await page.mouse.move(composition.width - 1, composition.height - 1);
+  await page.evaluate(() => (document.activeElement instanceof HTMLElement ? document.activeElement.blur() : undefined));
+}
+
 test('social preview image', async ({ page }) => {
-  test.skip(!existsSync(raw), 'Set OG_RAW to the RAW file the image is made from');
+  test.skip(!existsSync(raw), 'Set OG_RAW to the trailer’s hero photo, DSCF8078.RAF');
   mkdirSync(outDir, { recursive: true });
   page.on('pageerror', (error) => console.log(`Page error: ${error.message}`));
-  const main = JSON.parse(readFileSync(join(here, 'og-image-edit.json'), 'utf8')) as Edit;
-  const others = process.env.OG_EDITS ? (JSON.parse(readFileSync(process.env.OG_EDITS, 'utf8')) as Edit[]) : [];
 
   await page.goto('/');
   await page.getByRole('button', { name: /This browser/ }).click();
@@ -144,7 +160,14 @@ test('social preview image', async ({ page }) => {
   await page.keyboard.press('Enter');
   await waitForReady(page, 10 * 60_000);
   const edit = page.getByTestId('edit-view');
-  await editAndSettle(page, main);
+
+  // The trailer's edit, as it applies it: the crop first, then every other step in the order History recorded them.
+  const changesShape = ([, changes]: EditStep): boolean => Object.keys(changes).some((key) => key.startsWith('framing.'));
+  for (const step of [...EDIT.steps.filter(changesShape), ...EDIT.steps.filter((step) => !changesShape(step))]) {
+    await applyStep(page, step);
+    await page.waitForTimeout(120);
+  }
+  await settle(page);
 
   // The full-size image, not the working one: 100 % loads it, and Fit keeps it.
   await edit.getByRole('button', { name: 'Full', exact: true }).click();
@@ -154,29 +177,19 @@ test('social preview image', async ({ page }) => {
   await edit.getByRole('button', { name: 'Split' }).click();
   await expect(page.getByTestId('split-divider')).toHaveAttribute('aria-valuenow', '50');
 
-  // A smaller window, until the fitted photograph is PHOTO_CSS_WIDTH wide.
-  for (let i = 0; i < 8; i++) {
-    const box = await photoBox(page);
-    if (Math.abs(box.width - PHOTO_CSS_WIDTH) < 0.5) break;
-    const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
-    const k = PHOTO_CSS_WIDTH / box.width;
-    await page.setViewportSize({
-      width: Math.round(viewport.width - box.width + box.width * k),
-      height: Math.round(viewport.height - box.height + box.height * k),
-    });
-    await page.waitForTimeout(1500);
-  }
-  expect(Math.abs((await photoBox(page)).width - PHOTO_CSS_WIDTH)).toBeLessThan(0.5);
-  // No pointer over the photograph: it would show the pixel readout.
-  await page.mouse.move(0, 0);
+  // Production libraries are in Google Drive, whose header says so; the label for a library in this browser,
+  // which only development builds offer, is taken off the picture.
+  await page.getByRole('banner').getByText('This browser', { exact: true }).evaluate((el: HTMLElement) => {
+    el.style.visibility = 'hidden';
+  });
 
-  for (const [i, each] of [main, ...others].entries()) {
-    if (i > 0) await editAndSettle(page, each);
+  for (const composition of process.env.OG_COMPARE ? [WINDOW, ...COMPOSITIONS] : [WINDOW]) {
+    await compose(page, composition);
     const capture = await settledCapture(page);
     const jpeg = await scaled(page, capture, OG_WIDTH, 'image/jpeg');
-    writeFileSync(i === 0 ? publicImage : join(outDir, `${each.name}.jpg`), jpeg);
-    writeFileSync(join(outDir, `${each.name}-500.png`), await scaled(page, capture, 500, 'image/png'));
-    writeFileSync(join(outDir, `${each.name}-300.png`), await scaled(page, capture, 300, 'image/png'));
-    console.log(`${each.name}: ${jpeg.length} bytes`);
+    writeFileSync(composition === WINDOW ? publicImage : join(outDir, `${composition.name}.jpg`), jpeg);
+    writeFileSync(join(outDir, `${composition.name}-500.png`), await scaled(page, capture, 500, 'image/png'));
+    writeFileSync(join(outDir, `${composition.name}-300.png`), await scaled(page, capture, 300, 'image/png'));
+    console.log(`${composition.name}: ${jpeg.length} bytes, zoom ${await page.getByTestId('zoom-readout').inputValue()}`);
   }
 });
