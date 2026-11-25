@@ -40,8 +40,22 @@ async function opaqueBox(page: Page, layerId: string): Promise<Box | null> {
       __readLayerPixels: (id: string) => Promise<{ width: number; height: number; pixels: number[] } | null>;
       __editorStore: { getState: () => { document: { layers: Array<{ id: string; x: number; y: number }> } } };
     };
-    const layer = w.__editorStore.getState().document.layers.find((l) => l.id === lid)!;
-    const read = await w.__readLayerPixels(lid);
+    const position = () => {
+      const l = w.__editorStore.getState().document.layers.find((candidate) => candidate.id === lid)!;
+      return { x: l.x, y: l.y };
+    };
+    // Switching layers crops the old one to its content on an idle callback,
+    // moving its texture and its x/y together. If that lands while the
+    // pixels are read, the offset taken before the read no longer matches
+    // the texture, so read again until the position holds still across it.
+    let layer = position();
+    let read = await w.__readLayerPixels(lid);
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const after = position();
+      if (after.x === layer.x && after.y === layer.y) break;
+      layer = after;
+      read = await w.__readLayerPixels(lid);
+    }
     if (!read) return null;
     let minX = Infinity; let minY = Infinity; let maxX = -Infinity; let maxY = -Infinity;
     for (let y = 0; y < read.height; y++) {

@@ -74,7 +74,6 @@ vi.mock('../../app/tool-settings-store', () => ({
 import { lassoStrategy } from './lasso-strategy';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
-import type { SelectionUpContext } from '../../app/interactions/selection-strategy';
 
 function makeCtx(overrides: Partial<InteractionContext> = {}): InteractionContext {
   const layer = { id: 'layer-1', x: 0, y: 0, visible: true } as unknown as InteractionContext['activeLayer'];
@@ -111,12 +110,6 @@ function makeState(overrides: Partial<InteractionState> = {}): InteractionState 
     ...overrides,
   };
 }
-
-const upCtx: SelectionUpContext = {
-  screenToCanvas: (sx, sy) => ({ x: sx, y: sy }),
-  containerRef: { current: null },
-  event: { clientX: 0, clientY: 0 },
-};
 
 describe('lasso strategy', () => {
   beforeEach(() => {
@@ -160,7 +153,7 @@ describe('lasso strategy', () => {
       { x: 8, y: 0 },
       { x: 8, y: 8 },
     ];
-    lassoStrategy.onUp!(makeState(), { x: 8, y: 8 }, upCtx);
+    lassoStrategy.onUp!(makeState(), { x: 8, y: 8 });
     expect(editorState.setSelection).toHaveBeenCalledTimes(1);
     const [bounds, mask, w, h] = editorState.setSelection.mock.calls[0]! as [
       { x: number; y: number; width: number; height: number },
@@ -184,7 +177,7 @@ describe('lasso strategy', () => {
       { x: 0, y: 0 },
       { x: 5, y: 5 },
     ];
-    lassoStrategy.onUp!(makeState(), { x: 5, y: 5 }, upCtx);
+    lassoStrategy.onUp!(makeState(), { x: 5, y: 5 });
     expect(editorState.setSelection).not.toHaveBeenCalled();
     expect(uiState.clearLassoPoints).toHaveBeenCalledTimes(1);
   });
@@ -195,7 +188,7 @@ describe('lasso strategy', () => {
       { x: 2, y: 2 },
       { x: 2, y: 2 },
     ];
-    lassoStrategy.onUp!(makeState(), { x: 2, y: 2 }, upCtx);
+    lassoStrategy.onUp!(makeState(), { x: 2, y: 2 });
     expect(editorState.setSelection).not.toHaveBeenCalled();
     expect(uiState.clearLassoPoints).toHaveBeenCalledTimes(1);
   });
@@ -203,7 +196,7 @@ describe('lasso strategy', () => {
   /** Select the left triangle below the diagonal from (0,0) to (0,12)/(12,12). */
   function selectLeftTriangle(): void {
     uiState.lassoPoints = [{ x: 0, y: 0 }, { x: 12, y: 12 }, { x: 0, y: 12 }];
-    lassoStrategy.onUp!(makeState(), { x: 0, y: 12 }, upCtx);
+    lassoStrategy.onUp!(makeState(), { x: 0, y: 12 });
     const [bounds, mask] = editorState.setSelection.mock.calls[0]! as [
       { x: number; y: number; width: number; height: number },
       Uint8ClampedArray,
@@ -223,7 +216,7 @@ describe('lasso strategy', () => {
   it('Shift-lasso adds a second triangle that fills out the square', () => {
     selectLeftTriangle();
     uiState.lassoPoints = [{ x: 0, y: 0 }, { x: 12, y: 0 }, { x: 12, y: 12 }];
-    lassoStrategy.onUp!(makeState({ selectionCombineMode: 'add' }), { x: 12, y: 12 }, upCtx);
+    lassoStrategy.onUp!(makeState({ selectionCombineMode: 'add' }), { x: 12, y: 12 });
     const [bounds, mask] = editorState.setSelection.mock.calls[0]! as [
       { x: number; y: number; width: number; height: number },
       Uint8ClampedArray,
@@ -237,7 +230,7 @@ describe('lasso strategy', () => {
   it('Alt-lasso subtracts the traced area', () => {
     selectLeftTriangle();
     uiState.lassoPoints = [{ x: 0, y: 6 }, { x: 6, y: 6 }, { x: 6, y: 12 }, { x: 0, y: 12 }];
-    lassoStrategy.onUp!(makeState({ selectionCombineMode: 'subtract' }), { x: 0, y: 12 }, upCtx);
+    lassoStrategy.onUp!(makeState({ selectionCombineMode: 'subtract' }), { x: 0, y: 12 });
     const [, mask] = editorState.setSelection.mock.calls[0]! as [unknown, Uint8ClampedArray];
     expect(mask[9 * 12 + 3]).toBe(0); // inside the cut-out square
     expect(mask[9 * 12 + 8]).toBe(255); // rest of the triangle kept

@@ -67,6 +67,7 @@ pub const SELECTION_FILL_FRAG: &str = translated!("selection_fill");
 pub const FRAME_FILL_FRAG: &str = translated!("frame_fill");
 pub const ROTATE90_FRAG: &str = translated!("rotate90");
 pub const BLIT_REGION_FRAG: &str = translated!("blit_region");
+pub const BLIT_RESAMPLE_REGION_FRAG: &str = translated!("blit_resample_region");
 pub const MASK_EXPAND_FRAG: &str = translated!("mask_expand");
 pub const MASK_REMAP_FRAG: &str = translated!("mask_remap");
 pub const QUICK_MASK_TRANSLATE_FRAG: &str = translated!("quick_mask_translate");
@@ -205,6 +206,7 @@ typed_shaders! {
     THRESHOLD: params::filters::ThresholdParams = THRESHOLD_FRAG;
     BLIT_RESAMPLE: () = BLIT_RESAMPLE_FRAG;
     BLIT_REGION: params::core::BlitRegionParams = BLIT_REGION_FRAG;
+    BLIT_RESAMPLE_REGION: params::core::BlitRegionParams = BLIT_RESAMPLE_REGION_FRAG;
     FLIP: params::core::FlipParams = FLIP_FRAG;
     ROTATE90: params::core::Rotate90Params = ROTATE90_FRAG;
     MASK_EXPAND: () = MASK_EXPAND_FRAG;
@@ -373,6 +375,9 @@ pub struct ShaderPrograms {
     pub frame_fill: ShaderProgram<params::core::FrameFillParams>,
     pub rotate90: ShaderProgram<params::core::Rotate90Params>,
     pub blit_region: ShaderProgram<params::core::BlitRegionParams>,
+    /// `blit_region` with a premultiplied bilinear filter that reads
+    /// transparent outside the source.
+    pub blit_resample_region: ShaderProgram<params::core::BlitRegionParams>,
     pub mask_expand: ShaderProgram<()>,
     pub mask_remap: ShaderProgram<params::core::MaskRemapParams>,
     pub quick_mask_translate: ShaderProgram<params::core::QuickMaskTranslateParams>,
@@ -613,6 +618,7 @@ impl ShaderPrograms {
             frame_fill: compile(linker, &FRAME_FILL)?,
             rotate90: compile(linker, &ROTATE90)?,
             blit_region: compile(linker, &BLIT_REGION)?,
+            blit_resample_region: compile(linker, &BLIT_RESAMPLE_REGION)?,
             mask_expand: compile(linker, &MASK_EXPAND)?,
             mask_remap: compile(linker, &MASK_REMAP)?,
             quick_mask_translate: compile(linker, &QUICK_MASK_TRANSLATE)?,

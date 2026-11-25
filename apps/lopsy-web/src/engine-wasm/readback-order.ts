@@ -40,8 +40,10 @@ export interface ReadbackQueue<E> {
    * Makes a function that reads pixels back from the GPU answer with a
    * Promise. WebGPU cannot read back synchronously: there the engine
    * answers with a parked command, which this waits out. On WebGL the read
-   * has already happened and the Promise is resolved (or rejected, if the
-   * read threw) on return.
+   * has usually already happened and the Promise is resolved (or rejected,
+   * if the read threw) on return; the exports declared with
+   * `deferred_readback_export!` (thumbnails, the lazy mask read) park there
+   * too, until their fence signals.
    *
    * `order` matters only while a readback is out, so only on wgpu. A
    * caller usually changes the document with what it read: the crop of a
@@ -59,7 +61,8 @@ export interface ReadbackQueue<E> {
   /**
    * How many readbacks are out: commands the engine has parked until their
    * pixels arrive, plus one while in-turn reads are waiting their turn or
-   * a caller has yet to act on one that just answered. Always 0 on WebGL.
+   * a caller has yet to act on one that just answered. On WebGL only the
+   * deferred reads (thumbnails, the lazy mask read) park.
    */
   parkedCount(): number;
 }

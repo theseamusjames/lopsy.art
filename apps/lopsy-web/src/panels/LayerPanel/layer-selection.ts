@@ -13,7 +13,7 @@ import { getEngine } from '../../engine-wasm/engine-state';
 import { hasFloat, dropFloat } from '../../engine-wasm/wasm-bridge';
 import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { schedulePrefloat } from '../../app/interactions/prefloat';
-import { recordLayerAlphaSelection } from '../../app/interactions/layer-alpha-selection';
+import { recordLayerAlphaSelection, type LayerAlphaContent } from '../../app/interactions/layer-alpha-selection';
 import { getMaskDocOrigin } from '../../layers/mask-origin';
 
 export interface SelectLayerAlphaOptions {
@@ -73,7 +73,7 @@ export async function selectLayerAlpha(layerId: string, options: SelectLayerAlph
   const bounds = selectionBounds(selMask, docW, docH);
   if (bounds) {
     editorState.setSelection(bounds, selMask, docW, docH);
-    recordLayerAlphaSelection(layerId, selMask);
+    recordLayerAlphaSelection(layerId, selMask, layerAlphaOf(pixelData, layer.x, layer.y));
     useUIStore.getState().setTransform(createTransformState(bounds));
     // Prefloat runs ensure_layer_full_size on the engine, which re-origins
     // the layer to (0,0). For text layers that destroys the anchor
@@ -88,6 +88,34 @@ export async function selectLayerAlpha(layerId: string, options: SelectLayerAlph
       schedulePrefloat(layerId, selMask, bounds);
     }
   }
+}
+
+/** The layer's alpha cropped to its opaque pixels, at the layer's document position. */
+function layerAlphaOf(pixels: ImageData, layerX: number, layerY: number): LayerAlphaContent | null {
+  const { width, height, data } = pixels;
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if ((data[(y * width + x) * 4 + 3] ?? 0) < 1) continue;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (maxX < 0) return null;
+  const w = maxX - minX + 1;
+  const h = maxY - minY + 1;
+  const alpha = new Uint8ClampedArray(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      alpha[y * w + x] = data[((y + minY) * width + x + minX) * 4 + 3] ?? 0;
+    }
+  }
+  return { alpha, rect: { x: layerX + minX, y: layerY + minY, width: w, height: h } };
 }
 
 function combineWithSelection(

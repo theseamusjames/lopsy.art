@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { WebGL2Warning, checkWebGL2Support } from '../components/WebGL2Warning/WebGL2Warning';
+import { WebGL2Warning } from '../components/WebGL2Warning/WebGL2Warning';
 import { LiquifyPanel } from '../components/LiquifyPanel/LiquifyPanel';
 import { Toolbox } from '../toolbox/Toolbox';
 import { LayerPanel } from '../panels/LayerPanel/LayerPanel';
@@ -27,7 +27,7 @@ import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
 import { useCanvasInteraction } from './useCanvasInteraction';
 import { useBrushPrewarm } from './useBrushPrewarm';
-import { useCanvasRendering } from './useCanvasRendering';
+import { CanvasRenderer } from './CanvasRenderer';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import { useCanvasCursor } from './useCanvasCursor';
 import { useContextMenu } from './useContextMenu';
@@ -53,19 +53,12 @@ const handleSaveToPhotos = (): void => {
   void saveDocumentToPhotos();
 };
 
-// Isolated component for canvas rendering — prevents renderVersion and
-// cursorPosition changes from re-rendering the entire App tree.
-function CanvasRenderer({ canvasRef, containerRef, overlayCanvasRef }: {
-  canvasRef: React.RefObject<HTMLCanvasElement | null>;
-  containerRef: React.RefObject<HTMLDivElement | null>;
-  overlayCanvasRef: React.RefObject<HTMLCanvasElement | null>;
-}) {
-  useCanvasRendering(canvasRef, containerRef, overlayCanvasRef);
-  return null;
+interface AppProps {
+  /** checkWebGL2Support(), asked once by the entry so the page and window.lopsy agree. */
+  hasWebGL2: boolean;
 }
 
-export function App() {
-  const [hasWebGL2] = useState(() => checkWebGL2Support());
+export function App({ hasWebGL2 }: AppProps) {
   useReleaseToolbarButtonFocus();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -76,7 +69,6 @@ export function App() {
   const viewport = useEditorStore((s) => s.viewport);
   const layers = useEditorStore((s) => s.document.layers);
   const activeLayerId = useEditorStore((s) => s.document.activeLayerId);
-  const setActiveLayer = useEditorStore((s) => s.setActiveLayer);
 
   const documentReady = useEditorStore((s) => s.documentReady);
   const createDocument = useEditorStore((s) => s.createDocument);
@@ -173,7 +165,7 @@ export function App() {
   );
 
   // Canvas interaction (drawing tools)
-  const { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform, nudgeMove, nudgeSelection } = useCanvasInteraction(screenToCanvas, containerRef, screenToPixel);
+  const { handleToolDown, handleToolMove, handleToolUp, nudgeMove, nudgeSelection } = useCanvasInteraction(screenToCanvas, containerRef, screenToPixel);
 
   // Pre-warm brush GPU resources on paint-tool activation so the first
   // stroke on a large canvas doesn't pay a visible allocation cost.
@@ -189,7 +181,6 @@ export function App() {
   useKeyboardShortcuts({
     canvasRef,
     setPointerMode,
-    clearPersistentTransform,
     nudgeMove,
     nudgeSelection,
   });
@@ -204,11 +195,6 @@ export function App() {
     handleToolUp,
     updateHoveredHandle,
   });
-
-  const handleSelectLayer = useCallback((id: string) => {
-    clearPersistentTransform();
-    setActiveLayer(id);
-  }, [clearPersistentTransform, setActiveLayer]);
 
   const renderPanel = useCallback((panelId: string): ReactNode => {
     switch (panelId) {
@@ -227,11 +213,11 @@ export function App() {
       case 'text':
         return <TextPanel />;
       case 'layers':
-        return <LayerPanel onSelectLayer={handleSelectLayer} />;
+        return <LayerPanel />;
       default:
         return null;
     }
-  }, [handleSelectLayer]);
+  }, []);
 
   if (!hasWebGL2) {
     return <WebGL2Warning />;

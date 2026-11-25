@@ -44,8 +44,6 @@ test.describe('Image → Border: rounded corners', () => {
     await dialog.getByLabel('Symmetric', { exact: true }).check();
     await dialog.getByLabel('Border width (px)').fill('30');
     await dialog.getByLabel('Overlay').check();
-    await expect(dialog.getByLabel('Outer radius (px)')).toBeHidden();
-    await dialog.getByLabel('Rounded corners').check();
     await dialog.getByLabel('Outer radius (px)').fill('25');
     await dialog.getByLabel('Inner radius (px)').fill('20');
     await applyBorder(dialog);
@@ -70,18 +68,18 @@ test.describe('Image → Border: rounded corners', () => {
     expect((await getPixelAt(page, 100, 75, borderId)).a, 'window centre is open').toBe(0);
   });
 
-  test('Turning Rounded corners off keeps the square frame', async ({ page }) => {
+  test('The radius fields are always shown, start at 0 and keep the square frame (#1782)', async ({ page }) => {
     const dialog = await openBorderDialog(page);
+    await expect(dialog.getByRole('group', { name: 'Rounded corners' })).toBeVisible();
+    await expect(dialog.getByRole('checkbox')).toHaveCount(0);
+    await expect(dialog.getByLabel('Outer radius (px)')).toBeVisible();
+    await expect(dialog.getByLabel('Inner radius (px)')).toBeVisible();
+    await expect(dialog.getByLabel('Outer radius (px)')).toHaveValue('0');
+    await expect(dialog.getByLabel('Inner radius (px)')).toHaveValue('0');
     await setBorderColor(dialog, 'ff0000');
     await dialog.getByLabel('Symmetric', { exact: true }).check();
     await dialog.getByLabel('Border width (px)').fill('30');
     await dialog.getByLabel('Overlay').check();
-    // Radii entered and then switched off must not reach the border.
-    await dialog.getByLabel('Rounded corners').check();
-    await dialog.getByLabel('Outer radius (px)').fill('25');
-    await dialog.getByLabel('Inner radius (px)').fill('20');
-    await dialog.getByLabel('Rounded corners').uncheck();
-    await expect(dialog.getByLabel('Outer radius (px)')).toBeHidden();
     await applyBorder(dialog);
 
     const borderId = await borderLayerId(page);
@@ -102,7 +100,6 @@ test.describe('Image → Border: rounded corners', () => {
     await dialog.getByLabel('Symmetric', { exact: true }).check();
     await dialog.getByLabel('Border width (px)').fill('20');
     await dialog.getByLabel('Expand canvas').check();
-    await dialog.getByLabel('Rounded corners').check();
     await dialog.getByLabel('Outer radius (px)').fill('30');
     await dialog.getByLabel('Inner radius (px)').fill('15');
     await applyBorder(dialog);

@@ -172,21 +172,25 @@ const cyberpunk: ColorTransform = (r, g, b) => {
 
 let cachedPresets: LutPreset[] | null = null;
 
+const BUILTIN_TRANSFORMS: ReadonlyArray<{ id: string; name: string; fn: ColorTransform }> = [
+  { id: 'warm-vintage', name: 'Warm Vintage', fn: warmVintage },
+  { id: 'teal-orange', name: 'Teal & Orange', fn: tealOrange },
+  { id: 'noir', name: 'Noir', fn: noir },
+  { id: 'cross-process', name: 'Cross Process', fn: crossProcess },
+  { id: 'faded-film', name: 'Faded Film', fn: fadedFilm },
+  { id: 'sunset', name: 'Sunset', fn: sunset },
+  { id: 'cool-blue', name: 'Cool Blue', fn: coolBlue },
+  { id: 'cyberpunk', name: 'Cyberpunk', fn: cyberpunk },
+];
+
+/** The built-in presets' ids and names in the Color LUT dialog's order, without building their LUTs. */
+export const BUILTIN_LUT_PRESETS: ReadonlyArray<{ readonly id: string; readonly name: string }> =
+  BUILTIN_TRANSFORMS.map(({ id, name }) => ({ id, name }));
+
 export function getBuiltinPresets(): LutPreset[] {
   if (cachedPresets) return cachedPresets;
 
-  const transforms: Array<{ id: string; name: string; fn: ColorTransform }> = [
-    { id: 'warm-vintage', name: 'Warm Vintage', fn: warmVintage },
-    { id: 'teal-orange', name: 'Teal & Orange', fn: tealOrange },
-    { id: 'noir', name: 'Noir', fn: noir },
-    { id: 'cross-process', name: 'Cross Process', fn: crossProcess },
-    { id: 'faded-film', name: 'Faded Film', fn: fadedFilm },
-    { id: 'sunset', name: 'Sunset', fn: sunset },
-    { id: 'cool-blue', name: 'Cool Blue', fn: coolBlue },
-    { id: 'cyberpunk', name: 'Cyberpunk', fn: cyberpunk },
-  ];
-
-  cachedPresets = transforms.map(({ id, name, fn }) => ({
+  cachedPresets = BUILTIN_TRANSFORMS.map(({ id, name, fn }) => ({
     id,
     name,
     data: generateLutStrip(LUT_SIZE, fn),

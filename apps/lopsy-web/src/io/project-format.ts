@@ -9,7 +9,10 @@
  * See project-save.ts for the format itself.
  */
 
-import { PIXEL_FORMAT_RGBA16_LZ4, type LopsyManifest, type SerializedLayer } from './project-save';
+import { PIXEL_FORMAT_RGBA16_LZ4, isRgba16Layer, type LopsyManifest, type SerializedLayer } from './project-save';
+import type { LayerPixelFormat } from './layer-pixel-format';
+
+const LAYER_PIXEL_FORMATS: readonly LayerPixelFormat[] = ['rgba8-gzip', 'rgba16-lz4'];
 
 const LOPSY_MAGIC = [0x4c, 0x4f, 0x50, 0x53, 0x59, 0x00]; // "LOPSY\0"
 const HEADER_BYTES = 12;
@@ -146,6 +149,9 @@ export function validateManifest(value: unknown, maxSide: number, blobCount: num
   }
   checkOptional(value, 'dpi', 'number', 'the document');
   checkOptional(value, 'colorMode', 'string', 'the document', 32);
+  if (value.layerPixelFormat !== undefined && !LAYER_PIXEL_FORMATS.includes(value.layerPixelFormat as LayerPixelFormat)) {
+    fail('the file has an unknown layer pixel format.');
+  }
 
   const layers = value.layers as unknown[];
   const pixelCount = layers.filter((l) => isRecord(l) && isInt(l.pixelDataIndex) && l.pixelDataIndex >= 0).length;
@@ -219,12 +225,12 @@ export function readProjectContainer(buffer: ArrayBuffer, options: { maxSide: nu
 
   const manifest = validateManifest(manifestJson, options.maxSide, blobCount);
   const pixelBlobCount = manifest.layers.filter((l) => l.pixelDataIndex >= 0).length;
-  for (const layer of manifest.layers) checkLayerBlobs(layer, blobs, pixelBlobCount);
+  for (const layer of manifest.layers) checkLayerBlobs(manifest, layer, blobs, pixelBlobCount);
   return { version, manifest, blobs, pixelBlobCount };
 }
 
 /** Checks a layer's blobs against its manifest entry: mask sizes exactly, 16-bit headers exactly. */
-function checkLayerBlobs(layer: SerializedLayer, blobs: readonly Uint8Array[], pixelBlobCount: number): void {
+function checkLayerBlobs(manifest: LopsyManifest, layer: SerializedLayer, blobs: readonly Uint8Array[], pixelBlobCount: number): void {
   if (layer.maskDataIndex >= 0 && layer.maskWidth != null && layer.maskHeight != null) {
     const mask = blobs[pixelBlobCount + layer.maskDataIndex];
     if (!mask || mask.byteLength !== layer.maskWidth * layer.maskHeight) {
@@ -235,7 +241,7 @@ function checkLayerBlobs(layer: SerializedLayer, blobs: readonly Uint8Array[], p
   const blob = blobs[layer.pixelDataIndex];
   if (!blob) fail(`layer "${layer.name}" has no pixel data.`);
   const { width, height } = pixelBlobSize(layer);
-  if (layer.pixelFormat === PIXEL_FORMAT_RGBA16_LZ4) checkU16Blob(blob, width, height, layer.name);
+  if (isRgba16Layer(manifest, layer)) checkU16Blob(blob, width, height, layer.name);
 }
 
 /**

@@ -1,6 +1,6 @@
 import type { Layer, ToolId } from '../types';
 import type { ShapeOutput } from '../tools/shape/shape';
-import { notifyInfo } from '../app/notifications-store';
+import { announceRefusal, type Refusal } from '../commands/refusal';
 import { toolRegistry } from '../tools/tool-registry';
 
 /**
@@ -65,20 +65,32 @@ export function canReceiveRasterPaint(layer: Layer | null | undefined): boolean 
   return true;
 }
 
+const NO_LAYER: Refusal = { reason: 'There is no active layer.', notice: null };
+const GROUP_PAINT: Refusal = {
+  reason: "Groups can't be painted on. Select a layer inside the group.",
+  notice: 'info',
+};
+const TEXT_PAINT: Refusal = {
+  reason: 'Text layers must be rasterized before they can be painted on.',
+  notice: 'info',
+};
+
+/** Why the layer can't take a pixel write, or null when it can. The no-layer case is silent in the UI. */
+export function pixelWriteRefusal(layer: Layer | null | undefined): Refusal | null {
+  if (!layer) return NO_LAYER;
+  if (layer.type === 'group') return GROUP_PAINT;
+  if (layer.type === 'text') return TEXT_PAINT;
+  return null;
+}
+
 /**
  * Guard for pixel-writing entry points. Returns true when the write may
  * proceed. When it returns false, a user-visible toast has already been
  * shown explaining why the layer refused the write.
  */
 export function guardPixelWrite(layer: Layer | null | undefined): boolean {
-  if (!layer) return false;
-  if (layer.type === 'group') {
-    notifyInfo("Groups can't be painted on. Select a layer inside the group.");
-    return false;
-  }
-  if (layer.type === 'text') {
-    notifyInfo('Text layers must be rasterized before they can be painted on.');
-    return false;
-  }
-  return true;
+  const refusal = pixelWriteRefusal(layer);
+  if (!refusal) return true;
+  announceRefusal(refusal);
+  return false;
 }

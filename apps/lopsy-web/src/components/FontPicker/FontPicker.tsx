@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 import { FONT_CATALOG } from '../../utils/font-catalog';
 import type { FontEntry, FontCategory } from '../../utils/font-catalog';
-import { extractFamilyName, loadGoogleFontPreview } from '../../utils/font-loader';
+import { buildFontFamilyValue, extractFamilyName, loadGoogleFontPreview } from '../../utils/font-loader';
 import { mergeLocalFonts } from '../../utils/local-fonts';
 import { useLocalFontsStore, useFontEntry, loadLocalFontToDom } from '../../app/local-fonts-store';
 import { focusTextInputSink } from '../../app/text-input-sink';
@@ -138,12 +138,7 @@ export function FontPicker({ value, onChange }: FontPickerProps) {
 
   const selectEntry = useCallback(
     (entry: FontEntry) => {
-      const fallback = entry.category;
-      const familyVal =
-        /^[a-zA-Z]+$/.test(entry.family)
-          ? `${entry.family}, ${fallback}`
-          : `'${entry.family}', ${fallback}`;
-      onChange(familyVal);
+      onChange(buildFontFamilyValue(entry.family, entry.category));
       close();
       // The focused search field or option is about to unmount, which would
       // drop focus on <body>. Hand it back to the text being edited (so IME

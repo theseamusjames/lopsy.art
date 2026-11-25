@@ -1,7 +1,7 @@
 import { Slider } from '@lopsy/ui/Slider';
 import type { ShadowEffect } from '../../types';
 import { useEditorStore } from '../../app/editor-store';
-import { docScaledMax, docScaledOffset } from '../../utils/slider-ranges';
+import { effectSliderLimits } from './effect-list';
 import { EffectColorInput } from './EffectColorInput';
 import styles from './LayerEffectsPanel.module.css';
 
@@ -15,9 +15,10 @@ interface DropShadowFormProps {
 export function DropShadowForm({ shadow, onChange, onColorEditStart, onDragStart }: DropShadowFormProps) {
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
-  const offsetAbs = docScaledOffset(docWidth, docHeight, 100);
-  const blurMax = docScaledMax(docWidth, docHeight, 100);
-  const spreadMax = docScaledMax(docWidth, docHeight, 100);
+  const limits = effectSliderLimits(docWidth, docHeight);
+  const offsetAbs = limits.shadowOffset;
+  const blurMax = limits.shadowBlurMax;
+  const spreadMax = limits.shadowSpreadMax;
 
   return (
     <>

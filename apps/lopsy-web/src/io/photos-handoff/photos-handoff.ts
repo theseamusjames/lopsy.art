@@ -25,7 +25,7 @@ import { initWasm, decodeAndUploadImage } from '../../engine-wasm/wasm-bridge';
 import { resetTrackedState } from '../../engine-wasm/engine-sync';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import { getEngine } from '../../engine-wasm/engine-state';
-import { renderPng16 } from '../../app/MenuBar/menus/file-menu';
+import { renderPng16 } from '../export-image';
 import { loadProject } from '../project-load';
 import { serializeProject } from '../project-save';
 import { photosUrl } from './photos-url';
@@ -129,8 +129,11 @@ export async function openPhotosHandoffFromQuery(): Promise<void> {
 async function buildSavePayload(source?: HandoffSource, camera?: CameraSummary): Promise<SavePayload> {
   const engine = getEngine();
   if (!engine) throw new Error('engine not ready.');
-  // Photonamous keeps the 16-bit pixels (v3); Save Project's downloads stay v2.
-  const lopsy = await serializeProject({ precision: 16, ...(source ? { photos: camera ? { ...source, camera } : source } : {}) });
+  // The same v3 file Save Project writes (16-bit layer pixels), with the source block.
+  const { bytes } = await serializeProject(source ? { photos: camera ? { ...source, camera } : source } : {});
+  // serializeProject's bytes fill their own buffer, which is transferred as is.
+  const isWholeBuffer = bytes.buffer instanceof ArrayBuffer && bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength;
+  const lopsy = isWholeBuffer ? (bytes.buffer as ArrayBuffer) : bytes.slice().buffer;
   const render = await (await renderPng16(engine)).arrayBuffer();
   const name = useEditorStore.getState().document.name || 'Untitled';
   return { name, lopsy, render };

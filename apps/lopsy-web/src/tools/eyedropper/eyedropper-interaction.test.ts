@@ -18,7 +18,7 @@ vi.mock('../../app/tool-settings-store', () => ({
   useToolSettingsStore: { getState: () => ts },
 }));
 
-import { handleEyedropperDown, handleEyedropperMove, flushEyedropperSample } from './eyedropper-interaction';
+import { colorFromSample, handleEyedropperDown, handleEyedropperMove, flushEyedropperSample } from './eyedropper-interaction';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
 
@@ -162,5 +162,12 @@ describe('eyedropper interaction', () => {
     const args = sampleColor.mock.calls[0]!;
     expect(args[1]).toBe(9);
     expect(args[2]).toBe(9);
+  });
+});
+
+describe('colorFromSample', () => {
+  it('makes an engine sample a Color with alpha 0-1, and a short answer null', () => {
+    expect(colorFromSample(new Uint8Array([10, 20, 30, 51]))).toEqual({ r: 10, g: 20, b: 30, a: 0.2 });
+    expect(colorFromSample(new Uint8Array([1, 2, 3]))).toBeNull();
   });
 });

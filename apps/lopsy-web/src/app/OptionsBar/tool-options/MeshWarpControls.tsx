@@ -9,20 +9,12 @@ import {
   beginMeshWarpPreview,
   canStartMeshWarp,
   cancelMeshWarpPreview,
+  DEFAULT_MESH_WARP_GRID_SIZE,
+  MESH_WARP_GRID_SIZES,
+  meshWarpBounds,
   previewMeshWarp,
 } from '../../MenuBar/mesh-warp-actions';
-import type { Rect } from '../../../types';
 import styles from './MeshWarpControls.module.css';
-
-const DEFAULT_GRID_SIZE = 4;
-
-function clampToDoc(rect: Rect, docW: number, docH: number): Rect {
-  const x = Math.max(0, Math.min(docW, Math.round(rect.x)));
-  const y = Math.max(0, Math.min(docH, Math.round(rect.y)));
-  const right = Math.max(0, Math.min(docW, Math.round(rect.x + rect.width)));
-  const bottom = Math.max(0, Math.min(docH, Math.round(rect.y + rect.height)));
-  return { x, y, width: Math.max(1, right - x), height: Math.max(1, bottom - y) };
-}
 
 export function MeshWarpControls() {
   const meshWarp = useUIStore((s) => s.meshWarp);
@@ -38,13 +30,11 @@ export function MeshWarpControls() {
     const docW = editor.document.width;
     const docH = editor.document.height;
 
-    const bounds: Rect = (selectionActive && selectionBounds && selectionBounds.width > 1 && selectionBounds.height > 1)
-      ? clampToDoc(selectionBounds, docW, docH)
-      : { x: 0, y: 0, width: docW, height: docH };
+    const bounds = meshWarpBounds(selectionActive, selectionBounds, docW, docH);
 
     setMeshWarp({
-      grid: createIdentityGrid(DEFAULT_GRID_SIZE, DEFAULT_GRID_SIZE),
-      gridSize: DEFAULT_GRID_SIZE,
+      grid: createIdentityGrid(DEFAULT_MESH_WARP_GRID_SIZE, DEFAULT_MESH_WARP_GRID_SIZE),
+      gridSize: DEFAULT_MESH_WARP_GRID_SIZE,
       bounds,
       dragging: null,
       hovered: null,
@@ -134,10 +124,9 @@ export function MeshWarpControls() {
         onChange={handleGridSizeChange}
         aria-label="Grid size"
       >
-        <option value={3}>3 × 3</option>
-        <option value={4}>4 × 4</option>
-        <option value={5}>5 × 5</option>
-        <option value={6}>6 × 6</option>
+        {MESH_WARP_GRID_SIZES.map((size) => (
+          <option key={size} value={size}>{size} × {size}</option>
+        ))}
       </select>
       <button type="button" className={styles.secondaryButton} onClick={handleReset}>
         Reset

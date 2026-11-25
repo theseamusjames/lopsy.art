@@ -2,8 +2,9 @@ import { traceSelectionContours } from '../../selection/selection';
 import { getHandlePositions, isShapeChangingTransform } from '../../tools/transform/transform';
 import type { TransformHandle, TransformState } from '../../tools/transform/transform';
 import { transformPolylines } from '../../tools/transform/transform-point';
-import { SCALE_HANDLE_DRAWN_PX } from '../../tools/transform/transform-handles';
+import { SCALE_HANDLE_DRAWN_PX, hasRotateHandles } from '../../tools/transform/transform-handles';
 import type { Rect } from '../../types';
+import { layerAlphaOutline } from '../interactions/layer-alpha-selection';
 
 export interface SelectionData {
   active: boolean;
@@ -18,6 +19,7 @@ let cachedMaskRef: Uint8ClampedArray | null = null;
 // shifts only the bounds and materializes the mask when the gesture ends
 // (#1382), so the ants follow the bounds by this offset until then.
 let cachedBounds: Rect | null = null;
+let isCachedWholeLayer = false;
 // Built once per mask (not per frame) so an animated antPhase never re-traces
 // contours or re-issues a beginPath()/stroke() pair per contour. With
 // thousands of islands (e.g. a non-contiguous wand pick on a noisy texture),
@@ -40,6 +42,20 @@ function buildContourPath(contours: number[][]): Path2D {
   return path;
 }
 
+/**
+ * A Move of a layer-alpha selection carries the whole layer, past the canvas
+ * edge included, and frames all of it (#1801). While the bounds frame the
+ * whole layer the ants trace it too, not the canvas-clipped mask.
+ */
+function wholeLayerOutline(selection: SelectionData): { contours: number[][]; bounds: Rect } | null {
+  if (!selection.mask || !selection.bounds) return null;
+  const outline = layerAlphaOutline(selection.mask);
+  if (!outline) return null;
+  const isFramingWholeLayer = outline.bounds.width === selection.bounds.width
+    && outline.bounds.height === selection.bounds.height;
+  return isFramingWholeLayer ? outline : null;
+}
+
 function boundsShift(traced: Rect | null, current: Rect | null | undefined): { x: number; y: number } | null {
   if (!traced || !current) return null;
   if (traced.width !== current.width || traced.height !== current.height) return null;
@@ -57,11 +73,15 @@ export function renderSelectionAnts(
 ): void {
   if (!selection.active || !selection.mask) return;
 
-  if (selection.mask !== cachedMaskRef) {
-    cachedContours = traceSelectionContours(selection.mask, selection.maskWidth, selection.maskHeight, selection.bounds);
+  const outline = wholeLayerOutline(selection);
+  if (selection.mask !== cachedMaskRef || (outline !== null) !== isCachedWholeLayer) {
+    cachedContours = outline?.contours
+      ?? traceSelectionContours(selection.mask, selection.maskWidth, selection.maskHeight, selection.bounds);
     cachedPath = cachedContours.length > 0 ? buildContourPath(cachedContours) : null;
     cachedMaskRef = selection.mask;
-    cachedBounds = selection.bounds ? { ...selection.bounds } : null;
+    isCachedWholeLayer = outline !== null;
+    const traced = outline?.bounds ?? selection.bounds;
+    cachedBounds = traced ? { ...traced } : null;
     cachedTransformRef = null;
   }
 
@@ -216,7 +236,7 @@ export function drawTransformHandles(
     'rotate-bottom-right': 'bottom-right',
     'rotate-bottom-left': 'bottom-left',
   };
-  for (const key of rotHandleKeys) {
+  for (const key of hasRotateHandles(transform) ? rotHandleKeys : []) {
     const pos = handles[key];
     const cornerKey = cornerForRot[key] as TransformHandle;
     const cornerPos = handles[cornerKey];

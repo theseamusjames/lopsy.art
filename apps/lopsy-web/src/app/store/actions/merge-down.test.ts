@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '../../../test/canvas-mock';
 import { describe, it, expect, vi } from 'vitest';
-import { computeMergeDown, canMergeDown } from './merge-down';
+import { computeMergeDown, canMergeDown, mergeDownRefusal } from './merge-down';
 import { createRasterLayer, createTextLayer, createGroupLayer, DEFAULT_EFFECTS } from '../../../layers/layer-model';
 import type { DocumentState } from '../../../types';
 
@@ -333,6 +333,38 @@ describe('canMergeDown', () => {
       colorMode: 'rgb',
     };
     expect(canMergeDown(doc)).toBe(true);
+  });
+});
+
+describe('mergeDownRefusal', () => {
+  function groupedDoc(activeIndex: number): DocumentState {
+    const belowGroup = createRasterLayer({ name: 'Layer 1', width: 4, height: 4 });
+    const child = createRasterLayer({ name: 'Child', width: 4, height: 4 });
+    const group = createGroupLayer({ name: 'Group', children: [child.id] });
+    const order = [belowGroup.id, child.id, group.id];
+    return { ...makeDoc(), layers: [belowGroup, child, group], layerOrder: order, activeLayerId: order[activeIndex]! };
+  }
+
+  it('is null exactly when canMergeDown is true', () => {
+    expect(mergeDownRefusal(makeDoc())).toBeNull();
+  });
+
+  it('says why for each case canMergeDown rejects, silently', () => {
+    const doc = makeDoc();
+    const group = createGroupLayer({ name: 'Folder' });
+    const top = createRasterLayer({ name: 'Top', width: 4, height: 4 });
+    const overGroup: DocumentState = { ...doc, layers: [group, top], layerOrder: [group.id, top.id], activeLayerId: top.id };
+    const cases: Array<[DocumentState, string]> = [
+      [{ ...doc, activeLayerId: null }, 'No layer is active.'],
+      [{ ...doc, activeLayerId: doc.layerOrder[0]! }, 'There is no layer below the active layer to merge into.'],
+      [overGroup, 'The layer below is the group "Folder": Merge Down only merges into a layer that is not a group.'],
+      [groupedDoc(1), 'The layer below the active layer is in a different group: Merge Down merges a layer into its sibling below.'],
+      [groupedDoc(2), 'The active layer is a group, and the layer below it is inside it: Merge Down merges a layer into its sibling below.'],
+    ];
+    for (const [d, reason] of cases) {
+      expect(mergeDownRefusal(d)).toEqual({ reason, notice: null });
+      expect(canMergeDown(d)).toBe(false);
+    }
   });
 });
 

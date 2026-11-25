@@ -16,7 +16,7 @@ import { loadDocumentFonts } from '../app/load-document-fonts';
 import type { Layer, RasterLayer, TextLayer, ShapeLayer, GroupLayer } from '../types/layers';
 import type { Color } from '../types/color';
 import type { AdjustmentNode } from '../types/adjustment-nodes';
-import { FORMAT_VERSION, PIXEL_FORMAT_RGBA16_LZ4, type SerializedLayer } from './project-save';
+import { FORMAT_VERSION, isRgba16Layer, type SerializedLayer } from './project-save';
 import { inflateExact, pixelBlobSize, readProjectContainer } from './project-format';
 import { getMaxDocumentSide } from '../engine-wasm/gpu-limits';
 import { effectsForFormatVersion, parseStoredEffects } from './layer-effects-format';
@@ -148,8 +148,15 @@ function forgetFamilyLayouts(family: string): void {
   }
 }
 
-export async function loadProject(file: File): Promise<void> {
+export interface LoadedProject {
+  /** Settles once the fonts the document's text layers use are loaded, or failed to. */
+  readonly fonts: Promise<void>;
+}
+
+/** Opens a .lopsy file as the document; throws when it cannot be read, leaving the open document if it fails before replacing it. */
+export async function loadProjectOrThrow(file: File): Promise<LoadedProject> {
   useUIStore.getState().openModal({ kind: 'loading', message: 'Opening project…' });
+  let fonts: Promise<void> = Promise.resolve();
 
   try {
     await initWasm();
@@ -201,6 +208,8 @@ export async function loadProject(file: File): Promise<void> {
         layers: newLayers,
         layerOrder: [...manifest.layerOrder],
         activeLayerId: manifest.activeLayerId,
+        // The ids the throwaway document selected name no loaded layer.
+        selectedLayerIds: manifest.activeLayerId ? [manifest.activeLayerId] : [],
         backgroundColor: manifest.backgroundColor,
         colorMode: manifest.colorMode ?? 'rgb',
         indexedPalette: manifest.indexedPalette,
@@ -236,9 +245,9 @@ export async function loadProject(file: File): Promise<void> {
         const blob = blobs[s.pixelDataIndex];
         if (!blob) continue;
 
-        if (s.pixelFormat === PIXEL_FORMAT_RGBA16_LZ4) {
-          // The blob carries its own geometry; the layer's position comes
-          // from the descriptor flushLayerSync pushed above.
+        if (isRgba16Layer(manifest, s)) {
+          // The blob carries its own geometry; it is placed at the layer's
+          // x/y, which flushLayerSync gave the engine above.
           try {
             uploadLayerPixelsCompressedU16(engine, s.id, blob);
           } catch (err) {
@@ -276,13 +285,20 @@ export async function loadProject(file: File): Promise<void> {
         uploadLayerMask(engine, s.id, maskBytes, layer.mask.width, layer.mask.height);
       }
 
-      void loadDocumentFonts(newLayers, forgetFamilyLayouts);
+      fonts = loadDocumentFonts(newLayers, forgetFamilyLayouts);
     }
 
     useEditorStore.getState().fitToView();
+  } finally {
     useUIStore.getState().closeModalOfKind('loading');
+  }
+  return { fonts };
+}
+
+export async function loadProject(file: File): Promise<void> {
+  try {
+    await loadProjectOrThrow(file);
   } catch (err) {
-    useUIStore.getState().closeModalOfKind('loading');
     notifyError(`Failed to load project: ${describeError(err)}`);
   }
 }

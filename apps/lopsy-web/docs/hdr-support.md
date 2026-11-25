@@ -54,7 +54,9 @@ takes:
 - **Tools.** Brush colours, the colour picker, gradients and fills stop
   at white. The eyedropper and the Info panel read 8-bit values.
 - **Export.** PNG, JPEG, PSD and the `.lopsy` project format store 8 or
-  16-bit integers clipped at white. HDR output needs a format that can
+  16-bit integers clipped at white (`.lopsy` keeps a layer's 16 bits, as
+  normalized integers: enough for what layers hold today, which never goes
+  above white, but not for HDR values). HDR output needs a format that can
   carry it and a decision about what an SDR export of an HDR document
   shows.
 - **The WebGL engine.** Its canvas would need `drawingBufferStorage` with

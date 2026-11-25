@@ -17,10 +17,14 @@ mod backend;
 
 pub use backend::{context, framebuffer, texture_pool, ExternalImage};
 
-/// What a task on the wgpu backend is waiting for, for the host that
-/// resumes it (see `task`).
-#[cfg(all(feature = "wgpu", target_arch = "wasm32"))]
+/// What a pending task is waiting for, for the host that resumes it (see
+/// `task`).
+#[cfg(any(not(feature = "wgpu"), target_arch = "wasm32"))]
 pub use backend::read::take_waiting_on;
+
+/// Run a command whose reads may answer later on WebGL too (see
+/// `webgl/read.rs`). Every wgpu read answers later already.
+pub use backend::read::deferred;
 
 /// Whether a pool of `use_float` textures can hold unclamped linear data:
 /// an error naming `what` for an 8-bit pool (WebGL without

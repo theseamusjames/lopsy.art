@@ -3,7 +3,7 @@
 
 use wasm_bindgen::prelude::*;
 
-use crate::readback::{read, readback_export};
+use crate::readback::{deferred_readback_export, read};
 use crate::Engine;
 
 #[wasm_bindgen(js_name = "filterPatternFill")]
@@ -28,7 +28,7 @@ pub fn filter_color_lut(engine: &mut Engine, layer_id: &str, lut_data: &[u8], lu
     lopsy_engine::commands::filter::render::filter_color_lut(&mut engine.inner, layer_id, lut_data, lut_size, intensity)
 }
 
-readback_export! {
+deferred_readback_export! {
     #[wasm_bindgen(js_name = "readChannelThumbnail")]
     pub fn read_channel_thumbnail(engine, layer_id: &str, channel: u32, max_size: u32) -> Vec<u8> {
         read(lopsy_engine::commands::filter::render::read_channel_thumbnail(engine, layer_id, channel, max_size))

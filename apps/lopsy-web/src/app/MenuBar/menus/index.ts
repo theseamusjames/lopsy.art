@@ -1,38 +1,32 @@
+// Every menu item runs a command, so the menus need the registry filled.
+import '../../../commands';
 import type { MenuDef } from './types';
-import type { FilterDialogId } from '../filter-actions';
-import type { DocumentColorMode } from '../../../types';
-import { fileMenu } from './file-menu';
+import { createFileMenu } from './file-menu';
 import { createEditMenu } from './edit-menu';
-import { createImageMenu, type ImageDialogId } from './image-menu';
+import { createImageMenu } from './image-menu';
 import { createLayerMenu } from './layer-menu';
-import { createSelectMenu, type SelectDialogId } from './select-menu';
+import { createSelectMenu } from './select-menu';
 import { createFilterMenu } from './filter-menu';
 import { createPathMenu } from './path-menu';
 import { createViewMenu } from './view-menu';
-import { createHelpMenu, type HelpDialogId } from './help-menu';
+import { createHelpMenu } from './help-menu';
 
 export type { MenuDef, MenuItem } from './types';
 export type { ImageDialogId } from './image-menu';
 export type { HelpDialogId } from './help-menu';
 export type { SelectDialogId } from './select-menu';
 
-export function getMenus(
-  showFilterDialog: (id: FilterDialogId) => void,
-  showImageDialog: (id: ImageDialogId) => void,
-  showHelpDialog: (id: HelpDialogId) => void,
-  showSelectDialog: (id: SelectDialogId) => void,
-  colorMode: DocumentColorMode,
-  convertColorMode: (mode: DocumentColorMode) => void,
-): MenuDef[] {
+/** The menu bar's menus, with each item's disabled and checked state read now. */
+export function getMenus(): MenuDef[] {
   return [
-    fileMenu,
-    createEditMenu(showFilterDialog),
-    createImageMenu(showImageDialog, colorMode, convertColorMode),
+    createFileMenu(),
+    createEditMenu(),
+    createImageMenu(),
     createLayerMenu(),
-    createSelectMenu(showSelectDialog),
-    createFilterMenu(showFilterDialog),
+    createSelectMenu(),
+    createFilterMenu(),
     createPathMenu(),
     createViewMenu(),
-    createHelpMenu(showHelpDialog),
+    createHelpMenu(),
   ];
 }

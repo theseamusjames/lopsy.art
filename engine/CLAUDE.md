@@ -239,6 +239,14 @@ still there before writing. Its export is declared with `readback_export!`
 `wasm-bridge.ts`: pass `'any-time'` only for a read whose result changes
 nothing in the document (a thumbnail, the eyedropper).
 
+On WebGL a read answers at once, blocking on whatever the GPU still has
+queued. An export declared with `deferred_readback_export!` instead runs
+its command inside `gpu::deferred`: the read goes into a pixel-pack buffer
+behind a fence (`gpu/webgl/read.rs`) and the export answers later, as on
+WebGPU. Use it only for reads nothing inside the engine waits on (the
+thumbnails and the lazy mask read), and type the export in `wasm-bridge.ts`
+with `answersLater`.
+
 ### Hosts
 
 A host is what embeds the engine: it starts it and calls `commands/`.

@@ -3,7 +3,7 @@ import type { ContextMenuItem } from '../components/ContextMenu/ContextMenu';
 import { useEditorStore } from './editor-store';
 import { useToolSettingsStore, abrBrushToPreset } from './tool-settings-store';
 import { useUIStore } from './ui-store';
-import { selectAll } from './MenuBar/menus/select-menu';
+import { selectAll } from './selection-actions';
 import { readSelectionBrushTip } from './MenuBar/brush-actions';
 
 interface ContextMenuState {

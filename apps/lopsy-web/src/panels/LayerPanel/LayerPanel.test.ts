@@ -63,7 +63,7 @@ describe('LayerPanel', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
-    act(() => root!.render(createElement(LayerPanel, { onSelectLayer: () => {} })));
+    act(() => root!.render(createElement(LayerPanel)));
     largestPropertyList = 0;
     propertyListCount = 0;
 
@@ -84,6 +84,8 @@ describe('LayerPanel', () => {
   it('Add Mask makes the new mask the edit target', async () => {
     const [{ act, createElement }, { createRoot }, { useEditorStore }, { LayerPanel }] = mods;
     const { useUIStore } = await import('../../app/ui-store');
+    // The button runs mask.add, registered by the commands index as the app's entry point does.
+    await import('../../commands/mask/mask');
     useEditorStore.getState().createDocument(300, 200, false);
     useUIStore.getState().setMaskEditMode(false);
     const layerName = useEditorStore.getState().document.layers
@@ -92,7 +94,7 @@ describe('LayerPanel', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
-    act(() => root!.render(createElement(LayerPanel, { onSelectLayer: () => {} })));
+    act(() => root!.render(createElement(LayerPanel)));
 
     const addMask = container.querySelector<HTMLButtonElement>('[aria-label="Add Mask"]')!;
     act(() => addMask.click());

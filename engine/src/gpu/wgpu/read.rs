@@ -42,6 +42,12 @@ pub fn take_waiting_on() -> Option<js_sys::Promise> {
     WAITING_ON.with(|waiting| waiting.borrow_mut().take())
 }
 
+/// Every wgpu read answers later already, so this only runs `start`. The
+/// WebGL backend's counterpart defers the reads `start` begins.
+pub fn deferred<R>(start: impl FnOnce() -> R) -> R {
+    start()
+}
+
 /// Waits for a buffer to map.
 struct Mapped {
     arrival: Arrival,

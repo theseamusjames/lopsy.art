@@ -36,6 +36,18 @@ vi.mock('../../engine/pixel-data-manager', () => ({
   pixelDataManager: { versionOf: (id: string) => versions.get(id) ?? 0 },
 }));
 
+const textMocks = vi.hoisted(() => ({
+  renderTextLayerPlacement: vi.fn(() => true),
+}));
+vi.mock('../text-layer-transform', async () => ({
+  renderTextLayerPlacement: textMocks.renderTextLayerPlacement,
+  transformableTextLayer: (id: string | null) =>
+    editor.document.layers.find((l) => l.id === id && l.type === 'text') ?? null,
+}));
+vi.mock('../../engine-wasm/engine-sync', () => ({
+  measureTextFrame: () => ({ anchor: { x: 20, y: 30 }, matrix: { a: 1, b: 0, c: 0, d: 1 } }),
+}));
+
 function raster(id: string, locked = false) {
   return { id, type: 'raster', locked, x: 0, y: 0, width: 10, height: 10 };
 }
@@ -49,6 +61,7 @@ const editor = vi.hoisted(() => ({
   undoStack: [] as unknown[],
   redoStack: [] as unknown[],
   notifyRender: vi.fn(),
+  updateTextLayerProperties: vi.fn(),
 }));
 vi.mock('../editor-store', () => ({ useEditorStore: { getState: () => editor } }));
 
@@ -69,9 +82,13 @@ import {
   beginLayerTransformSessionWhenMeasured,
   forgetLayerTransform,
   getLayerTransformBox,
+  markLayerTransformDirty,
+  refuseTextInLayerTransform,
   renderLayerTransform,
   resetLayerTransformCache,
+  textInLayerTransformRefusal,
 } from './layer-transform';
+import { useNotificationsStore } from '../notifications-store';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -219,5 +236,91 @@ describe('renderLayerTransform', () => {
     bridge.state.isLive = false;
     renderLayerTransform({ ...box, rotation: 1 });
     expect(bridge.compositeLayerTransformAffine).not.toHaveBeenCalled();
+  });
+});
+
+describe('markLayerTransformDirty with text layers (#1799)', () => {
+  function text(id: string) {
+    return { id, type: 'text', locked: false, x: 0, y: 0, text: 'Hi' };
+  }
+
+  beforeEach(() => {
+    editor.document.layers = [text('a'), text('b')];
+    editor.document.selectedLayerIds = ['a', 'b'];
+  });
+
+  function storedIds(): string[] {
+    return editor.updateTextLayerProperties.mock.calls.map((c) => c[0] as string);
+  }
+
+  it('stores the rotation on each lifted text layer', async () => {
+    const box = (await settledBox())!;
+    expect(beginLayerTransformSession(box)).toBe('begun');
+    renderLayerTransform({ ...box, rotation: -0.1 });
+    markLayerTransformDirty();
+    expect(storedIds().sort()).toEqual(['a', 'b']);
+  });
+
+  it('stores nothing on a text layer that was not lifted, so its pixels and transform agree', async () => {
+    bridge.state.contentBounds.set('b', []);
+    const box = (await settledBox())!;
+    expect(beginLayerTransformSession(box)).toBe('begun');
+    expect(bridge.beginLayerTransform).toHaveBeenCalledTimes(1);
+    renderLayerTransform({ ...box, rotation: -0.1 });
+    markLayerTransformDirty();
+    expect(storedIds()).toEqual(['a']);
+  });
+
+  it('stores nothing once the engine has dropped the session: the drag moved no pixels', async () => {
+    const box = (await settledBox())!;
+    expect(beginLayerTransformSession(box)).toBe('begun');
+    renderLayerTransform({ ...box, rotation: -0.05 });
+    // Something baked the float (dropFloat) between drags; the box still
+    // shows a rotation but the next drag renders nothing.
+    bridge.state.isLive = false;
+    ui.layerTransform = { ...box, rotation: -0.1 };
+    markLayerTransformDirty();
+    expect(editor.updateTextLayerProperties).not.toHaveBeenCalled();
+  });
+});
+
+describe('textInLayerTransformRefusal', () => {
+  const PATH_REASON = 'Rasterize text on a path before transforming it with other layers.';
+  const DISTORT_REASON = 'Rasterize the text layers before distorting them with other layers.';
+
+  function text(id: string, pathId?: string) {
+    return { id, type: 'text', locked: false, x: 0, y: 0, text: 'Hi', ...(pathId ? { pathId } : {}) };
+  }
+
+  function toasts(): Array<[string, string]> {
+    return useNotificationsStore.getState().notifications.map((n) => [n.level, n.message]);
+  }
+
+  beforeEach(() => {
+    useNotificationsStore.setState({ notifications: [] });
+  });
+
+  it('null for raster layers, and refuse returns false silently', () => {
+    expect(textInLayerTransformRefusal(true)).toBeNull();
+    expect(refuseTextInLayerTransform(true)).toBe(false);
+    expect(toasts()).toEqual([]);
+  });
+
+  it('pins the distort refusal, and refuse toasts it once', () => {
+    editor.document.layers = [raster('a'), text('t')];
+    editor.document.selectedLayerIds = ['a', 't'];
+    expect(textInLayerTransformRefusal(false)).toBeNull();
+    expect(textInLayerTransformRefusal(true)).toEqual({ reason: DISTORT_REASON, notice: 'info' });
+    expect(toasts()).toEqual([]);
+    expect(refuseTextInLayerTransform(true)).toBe(true);
+    expect(toasts()).toEqual([['info', DISTORT_REASON]]);
+  });
+
+  it('pins the text-on-path refusal', () => {
+    editor.document.layers = [raster('a'), text('t', 'path-1')];
+    editor.document.selectedLayerIds = ['a', 't'];
+    expect(textInLayerTransformRefusal(false)).toEqual({ reason: PATH_REASON, notice: 'info' });
+    expect(refuseTextInLayerTransform(false)).toBe(true);
+    expect(toasts()).toEqual([['info', PATH_REASON]]);
   });
 });

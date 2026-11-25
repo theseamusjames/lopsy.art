@@ -33,6 +33,12 @@ const MARGIN = 0.03;
 // backend completes, and each of the 26 read exports a task that can wait
 // for one. The wgpu build needs both, and the two builds share the engine.
 //
+// Raised again to what CI measures for the engine as it stands: the glue
+// had grown past the margin (3.2% raw, 5.0% gzip) through engine changes
+// that did not raise the budget with them, so the check failed on every
+// PR, whether or not it touched the engine. The wasm binary was inside
+// the margin (1.8% raw, 0.6% gzip) and is re-based with it.
+//
 // The glue was raised for Photonamous' RAW develop exports (setRawDevelop,
 // clearRawDevelop, rafRenderLinearBand, rafRenderBinnedLinear,
 // rafDevelopDefaults, rafDevelopProfiles, readDevelopHistogram, autoTone,

@@ -22,7 +22,6 @@ use readback::{read, readback_export};
 pub struct Engine {
     inner: EngineInner,
     /// Commands waiting for a readback.
-    #[cfg(feature = "wgpu")]
     tasks: readback::Tasks,
 }
 
@@ -108,7 +107,6 @@ fn engine_on(gpu_ctx: GpuContext) -> Result<Engine, JsError> {
     let inner = EngineInner::new(gpu_ctx, shaders).map_err(|e| JsError::new(&e))?;
     Ok(Engine {
         inner,
-        #[cfg(feature = "wgpu")]
         tasks: readback::Tasks::default(),
     })
 }
@@ -354,15 +352,6 @@ readback_export! {
 }
 
 /// Continue a command that was waiting for a readback (see `readback`).
-/// WebGL never leaves one waiting.
-#[cfg(not(feature = "wgpu"))]
-#[wasm_bindgen(js_name = "resumeTask")]
-pub fn resume_task(_engine: &mut Engine, _id: u32) -> Result<JsValue, JsError> {
-    Err(JsError::new("No such readback task"))
-}
-
-/// Continue a command that was waiting for a readback (see `readback`).
-#[cfg(feature = "wgpu")]
 #[wasm_bindgen(js_name = "resumeTask")]
 pub fn resume_task(engine: &mut Engine, id: u32) -> Result<JsValue, JsValue> {
     engine.tasks.resume(&mut engine.inner, id)

@@ -12,6 +12,7 @@ import {
   getHandlePositions,
   hitTestHandle,
   hitTestBoxHandle,
+  hasRotateHandles,
   isScaleHandle,
   isRotateHandle,
   computeScale,
@@ -19,6 +20,8 @@ import {
   getCursorForHandle,
   applyTransformToMask,
   translateTransform,
+  mapRectThroughAffine,
+  affineSourceRect,
 } from './transform';
 
 describe('createTransformState', () => {
@@ -221,6 +224,26 @@ describe('hitTestHandle', () => {
     expect(hitTestHandle(offCentre, state, 6.4)).toBeNull();
     expect(hitTestHandle(offCentre, state, 6.4, 10)).toBe('rotate-top-right');
     expect(hitTestHandle({ x: 208, y: 0 }, state, 6.4, 10)).toBeNull();
+  });
+});
+
+describe('rotate handles in the corner modes (#1778)', () => {
+  const base = createTransformState({ x: 0, y: 0, width: 100, height: 100 });
+  const rotPos = getHandlePositions(base)['rotate-top-left'];
+
+  it('keeps them in free transform and skew', () => {
+    expect(hasRotateHandles(base)).toBe(true);
+    expect(hasRotateHandles({ ...base, mode: 'skew' })).toBe(true);
+    expect(hitTestBoxHandle(rotPos, base, 1)).toBe('rotate-top-left');
+  });
+
+  it.each(['distort', 'perspective'] as const)('has none to grab in %s', (mode) => {
+    const state: TransformState = { ...base, mode };
+    expect(hasRotateHandles(state)).toBe(false);
+    const pos = getHandlePositions(state)['rotate-top-left'];
+    expect(hitTestBoxHandle(pos, state, 1)).toBeNull();
+    expect(hitTestHandle(pos, state, 6)).toBeNull();
+    expect(hitTestBoxHandle({ x: 0, y: 0 }, state, 1)).toBe('top-left');
   });
 });
 
@@ -631,5 +654,48 @@ describe('documentAffineOf', () => {
     };
     expect(documentAffineOf(dragged)).toBeNull();
     expect(documentAffineOf(createTransformState({ x: 0, y: 0, width: 0, height: 10 }, 'perspective'))).toBeNull();
+  });
+});
+
+describe('mapRectThroughAffine (#1785)', () => {
+  it('maps a rect past the box through the box\'s own scale', () => {
+    // Box 600..800 scaled 0.75 about its bottom-right corner (800, 450).
+    const base = createTransformState({ x: 600, y: 150, width: 200, height: 300 });
+    const t: TransformState = { ...base, scaleX: 0.75, scaleY: 0.75, translateX: 25, translateY: 37.5 };
+    const r = mapRectThroughAffine(t, { x: 600, y: 150, width: 300, height: 300 });
+    expect(r.x).toBeCloseTo(650);
+    expect(r.width).toBeCloseTo(225);
+    expect(r.x + r.width).toBeCloseTo(875);
+  });
+});
+
+describe('affineSourceRect', () => {
+  const canvas = { width: 600, height: 400 };
+  const box = { x: 350, y: 150, width: 150, height: 100 };
+
+  it('is the box when there is no whole-layer lift', () => {
+    expect(affineSourceRect(box, null, canvas)).toEqual(box);
+  });
+
+  it('is the box when the whole layer lies inside the canvas', () => {
+    expect(affineSourceRect(box, { x: 0, y: 0, width: 600, height: 400 }, canvas)).toEqual(box);
+  });
+
+  it('adds the strip of the layer past the right edge', () => {
+    const whole = { x: 500, y: 100, width: 300, height: 200 };
+    expect(affineSourceRect({ x: 500, y: 100, width: 100, height: 200 }, whole, canvas))
+      .toEqual({ x: 500, y: 100, width: 300, height: 200 });
+  });
+
+  it('adds overhangs on several sides, spanning the layer along each edge', () => {
+    const whole = { x: -50, y: -20, width: 200, height: 100 };
+    expect(affineSourceRect({ x: 0, y: 0, width: 40, height: 30 }, whole, canvas))
+      .toEqual({ x: -50, y: -20, width: 200, height: 100 });
+  });
+
+  it('keeps a box that reaches beyond the overhang strip', () => {
+    const whole = { x: 550, y: 200, width: 100, height: 50 };
+    expect(affineSourceRect({ x: 100, y: 100, width: 500, height: 200 }, whole, canvas))
+      .toEqual({ x: 100, y: 100, width: 550, height: 200 });
   });
 });

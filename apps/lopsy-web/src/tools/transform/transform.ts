@@ -1,4 +1,5 @@
 import type { Point, Rect } from '../../types';
+import { transformPoint } from './transform-handles';
 
 export type TransformHandle =
   | 'top-left'
@@ -237,6 +238,51 @@ export function mapRectThroughInverse(rect: Rect, inv: Float32Array): Rect {
   return { x: cx - extentX, y: cy - extentY, width: 2 * extentX, height: 2 * extentY };
 }
 
+/** Bounds of `rect` carried through the Free/Skew affine map of `t`. */
+export function mapRectThroughAffine(t: TransformState, rect: Rect): Rect {
+  const corners = [
+    transformPoint(rect.x, rect.y, t),
+    transformPoint(rect.x + rect.width, rect.y, t),
+    transformPoint(rect.x + rect.width, rect.y + rect.height, t),
+    transformPoint(rect.x, rect.y + rect.height, t),
+  ];
+  const xs = corners.map((p) => p.x);
+  const ys = corners.map((p) => p.y);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y };
+}
+
+/**
+ * The rect a Free/Skew transform of a float samples. A whole-layer lift
+ * selects the layer's alpha clamped to the canvas (`box`), so the only
+ * content outside the box is the part of the layer past the canvas edge.
+ * That overhang is added; the layer's transparent area inside the canvas is
+ * not, or a stretch would grow the float by the whole raster's image.
+ */
+export function affineSourceRect(box: Rect, wholeLayer: Rect | null, canvas: { width: number; height: number }): Rect {
+  if (!wholeLayer) return box;
+  const right = wholeLayer.x + wholeLayer.width;
+  const bottom = wholeLayer.y + wholeLayer.height;
+  const overhangs: Rect[] = [];
+  if (wholeLayer.x < 0) overhangs.push({ x: wholeLayer.x, y: wholeLayer.y, width: -wholeLayer.x, height: wholeLayer.height });
+  if (right > canvas.width) overhangs.push({ x: canvas.width, y: wholeLayer.y, width: right - canvas.width, height: wholeLayer.height });
+  if (wholeLayer.y < 0) overhangs.push({ x: wholeLayer.x, y: wholeLayer.y, width: wholeLayer.width, height: -wholeLayer.y });
+  if (bottom > canvas.height) overhangs.push({ x: wholeLayer.x, y: canvas.height, width: wholeLayer.width, height: bottom - canvas.height });
+  return overhangs.reduce(unionRect, box);
+}
+
+function unionRect(a: Rect, b: Rect): Rect {
+  const x = Math.min(a.x, b.x);
+  const y = Math.min(a.y, b.y);
+  return {
+    x,
+    y,
+    width: Math.max(a.x + a.width, b.x + b.width) - x,
+    height: Math.max(a.y + a.height, b.y + b.height) - y,
+  };
+}
+
 export function computeInverseAffineMatrix(t: TransformState): Float32Array {
   const [a, b, c, d] = forwardAffine2x2(t);
 
@@ -268,6 +314,7 @@ export {
   getHandlePositions,
   hitTestHandle,
   hitTestBoxHandle,
+  hasRotateHandles,
   isScaleHandle,
   isRotateHandle,
   getCursorForHandle,

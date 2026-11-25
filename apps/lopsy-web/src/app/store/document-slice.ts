@@ -45,7 +45,7 @@ import { computeConvertColorMode, layersWithPixels, paletteFromBytes, paletteToB
 import { colorModeLabel, convertColorToDocMode } from '../../utils/color-mode';
 import { getColorModeCapabilities } from '../../utils/color-mode-capabilities';
 import { runInOrder } from '../../utils/run-in-order';
-import { notifyInfo } from '../notifications-store';
+import { announceRefusal, type Refusal } from '../../commands/refusal';
 import { convertLayerToGrayscale, quantizeCompositeToPalette, applyPaletteToLayer, convertLayerToLab, convertLayerFromLab, bakeCmykGamut } from '../../engine-wasm/wasm-bridge';
 import { useToolSettingsStore } from '../tool-settings-store';
 import { computeAlignLayer } from './actions/align-layer';
@@ -225,20 +225,30 @@ function syncPixelDataToGpu(
 }
 
 /**
- * Indexed documents are a single flattened, palette-constrained surface
- * (Photoshop parity), so every layer-creating action is refused while that
- * mode is active. Returns true when the action may proceed.
- */
-/**
  * A conversion reads the document's mode, reads layers back and then sets
  * the mode. A WebGPU readback answers frames later, so a second conversion
  * picked meanwhile would still see the old mode: it waits for the first.
  */
 const convertColorModesInOrder = runInOrder();
 
+/**
+ * Indexed documents are a single flattened, palette-constrained surface
+ * (Photoshop parity), so every layer-creating action is refused while that
+ * mode is active. Null when the action may proceed.
+ */
+export function layerCreationRefusal(doc: { readonly colorMode: DocumentColorMode }): Refusal | null {
+  if (getColorModeCapabilities(doc.colorMode).canAddLayers) return null;
+  return {
+    reason: `${colorModeLabel(doc.colorMode)} mode does not support layers. Convert to RGB first.`,
+    notice: 'info',
+  };
+}
+
+/** Returns true when the action may proceed; otherwise toasts why not. */
 function allowLayerCreation(doc: { readonly colorMode: DocumentColorMode }): boolean {
-  if (getColorModeCapabilities(doc.colorMode).canAddLayers) return true;
-  notifyInfo(`${colorModeLabel(doc.colorMode)} mode does not support layers. Convert to RGB first.`);
+  const refusal = layerCreationRefusal(doc);
+  if (!refusal) return true;
+  announceRefusal(refusal);
   return false;
 }
 
@@ -274,9 +284,10 @@ export interface DocumentSlice {
   createDocument: (width: number, height: number, transparentBg: boolean, colorMode?: DocumentColorMode, dpi?: number) => void;
   openImageAsDocument: (imageData: ImageData, name: string) => void;
   addLayer: () => void;
-  addTextLayer: (layer: import('../../types').TextLayer) => void;
+  addTextLayer: (layer: import('../../types').TextLayer, options?: { recordHistory?: boolean }) => void;
   updateTextLayerProperties: (id: string, props: Partial<Omit<import('../../types').TextLayer, 'id' | 'type'>>) => void;
-  removeLayer: (id: string) => void;
+  /** `recordHistory: false` removes the layer without a Delete Layer row. */
+  removeLayer: (id: string, options?: { recordHistory?: boolean }) => void;
   setActiveLayer: (id: string) => void;
   toggleLayerVisibility: (id: string) => void;
   toggleLayerLock: (id: string) => void;
@@ -318,7 +329,8 @@ export interface DocumentSlice {
   resizeCanvas: (newWidth: number, newHeight: number, anchorX: number, anchorY: number) => void;
   addBorder: (color: Color, widths: BorderWidths, placement: BorderPlacement, corners?: BorderCorners) => void;
   resizeImage: (newWidth: number, newHeight: number) => void;
-  convertColorMode: (newMode: DocumentColorMode, options?: IndexedConversionOptions) => Promise<void>;
+  /** Resolves true once it has converted; false when it did nothing (already in that mode by the time its turn came). */
+  convertColorMode: (newMode: DocumentColorMode, options?: IndexedConversionOptions) => Promise<boolean>;
 
   // Multi-select
   toggleLayerSelection: (id: string) => void;
@@ -392,11 +404,11 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     set(result);
   },
 
-  addTextLayer: (layer) => {
+  addTextLayer: (layer, options) => {
     const s = get();
     const result = computeAddTextLayer(s.document, layer);
     if (!result) return;
-    s.pushHistoryMetadata('Add Text Layer');
+    if (options?.recordHistory !== false) s.pushHistoryMetadata('Add Text Layer');
     set(result);
   },
 
@@ -414,7 +426,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     });
   },
 
-  removeLayer: (id) => {
+  removeLayer: (id, options) => {
     const s = get();
     const result = computeRemoveLayer(
       s.document,
@@ -438,7 +450,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
       pixelDataManager.dropLayer(descId);
     }
 
-    s.pushHistory('Delete Layer');
+    if (options?.recordHistory !== false) s.pushHistory('Delete Layer');
     applyActionResult(set, result);
   },
 
@@ -1008,7 +1020,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
 
   convertColorMode: (newMode, options) => convertColorModesInOrder(async () => {
     const s = get();
-    if (s.document.colorMode === newMode) return;
+    if (s.document.colorMode === newMode) return false;
 
     // Bake in-flight strokes into layer textures first, then snapshot — the
     // conversion overwrites those textures in place, so history must capture
@@ -1033,7 +1045,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     }
 
     const result = computeConvertColorMode(doc, newMode);
-    if (!result?.document) return;
+    if (!result?.document) return false;
     let nextDocument = result.document;
 
     const engine = getEngine();
@@ -1074,6 +1086,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     ts.setBackgroundColor(convertColorToDocMode(ts.backgroundColor, newMode, palette));
 
     s.notifyRender();
+    return true;
   }),
 
   toggleLayerSelection: (id) => {

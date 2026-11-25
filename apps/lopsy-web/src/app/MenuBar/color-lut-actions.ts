@@ -9,6 +9,7 @@ import {
 } from '../../engine-wasm/wasm-bridge';
 import { flushLayerSync } from '../../engine-wasm/engine-sync';
 import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
+import { setLivePreviewShowing } from '../live-preview';
 import type { LutPreset } from '../../filters/color-lut';
 import {
   commitFilterPreview,
@@ -26,6 +27,7 @@ export function beginColorLutPreview(): void {
   const state = useEditorStore.getState();
   flushLayerSync(state);
   runOnFilterTarget(engine, target, () => saveFilterPreview(engine, target.layerId));
+  setLivePreviewShowing(true);
   // saveFilterPreview expands the layer texture to doc size — reconcile
   // JS bounds so the next syncLayers push does not clobber it (#771).
   if (!target.isMask) syncLayerAfterFullSize(engine, target.layerId);
@@ -46,6 +48,7 @@ export function previewColorLut(preset: LutPreset, intensity: number): void {
 }
 
 export function cancelColorLutPreview(): void {
+  setLivePreviewShowing(false);
   const engine = getEngine();
   if (!engine) return;
   const target = peekFilterTarget();
@@ -58,6 +61,7 @@ export function cancelColorLutPreview(): void {
 }
 
 export function applyColorLut(preset: LutPreset, intensity: number): void {
+  setLivePreviewShowing(false);
   const target = peekFilterTarget();
   if (!target) return;
   const engine = getEngine();

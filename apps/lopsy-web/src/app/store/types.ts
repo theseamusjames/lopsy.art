@@ -129,9 +129,11 @@ export interface EditorState {
 
   // Document mutations
   addLayer: () => void;
-  addTextLayer: (layer: TextLayer) => void;
+  /** `recordHistory: false` leaves the history row to the caller (the Text tool defers it). */
+  addTextLayer: (layer: TextLayer, options?: { recordHistory?: boolean }) => void;
   updateTextLayerProperties: (id: string, props: Partial<Omit<TextLayer, 'id' | 'type'>>) => void;
-  removeLayer: (id: string) => void;
+  /** `recordHistory: false` removes the layer without a Delete Layer row. */
+  removeLayer: (id: string, options?: { recordHistory?: boolean }) => void;
   setActiveLayer: (id: string) => void;
   toggleLayerVisibility: (id: string) => void;
   toggleLayerLock: (id: string) => void;
@@ -211,7 +213,7 @@ export interface EditorState {
   convertColorMode: (
     newMode: DocumentColorMode,
     options?: import('./actions/convert-color-mode').IndexedConversionOptions,
-  ) => void;
+  ) => Promise<boolean>;
 
   // Viewport
   setZoom: (zoom: number) => void;
@@ -234,6 +236,8 @@ export interface EditorState {
   pushHistory: (label?: string, before?: import('./layer-gpu-capture').LayerHistoryBefore) => void;
   pushPrebuiltSnapshot: (snapshot: HistorySnapshot) => void;
   pushHistoryMetadata: (label: string) => void;
+  /** The entry `pushHistoryMetadata(label)` would push now, not pushed. */
+  captureHistoryMetadata: (label: string) => HistorySnapshot;
   markClean: () => void;
 }
 

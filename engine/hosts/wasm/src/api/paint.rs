@@ -3,7 +3,7 @@
 
 use wasm_bindgen::prelude::*;
 
-use crate::readback::{read, readback_export, task};
+use crate::readback::{read, readback_export, task, deferred_readback_export};
 use crate::Engine;
 
 #[wasm_bindgen(js_name = "beginStroke")]
@@ -415,7 +415,7 @@ pub fn render_mask_radial_gradient(
     lopsy_engine::commands::paint::render_mask_radial_gradient(&mut engine.inner, layer_id, cx, cy, radius, stops_json)
 }
 
-readback_export! {
+deferred_readback_export! {
     #[wasm_bindgen(js_name = "readMaskTexture")]
     pub fn read_mask_texture(engine, layer_id: &str) -> Option<Vec<u8>> {
         read(lopsy_engine::commands::paint::read_mask_texture(engine, layer_id))

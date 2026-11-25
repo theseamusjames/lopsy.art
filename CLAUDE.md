@@ -23,10 +23,14 @@ What you may be looking for:
 - **The product spec**: `apps/lopsy-web/SPEC.md`.
 - **The feature catalog**: `apps/lopsy-web/FEATURES.md`. Current behaviour
   only; bugs live in GitHub issues.
-- **The guide for agents that drive the UI**: `apps/lopsy-web/SKILL.md`
-  (published at `/SKILL.md`).
+- **The guide for agents that make images through the command API**:
+  `apps/lopsy-web/SKILL.md` (published at `/SKILL.md`). Its driver,
+  recipes and snippets are tested against the editor page
+  (`e2e/skill-recipes.spec.ts`): update it when a command it names changes.
 - **How to write e2e tests**: `apps/lopsy-web/e2e/GUIDE.md`. Read it before
   writing one.
+- **The command registry the menus, keys and panels run through**: the
+  "Commands" section of `apps/lopsy-web/CLAUDE.md`.
 - **What HDR support exists and what it would take to finish**:
   `apps/lopsy-web/docs/hdr-support.md`.
 - **The engine migration (WebGL to a pass layer to wgpu) and this layout**:

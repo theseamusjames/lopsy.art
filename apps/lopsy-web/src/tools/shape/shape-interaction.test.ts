@@ -108,6 +108,7 @@ import {
   handleShapeMove,
   handleShapeUp,
   confirmShapeSize,
+  CLICK_THRESHOLD,
 } from './shape-interaction';
 import type { PathAnchor } from '../path/path';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
@@ -410,6 +411,14 @@ describe('shape up — click vs drag', () => {
       layerY: 9,
     });
     expect(renderShapeExpanded).not.toHaveBeenCalled();
+  });
+
+  it('treats a gesture exactly CLICK_THRESHOLD long as a drag, and anything shorter as a click', () => {
+    expect(CLICK_THRESHOLD).toBe(4);
+    handleShapeUp(makeState({ startPoint: { x: 50, y: 50 } }), { x: 50 + CLICK_THRESHOLD, y: 50 });
+    expect(uiState.setPendingShapeClick).not.toHaveBeenCalled();
+    handleShapeUp(makeState({ startPoint: { x: 50, y: 50 } }), { x: 50 + CLICK_THRESHOLD - 0.5, y: 50 });
+    expect(uiState.setPendingShapeClick).toHaveBeenCalledTimes(1);
   });
 
   it('a click in path-output mode undoes without opening the size modal', () => {

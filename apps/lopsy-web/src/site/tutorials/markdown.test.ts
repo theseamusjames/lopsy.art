@@ -29,6 +29,16 @@ describe('renderInline', () => {
     );
   });
 
+  it('keeps balanced parentheses inside a link URL (#1803)', () => {
+    const url =
+      'https://commons.wikimedia.org/wiki/File:Murder_hornet_back_2020-10-02-09.36.37_ZS_PMax_UDR_(50409006658).jpg';
+    expect(renderInline(`[Murder hornet back](${url}), a top-down shot`)).toBe(
+      `<a href="${url}" rel="noopener">Murder hornet back</a>, a top-down shot`,
+    );
+    expect(renderInline(`([photo](${url}))`)).toBe(`(<a href="${url}" rel="noopener">photo</a>)`);
+    expect(stripMarkdown(`A [photo](${url}) credit.`)).toBe('A photo credit.');
+  });
+
   it('drops unsafe link targets but keeps the text', () => {
     expect(renderInline('[click](javascript:alert(1))')).not.toContain('href');
   });

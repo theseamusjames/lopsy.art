@@ -29,6 +29,8 @@ import {
   materializeAllMaskData,
   materializeMaskData,
   scheduleMaskDataRefresh,
+  scheduleMaskDataRefreshAfterHistory,
+  HISTORY_QUIET_MS,
   __resetMaskDataSyncForTest,
 } from './mask-data-sync';
 import { pendingMaskReadCount, __resetMaskReadQueueForTest } from './mask-read-queue';
@@ -95,5 +97,49 @@ describe('mask-data-sync (#780)', () => {
 
     expect(editorState.updateLayerMaskData).not.toHaveBeenCalled();
     expect(isMaskDataStale('a')).toBe(true);
+  });
+});
+
+describe('mask refresh after undo/redo (#1768)', () => {
+  it('queues one read per mask once a burst of undo steps goes quiet', () => {
+    vi.useFakeTimers();
+    try {
+      for (let i = 0; i < 4; i++) {
+        scheduleMaskDataRefreshAfterHistory('a');
+        expect(pendingMaskReadCount()).toBe(0);
+        vi.advanceTimersByTime(40);
+      }
+      expect(isMaskDataStale('a')).toBe(true);
+      vi.advanceTimersByTime(HISTORY_QUIET_MS - 40 - 1);
+      expect(pendingMaskReadCount()).toBe(0);
+      vi.advanceTimersByTime(1);
+      expect(pendingMaskReadCount()).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a step drops a read queued by an earlier step', () => {
+    vi.useFakeTimers();
+    try {
+      scheduleMaskDataRefresh('a');
+      expect(pendingMaskReadCount()).toBe(1);
+      scheduleMaskDataRefreshAfterHistory('a');
+      expect(pendingMaskReadCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('skips a mask whose bytes were made current during the burst', () => {
+    vi.useFakeTimers();
+    try {
+      scheduleMaskDataRefreshAfterHistory('a');
+      markMaskDataFresh('a');
+      vi.advanceTimersByTime(HISTORY_QUIET_MS);
+      expect(pendingMaskReadCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

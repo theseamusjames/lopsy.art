@@ -841,3 +841,74 @@ The sharpening mask view is drawn inside the live develop chain, but the
 engine now reads the photo under it for those three reads (their doc
 comments say so), so the app's linear path never opens the scope for them,
 whatever view is on. The legacy (8-bit) path still holds every view off.
+## Glyph outlines are filled by our own rasterizer, not zeno
+
+zeno (swash's `Render`) sums signed area per pixel and clamps it, so where
+two contours of one glyph overlap (variable fonts never merge them) and
+both have an edge in a pixel, that edge pixel is drawn about twice as
+bright (#1806). `render_glyph_unhinted` still lets `Render` handle colour
+outlines and bitmaps, but fills plain outlines with
+`engine/src/document/text/glyph_raster.rs`: 64 scanlines per pixel row,
+crossings walked with a winding count so overlaps merge before coverage is
+taken. `engine/tests/fixtures/AzeretMono-wght-latin.woff2` (served by
+`e2e/font-fixtures.ts`) has the overlapping P that reproduces it.
+
+## A command that refuses before calling the store can skip work the store does anyway
+
+Several store functions do work even when there is "nothing to do": Undo
+and Redo finalize a pending stroke, drop a live Move float and record a
+deferred text-layer entry with empty stacks; Select > Inverse commits a
+live float with nothing selected; Merge Down flushes layer data when it
+cannot merge. A command that pre-checks and throws before calling the
+function silently loses that, and the menu or key bound to it changes
+behaviour. Call the function first and refuse afterwards from what it
+left (`history.undo`, `select.invert`, `layer.merge-down` in
+`src/commands/`).
+
+## Commands bound to the UI: one toast, never two
+
+`invokeFromUi` toasts a refused `CommandError` with the `notice` it
+carries. Many wrapped functions toast their own refusal (`addLayer` in an
+Indexed document, `addBorder`, `readSelectionBrushTip` on an empty tip).
+When the command refuses after such a call, throw with `notice` null or
+the user sees the message twice; when it refuses before calling, carry
+the notice the UI's own refusal had or the menu goes silent. The
+`e2e/surface-*` specs assert the exact `toasts(page)` list, so they
+catch both.
+
+## The pixel-debt check also fails when a file has fewer allocations than its budget
+
+`scripts/check-pixel-debt.mjs` (run by `npm run lint`) fails when a file
+outside its allowlist gains a typed-array or `ImageData` allocation, when
+an allowlisted file exceeds its budget, and when an allowlisted file has
+FEWER than its budget. Moving such code from one file to another (out of
+a component into a plain module) means moving the budget in the same
+change: lower the old file's entry and add the new file's.
+
+## A/B against older source with a worktree, not `git checkout <rev> -- src`
+
+`git checkout <rev> -- apps/lopsy-web/src` brings back, as staged files,
+the files the branch deleted or renamed, and `git checkout HEAD -- …`
+afterwards does not remove them: they stay in the tree, get compiled and
+tested, and show in `git status` as new files that must be removed by
+hand. A second `git worktree add` at `<rev>` avoids it.
+
+## Playwright: Shift+lowercase letter, and the shared system clipboard
+
+`page.keyboard.press('ControlOrMeta+Shift+e')` delivers `e.key === 'e'`
+with `shiftKey`; a handler that matches `e.key` alone takes it for the
+unshifted shortcut (Merge Down). Press shifted letters in upper case.
+The system clipboard is shared by every Playwright worker, so a test that
+needs it empty, or reads back what it wrote, can fail under parallel runs
+when another test copies in between. `pasteOverText` in
+`e2e/surface-helpers-keys.ts` puts known text there and retries until the
+paste event carries it.
+
+## Hold-to-smooth depends on the identity of the gesture state object
+
+`gestureMove` (`src/app/interactions/gesture-session.ts`) arms the brush's
+hold timer with the `state` object of that move, and the timer smooths
+only if `session.stateRef.current` is still that same object. Move
+handlers mutate the state in place; only down, up and the smooth itself
+replace it. A move handler, or a refactor of the session, that replaces
+or copies the state on each move disables hold-to-smooth with no error.

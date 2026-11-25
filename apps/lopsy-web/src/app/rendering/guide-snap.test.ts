@@ -49,6 +49,19 @@ describe('snapGuideToFraction', () => {
     expect(_GUIDE_SNAP_FRACTIONS_FOR_TEST).toContain(2 / 3);
   });
 
+  it('fraction table includes fifths', () => {
+    for (let n = 1; n < 5; n++) {
+      expect(_GUIDE_SNAP_FRACTIONS_FOR_TEST).toContain(n / 5);
+    }
+  });
+
+  it('snaps to fifths', () => {
+    expect(snapGuideToFraction(203, 1000)).toBe(200);
+    expect(snapGuideToFraction(397, 1000)).toBe(400);
+    expect(snapGuideToFraction(604, 1000)).toBe(600);
+    expect(snapGuideToFraction(798, 1000)).toBe(800);
+  });
+
   it('fraction table includes 1/16 steps', () => {
     for (let n = 1; n < 16; n += 2) {
       expect(_GUIDE_SNAP_FRACTIONS_FOR_TEST).toContain(n / 16);
@@ -72,6 +85,13 @@ describe('formatFractionLabel', () => {
     expect(formatFractionLabel(667, 1000)).toBe('2/3');
   });
 
+  it('labels fifths', () => {
+    expect(formatFractionLabel(200, 1000)).toBe('1/5');
+    expect(formatFractionLabel(400, 1000)).toBe('2/5');
+    expect(formatFractionLabel(600, 1000)).toBe('3/5');
+    expect(formatFractionLabel(800, 1000)).toBe('4/5');
+  });
+
   it('labels 1/4 and 3/4', () => {
     expect(formatFractionLabel(250, 1000)).toBe('1/4');
     expect(formatFractionLabel(750, 1000)).toBe('3/4');
@@ -93,6 +113,8 @@ describe('formatFractionLabel', () => {
   it('returns null for positions that do not match a snap fraction', () => {
     // 100 / 1000 = 1/10, which is not in the snap table
     expect(formatFractionLabel(100, 1000)).toBeNull();
+    // 1/7 is not in the snap table either
+    expect(formatFractionLabel(143, 1001)).toBeNull();
     // arbitrary non-fraction
     expect(formatFractionLabel(217, 1000)).toBeNull();
   });

@@ -5,6 +5,7 @@ import type { SelectionCombineMode } from '../../selection/selection';
 import type { LayerHistoryBefore } from '../store/layer-gpu-capture';
 import type { TextFrame } from '../../tools/text/text-transform';
 import type { MoveAlignmentContext } from './move-alignment';
+import type { LayerAlphaContent } from './layer-alpha-selection';
 
 /**
  * Discriminated union describing which canvas gesture is active.
@@ -178,7 +179,7 @@ export const GESTURE_IDLE: CanvasGesture = { kind: 'idle' };
  * a template for handlers that need to return a fresh state with a single
  * gesture variant slotted in. Exported so pre-tool down handlers can
  * construct their own state — see PRE_TOOL_DOWN_GUARDS in
- * useCanvasInteraction.ts.
+ * interactions/gesture-session.ts.
  */
 export const INITIAL_INTERACTION_STATE: InteractionState = {
   drawing: false,
@@ -267,6 +268,21 @@ export interface FloatingSelection {
   originalMask: Uint8ClampedArray;
   originalBounds: Rect;
   gpuResident: true;
+  /** Set when the float lifted a whole layer (a layer-alpha selection). */
+  wholeLayer?: WholeLayerFloat;
+}
+
+/**
+ * A float that lifted a whole layer carries the part past the canvas edge
+ * too, which the selection mask cannot hold. The selection that frames it
+ * after a move is rebuilt from the layer's alpha, so the ants and the
+ * transform box cover everything that moved (#1801).
+ */
+export interface WholeLayerFloat {
+  /** The layer's alpha where it was lifted. */
+  content: LayerAlphaContent;
+  /** False once an Alt drag left a copy behind: the layer then holds more than the float. */
+  isLayerOnly: boolean;
 }
 
 export interface PersistentTransform {
@@ -295,8 +311,6 @@ export interface InteractionContext {
   clientY: number;
   /** Click count (MouseEvent.detail); 2 for a double-click. */
   clickDetail?: number;
-  screenToCanvas?: (sx: number, sy: number) => Point;
-  containerRef?: MutableRefObject<HTMLDivElement | null>;
   stateRef: MutableRefObject<InteractionState>;
   floatingSelectionRef: MutableRefObject<FloatingSelection | null>;
   persistentTransformRef: MutableRefObject<PersistentTransform | null>;

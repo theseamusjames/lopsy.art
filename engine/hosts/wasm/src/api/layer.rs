@@ -4,7 +4,7 @@
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
 
-use crate::readback::{read, readback_export, task};
+use crate::readback::{read, readback_export, task, deferred_readback_export};
 use crate::Engine;
 
 #[wasm_bindgen(js_name = "addLayer")]
@@ -172,6 +172,15 @@ pub fn rotate_layer_90(engine: &mut Engine, layer_id: &str, clockwise: bool) -> 
 #[wasm_bindgen(js_name = "scaleLayerTexture")]
 pub fn scale_layer_texture(engine: &mut Engine, layer_id: &str, new_w: u32, new_h: u32) -> Result<(), JsError> {
     lopsy_engine::commands::layer::scale_layer_texture(&mut engine.inner, layer_id, new_w, new_h).map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "resampleLayerTexture")]
+#[allow(clippy::too_many_arguments)]
+pub fn resample_layer_texture(
+    engine: &mut Engine, layer_id: &str, new_w: u32, new_h: u32,
+    scale_x: f32, scale_y: f32, offset_x: f32, offset_y: f32,
+) -> Result<(), JsError> {
+    lopsy_engine::commands::layer::resample_layer_texture(&mut engine.inner, layer_id, new_w, new_h, scale_x, scale_y, offset_x, offset_y).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "remapLayerMask")]
@@ -476,14 +485,14 @@ pub fn upload_layer_pixels_compressed_u16(
     lopsy_engine::commands::layer::upload_layer_pixels_compressed_u16(&mut engine.inner, layer_id, compressed).map_err(|e| JsError::new(&e))
 }
 
-readback_export! {
+deferred_readback_export! {
     #[wasm_bindgen(js_name = "readLayerThumbnail")]
     pub fn read_layer_thumbnail(engine, layer_id: &str, max_size: u32) -> Vec<u8> {
         read(lopsy_engine::commands::layer::read_layer_thumbnail(engine, layer_id, max_size))
     }
 }
 
-readback_export! {
+deferred_readback_export! {
     #[wasm_bindgen(js_name = "readCompositeThumbnail")]
     pub fn read_composite_thumbnail(engine, max_size: u32) -> Vec<u8> {
         read(lopsy_engine::commands::layer::read_composite_thumbnail(engine, max_size))

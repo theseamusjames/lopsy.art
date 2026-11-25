@@ -12,7 +12,10 @@ import {
   getTransformedBounds,
   getTransformedContentBounds,
   createTransformState,
+  mapRectThroughAffine,
+  affineSourceRect,
 } from '../../tools/transform/transform';
+import { transformPoint } from '../../tools/transform/transform-handles';
 import type { TransformHandle, TransformState } from '../../tools/transform/transform';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
@@ -25,7 +28,7 @@ import {
   compositeFloatPerspective,
   dropFloat,
 } from '../../engine-wasm/wasm-bridge';
-import { floatLayerSelection } from './float-layer-selection';
+import { floatLayerSelection, wholeLayerFloatRect } from './float-layer-selection';
 import { reconcileLayerBoundsWithEngine } from '../reconcile-layer-bounds';
 import { growFloatToCover } from './float-growth';
 import { cancelPrefloat } from './prefloat';
@@ -420,20 +423,27 @@ function computeDraggedTransform(
 export function renderTransformedFloat(layerId: string | null, transform: TransformState): void {
   const engine = getEngine();
   if (!engine || !hasFloat(engine)) return;
-  if (layerId) growFloatToCover(engine, layerId, getTransformedContentBounds(transform));
   const ob = transform.originalBounds;
   if (transform.mode === 'distort' || transform.mode === 'perspective') {
+    if (layerId) growFloatToCover(engine, layerId, getTransformedContentBounds(transform));
     const [tl, tr, br, bl] = getCornerPositions(transform);
     const corners = new Float32Array([tl.x, tl.y, tr.x, tr.y, br.x, br.y, bl.x, bl.y]);
     compositeFloatPerspective(engine, corners, ob.x, ob.y, ob.width, ob.height);
     return;
   }
-  const srcCx = ob.x + ob.width / 2;
-  const srcCy = ob.y + ob.height / 2;
-  const dstCx = srcCx + transform.translateX;
-  const dstCy = srcCy + transform.translateY;
+  // The source rect bounds what the shader samples. A whole-layer lift also
+  // holds the layer past the canvas edge, outside the canvas-clamped box: it
+  // is carried through the same map rather than dropped (#1785).
+  const { width, height } = useEditorStore.getState().document;
+  const source = affineSourceRect(ob, layerId ? wholeLayerFloatRect(layerId) : null, { width, height });
+  if (layerId) growFloatToCover(engine, layerId, mapRectThroughAffine(transform, source));
+  const srcCx = source.x + source.width / 2;
+  const srcCy = source.y + source.height / 2;
+  // The shader maps output back as srcCenter + M⁻¹(p − dstCenter), so a
+  // source centre other than the box's needs its own image as dstCenter.
+  const dst = transformPoint(srcCx, srcCy, transform);
   const invMatrix = computeInverseAffineMatrix(transform);
-  compositeFloatAffine(engine, invMatrix, srcCx, srcCy, dstCx, dstCy, ob.width, ob.height);
+  compositeFloatAffine(engine, invMatrix, srcCx, srcCy, dst.x, dst.y, source.width, source.height);
 }
 
 /**

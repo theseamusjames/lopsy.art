@@ -4,6 +4,7 @@ import { readLayerPixels, getLayerTextureDimensions, getLayerEngineBounds, filte
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { usePatternStore, generateThumbnail } from '../pattern-store';
 import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
+import { setLivePreviewShowing } from '../live-preview';
 import type { PatternDefinition, PatternFillSettings } from '../pattern-store';
 import { extractSelectionPattern } from './pattern-extract';
 import { guardPixelWrite } from '../../layers/paint-target';
@@ -18,31 +19,36 @@ function findActiveLayer(): Layer | undefined {
   return st.document.layers.find((l) => l.id === id);
 }
 
-export async function definePattern(): Promise<void> {
+/**
+ * Edit > Define Pattern: the active layer's pixels inside the selection, or
+ * the whole layer, as a new pattern. The menu leaves `name` out, so it is
+ * "Pattern N". Resolves with the pattern, or null when nothing was defined.
+ */
+export async function definePattern(name?: string): Promise<PatternDefinition | null> {
   const state = useEditorStore.getState();
   const activeId = state.document.activeLayerId;
-  if (!activeId) return;
+  if (!activeId) return null;
 
   // Reading from a group layer produces the zero/1x1 texture path already,
   // but text layers have a texture that will be wiped by the next re-render
   // — treat the same as any other pixel-read on those types.
-  if (!guardPixelWrite(findActiveLayer())) return;
+  if (!guardPixelWrite(findActiveLayer())) return null;
 
   const engine = getEngine();
-  if (!engine) return;
+  if (!engine) return null;
 
   let dims: Uint32Array;
   try {
     dims = getLayerTextureDimensions(engine, activeId);
   } catch {
-    return;
+    return null;
   }
   const layerW = dims[0] ?? 0;
   const layerH = dims[1] ?? 0;
-  if (layerW === 0 || layerH === 0) return;
+  if (layerW === 0 || layerH === 0) return null;
 
   const pixels = await readLayerPixels(engine, activeId);
-  if (!pixels || pixels.length === 0) return;
+  if (!pixels || pixels.length === 0) return null;
 
   const { selection } = state;
   let data: Uint8Array;
@@ -57,7 +63,7 @@ export async function definePattern(): Promise<void> {
       state.document.width,
       state.document.height,
     );
-    if (!extracted) return;
+    if (!extracted) return null;
     ({ data, width, height } = extracted);
   } else {
     data = new Uint8Array(pixels);
@@ -70,7 +76,7 @@ export async function definePattern(): Promise<void> {
 
   const pattern: PatternDefinition = {
     id: `pattern-${Date.now()}-${patternCounter}`,
-    name: `Pattern ${patternCounter}`,
+    name: name ?? `Pattern ${patternCounter}`,
     width,
     height,
     data,
@@ -78,6 +84,7 @@ export async function definePattern(): Promise<void> {
   };
 
   usePatternStore.getState().addPattern(pattern);
+  return pattern;
 }
 
 function runPatternFill(
@@ -126,6 +133,7 @@ export function beginPatternPreview(): void {
   const engine = getEngine();
   if (!engine) return;
   saveFilterPreview(engine, activeId);
+  setLivePreviewShowing(true);
   // saveFilterPreview expands the layer texture to doc size — reconcile
   // JS bounds so the next syncLayers push does not clobber it (#771).
   syncLayerAfterFullSize(engine, activeId);
@@ -150,6 +158,7 @@ export function previewPatternFill(patternId: string, settings: PatternFillSetti
 }
 
 export function cancelPatternPreview(): void {
+  setLivePreviewShowing(false);
   const engine = getEngine();
   if (!engine) return;
   restoreFilterPreview(engine);
@@ -162,6 +171,7 @@ export function cancelPatternPreview(): void {
 }
 
 export function applyPatternFillWithPreview(patternId: string, settings: PatternFillSettings): void {
+  setLivePreviewShowing(false);
   const pattern = usePatternStore.getState().patterns.find((p) => p.id === patternId);
   if (!pattern) return;
 

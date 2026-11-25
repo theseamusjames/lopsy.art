@@ -4,6 +4,7 @@ import { useUIStore } from './ui-store';
 import { useToolSettingsStore } from './tool-settings-store';
 import { initEngine, getEngine, getEngineCanvas, destroyEngine, markWgpuDeviceLost, GPU_LOST_EVENT } from '../engine-wasm/engine-state';
 import { describeError, notifyError } from './notifications-store';
+import { loopStarted, loopStopped, notifyLoopPass } from './rendering/frame-clock';
 import {
   syncDocumentSize,
   syncBackgroundColor,
@@ -41,7 +42,6 @@ import { onScreenHdrChange } from '../engine-wasm/screen-output';
 import { expandLayerToDocSize, hasFloat } from '../engine-wasm/wasm-bridge';
 import { cropLayerToContentIfMeasured } from './crop-layer-to-content';
 import { readLayerContentRectLocal } from './layer-content-rect';
-import { invalidateCachedSnapshot } from './store/history-slice';
 import { handleGpuContextLost, handleGpuContextRestored } from './gpu-context-loss';
 import { backupLayersToCpu, layerBackupTime, pauseLayerBackup, restoreLayerBackup } from './gpu-layer-backup';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
@@ -109,7 +109,6 @@ function renderFrameGpu(
             const now = croppable();
             if (!now || now.eng !== first.eng) return;
             const { eng, currentOld } = now;
-            invalidateCachedSnapshot(oldId);
             const result = cropLayerToContentIfMeasured(eng, oldId) ?? [];
             if (result.length !== 4 || (result[2] ?? 0) <= 0) return;
             croppedLayerIds.add(oldId);
@@ -468,11 +467,13 @@ export function useCanvasRendering(
         hasBaselineSnapshot = false;
       }
 
+      let didRender = false;
       if (dirtyRef.current && engineReadyRef.current) {
         dirtyRef.current = false;
         const overlay = overlayCanvasRef.current;
         const container = containerRef.current;
         if (overlay && container) {
+          didRender = true;
           try {
             renderFrame(overlay, container, antPhaseRef, prevActiveLayerRef, croppedLayerIdsRef.current);
           } catch (e) {
@@ -499,13 +500,16 @@ export function useCanvasRendering(
         }
       }
 
+      notifyLoopPass(didRender);
       antAnimId = requestAnimationFrame(loop);
     };
 
+    loopStarted();
     antAnimId = requestAnimationFrame(loop);
     return () => {
       running = false;
       cancelAnimationFrame(antAnimId);
+      loopStopped();
     };
   }, [canvasRef, containerRef, overlayCanvasRef]);
 }

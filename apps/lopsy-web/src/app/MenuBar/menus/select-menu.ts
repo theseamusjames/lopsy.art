@@ -1,73 +1,23 @@
-import { useEditorStore } from '../../editor-store';
-import { useUIStore } from '../../ui-store';
-import { createRectSelection, invertSelection, selectionBounds } from '../../../selection/selection';
-import { selectionToPaths } from '../../../selection/selection-to-path';
-import { createTransformState } from '../../../tools/transform/transform';
-import { commitLiveFloat } from '../../interactions/live-float';
+import type { SelectionModifyKind } from '../../selection-actions';
+import { commandItem } from './command-item';
 import type { MenuDef } from './types';
 
-export type SelectDialogId = 'grow' | 'shrink' | 'feather';
+export type SelectDialogId = SelectionModifyKind;
 
-export function selectAll(): void {
-  const state = useEditorStore.getState();
-  const { width, height } = state.document;
-  const rect = { x: 0, y: 0, width, height };
-  const mask = createRectSelection(rect, width, height);
-  state.setSelection(rect, mask, width, height);
-  // Every other setSelection call pairs with setTransform so the marquee
-  // overlay and transform handles refresh with the new bounds. Without this,
-  // Cmd+A after any prior selection (e.g. the paste's alpha-selection at a
-  // sub-canvas region) leaves the handles pinned to the stale bounds — #721.
-  useUIStore.getState().setTransform(createTransformState(rect));
-}
-
-export function invertSelectionAction(): void {
-  // Invert what is on screen: a pending Move-tool scale or rotate has to
-  // reach the mask first, and the float it leaves must not outlive the swap.
-  commitLiveFloat();
-  const state = useEditorStore.getState();
-  const sel = state.selection;
-  if (!sel.active || !sel.mask) return;
-  const inverted = invertSelection(sel.mask);
-  // Bounds-driven commands (Crop, transform handles, Define Pattern) read
-  // the rect, so it has to frame what the inverted mask covers (#1492).
-  const { width, height } = state.document;
-  const rect = selectionBounds(inverted, sel.maskWidth, sel.maskHeight)
-    ?? { x: 0, y: 0, width, height };
-  state.pushHistoryMetadata('Inverse Selection');
-  state.setSelection(rect, inverted, sel.maskWidth, sel.maskHeight);
-  useUIStore.getState().setTransform(createTransformState(rect));
-}
-
-export function selectionToPathAction(): void {
-  const state = useEditorStore.getState();
-  const sel = state.selection;
-  if (!sel.active || !sel.mask) return;
-  const paths = selectionToPaths(sel.mask, sel.maskWidth, sel.maskHeight);
-  if (paths.length === 0) return;
-  state.pushHistoryMetadata('Selection to Path');
-  for (const anchors of paths) {
-    state.addPath(anchors, true);
-  }
-}
-
-export function createSelectMenu(showDialog: (id: SelectDialogId) => void): MenuDef {
+export function createSelectMenu(): MenuDef {
   return {
     label: 'Select',
     items: [
-      { label: 'All', shortcut: '⌘A', action: () => selectAll() },
-      { label: 'Deselect', shortcut: '⌘D', action: () => useEditorStore.getState().clearSelection() },
-      { label: 'Inverse', shortcut: '⇧⌘I', action: () => invertSelectionAction() },
+      commandItem('All', 'select.all', undefined, '⌘A'),
+      // select.none with its default commit: false is clearSelection() alone (Cmd+D also commits).
+      commandItem('Deselect', 'select.none', undefined, '⌘D'),
+      commandItem('Inverse', 'select.invert', undefined, '⇧⌘I'),
       { separator: true, label: '' },
-      { label: 'Grow…', action: () => showDialog('grow') },
-      { label: 'Shrink…', action: () => showDialog('shrink') },
-      { label: 'Feather…', action: () => showDialog('feather') },
+      commandItem('Grow…', 'ui.dialog.select', { dialog: 'grow' }),
+      commandItem('Shrink…', 'ui.dialog.select', { dialog: 'shrink' }),
+      commandItem('Feather…', 'ui.dialog.select', { dialog: 'feather' }),
       { separator: true, label: '' },
-      {
-        label: 'Selection → Path',
-        action: () => selectionToPathAction(),
-        disabled: !useEditorStore.getState().selection.active,
-      },
+      commandItem('Selection → Path', 'select.to-path'),
     ],
   };
 }

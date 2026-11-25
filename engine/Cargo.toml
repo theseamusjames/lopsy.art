@@ -59,6 +59,8 @@ features = [
     "WebGlUniformLocation",
     "WebGlActiveInfo",
     "WebGlVertexArrayObject",
+    "WebGlSync",
+    "Window",
     "ImageBitmap",
 ]
 

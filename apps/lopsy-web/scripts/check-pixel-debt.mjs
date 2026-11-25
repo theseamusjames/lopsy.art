@@ -44,6 +44,7 @@ const ALLOWLIST = {
   'src/app/interactions/float-layer-selection.test.ts': 2, // #1605 selection-mask fixtures, +1: #1675 scaled-selection fixture
   'src/app/interactions/transform-lift-mask.test.ts': 2,   // #1675 selection-mask fixtures
   'src/app/interactions/selection-nudge.test.ts': 1,  // #1480 selection-mask fixture
+  'src/app/interactions/whole-layer-float.test.ts': 2, // #1801 layer-alpha and selection-mask fixtures
   'src/app/store/actions/add-layer-mask.test.ts': 2,      // #1545 selection-mask fixtures
   'src/app/store/actions/align-layer.test.ts': 3,         // +1: #1517 marquee-over-multi-select fixture mask
   'src/app/store/actions/crop-canvas.test.ts': 1,
@@ -126,7 +127,8 @@ const ALLOWLIST = {
   'src/app/MenuBar/MenuBar.tsx': 1,                          // GPU feather readback creates Uint8ClampedArray
   'src/tools/marquee/marquee-strategy.ts': 1,
   'src/tools/wand/wand-strategy.ts': 1,
-  'src/panels/LayerPanel/layer-selection.ts': 2,
+  'src/panels/LayerPanel/layer-selection.ts': 3,             // +1: #1801 the layer's whole alpha, past the canvas edge
+  'src/app/interactions/layer-alpha-selection.ts': 1,       // #1801 selection mask rebuilt from a moved layer's alpha
   'src/panels/PathsPanel/path-to-selection.ts': 1,
   'src/selection/selection.ts': 15,                          // see #442 — feather pass should move to existing GPU helper; +1: #1038 grow/shrink distance grid; +1: #1188 translateSelectionMask (moved from marquee-strategy.ts)
   'src/tools/lasso/lasso.ts': 1,
@@ -145,7 +147,8 @@ const ALLOWLIST = {
   // ──────────────────────────────────────────────────────────────────────
   // File I/O — produce raw buffers for encoders / parsers / loaders.
   // ──────────────────────────────────────────────────────────────────────
-  'src/app/MenuBar/menus/file-menu.ts': 2,                   // PNG export + JPEG export
+  'src/app/MenuBar/menus/file-menu.ts': 1,                   // Export dialog preview composite
+  'src/io/export-image.ts': 1,                               // export composite (PNG/JPEG/WebP/BMP), moved from file-menu.ts
   'src/io/project-load.ts': 1,                               // .lopsy project unpack
   'src/io/psd.ts': 2,                                        // leaf + group mask unpack
 
@@ -195,7 +198,7 @@ const ALLOWLIST = {
   // ──────────────────────────────────────────────────────────────────────
   // Transform matrices — Float32Array is the WebGL matrix shape.
   // ──────────────────────────────────────────────────────────────────────
-  'src/app/OptionsBar/tool-options/TransformControls.tsx': 4,
+  'src/app/interactions/move-transform-buttons.ts': 4,       // the Move options' flip and quarter-turn matrices
   'src/app/interactions/transform-handlers.ts': 2,
   'src/tools/transform/transform.ts': 2,
 };

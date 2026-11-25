@@ -4,7 +4,8 @@ import { getEngine } from '../../../engine-wasm/engine-state';
 import { mergeLayers, bakeLayerEffects, updateLayer } from '../../../engine-wasm/wasm-bridge';
 import { layerToDescJson } from '../../../engine-wasm/sync-layers';
 import { DEFAULT_EFFECTS, hasEnabledEffects } from '../../../layers/layer-model';
-import { findParentGroup, removeFromParentGroup } from '../../../layers/group-utils';
+import { findParentGroup, isAncestorOf, removeFromParentGroup } from '../../../layers/group-utils';
+import type { Refusal } from '../../../commands/refusal';
 import { pixelDataManager } from '../../../engine/pixel-data-manager';
 import { invalidateBitmapCache } from '../../../engine/bitmap-cache';
 
@@ -29,19 +30,32 @@ import { invalidateBitmapCache } from '../../../engine/bitmap-cache';
  * valid.
  */
 export function canMergeDown(doc: DocumentState): boolean {
+  return mergeDownRefusal(doc) === null;
+}
+
+function refusedSilently(reason: string): Refusal {
+  return { reason, notice: null };
+}
+
+/** Why Merge Down cannot run for the active layer (the menu item is disabled then); null when it can. */
+export function mergeDownRefusal(doc: DocumentState): Refusal | null {
   const activeId = doc.activeLayerId;
-  if (!activeId) return false;
+  if (!activeId) return refusedSilently('No layer is active.');
   const orderIdx = doc.layerOrder.indexOf(activeId);
-  if (orderIdx <= 0) return false;
-  const belowId = doc.layerOrder[orderIdx - 1];
-  if (!belowId) return false;
-  const belowLayer = doc.layers.find((l) => l.id === belowId);
-  if (!belowLayer) return false;
-  if (belowLayer.type === 'group') return false;
+  const belowId = orderIdx > 0 ? doc.layerOrder[orderIdx - 1] : undefined;
+  const belowLayer = belowId ? doc.layers.find((l) => l.id === belowId) : undefined;
+  if (!belowId || !belowLayer) return refusedSilently('There is no layer below the active layer to merge into.');
+  if (belowLayer.type === 'group') {
+    return refusedSilently(`The layer below is the group "${belowLayer.name}": Merge Down only merges into a layer that is not a group.`);
+  }
 
   const activeParentId = findParentGroup(doc.layers, activeId)?.id ?? null;
   const belowParentId = findParentGroup(doc.layers, belowId)?.id ?? null;
-  return activeParentId === belowParentId;
+  if (activeParentId === belowParentId) return null;
+  if (isAncestorOf(doc.layers, activeId, belowId)) {
+    return refusedSilently('The active layer is a group, and the layer below it is inside it: Merge Down merges a layer into its sibling below.');
+  }
+  return refusedSilently('The layer below the active layer is in a different group: Merge Down merges a layer into its sibling below.');
 }
 
 /**

@@ -448,6 +448,38 @@ pub fn scale_texture(
     Ok(())
 }
 
+/// GPU-side resample of a layer texture into a new `new_w` x `new_h` texture
+/// through `src_uv = dst_uv * scale + offset`, filtering bilinearly in
+/// premultiplied space and reading transparent outside the source. Image
+/// Size uses it so a layer's box can snap outward to whole pixels while its
+/// content keeps the exact document scale and sub-pixel origin.
+pub fn resample_texture_region(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    new_w: u32,
+    new_h: u32,
+    scale: [f32; 2],
+    offset: [f32; 2],
+) -> Result<(), String> {
+    let tex_handle = *engine.layer_textures.get(layer_id)
+        .ok_or_else(|| format!("Layer {layer_id} not found"))?;
+    engine.texture_pool.get(tex_handle).ok_or("Texture not found")?;
+
+    let new_tex = engine.texture_pool.acquire(new_w, new_h)?;
+    engine.texture_pool.get(new_tex).ok_or("New texture not found")?;
+
+    engine.pass(&engine.shaders.blit_resample_region, BlitRegionParams { scale, offset })
+        .texture("u_tex", tex_handle)
+        .blend(Blend::Off)
+        .draw(Target::Texture(new_tex));
+
+    engine.texture_pool.release(tex_handle);
+    engine.layer_textures.insert(layer_id.to_string(), new_tex);
+
+    engine.mark_layer_dirty(layer_id);
+    Ok(())
+}
+
 /// GPU-side canvas resize: reposition layer pixels within a new canvas size.
 pub fn resize_canvas_texture(
     engine: &mut EngineInner,

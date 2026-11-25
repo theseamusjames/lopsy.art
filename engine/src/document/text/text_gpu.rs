@@ -6,7 +6,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use cosmic_text::fontdb;
-use cosmic_text::{Align, Attrs, Buffer, CacheKey, Family, FontSystem, Metrics, Shaping, Stretch, Style, SwashCache, SwashImage, Weight, Wrap};
+use cosmic_text::{Align, Attrs, Buffer, CacheKey, Family, FontSystem, Metrics, Shaping, Stretch, Style, SwashCache, SwashContent, SwashImage, Weight, Wrap};
 use lopsy_core::text_color_spans::ColorSpans;
 use lopsy_core::vertical_orientation::{vertical_form_transform, VerticalGlyphForm};
 use swash::scale::{ScaleContext, Render, Source, StrikeWith};
@@ -14,6 +14,7 @@ use swash::shape::ShapeContext;
 use swash::zeno::{Format, Transform, Vector};
 
 use crate::document::text::glyph_atlas::GlyphAtlas;
+use crate::document::text::glyph_raster::rasterize_nonzero;
 use crate::document::text::ligature_split::{expand_run_glyphs, find_ligature_splits, LigatureSplit};
 use crate::document::text::vertical_forms::{vertical_glyph, VerticalAlternateCache};
 
@@ -261,15 +262,25 @@ fn render_glyph_unhinted<'a>(
             .hint(false)
             .build();
         let offset = Vector::new(cache_key.x_bin.as_float(), cache_key.y_bin.as_float());
-        Render::new(&[
+        let color = Render::new(&[
             Source::ColorOutline(0),
             Source::ColorBitmap(StrikeWith::BestFit),
-            Source::Outline,
         ])
         .format(Format::Alpha)
         .offset(offset)
         .transform(transform)
-        .render(&mut scaler, cache_key.glyph_id)
+        .render(&mut scaler, cache_key.glyph_id);
+        if color.is_some() {
+            return color;
+        }
+        // Plain outlines are filled here rather than by swash's zeno, which
+        // double-counts edges where a glyph's own contours overlap (#1806).
+        let mut outline = scaler.scale_outline(cache_key.glyph_id)?;
+        if let Some(transform) = &transform {
+            outline.transform(transform);
+        }
+        let (placement, data) = rasterize_nonzero(outline.path(), offset);
+        Some(SwashImage { source: Source::Outline, content: SwashContent::Mask, placement, data })
     }).as_ref()
 }
 
@@ -2035,6 +2046,35 @@ mod tests {
             .set_text_content("t", &family_props("Hello", "Montserrat", 100))
             .expect("ok");
         assert_eq!(faces_used(&renderer, "t"), vec![("Montserrat".to_string(), 100)]);
+    }
+
+    fn azeret_mono_css2() -> Vec<u8> {
+        crate::document::text::woff2::decode_woff2(include_bytes!("../../../tests/fixtures/AzeretMono-wght-latin.woff2")).expect("decodes")
+    }
+
+    /// #1806: Azeret Mono Black's P is a stem contour and a bowl contour that
+    /// overlap along the cap line. Its top edge row must be one flat
+    /// partial coverage, not brighter where both contours have an edge.
+    #[test]
+    fn overlapping_glyph_contours_leave_a_flat_edge_row_1806() {
+        let mut renderer = make_renderer();
+        renderer.load_font_as(&azeret_mono_css2(), Some("Azeret Mono")).expect("loads");
+        let props = r#"{"text":"P","fontFamily":"'Azeret Mono', monospace","fontSize":330,"fontWeight":900,"fontStyle":"normal","color":[1,1,1,1],"lineHeight":1.2,"letterSpacing":0,"textAlign":"left","areaWidth":null}"#;
+        renderer.set_text_content("p", props).expect("ok");
+        assert_eq!(faces_used(&renderer, "p"), vec![("Azeret Mono".to_string(), 900)]);
+        let (px, w, h, _, _) = renderer.render_text_layer_software("p").expect("renders");
+        let alpha = |x: u32, y: u32| px[((y * w + x) * 4 + 3) as usize];
+        let top = (0..h)
+            .find(|&y| (0..w).any(|x| alpha(x, y) > 10))
+            .expect("the P has ink");
+        let mut row: Vec<u8> = (0..w).map(|x| alpha(x, top)).filter(|&a| a > 10).collect();
+        assert!(row.len() > 40, "cap line too short: {row:?}");
+        let edge = row.clone();
+        row.sort_unstable();
+        let median = row[row.len() / 2];
+        assert!(median < 250, "the cap line must sit at a fractional y for this to test anything: {edge:?}");
+        let max = *row.last().unwrap();
+        assert!(max <= median + 6, "cap line has a brighter run where contours overlap: {edge:?}");
     }
 
     #[test]

@@ -1,58 +1,56 @@
-import { applyInvert, applyDesaturate, applyFindEdges } from '../filter-actions';
-import { beginTiltShiftSession } from '../tilt-shift-actions';
 import type { FilterDialogId } from '../filter-actions';
-import { openLiquify } from '../liquify-actions';
-import { isFilteringMask } from '../filter-target';
-import type { MenuDef } from './types';
+import { commandItem } from './command-item';
+import type { MenuDef, MenuItem } from './types';
 
-export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void): MenuDef {
-  // Liquify and Tilt-Shift are on-canvas sessions over the layer's pixels;
-  // every other command runs on the mask in mask edit mode (#1150).
-  const isMaskTarget = isFilteringMask();
+function dialogItem(label: string, dialog: FilterDialogId): MenuItem {
+  return commandItem(label, 'ui.dialog.filter', { dialog });
+}
+
+export function createFilterMenu(): MenuDef {
   return {
     label: 'Filter',
     items: [
-      { label: 'Liquify...', shortcut: '⌘⇧X', disabled: isMaskTarget, action: () => openLiquify() },
+      commandItem('Liquify...', 'ui.filter.liquify', undefined, '⌘⇧X'),
       { separator: true, label: '' },
-      { label: 'Gaussian Blur...', action: () => showFilterDialog('gaussian-blur') },
-      { label: 'Box Blur...', action: () => showFilterDialog('box-blur') },
-      { label: 'Surface Blur...', action: () => showFilterDialog('surface-blur') },
-      { label: 'Motion Blur...', action: () => showFilterDialog('motion-blur') },
-      { label: 'Radial Blur...', action: () => showFilterDialog('radial-blur') },
-      { label: 'Tilt-Shift Blur...', disabled: isMaskTarget, action: () => beginTiltShiftSession() },
-      { label: 'Unsharp Mask...', action: () => showFilterDialog('unsharp-mask') },
+      dialogItem('Gaussian Blur...', 'gaussian-blur'),
+      dialogItem('Box Blur...', 'box-blur'),
+      dialogItem('Surface Blur...', 'surface-blur'),
+      dialogItem('Motion Blur...', 'motion-blur'),
+      dialogItem('Radial Blur...', 'radial-blur'),
+      commandItem('Tilt-Shift Blur...', 'ui.filter.tilt-shift'),
+      dialogItem('Unsharp Mask...', 'unsharp-mask'),
       { separator: true, label: '' },
-      { label: 'Find Edges', action: () => applyFindEdges() },
-      { label: 'Cel Shading...', action: () => showFilterDialog('cel-shading') },
-      { label: 'Pixelate...', action: () => showFilterDialog('pixelate') },
-      { label: 'Halftone...', action: () => showFilterDialog('halftone') },
-      { label: 'Kaleidoscope...', action: () => showFilterDialog('kaleidoscope') },
-      { label: 'Oil Paint...', action: () => showFilterDialog('oil-paint') },
-      { label: 'Chromatic Aberration...', action: () => showFilterDialog('chromatic-aberration') },
-      { label: 'Pixel Stretch...', action: () => showFilterDialog('pixel-stretch') },
-      { label: 'Lens Distortion...', action: () => showFilterDialog('lens-distortion') },
+      commandItem('Find Edges', 'filter.find-edges'),
+      dialogItem('Cel Shading...', 'cel-shading'),
+      dialogItem('Pixelate...', 'pixelate'),
+      dialogItem('Halftone...', 'halftone'),
+      dialogItem('Kaleidoscope...', 'kaleidoscope'),
+      dialogItem('Oil Paint...', 'oil-paint'),
+      dialogItem('Chromatic Aberration...', 'chromatic-aberration'),
+      dialogItem('Pixel Stretch...', 'pixel-stretch'),
+      dialogItem('Lens Distortion...', 'lens-distortion'),
       { separator: true, label: '' },
-      { label: 'Bloom...', action: () => showFilterDialog('bloom') },
-      { label: 'Voronoi...', action: () => showFilterDialog('voronoi') },
+      dialogItem('Bloom...', 'bloom'),
+      dialogItem('Voronoi...', 'voronoi'),
       { separator: true, label: '' },
-      { label: 'Add Noise...', action: () => showFilterDialog('add-noise') },
-      { label: 'Texture...', action: () => showFilterDialog('texture') },
+      dialogItem('Add Noise...', 'add-noise'),
+      dialogItem('Texture...', 'texture'),
       { separator: true, label: '' },
-      { label: 'Clouds...', action: () => showFilterDialog('clouds') },
-      { label: 'Fibers...', action: () => showFilterDialog('fibers') },
-      { label: 'Smoke...', action: () => showFilterDialog('smoke') },
-      { label: 'Sunburst...', action: () => showFilterDialog('sunburst') },
+      dialogItem('Clouds...', 'clouds'),
+      dialogItem('Fibers...', 'fibers'),
+      dialogItem('Smoke...', 'smoke'),
+      dialogItem('Sunburst...', 'sunburst'),
       { separator: true, label: '' },
-      { label: 'Brightness/Contrast...', action: () => showFilterDialog('brightness-contrast') },
-      { label: 'Hue/Saturation...', action: () => showFilterDialog('hue-saturation') },
-      { label: 'Color LUT...', action: () => showFilterDialog('color-lut') },
+      dialogItem('Brightness/Contrast...', 'brightness-contrast'),
+      dialogItem('Hue/Saturation...', 'hue-saturation'),
+      dialogItem('Color LUT...', 'color-lut'),
       { separator: true, label: '' },
-      { label: 'Invert', action: () => applyInvert() },
-      { label: 'Desaturate', action: () => applyDesaturate() },
-      { label: 'Posterize...', action: () => showFilterDialog('posterize') },
-      { label: 'Threshold...', action: () => showFilterDialog('threshold') },
-      { label: 'Solarize...', action: () => showFilterDialog('solarize') },
-      { label: 'Emboss...', action: () => showFilterDialog('emboss') },
+      commandItem('Invert', 'filter.invert'),
+      commandItem('Desaturate', 'filter.desaturate'),
+      dialogItem('Posterize...', 'posterize'),
+      dialogItem('Threshold...', 'threshold'),
+      dialogItem('Solarize...', 'solarize'),
+      dialogItem('Emboss...', 'emboss'),
     ],
   };
 }

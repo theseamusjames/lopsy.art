@@ -4,11 +4,8 @@ import { useEditorStore } from '../../app/editor-store';
 import { TEXT_INPUT_SINK_ATTR } from '../../app/text-input-sink';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { makeTextGeometry } from '../../tools/text/text-geometry';
-import {
-  applyComposition,
-  insertInputText,
-  type TextEditState,
-} from '../../tools/text/text-input';
+import { applyComposition, type TextEditState } from '../../tools/text/text-input';
+import { applyEditState, insertIntoEditedText, toEditState } from '../../app/text-edit-buffer';
 import styles from './TextInputSink.module.css';
 
 interface TextInputSinkProps {
@@ -16,20 +13,6 @@ interface TextInputSinkProps {
 }
 
 const SINK_ATTRS = { [TEXT_INPUT_SINK_ATTR]: '' };
-
-function toEditState(editing: TextEditingState): TextEditState {
-  return {
-    text: editing.text,
-    cursorPos: editing.cursorPos,
-    selectionAnchor: editing.selectionAnchor,
-    preferredX: null,
-  };
-}
-
-function applyEditState(next: TextEditState): void {
-  useUIStore.getState().updateTextEditingSelection(next.text, next.cursorPos, next.selectionAnchor);
-  useEditorStore.getState().notifyRender();
-}
 
 interface SinkPosition {
   x: number;
@@ -143,9 +126,8 @@ export function TextInputSink({ containerRef }: TextInputSinkProps) {
     const sink = e.currentTarget;
     const value = sink.value;
     sink.value = '';
-    const editing = useUIStore.getState().textEditing;
-    if (!editing || value === '') return;
-    applyEditState(insertInputText(toEditState(editing), value));
+    if (value === '') return;
+    insertIntoEditedText(value);
   }, []);
 
   if (!textEditing) return null;

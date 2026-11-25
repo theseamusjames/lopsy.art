@@ -1,78 +1,28 @@
-import { useEditorStore } from '../../editor-store';
-import { useUIStore } from '../../ui-store';
-import { useToolSettingsStore } from '../../tool-settings-store';
-import { clearJsPixelData } from '../../store/clear-js-pixel-data';
-import { getEngine } from '../../../engine-wasm/engine-state';
-import { fillWithColor } from '../../../engine-wasm/wasm-bridge';
-import { syncLayerAfterFullSize } from '../../sync-layer-after-full-size';
-import { guardPixelWrite } from '../../../layers/paint-target';
-import { fillActiveLayerMask } from '../../fill-layer-mask';
-import { pasteInternalClipboard } from '../../paste-or-open';
-import { definePattern } from '../pattern-actions';
-import { defineBrush } from '../brush-actions';
-import type { FilterDialogId } from '../filter-actions';
+import { commandItem } from './command-item';
 import type { MenuDef } from './types';
 
-export function fillSelection(): void {
-  const state = useEditorStore.getState();
-  const activeId = state.document.activeLayerId;
-  if (!activeId) return;
-
-  // #768: refuse the fill on a group or text layer — writing there is
-  // either invisible (group) or wiped by the next text re-render.
-  const activeLayer = state.document.layers.find((l) => l.id === activeId);
-  if (activeLayer?.locked) return;
-  if (fillActiveLayerMask(useToolSettingsStore.getState().foregroundColor, 'Mask Fill')) return;
-  if (!guardPixelWrite(activeLayer)) return;
-
-  const engine = getEngine();
-  if (!engine) return;
-
-  state.pushHistory('Fill');
-  const color = useToolSettingsStore.getState().foregroundColor;
-
-  // GPU fill: uses the engine's selection mask if active. `fillWithColor`
-  // internally calls `ensure_layer_full_size`, so an untouched 1x1
-  // placeholder texture is expanded to doc size before the fill runs
-  // (#765). We reconcile the Zustand bounds after so the next syncLayers
-  // doesn't push the stale JS values back.
-  fillWithColor(engine, activeId, color.r / 255, color.g / 255, color.b / 255, color.a);
-  syncLayerAfterFullSize(engine, activeId);
-
-  clearJsPixelData(activeId);
-  state.notifyRender();
-}
-
-export function cropToSelection(): void {
-  const state = useEditorStore.getState();
-  if (!state.selection.active || !state.selection.bounds) return;
-  state.cropCanvas(state.selection.bounds);
-  state.clearSelection();
-}
-
-export function createEditMenu(showFilterDialog: (id: FilterDialogId) => void): MenuDef {
-  const hasSelection = useEditorStore.getState().selection.active;
+export function createEditMenu(): MenuDef {
   return {
     label: 'Edit',
     items: [
-      { label: 'Undo', shortcut: '⌘Z', action: () => useEditorStore.getState().undo() },
-      { label: 'Redo', shortcut: '⇧⌘Z', action: () => useEditorStore.getState().redo() },
+      commandItem('Undo', 'history.undo', undefined, '⌘Z'),
+      commandItem('Redo', 'history.redo', undefined, '⇧⌘Z'),
       { separator: true, label: '' },
-      { label: 'Cut', shortcut: '⌘X', action: () => useEditorStore.getState().cut() },
-      { label: 'Copy', shortcut: '⌘C', action: () => useEditorStore.getState().copy() },
-      { label: 'Copy Merged', shortcut: '⇧⌘C', action: () => void useEditorStore.getState().copyMerged() },
-      { label: 'Paste', shortcut: '⌘V', action: () => pasteInternalClipboard() },
+      commandItem('Cut', 'clipboard.cut', undefined, '⌘X'),
+      commandItem('Copy', 'clipboard.copy', undefined, '⌘C'),
+      commandItem('Copy Merged', 'clipboard.copy-merged', undefined, '⇧⌘C'),
+      commandItem('Paste', 'clipboard.paste', undefined, '⌘V'),
       { separator: true, label: '' },
-      { label: 'Fill', shortcut: '⇧F5', action: () => fillSelection() },
-      { label: 'Fill with Pattern...', action: () => showFilterDialog('pattern-fill') },
+      commandItem('Fill', 'paint.fill', undefined, '⇧F5'),
+      commandItem('Fill with Pattern...', 'ui.dialog.filter', { dialog: 'pattern-fill' }),
       { separator: true, label: '' },
-      { label: 'Crop', action: () => cropToSelection(), disabled: !hasSelection },
+      commandItem('Crop', 'image.crop-to-selection'),
       { separator: true, label: '' },
-      { label: 'Define Pattern', action: () => definePattern() },
-      { label: 'Define Brush...', action: () => defineBrush(false), disabled: !hasSelection },
-      { label: 'Define Color Brush...', action: () => defineBrush(true), disabled: !hasSelection },
+      commandItem('Define Pattern', 'pattern.define'),
+      commandItem('Define Brush...', 'ui.edit.define-brush', { color: false }),
+      commandItem('Define Color Brush...', 'ui.edit.define-brush', { color: true }),
       { separator: true, label: '' },
-      { label: 'Clear Guides', action: () => useUIStore.getState().clearGuides() },
+      commandItem('Clear Guides', 'guide.clear'),
     ],
   };
 }

@@ -291,10 +291,46 @@ impl<'a> RawPass<'a> {
     }
 
     pub(in crate::gpu) fn read_back(self, format: ReadFormat, w: u32, h: u32) -> Read<Vec<u8>> {
-        Read::ready(self.read_back_now(format, w, h).ok_or_else(|| "Readback failed".to_string()))
+        let is_deferring = super::read::is_deferring();
+        let gl = self.gpu.gl;
+        let Some((fbo, staging)) = self.draw_to_staging(format, w, h) else {
+            return Read::failed("Readback failed");
+        };
+        let len = (w * h * bytes_per_texel(format)) as usize;
+        let (gl_format, ty) = match format {
+            ReadFormat::R8 => (GL::RED, GL::UNSIGNED_BYTE),
+            ReadFormat::Rgba8 => (GL::RGBA, GL::UNSIGNED_BYTE),
+        };
+        // With 1-byte texels and a width that is not a multiple of 4, the
+        // default PACK_ALIGNMENT of 4 expects padded rows and rejects the
+        // tightly sized buffer (#1057).
+        if format == ReadFormat::R8 {
+            gl.pixel_storei(GL::PACK_ALIGNMENT, 1);
+        }
+        let read = if is_deferring {
+            super::read::read_pixels_later(gl, w, h, gl_format, ty, len)
+        } else {
+            let mut pixels = vec![0u8; len];
+            gl.read_pixels_with_opt_u8_array(0, 0, w as i32, h as i32, gl_format, ty, Some(&mut pixels))
+                .is_ok()
+                .then(|| Read::ready(Ok(pixels)))
+        };
+        if format == ReadFormat::R8 {
+            gl.pixel_storei(GL::PACK_ALIGNMENT, 4);
+        }
+
+        // The pack buffer copy is queued ahead of these deletes, so the
+        // staging objects can go now either way.
+        gl.bind_framebuffer(GL::FRAMEBUFFER, None);
+        gl.delete_framebuffer(Some(&fbo));
+        gl.delete_texture(Some(&staging));
+
+        read.unwrap_or_else(|| Read::failed("Readback failed"))
     }
 
-    fn read_back_now(self, format: ReadFormat, w: u32, h: u32) -> Option<Vec<u8>> {
+    /// Draw the pass into a new `w`×`h` 8-bit texture, left bound as the
+    /// framebuffer's colour attachment for the read.
+    fn draw_to_staging(&self, format: ReadFormat, w: u32, h: u32) -> Option<(web_sys::WebGlFramebuffer, web_sys::WebGlTexture)> {
         if self.has_missing_texture {
             return None;
         }
@@ -324,32 +360,7 @@ impl<'a> RawPass<'a> {
         gl.framebuffer_texture_2d(GL::FRAMEBUFFER, GL::COLOR_ATTACHMENT0, GL::TEXTURE_2D, Some(&staging), 0);
         gl.viewport(0, 0, w as i32, h as i32);
         gl.draw_arrays(GL::TRIANGLES, 0, 3);
-
-        let mut pixels = vec![0u8; (w * h * bytes_per_texel(format)) as usize];
-        let is_read = match format {
-            ReadFormat::R8 => {
-                // With 1-byte texels and a width that is not a multiple of
-                // 4, the default PACK_ALIGNMENT of 4 expects padded rows and
-                // rejects the tightly sized buffer (#1057).
-                gl.pixel_storei(GL::PACK_ALIGNMENT, 1);
-                let result = gl.read_pixels_with_opt_u8_array(
-                    0, 0, w as i32, h as i32, GL::RED, GL::UNSIGNED_BYTE, Some(&mut pixels),
-                );
-                gl.pixel_storei(GL::PACK_ALIGNMENT, 4);
-                result.is_ok()
-            }
-            ReadFormat::Rgba8 => gl
-                .read_pixels_with_opt_u8_array(
-                    0, 0, w as i32, h as i32, GL::RGBA, GL::UNSIGNED_BYTE, Some(&mut pixels),
-                )
-                .is_ok(),
-        };
-
-        gl.bind_framebuffer(GL::FRAMEBUFFER, None);
-        gl.delete_framebuffer(Some(&fbo));
-        gl.delete_texture(Some(&staging));
-
-        is_read.then_some(pixels)
+        Some((fbo, staging))
     }
 
     pub(in crate::gpu) fn draw(self, target: Target) -> bool {

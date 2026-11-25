@@ -7,13 +7,12 @@ import {
   parseBorderWidth,
   planBorder,
   uniformBorderWidths,
-  SQUARE_CORNERS,
   type BorderCorners,
   type BorderPlacement,
-  type BorderPlan,
   type BorderWidths,
 } from '../../layers/border';
 import type { Color } from '../../types';
+import { describeBorderPlan } from './border-plan';
 import styles from './BorderModal.module.css';
 
 type BorderSides = 'symmetric' | 'asymmetric';
@@ -27,7 +26,7 @@ const SIDES: readonly { key: Side; label: string }[] = [
 ];
 
 const DEFAULT_WIDTH = '20';
-const DEFAULT_RADIUS = '20';
+const DEFAULT_RADIUS = '0';
 
 interface BorderModalProps {
   onClose: () => void;
@@ -46,7 +45,6 @@ export function BorderModal({ onClose }: BorderModalProps) {
   const [sideWidths, setSideWidths] = useState<Record<Side, string>>({
     top: DEFAULT_WIDTH, bottom: DEFAULT_WIDTH, left: DEFAULT_WIDTH, right: DEFAULT_WIDTH,
   });
-  const [isRounded, setIsRounded] = useState(false);
   const [innerRadius, setInnerRadius] = useState(DEFAULT_RADIUS);
   const [outerRadius, setOuterRadius] = useState(DEFAULT_RADIUS);
 
@@ -58,9 +56,10 @@ export function BorderModal({ onClose }: BorderModalProps) {
       bottom: parseBorderWidth(sideWidths.bottom),
       left: parseBorderWidth(sideWidths.left),
     }), [sides, width, sideWidths]);
-  const corners = useMemo<BorderCorners>(() => (isRounded
-    ? { outer: parseBorderWidth(outerRadius), inner: parseBorderWidth(innerRadius) }
-    : SQUARE_CORNERS), [isRounded, outerRadius, innerRadius]);
+  const corners = useMemo<BorderCorners>(
+    () => ({ outer: parseBorderWidth(outerRadius), inner: parseBorderWidth(innerRadius) }),
+    [outerRadius, innerRadius],
+  );
   const plan = planBorder(docWidth, docHeight, widths, placement, getMaxDocumentSide(), corners);
 
   const handleApply = useCallback(() => {
@@ -171,44 +170,34 @@ export function BorderModal({ onClose }: BorderModalProps) {
               </label>
             </fieldset>
             <fieldset className={styles.group}>
-              <legend className={styles.fieldLabel}>Corners</legend>
-              <label className={styles.radio}>
-                <input
-                  type="checkbox"
-                  checked={isRounded}
-                  onChange={(e) => setIsRounded(e.target.checked)}
-                />
-                Rounded corners
-              </label>
-              {isRounded && (
-                <div className={styles.sideGrid}>
-                  <label className={styles.field}>
-                    <span className={styles.fieldLabel}>Inner radius (px)</span>
-                    <input
-                      className={styles.fieldInput}
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={innerRadius}
-                      onChange={(e) => setInnerRadius(e.target.value)}
-                    />
-                  </label>
-                  <label className={styles.field}>
-                    <span className={styles.fieldLabel}>Outer radius (px)</span>
-                    <input
-                      className={styles.fieldInput}
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={outerRadius}
-                      onChange={(e) => setOuterRadius(e.target.value)}
-                    />
-                  </label>
-                </div>
-              )}
+              <legend className={styles.fieldLabel}>Rounded corners</legend>
+              <div className={styles.sideGrid}>
+                <label className={styles.field}>
+                  <span className={styles.fieldLabel}>Inner radius (px)</span>
+                  <input
+                    className={styles.fieldInput}
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={innerRadius}
+                    onChange={(e) => setInnerRadius(e.target.value)}
+                  />
+                </label>
+                <label className={styles.field}>
+                  <span className={styles.fieldLabel}>Outer radius (px)</span>
+                  <input
+                    className={styles.fieldInput}
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={outerRadius}
+                    onChange={(e) => setOuterRadius(e.target.value)}
+                  />
+                </label>
+              </div>
             </fieldset>
             <p className={styles.info} aria-live="polite">
-              {describePlan(plan, widths, docWidth, docHeight)}
+              {describeBorderPlan(plan, widths, docWidth, docHeight)}
             </p>
           </div>
         </div>
@@ -219,21 +208,4 @@ export function BorderModal({ onClose }: BorderModalProps) {
       </div>
     </div>
   );
-}
-
-function describePlan(
-  plan: BorderPlan | null,
-  widths: BorderWidths,
-  docWidth: number,
-  docHeight: number,
-): string {
-  if (!plan) {
-    const hasWidth = widths.top + widths.right + widths.bottom + widths.left > 0;
-    return hasWidth
-      ? `Too large: the canvas can be at most ${getMaxDocumentSide()} px on a side.`
-      : 'Enter a border width.';
-  }
-  return plan.width === docWidth && plan.height === docHeight
-    ? `Canvas stays ${docWidth} × ${docHeight} px`
-    : `New size: ${plan.width} × ${plan.height} px`;
 }

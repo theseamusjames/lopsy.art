@@ -1,6 +1,7 @@
 import { useCallback, type RefObject } from 'react';
 import { Check, X } from 'lucide-react';
-import { useUIStore } from '../../app/ui-store';
+import { useUIStore, type TextEditingState } from '../../app/ui-store';
+import type { Layer } from '../../types';
 import { useEditorStore } from '../../app/editor-store';
 import { commitTextEditing, cancelTextEditing } from '../../tools/text/text-interaction';
 import styles from './TextActionButtons.module.css';
@@ -9,15 +10,29 @@ interface TextActionButtonsProps {
   containerRef: RefObject<HTMLDivElement | null>;
 }
 
+/**
+ * Where the buttons dock, in document space. Transformed text can run any
+ * direction from its anchor, so it docks at its texture's top-left. Upright
+ * point text grows left of its anchor when right- or centre-aligned, so it
+ * docks at the texture's left edge (the widest line's start), never right of
+ * the anchor. Area text docks at its box.
+ */
+function buttonsOrigin(editing: TextEditingState, layer: Layer | null): { x: number; y: number } {
+  const { bounds } = editing;
+  if (!layer) return { x: bounds.x, y: bounds.y };
+  if (editing.matrix) return { x: layer.x, y: layer.y };
+  const isPointText = bounds.width === null;
+  if (!isPointText || editing.text.length === 0) return { x: bounds.x, y: bounds.y };
+  return { x: Math.min(bounds.x, layer.x), y: bounds.y };
+}
+
 export function TextActionButtons({ containerRef }: TextActionButtonsProps) {
   const textEditing = useUIStore((s) => s.textEditing);
   const viewport = useEditorStore((s) => s.viewport);
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
-  // Transformed text can run any direction from its anchor, so dock the
-  // buttons beside its texture's top-left instead of over the glyphs.
   const editedLayer = useEditorStore((s) =>
-    textEditing?.matrix ? s.document.layers.find((l) => l.id === textEditing.layerId) ?? null : null,
+    textEditing ? s.document.layers.find((l) => l.id === textEditing.layerId) ?? null : null,
   );
 
   const handleCommit = useCallback(() => {
@@ -41,8 +56,7 @@ export function TextActionButtons({ containerRef }: TextActionButtonsProps) {
   const cx = rect.width / 2;
   const cy = rect.height / 2;
 
-  const originX = editedLayer?.x ?? textEditing.bounds.x;
-  const originY = editedLayer?.y ?? textEditing.bounds.y;
+  const { x: originX, y: originY } = buttonsOrigin(textEditing, editedLayer);
   const screenX =
     viewport.panX + cx +
     (originX - docWidth / 2) * viewport.zoom;

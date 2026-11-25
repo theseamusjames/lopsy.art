@@ -130,10 +130,10 @@ let latestFeatherCommit = 0;
 function whenFeathered(
   pending: Promise<FeatheredMask | null>,
   apply: (feathered: FeatheredMask | null) => void,
-): void {
+): Promise<void> {
   const commit = ++latestFeatherCommit;
   const selectionAtRequest = useEditorStore.getState().selection.mask;
-  void pending.then((feathered) => {
+  return pending.then((feathered) => {
     if (commit !== latestFeatherCommit) return;
     if (useEditorStore.getState().selection.mask !== selectionAtRequest) return;
     apply(feathered);
@@ -150,18 +150,23 @@ function installSelection(
   useUIStore.getState().setTransform(createTransformState(bounds));
 }
 
+/**
+ * Install a new shape as the selection, feathered by the marquees' Feather
+ * radius. The promise resolves once the feathered shape is in place (at
+ * once when there is nothing to feather).
+ */
 export function commitFeatheredSelection(
   bounds: { x: number; y: number; width: number; height: number },
   mask: Uint8ClampedArray,
   docW: number,
   docH: number,
-): void {
+): Promise<void> {
   const pending = featherShapeMask(mask, docW, docH);
   if (!pending) {
     installSelection(bounds, mask, docW, docH);
-    return;
+    return Promise.resolve();
   }
-  whenFeathered(pending, (feathered) => {
+  return whenFeathered(pending, (feathered) => {
     const newBounds = feathered ? selectionBounds(feathered.mask, feathered.width, feathered.height) : null;
     if (!feathered || !newBounds) {
       installSelection(bounds, mask, docW, docH);
@@ -216,7 +221,8 @@ export function combineSelectionMasks(
  * Commit a selection tool's new shape. `replace` installs it as the
  * selection; the other modes combine it with the current selection as one
  * undoable step. Feather softens only the new shape, so adding a region
- * never re-blurs the edges already selected.
+ * never re-blurs the edges already selected. The promise resolves once the
+ * (feathered) shape is in place.
  */
 export function commitSelectionShape(
   bounds: { x: number; y: number; width: number; height: number },
@@ -224,11 +230,10 @@ export function commitSelectionShape(
   docW: number,
   docH: number,
   mode: SelectionCombineMode,
-): void {
+): Promise<void> {
   const existing = mode === 'replace' ? null : combinableSelectionMask(docW, docH);
   if (mode === 'replace' || !existing) {
-    commitFeatheredSelection(bounds, mask, docW, docH);
-    return;
+    return commitFeatheredSelection(bounds, mask, docW, docH);
   }
   useEditorStore.getState().pushHistoryMetadata(SELECTION_COMBINE_LABELS[mode]);
   const combineWith = (feathered: FeatheredMask | null): void => {
@@ -243,8 +248,40 @@ export function commitSelectionShape(
     installSelection(combinedBounds, combined, docW, docH);
   };
   const pending = featherShapeMask(mask, docW, docH);
-  if (pending) whenFeathered(pending, combineWith);
-  else combineWith(null);
+  if (pending) return whenFeathered(pending, combineWith);
+  combineWith(null);
+  return Promise.resolve();
+}
+
+/**
+ * Commit a Rectangular or Elliptical Marquee box (the ellipse's bounding
+ * box) as releasing the drag does: the shape is clipped to the document
+ * and combined, feathered and installed by `commitSelectionShape`.
+ */
+export function commitMarqueeShape(
+  shape: 'rect' | 'ellipse',
+  rect: { x: number; y: number; width: number; height: number },
+  mode: SelectionCombineMode,
+): Promise<void> {
+  const { width: docW, height: docH } = useEditorStore.getState().document;
+  const mask = shape === 'ellipse'
+    ? createEllipseSelection(rect, docW, docH)
+    : createRectSelection(rect, docW, docH);
+  return commitSelectionShape(rect, mask, docW, docH, mode);
+}
+
+/**
+ * Commit a closed Lasso polygon as releasing the drag does. Null, with
+ * nothing changed, when it has fewer than 3 points or covers no pixel of
+ * the document.
+ */
+export function commitLassoPolygon(points: Point[], mode: SelectionCombineMode): Promise<void> | null {
+  if (points.length < 3) return null;
+  const { width: docW, height: docH } = useEditorStore.getState().document;
+  const lassoMask = createPolygonMask(points, docW, docH);
+  const lassoBounds = selectionBounds(lassoMask, docW, docH);
+  if (!lassoBounds) return null;
+  return commitSelectionShape(lassoBounds, lassoMask, docW, docH, mode);
 }
 
 export function createRectSelection(
@@ -332,13 +369,7 @@ export function handleSelectionMove(
   STRATEGY_MAP[tool]?.onMove?.(state, canvasPos, metaKey);
 }
 
-export function handleSelectionUp(
-  state: InteractionState,
-  _canvasPos: Point,
-  screenToCanvas: (sx: number, sy: number) => Point,
-  containerRef: React.RefObject<HTMLDivElement | null>,
-  e: { clientX: number; clientY: number },
-): void {
+export function handleSelectionUp(state: InteractionState, canvasPos: Point): void {
   const tool = state.tool as SelectionToolId;
-  STRATEGY_MAP[tool]?.onUp?.(state, _canvasPos, { screenToCanvas, containerRef, event: e });
+  STRATEGY_MAP[tool]?.onUp?.(state, canvasPos);
 }

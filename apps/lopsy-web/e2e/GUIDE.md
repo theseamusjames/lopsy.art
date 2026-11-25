@@ -153,6 +153,70 @@ Everything else has a UI path and must go through it. If you think
 something doesn't, check the helpers table — there's probably a helper
 you missed.
 
+### API specs (`e2e/api/`)
+
+The rules above are for UI specs: they drive the UI and never call the
+store or the commands. Specs under `e2e/api/` test the command API
+(`src/commands/`) instead, and are the only specs that may call
+`window.__lopsyCommands`, always through `e2e/api/harness.ts`:
+
+- Import `test` and `expect` from `./harness`. Each test starts on the
+  editor (`/`) with the API installed and **no document**: create one with
+  `doc.new` or `createDocument` from `../helpers`.
+- `run(page, { op, ...params })` (or an array, for a batch) returns the
+  result; a refusal rejects with an `ApiError` carrying `code` and
+  `message`. `runError(page, invocation)` returns that `{ code, message }`
+  and fails if the command succeeded.
+- Assert on real state and real pixels read back with the dev hooks, as
+  a UI spec would. Each command needs a spec that would fail if it were a
+  no-op, and one for each refusal.
+- A **comparison spec** runs one operation through the UI and through a
+  command and asserts the documents are equal:
+  `compareUiAndApi(page, { setup?, viaUi, viaApi })`. Each side gets a
+  reloaded page and a fresh document of the same size, and the two
+  `snapshot(page)`s (layers by position, pixel hashes in document space,
+  selection, history labels; no ids) must match. If they don't, find what
+  the UI does that the command doesn't; `ignore` is a last resort, and
+  each key in it needs a comment saying why.
+
+API specs run on the `chromium` project only. The production build is
+checked by `npm run test:e2e:preview` (`e2e/build-preview.spec.ts`).
+
+A spec outside `e2e/api/` may call the public `window.lopsy` when what it
+tests is that API on a page (`skill-recipes.spec.ts`,
+`lopsy-api-editor.spec.ts`, with `e2e/lopsy-api-helpers.ts`); everything a
+person does in it still goes through the UI. Like the API specs, such a
+spec tests the API in desktop Chromium only: it skips itself on the other
+projects.
+
+### Characterization specs (`e2e/surface-*.spec.ts`)
+
+These are UI specs that pin what each menu item, key handler and
+Layers-panel control does: its history label, toast, dialog, selection,
+layers and pixels, and when it is disabled or ignored. Behaviour that
+looks wrong is pinned as it is, with a comment saying so. They are the
+reference for changes to the surfaces: a change that alters one of these
+behaviours on purpose updates the spec in the same change.
+
+- Their helpers are in `e2e/surface-helpers.ts` (menus, state snapshots,
+  common setups) and `e2e/surface-helpers-keys.ts`, `-file.ts` and
+  `-filters.ts`; each file's header lists what it offers. They drive the UI
+  or only read state.
+- A test named `D<n>: ...` pins one side of an operation that two surfaces
+  do differently. The numbers are the entries of
+  [`docs/ui-surface-differences.md`](../docs/ui-surface-differences.md);
+  keep the two in step.
+- Press shifted letters in upper case: `ControlOrMeta+Shift+Z`, not
+  `ControlOrMeta+Shift+z`. Playwright delivers the lowercase letter as
+  `e.key`, and a handler that matches `e.key` alone takes it for the
+  unshifted shortcut (`ControlOrMeta+Shift+e` runs Merge Down).
+- The system clipboard is shared by every Playwright worker. A test that
+  needs it empty, or needs what it wrote to still be there at the paste,
+  fails when another worker copies in between. Put known content there
+  and check what the paste event carries (`pasteOverText` in
+  `e2e/surface-helpers-keys.ts`), or assert only on the internal
+  clipboard.
+
 ## Screenshots are the source of truth
 
 **Always write tests by screenshot first, assertion second.** The
@@ -250,7 +314,7 @@ will pass against any future regression.
 
 ## Where to find things
 
-### Exposed window globals (`src/main.tsx`)
+### Exposed window globals (`src/dev-hooks.ts`)
 
 These are only set in dev mode and only exist for testing. Always
 double-check that a global exists before using it — don't assume.
@@ -270,11 +334,13 @@ double-check that a global exists before using it — don't assume.
 | `__effectCacheStats()` | The live compositor's per-layer effect cache: `{entries, images, bytes, budgetBytes, hits, misses}`. `bytes` is the VRAM its cached images hold. `__readCompositedPixels` forces a recomposite but does not invalidate the cache, so a second read is served from it — compare that against an export to catch stale effects (`effect-cache-invalidation.spec.ts`). |
 | `__textFrameOffsetMeasureCount()` | How many times the engine has measured an upright text layer's render offset to recover its anchor. Measurements are cached by props, so moving a text layer must not raise it (`text-move-frame-cache-1223.spec.ts`). |
 
-**What is NOT exposed:** there is no `__engineState`, `__wasmBridge`,
-`__wasmEngine`, or `__imageAdjustmentsModule`. Several historical tests
-referenced these and silently passed because the globals returned
-`undefined`. Don't add them — use the four stores plus the read
-functions above.
+`__engineState` (`{ getEngine }`) and `__wasmBridge` (the
+`wasm-bridge` module) are set by `src/engine-wasm/engine-state.ts` each
+time the engine starts (`__wasmBridge` a moment later, by a dynamic
+import), so they are `undefined` until a document's engine is up;
+`__readLayerInDocument` and `surfaceState` use them. There is no
+`__wasmEngine` or `__imageAdjustmentsModule`: historical tests that read
+those silently passed on `undefined`.
 
 ### Shared helpers (`e2e/helpers.ts`)
 

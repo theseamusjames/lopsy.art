@@ -1,7 +1,7 @@
 use crate::gpu::uniforms::{uniforms, Mat2, Mat3};
 
 uniforms! {
-    /// `blit_region.wgsl`
+    /// `blit_region.wgsl` and `blit_resample_region.wgsl`
     pub struct BlitRegionParams {
         pub scale: [f32; 2],
         pub offset: [f32; 2],
