@@ -289,10 +289,24 @@ once, in this order:
    - `PHOTONAMOUS_GOOGLE_CLIENT_ID` = the client ID
    - `PHOTONAMOUS_GOOGLE_API_KEY` = the Picker API key
    - `PHOTONAMOUS_GOOGLE_APP_ID` = the project number
+   - `PHOTONAMOUS_TAG_MANAGER_ID` = the Google Tag Manager container ID
+     (`GTM-…`), for usage statistics
 
    The Google ones are optional. Without the client ID, Photonamous offers
    local storage only. They are public identifiers, so they are variables,
    not secrets.
+
+   Without the Tag Manager ID the site has no analytics at all. Before
+   setting it, check the container and the Analytics property against the
+   Privacy Policy (`apps/photonamous/privacy.html`, "Usage statistics"):
+   only a Google Analytics tag in the container; in the Google tag's
+   settings, **Allow user-provided data capabilities** off (it scans the
+   page for emails, phone numbers, names and addresses, and a photo
+   library's page has file names and captions on it); Google signals and
+   ads personalisation off; no Google Ads account linked. The page's
+   Content-Security-Policy allows Tag Manager's and Analytics' hosts only,
+   which stops advertising tags, but it cannot stop data sent inside the
+   Analytics request itself.
 
    Three more variables are optional, each with a default:
 

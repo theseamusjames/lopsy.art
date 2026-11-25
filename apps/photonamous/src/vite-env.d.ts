@@ -9,6 +9,8 @@ interface ImportMetaEnv {
   readonly VITE_GOOGLE_APP_ID?: string;
   /** `true` offers libraries on this computer (this browser, a folder) in a production build too; development always does. */
   readonly VITE_LOCAL_LIBRARIES?: string;
+  /** Google Tag Manager container ID (`GTM-…`): turns usage statistics on. Unset in development and in tests. */
+  readonly VITE_TAG_MANAGER_ID?: string;
   /** Lopsy's URL, for handoffs. Defaults to http://localhost:5173/ in development and https://lopsy.art/ in a build. */
   readonly VITE_LOPSY_URL?: string;
 }

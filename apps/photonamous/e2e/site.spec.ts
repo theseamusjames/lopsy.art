@@ -260,3 +260,17 @@ test('the service worker leaves the Privacy Policy and Terms to the network', as
   await expect(page.goto('/privacy')).rejects.toThrow(/ERR_INTERNET_DISCONNECTED/);
   await context.setOffline(false);
 });
+
+test('a build with no Tag Manager ID has no analytics: nothing is asked of Google', async ({ page }) => {
+  // The tests' build is given no container ID, as a development build is not (src/analytics/tag-manager.ts).
+  const asked: string[] = [];
+  page.on('request', (request) => {
+    const host = new URL(request.url()).hostname;
+    if (/googletagmanager\.com$|google-analytics\.com$|analytics\.google\.com$/.test(host)) asked.push(request.url());
+  });
+  await page.goto('/');
+  await expect(page.getByRole('navigation', { name: 'About Photonamous' })).toBeVisible();
+  expect(await page.evaluate(() => Reflect.get(window, 'dataLayer'))).toBeUndefined();
+  expect(await page.locator('script[data-tag-manager]').count()).toBe(0);
+  expect(asked).toEqual([]);
+});
