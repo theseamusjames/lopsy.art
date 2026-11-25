@@ -56,16 +56,31 @@ export function useFocusReturn(isOpen: boolean, target: RefObject<HTMLElement | 
 
 /**
  * While `isOn` disables the view's controls (Before), the browser takes
- * focus off a disabled one, a moment later, and leaves it on the page.
- * The control focused as it began gets focus back when it ends, unless
- * focus has gone somewhere else since.
+ * focus off a disabled one and leaves it on the page. Chrome does so at
+ * once, as React sets `disabled`, before this hook's effect runs, so the
+ * control that lost focus in that same commit is remembered too. The
+ * control focused as it began gets focus back when it ends, unless focus
+ * has gone somewhere else since.
  */
 export function useFocusKept(isOn: boolean): void {
   const kept = useRef<HTMLElement | null>(null);
+  // The element that lost focus to nothing in the task now running; cleared once it ends.
+  const justLost = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const handleFocusOut = (e: FocusEvent) => {
+      if (e.relatedTarget !== null || !(e.target instanceof HTMLElement)) return;
+      justLost.current = e.target;
+      queueMicrotask(() => {
+        justLost.current = null;
+      });
+    };
+    document.addEventListener('focusout', handleFocusOut, true);
+    return () => document.removeEventListener('focusout', handleFocusOut, true);
+  }, []);
   useLayoutEffect(() => {
     if (isOn) {
       const active = document.activeElement;
-      kept.current = active instanceof HTMLElement && active !== document.body ? active : null;
+      kept.current = active instanceof HTMLElement && active !== document.body ? active : justLost.current;
       return;
     }
     const element = kept.current;
