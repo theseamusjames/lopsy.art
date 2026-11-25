@@ -488,7 +488,7 @@ fn sensor_family_siblings(model: &str) -> &'static [&'static str] {
 // ── Presets in the Photonamous recipe's units ────────────────────────
 
 /// A preset as the Edit view's White balance menu offers it: the recipe's
-/// temperature and tint (−150..150, relative to the as-shot balance, in the
+/// temperature and tint (−200..200, relative to the as-shot balance, in the
 /// RAW model of `develop_stats::RAW_TEMPERATURE_STOPS`), for one body.
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct RecipeWbPreset {
@@ -541,7 +541,7 @@ pub fn recipe_temperature_tint(preset: [f32; 3], as_shot: [f32; 3]) -> (f32, f32
 }
 
 /// The menu of presets for `camera` shot at `as_shot` multipliers, in menu
-/// order, clamped to the sliders' −150..150 and rounded. A body missing
+/// order, clamped to Temperature and Tint's −200..200 and rounded. A body missing
 /// from the table uses its sensor family's (`sensor_family_siblings`).
 pub fn recipe_presets(camera: &str, as_shot: [f32; 3]) -> Vec<RecipeWbPreset> {
     let mut out: Vec<(u8, RecipeWbPreset)> = presets_for_camera(camera)
@@ -549,7 +549,7 @@ pub fn recipe_presets(camera: &str, as_shot: [f32; 3]) -> Vec<RecipeWbPreset> {
         .filter_map(|p| {
             let (name, order) = menu_entry(p.illuminant)?;
             let (t, m) = recipe_temperature_tint(p.multipliers, as_shot);
-            let end = crate::scene_tone::SLIDER_END;
+            let end = crate::scene_tone::WB_SLIDER_END;
             let slider = |v: f32| v.clamp(-end, end).round() + 0.0;
             Some((order, RecipeWbPreset { name: name.to_string(), temperature: slider(t), tint: slider(m) }))
         })
@@ -629,10 +629,10 @@ mod recipe_tests {
         assert!(!recipe_presets("X100VI", daylight).is_empty());
     }
 
-    /// A preset past the old ±100 is offered at its own value up to ±150,
-    /// and one past that stops at 150.
+    /// A preset past the old ±100 is offered at its own value up to ±200,
+    /// and one past that stops at 200.
     #[test]
-    fn presets_are_clamped_to_150_not_100() {
+    fn presets_are_clamped_to_200_not_100() {
         let daylight = lookup_wb("X-T5", "Daylight").unwrap();
         // Shot under a very warm light: the camera's Daylight is far warmer than as shot.
         let as_shot = [daylight[0] * 0.55, 1.0, daylight[2] * 1.8];
@@ -642,9 +642,12 @@ mod recipe_tests {
             .filter(|p| menu_entry(p.illuminant).is_some())
             .map(|p| recipe_temperature_tint(p.multipliers, as_shot).0)
             .collect();
-        assert!(raw.iter().any(|t| t.abs() > 100.0 && t.abs() < 150.0), "{raw:?}");
-        assert!(presets.iter().all(|p| p.temperature.abs() <= 150.0 && p.tint.abs() <= 150.0));
+        assert!(raw.iter().any(|t| t.abs() > 100.0 && t.abs() < 200.0), "{raw:?}");
+        assert!(presets.iter().all(|p| p.temperature.abs() <= 200.0 && p.tint.abs() <= 200.0));
         assert!(presets.iter().any(|p| p.temperature.abs() > 100.0), "{presets:?}");
+        // Shot under a far warmer light still: the preset past the end stops at it.
+        let far = recipe_presets("X-T5", [daylight[0] * 0.2, 1.0, daylight[2] * 4.0]);
+        assert!(far.iter().any(|p| p.temperature.abs() == 200.0), "{far:?}");
     }
 
     #[test]

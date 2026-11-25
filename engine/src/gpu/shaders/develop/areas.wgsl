@@ -36,7 +36,8 @@ fn luma(c: vec3<f32>) -> f32 {
     return dot(c, vec3<f32>(0.2126, 0.7152, 0.0722));
 }
 
-// The sliders arrive in −150..150; this pass holds them to ±100
+// The sliders arrive in −150..150 (Temperature and Tint in −200..200);
+// this pass holds them to ±100
 // (lopsy_core::areas::LEGACY_LIMIT), where contrast below −100 would turn
 // the image's contrast over.
 const LEGACY_LIMIT: f32 = 100.0;

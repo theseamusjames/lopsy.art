@@ -333,7 +333,7 @@ pub const RAW_TINT_STOPS: f32 = 0.4;
 pub const ENCODED_TEMPERATURE_STOPS: f32 = 0.5;
 pub const ENCODED_TINT_STOPS: f32 = 0.35;
 
-/// The `[temperature, tint]` (−150..150) whose gains make the mean of
+/// The `[temperature, tint]` (−200..200) whose gains make the mean of
 /// `rgba16` (straight RGBA u16, transparent pixels skipped) neutral, with
 /// the RAW stops when `is_raw` and the encoded ones otherwise. `[0, 0]`
 /// when the patch is empty or has a channel at 0. Mirrors the app's
@@ -374,7 +374,7 @@ pub fn neutral_temperature_tint_clipped(rgba16: &[u16], is_raw: bool, clip: Opti
     };
     let t = (r / b).log2() / (2.0 * ts as f64);
     let m = -(g / (r * b).sqrt()).log2() / ms as f64;
-    let end = f64::from(crate::scene_tone::SLIDER_END);
+    let end = f64::from(crate::scene_tone::WB_SLIDER_END);
     let slider = |v: f64| ((v * 100.0).clamp(-end, end).round() as f32) + 0.0;
     [slider(t), slider(m)]
 }

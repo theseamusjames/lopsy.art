@@ -31,8 +31,8 @@
 //! | 10 | contrast | −150..150 |
 //! | 11 | highlights | −150..150 |
 //! | 12 | shadows | −150..150 |
-//! | 13 | temperature | −150..150 |
-//! | 14 | tint | −150..150 |
+//! | 13 | temperature | −200..200 |
+//! | 14 | tint | −200..200 |
 //! | 15 | saturation | −100..150 |
 //!
 //! Document pixel coordinates have their origin at the top-left corner of
@@ -80,7 +80,7 @@
 //! `develop/area_layer.wgsl`). The mask is the one above, amount and invert
 //! included. An area with nothing further set draws no layer.
 
-use crate::scene_tone::SLIDER_END;
+use crate::scene_tone::{SLIDER_END, WB_SLIDER_END};
 
 /// What the areas pass of the chain without the working space holds each
 /// slider to, as it always took them. Within ±100 its maths is unchanged.
@@ -131,6 +131,7 @@ pub fn parse_areas(values: &[f32]) -> Result<(Vec<Area>, Vec<f32>), String> {
             k => return Err(format!("Area kind must be 0 (linear) or 1 (radial), got {k}")),
         };
         let slider = |x: f32| x.clamp(-SLIDER_END, SLIDER_END);
+        let wb = |x: f32| x.clamp(-WB_SLIDER_END, WB_SLIDER_END);
         let a = Area {
             radial,
             invert: v[1] >= 0.5,
@@ -142,8 +143,8 @@ pub fn parse_areas(values: &[f32]) -> Result<(Vec<Area>, Vec<f32>), String> {
             contrast: slider(v[10]),
             highlights: slider(v[11]),
             shadows: slider(v[12]),
-            temperature: slider(v[13]),
-            tint: slider(v[14]),
+            temperature: wb(v[13]),
+            tint: wb(v[14]),
             saturation: v[15].clamp(crate::look::CHROMA_FLOOR, SLIDER_END),
         };
         clamped.extend_from_slice(&[
@@ -365,6 +366,14 @@ mod tests {
         assert_eq!(adjust(px, &a, 1.0), adjust(px, &area(held), 1.0));
         v[10] = 400.0;
         assert_eq!(area(v).contrast, 150.0);
+        // Temperature and Tint run further, and are held to 100 the same way.
+        v[10..16].copy_from_slice(&[0.0, 0.0, 0.0, 200.0, -200.0, 0.0]);
+        let a = area(v);
+        assert_eq!((a.temperature, a.tint), (200.0, -200.0));
+        held[10..16].copy_from_slice(&[0.0, 0.0, 0.0, 100.0, -100.0, 0.0]);
+        assert_eq!(adjust(px, &a, 1.0), adjust(px, &area(held), 1.0));
+        v[13] = 900.0;
+        assert_eq!(area(v).temperature, 200.0);
     }
 
     #[test]

@@ -14,8 +14,9 @@
 //!    gains below are powers of two of the blended values), tone sliders in
 //!    their own units, which move knots. A mask therefore costs no pass, and
 //!    where `m` is 0 the pixel gets exactly the photo's own values. Each
-//!    slider runs to ±[`SLIDER_END`] (150), and a mask's adds up to as much
-//!    again, so the blended values reach ±300.
+//!    slider runs to ±[`SLIDER_END`] (150), Temperature and Tint to
+//!    ±[`WB_SLIDER_END`] (200), and a mask's adds up to as much again, so
+//!    the blended values reach ±300, and ±400 for white balance.
 //! 2. **Exposure and white balance**, a gain on all three channels:
 //!    `2^ev` times the white-balance gains, red `2^(WB_TEMPERATURE_STOPS·t)`,
 //!    blue `2^(−WB_TEMPERATURE_STOPS·t)`, green `2^(−WB_TINT_STOPS·tint)`
@@ -119,15 +120,24 @@ pub const WB_TINT_STOPS: f32 = 0.4;
 /// Floats in `setDevelopTone`.
 pub const TONE_LEN: usize = 8;
 /// The far end of a develop slider whose 100 is not a real limit, in
-/// recipe units: Temperature, Tint and the tone sliders run ±150, and the
-/// other sliders that widened run to it at their open end. Every mapping
-/// from such a slider is linear in it, or a power of two of it, so 150 is
-/// one and a half times as far along the same curve as 100.
+/// recipe units: the tone sliders run ±150, and the other sliders that
+/// widened run to it at their open end. Every mapping from such a slider
+/// is linear in it, or a power of two of it, so 150 is one and a half
+/// times as far along the same curve as 100.
 pub const SLIDER_END: f32 = 150.0;
 
+/// The far end of Temperature and Tint, the photo's and a mask's: ±200.
+/// They run further than the other sliders because a camera's own
+/// white-balance presets do: a photo shot under tungsten light with the
+/// camera set for shade needs more than 150 to reach the Tungsten preset.
+/// White balance is a power of two of the value, so 200 is the same curve
+/// twice as far along as 100.
+pub const WB_SLIDER_END: f32 = 200.0;
+
 /// The photo's own sliders, in the recipe's units: exposure in EV
-/// (−5..5), the rest −150..150. Exposure, Temperature and Tint are for a
-/// photo that is not RAW; a RAW photo's are applied by the RAW step.
+/// (−5..5), Temperature and Tint −200..200, the rest −150..150. Exposure,
+/// Temperature and Tint are for a photo that is not RAW; a RAW photo's are
+/// applied by the RAW step.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct ToneSliders {
     pub exposure: f32,
@@ -143,7 +153,8 @@ pub struct ToneSliders {
 impl ToneSliders {
     /// `setDevelopTone`'s 8 floats: exposure, temperature, tint, contrast,
     /// highlights, shadows, whites, blacks. Exposure is clamped to ±10 EV,
-    /// the rest to ±[`SLIDER_END`].
+    /// temperature and tint to ±[`WB_SLIDER_END`], the rest to
+    /// ±[`SLIDER_END`].
     pub fn parse(values: &[f32]) -> Result<Self, String> {
         if values.len() != TONE_LEN {
             return Err(format!("Develop tone needs {TONE_LEN} floats, got {}", values.len()));
@@ -152,10 +163,11 @@ impl ToneSliders {
             return Err("Develop tone values must be finite".to_string());
         }
         let s = |v: f32| v.clamp(-SLIDER_END, SLIDER_END);
+        let wb = |v: f32| v.clamp(-WB_SLIDER_END, WB_SLIDER_END);
         Ok(Self {
             exposure: values[0].clamp(-10.0, 10.0),
-            temperature: s(values[1]),
-            tint: s(values[2]),
+            temperature: wb(values[1]),
+            tint: wb(values[2]),
             contrast: s(values[3]),
             highlights: s(values[4]),
             shadows: s(values[5]),
@@ -458,10 +470,19 @@ mod tests {
                 }
             }
         }
-        // The parser takes ±150 and stops there.
+        // The parser takes ±150 and stops there; Temperature and Tint, ±200.
         let t = ToneSliders::parse(&[20.0, 150.0, -150.0, 151.0, -400.0, 150.0, 149.5, -150.0]).unwrap();
         assert_eq!((t.exposure, t.temperature, t.tint, t.contrast, t.highlights), (10.0f32.min(20.0), 150.0, -150.0, 150.0, -150.0));
         assert_eq!((t.shadows, t.whites, t.blacks), (150.0, 149.5, -150.0));
+        let t = ToneSliders::parse(&[0.0, 200.0, -200.0, 200.0, 0.0, 0.0, 0.0, 0.0]).unwrap();
+        assert_eq!((t.temperature, t.tint, t.contrast), (200.0, -200.0, 150.0));
+        let t = ToneSliders::parse(&[0.0, 201.0, -900.0, 0.0, 0.0, 0.0, 0.0, 0.0]).unwrap();
+        assert_eq!((t.temperature, t.tint), (200.0, -200.0));
+        // 200 is the same curve twice as far along: the gains at 100, squared, up to the brightness kept.
+        let (g1, g2) = (white_balance_gains(100.0, -100.0), white_balance_gains(200.0, -200.0));
+        for (a, b) in [(0, 1), (1, 2)] {
+            assert!(((g2[a] / g2[b]) - (g1[a] / g1[b]).powi(2)).abs() < 1e-4 * (g2[a] / g2[b]), "{g1:?} {g2:?}");
+        }
         assert!(ToneSliders::parse(&[0.0, f32::NAN, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]).is_err());
     }
 
@@ -473,8 +494,8 @@ mod tests {
         let inputs: [[f32; 3]; 7] = [[0.0; 3], [1.0; 3], [16.0; 3], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [-0.1, 0.5, 1.2], [1e-7, 0.0, 0.0]];
         for c in inputs {
             for ev in [-14.0f32, 0.0, 14.0] {
-                for t in [-300.0f32, 0.0, 300.0] {
-                    for tint in [-300.0f32, 300.0] {
+                for t in [-400.0f32, 0.0, 400.0] {
+                    for tint in [-400.0f32, 400.0] {
                         for tone in WIDE {
                             let out = tone_pixel(c, ev, t, tint, [tone, -tone, tone, tone, -tone]);
                             assert!(out.iter().all(|v| v.is_finite()), "{c:?} ev {ev} t {t} tint {tint} tone {tone}: {out:?}");

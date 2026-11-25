@@ -254,7 +254,8 @@ pub fn clear_image_local_contrast(engine: &mut Engine) {
 /// `[kind (0 linear, 1 radial), invert (0/1), amount 0..1,
 ///   x0, y0, x1, y1, rotation (rad), feather 0..1,
 ///   exposure (EV −4..4), contrast, highlights, shadows,
-///   temperature, tint (−150..150), saturation (−100..150)]`, clamped.
+///   temperature, tint (−200..200), saturation (−100..150)]`, clamped
+/// (contrast, highlights and shadows to ±150).
 /// Without the working space the areas pass holds the six sliders to
 /// ±100; with it the tone and look passes take them whole.
 /// Linear: (x0, y0) = p0 (full effect), (x1, y1) = p1 (no effect).
@@ -389,13 +390,13 @@ pub fn clear_image_finish(engine: &mut Engine) {
 // All zeros is the identity.
 
 /// Tone on scene data, before the profile's base curve: 8 floats
-/// `[exposure EV −5..5, temperature, tint,
+/// `[exposure EV −5..5, temperature, tint (each −200..200),
 ///   contrast, highlights, shadows, whites, blacks (each −150..150)]`, the
 /// recipe's units, clamped (exposure to ±10 EV). Exposure, Temperature and
 /// Tint are for a photo that is not RAW; for a RAW photo send them as 0
 /// (the RAW step applies the photo's own). Temperature ±100 is a red and
 /// blue gain of 2^(±0.6) and 2^(∓0.6), Tint ±100 a green gain of 2^(∓0.4),
-/// luminance kept; ±150 is 2^(±0.9) and 2^(∓0.6).
+/// luminance kept; ±200 is 2^(±1.2) and 2^(∓0.8).
 #[wasm_bindgen(js_name = "setDevelopTone")]
 pub fn set_develop_tone(engine: &mut Engine, values: &[f32]) -> Result<(), JsError> {
     lopsy_engine::commands::develop::set_develop_tone(&mut engine.inner, values).map_err(|e| JsError::new(&e))

@@ -542,8 +542,8 @@ pub fn composite_for_export_sized(engine: &mut EngineInner, width: u32, height: 
 
 /// Tone on scene data: `lopsy_core::scene_tone::ToneSliders::parse`'s 8
 /// floats (exposure EV, temperature, tint, contrast, highlights, shadows,
-/// whites, blacks; recipe units: exposure −10..10 EV, the rest −150..150,
-/// clamped). For a RAW photo, send exposure,
+/// whites, blacks; recipe units: exposure −10..10 EV, temperature and tint
+/// −200..200, the rest −150..150, clamped). For a RAW photo, send exposure,
 /// temperature and tint as 0: the RAW step applies the photo's own.
 pub fn set_develop_tone(engine: &mut EngineInner, values: &[f32]) -> Result<(), String> {
     let sliders = lopsy_core::scene_tone::ToneSliders::parse(values)?;

@@ -154,7 +154,7 @@
 //! White balance and statistics:
 //! - `rafAutoWhiteBalance(linearRgba)`: near-neutral-pixel white balance, as `wbRatio`.
 //! - `rafAutoWhiteBalanceClipped(linearRgba, clipLevels)`: the same, leaving out clipped and reconstructed pixels.
-//! - `rafWhiteBalancePresets(rafBytes)`, `rafWhiteBalanceKelvin(rafBytes)`: the body's presets in recipe units (clamped to the sliders' ±150), and the Kelvin scale, a line fitted through the presets (a RAF has no calibration data, so its Kelvin is a readout, not a colour temperature). A DNG's Kelvin is real: `dngWhiteBalance` and `dngWhiteBalanceKelvin`.
+//! - `rafWhiteBalancePresets(rafBytes)`, `rafWhiteBalanceKelvin(rafBytes)`: the body's presets in recipe units (clamped to Temperature and Tint's ±200), and the Kelvin scale, a line fitted through the presets (a RAF has no calibration data, so its Kelvin is a readout, not a colour temperature). A DNG's Kelvin is real: `dngWhiteBalance` and `dngWhiteBalanceKelvin`.
 //! - `sampleNeutralWhiteBalance(engine, x, y, radius)` (readback): the picker; leaves out clipped and reconstructed pixels when `setRawDevelop`'s JSON has `clipLevels`.
 //! - `readDevelopHistogram(engine)` (readback): 4 × 256 bins of the displayed result; with the working space, of the sRGB output.
 //! - `readHdrHistogram(engine, peak)` (readback, working space only): 4 × 256 bins of the HDR rendering for the HDR canvas in sRGB primaries, encoded values from black (bin 0) to the peak (bin 255); `hdrHistogramWhiteBin(peak)` is where white falls (139.7 for 4).
@@ -171,7 +171,8 @@
 //! is the identity, and each acts only with the working space):
 //! - `setDevelopTone(engine, Float32Array(8))`: exposure EV, temperature,
 //!   tint, contrast, highlights, shadows, whites, blacks (recipe units:
-//!   exposure clamped to ±10 EV, the rest to ±150, `scene_tone::SLIDER_END`);
+//!   exposure clamped to ±10 EV, temperature and tint to ±200,
+//!   `scene_tone::WB_SLIDER_END`, the rest to ±150, `scene_tone::SLIDER_END`);
 //!   exposure, temperature and tint 0 for a RAW photo.
 //! - `setDevelopLook(engine, Float32Array(44))`: vibrance and saturation
 //!   (−100..150), Color by hue's 24 (hue and luminance ±150, saturation
@@ -222,6 +223,8 @@
 //! (`lopsy_core::scene_tone::SLIDER_END`); every mapping from it is linear
 //! in it or a power of two of it, so 150 is one and a half times as far
 //! along the same curve and a value within ±100 renders as it always did.
+//! Temperature and Tint, the photo's and a mask's, run to 200
+//! (`scene_tone::WB_SLIDER_END`): a camera's own presets reach that far.
 //! The ends that stayed are real ones: Saturation, Vibrance and a band's
 //! saturation at −100 (grey), the details at −100 (removed exactly), haze at
 //! +100 (the whole veil), noise reduction's colour and keep detail at 100,
