@@ -17,19 +17,19 @@
 #   base) and the engine's workers; manifest-src 'self': the web manifest.
 # - No Cross-Origin-Opener-Policy: it would cut the sign-in popup and the
 #   Lopsy handoff off from their openers (6.4, 6.12).
-# - Usage statistics (src/analytics/tag-manager.ts): Tag Manager's loader
-#   and the Analytics script it brings (*.googletagmanager.com) in
-#   script-src; Analytics' collection hosts (*.google-analytics.com,
-#   *.analytics.google.com) in connect-src and img-src, as Google's CSP
-#   guide for Tag Manager lists them for Google Analytics 4. Left out on
-#   purpose: every advertising host (doubleclick.net, googleadservices.com,
-#   google.com/ads and the like), so a container set to do more than
-#   Analytics is refused here; and 'unsafe-inline' for scripts, so a Custom
-#   HTML tag cannot run.
+# - Usage statistics are added by Cloudflare, as on lopsy.art, not by the
+#   app: nothing in the source loads an analytics script. Zaraz (the
+#   Google tag, run at Cloudflare's edge) is served from this origin under
+#   /cdn-cgi/zaraz/ and needs nothing here: Cloudflare's CSP reference says
+#   "No updates required", since it adjusts the header itself. Web
+#   Analytics' beacon needs its script host (static.cloudflareinsights.com)
+#   and its collection host (cloudflareinsights.com), as the same reference
+#   lists. No Google analytics or advertising host is allowed, and no
+#   'unsafe-inline' for scripts.
 # A host added here is another party the page talks to: say so in the
 # Privacy Policy (privacy.html) in the same change.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://accounts.google.com/gsi/ https://apis.google.com https://*.googletagmanager.com; connect-src 'self' https://www.googleapis.com https://oauth2.googleapis.com https://content.googleapis.com https://accounts.google.com https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com; frame-src https://accounts.google.com https://docs.google.com https://drive.google.com; img-src 'self' blob: data: https://*.googleusercontent.com https://*.google-analytics.com https://*.googletagmanager.com; worker-src 'self' blob:; manifest-src 'self'; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://accounts.google.com/gsi/ https://apis.google.com https://static.cloudflareinsights.com; connect-src 'self' https://www.googleapis.com https://oauth2.googleapis.com https://content.googleapis.com https://accounts.google.com https://cloudflareinsights.com; frame-src https://accounts.google.com https://docs.google.com https://drive.google.com; img-src 'self' blob: data: https://*.googleusercontent.com; worker-src 'self' blob:; manifest-src 'self'; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
 

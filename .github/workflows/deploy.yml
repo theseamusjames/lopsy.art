@@ -64,7 +64,6 @@ jobs:
           VITE_GOOGLE_CLIENT_ID: ${{ vars.PHOTONAMOUS_GOOGLE_CLIENT_ID }}
           VITE_GOOGLE_API_KEY: ${{ vars.PHOTONAMOUS_GOOGLE_API_KEY }}
           VITE_GOOGLE_APP_ID: ${{ vars.PHOTONAMOUS_GOOGLE_APP_ID }}
-          VITE_TAG_MANAGER_ID: ${{ vars.PHOTONAMOUS_TAG_MANAGER_ID }}
 
       - name: Deploy Photonamous to Cloudflare Pages
         if: vars.DEPLOY_PHOTONAMOUS == 'true'

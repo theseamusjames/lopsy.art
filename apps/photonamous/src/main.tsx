@@ -6,7 +6,6 @@ import { finishDrivePick, isDrivePickReturn } from './app/real/drive-pick-return
 import { ErrorBoundary } from './components/ErrorBoundary/ErrorBoundary';
 import { GradeScreen } from './handoff/GradeScreen/GradeScreen';
 import { lopsyUrl } from './handoff/send-to-lopsy';
-import { startTagManager } from './analytics/tag-manager';
 import { installCharacterKeyGuard } from './shortcuts/character-keys';
 import { registerServiceWorker } from './sw/register';
 import './styles/index.css';
@@ -35,8 +34,6 @@ function start(): void {
   );
 
   registerServiceWorker();
-  // Usage statistics, in a build the deploy gave a container ID; never in development or tests.
-  startTagManager(import.meta.env.VITE_TAG_MANAGER_ID);
   // The build this page runs is chosen at start-up, so the worker keeps its wasm even if no photo is opened before going offline.
   if (import.meta.env.PROD) {
     import('./engine/develop-engine')

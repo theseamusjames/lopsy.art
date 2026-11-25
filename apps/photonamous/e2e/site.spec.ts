@@ -292,13 +292,19 @@ test('the service worker leaves the Privacy Policy and Terms to the network', as
   await context.setOffline(false);
 });
 
-test('a build with no Tag Manager ID has no analytics: nothing is asked of Google', async ({ page }) => {
-  // The tests' build is given no container ID, as a development build is not (src/analytics/tag-manager.ts).
+test('the app loads no analytics of its own: Cloudflare adds it, as on lopsy.art', async ({ page }) => {
+  // Zaraz and Web Analytics are injected at Cloudflare's edge (public/_headers says how the policy allows them),
+  // so the files this build serves ask nothing of Google's or Cloudflare's analytics hosts.
   const asked: string[] = [];
   page.on('request', (request) => {
     const host = new URL(request.url()).hostname;
-    if (/googletagmanager\.com$|google-analytics\.com$|analytics\.google\.com$/.test(host)) asked.push(request.url());
+    if (/googletagmanager\.com$|google-analytics\.com$|analytics\.google\.com$|cloudflareinsights\.com$/.test(host)) asked.push(request.url());
   });
+  await page.goto('/');
+  await expect(page.getByRole('navigation', { name: 'About Photonamous' })).toBeVisible();
+  expect(await page.evaluate(() => Reflect.get(window, 'dataLayer'))).toBeUndefined();
+  expect(asked).toEqual([]);
+});
   await page.goto('/');
   await expect(page.getByRole('navigation', { name: 'About Photonamous' })).toBeVisible();
   expect(await page.evaluate(() => Reflect.get(window, 'dataLayer'))).toBeUndefined();
