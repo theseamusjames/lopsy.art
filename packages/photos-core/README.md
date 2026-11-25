@@ -126,6 +126,19 @@ library (`lock.ts`) allows one writer per device.
   - Controls added after the first release (`LATER_PATHS`, `LATER_GROUPS`)
     count in `recipeHash` only when they are set. New fields must keep
     existing hashes, or every stored preview goes stale.
+- **Newer pipelines are never written** (`library/pipeline.ts`). A
+  version whose `recipe.pipeline` is newer than this build's
+  `PIPELINE_VERSION` was edited on a newer build; this build reads only
+  the leaves it knows, clamped to its ranges, so writing that reading
+  back would lose the rest.
+  - `editRecipe` and `setRecipe` throw `NewerPipelineError` for it, and
+    `setRecipe`, `createVersion` and `addAsset` throw for a recipe from
+    a newer pipeline.
+  - `applyRecipeValues` (paste, presets) passes it by; `undo` and `redo`
+    return false; `setPreview` keeps the newer build's previews.
+  - An XMP sidecar from a newer pipeline brings its marks, not its edits.
+  - Its fields stay in the merge store, the snapshots and the journal
+    exactly as written. Tests: `pipeline.test.ts`.
 - **Tombstones.** Things that devices can delete while others edit them
   are deleted with a flag, not by removing them: `deleted` on assets,
   versions, albums and presets, and `areas.<id>.deleted` on areas.

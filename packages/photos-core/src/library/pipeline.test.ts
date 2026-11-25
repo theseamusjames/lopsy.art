@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { decodeSegment, encodeSegment, segmentName } from './journal';
 import { MemoryLocalStore } from './local-store';
-import { isPreviewCurrent } from './pipeline';
+import { applyXmp } from '../xmp/sidecars';
+import { isNewerPipeline, isPreviewCurrent, NewerPipelineError } from './pipeline';
 import { DEFAULT_RECIPE, PIPELINE_VERSION, recipeFromPaths, recipeHash } from './recipe';
 import { openLibrary } from './session';
+import { loadNewestSnapshot } from './snapshot';
 import { TestAdapter } from './test-support/test-adapter';
 import type { Json, LibrarySession, NewAsset, Op, OpEnvelope, PreviewRef, Version } from './types';
 import { OP_SCHEMA_VERSION } from './validate';
@@ -238,5 +240,91 @@ describe('isPreviewCurrent', () => {
     // A version from a newer pipeline is never current here, even with that pipeline's own preview.
     const v = version(newer);
     expect(isPreviewCurrent(preview({ pipeline: newer, recipeHash: recipeHash(v.recipe) }), v)).toBe(false);
+  });
+});
+
+describe('a version from a newer pipeline', () => {
+  const NEWER = PIPELINE_VERSION + 1;
+  /** What a newer build wrote: its pipeline, a setting this build does not know and one past this build's range. */
+  const newerFields: Readonly<Record<string, Json>> = {
+    assetId: 'asset-new',
+    name: 'Original',
+    createdAt: '2027-01-01T00:00:00.000Z',
+    thumb: { fileId: 'new-thumb', recipeHash: 'newer-hash', pipeline: NEWER, width: 512, height: 341 },
+    screen: { fileId: 'new-screen', recipeHash: 'newer-hash', pipeline: NEWER, width: 2048, height: 1365 },
+    deleted: false,
+    'recipe.pipeline': NEWER,
+    'recipe.tone.exposure': 7.5,
+    'recipe.tone.glow': 30,
+    'recipe.areas.a1.kind': 'spiral',
+  };
+
+  async function libraryWithNewerVersion(options: { snapshotEvery?: number } = {}) {
+    const adapter = new TestAdapter();
+    const writer = await open(adapter);
+    writer.setSetting('grid.size', 3);
+    await writeRawOps(adapter, writer, [assetOp('asset-new', 'version-new'), { t: 'set', kind: 'version', id: 'version-new', fields: newerFields }]);
+    const reader = await openLibrary({ adapter, store: new MemoryLocalStore(), autoSync: false, ...options });
+    await reader.syncNow();
+    return { adapter, reader };
+  }
+
+  it('opens, reads its pipeline as written, and its previews as not current', async () => {
+    const { reader } = await libraryWithNewerVersion();
+    const version = reader.getView().versions.get('version-new');
+    expect(version?.recipe.pipeline).toBe(NEWER);
+    expect(version && isNewerPipeline(version.recipe)).toBe(true);
+    expect(version && isPreviewCurrent(version.thumb, version)).toBe(false);
+  });
+
+  it('is never written: edits throw, pastes and presets pass it by, undo and previews do nothing', async () => {
+    const { adapter, reader } = await libraryWithNewerVersion();
+    const { versionId: own } = reader.addAsset(photo(1));
+    const view = reader.getView();
+    const recipe = view.versions.get('version-new')?.recipe ?? DEFAULT_RECIPE;
+    expect(() => reader.editRecipe('version-new', { 'tone.contrast': 10 }, 'Contrast')).toThrow(NewerPipelineError);
+    expect(() => reader.setRecipe('version-new', DEFAULT_RECIPE, 'Reset to original')).toThrow(NewerPipelineError);
+    // A copy of what this build read of it would be labelled newer without all its settings.
+    expect(() => reader.createVersion('asset-new', 'Copy', recipe)).toThrow(NewerPipelineError);
+    expect(() => reader.setRecipe(own, recipe, 'Paste')).toThrow(NewerPipelineError);
+    reader.applyRecipeValues(['version-new', own], { 'tone.contrast': 10 }, 'Paste edits');
+    expect(reader.undo('version-new')).toBe(false);
+    expect(reader.redo('version-new')).toBe(false);
+    reader.setPreview('version-new', 'thumb', { fileId: 'old-build', recipeHash: recipeHash(recipe), pipeline: PIPELINE_VERSION, width: 1, height: 1 });
+    expect(reader.getView().versions.get(own)?.recipe.tone.contrast).toBe(10);
+    expect(reader.getView().versions.get('version-new')?.thumb?.fileId).toBe('new-thumb');
+    await reader.syncNow();
+    expect(versionWrites(await storedOps(adapter, reader), 'version-new')).toEqual([]);
+  });
+
+  it('survives a load and save cycle untouched, through the snapshot too', async () => {
+    const { adapter, reader } = await libraryWithNewerVersion({ snapshotEvery: 1 });
+    // Other work on the library, which writes the state and a snapshot.
+    reader.addAsset(photo(2));
+    reader.setMarks(['asset-new'], { rating: 4 });
+    await reader.syncNow();
+    await reader.close();
+    const reopened = await open(adapter);
+    await reopened.syncNow();
+    expect(reopened.getView().assets.get('asset-new')?.rating).toBe(4);
+    const newest = await loadNewestSnapshot(adapter, reopened.layout.snapshotsId, reopened.libraryId);
+    const fields = newest.snapshot?.store.get('version', 'version-new')?.fields;
+    expect(fields && Object.fromEntries([...fields].map(([path, r]) => [path, r.value]))).toEqual(newerFields);
+  });
+
+  it('is not taken from an XMP sidecar a newer pipeline wrote', async () => {
+    const session = await open(new TestAdapter());
+    const { assetId, versionId } = session.addAsset(photo(1));
+    const recipe = { ...DEFAULT_RECIPE, pipeline: NEWER, tone: { ...DEFAULT_RECIPE.tone, exposure: 1 } };
+    const applied = applyXmp(
+      session,
+      assetId,
+      versionId,
+      { rating: 3, setAside: null, label: null, keywords: [], title: null, caption: null, recipe, edits: {}, crop: null, orientation: null },
+      1,
+    );
+    expect(applied).toEqual({ marks: true, keywords: 0, recipe: false });
+    expect(session.getView().versions.get(versionId)?.recipe).toMatchObject({ pipeline: PIPELINE_VERSION, tone: { exposure: 0 } });
+    expect(session.getView().assets.get(assetId)?.rating).toBe(3);
   });
 });

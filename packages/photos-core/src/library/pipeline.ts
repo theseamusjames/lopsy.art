@@ -7,8 +7,30 @@
  * as UNRECORDED_PIPELINE (recipe.ts), 1.
  */
 
-import { PIPELINE_VERSION, recipeHash } from './recipe';
+import { PIPELINE_VERSION, recipeHash, type Recipe } from './recipe';
 import type { PreviewRef, Version } from './types';
+
+/**
+ * Whether the recipe was edited with a pipeline newer than this build's
+ * (a library edited on a newer build, opened on an older cached one).
+ * This build cannot render it as it was meant, and must not write to it:
+ * its reading of the recipe drops or clamps the settings it does not
+ * know, so writing that reading back would lose them.
+ */
+export function isNewerPipeline(recipe: Pick<Recipe, 'pipeline'>): boolean {
+  return recipe.pipeline > PIPELINE_VERSION;
+}
+
+export const NEWER_PIPELINE_MESSAGE =
+  'This version was edited with a newer version of Photonamous. Reload to update the app before changing it.';
+
+/** Thrown by a recipe command on a version (or with a recipe) from a newer pipeline than this build's. */
+export class NewerPipelineError extends Error {
+  constructor() {
+    super(NEWER_PIPELINE_MESSAGE);
+    this.name = 'NewerPipelineError';
+  }
+}
 
 /**
  * Whether a stored preview shows the version as this build would render

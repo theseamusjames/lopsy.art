@@ -23,6 +23,7 @@ import { EMPTY_BOOKKEEPING, type LocalStore, type SyncBookkeeping } from './loca
 import { MergeStore, type RecipeWrite } from './merge-store';
 import { exportSettingsFromJson, exportSettingsProblem, type ExportSettings } from '../export/types';
 import { BUILT_IN_PREFIX, isStarterExportPreset, isStarterPreset } from './presets';
+import { isNewerPipeline, NewerPipelineError } from './pipeline';
 import {
   isRecipeGroupId,
   pickGroups,
@@ -650,6 +651,7 @@ class Session implements PhotosLibrarySession {
   }
 
   editRecipe(versionId: VersionId, changes: Readonly<Record<string, Json>>, label: string): void {
+    this.refuseNewerVersion(versionId);
     const fields: Record<string, Json> = {};
     // An edit never relabels the pipeline the version was made with.
     for (const [path, value] of Object.entries(changes)) if (path !== 'pipeline') fields[`recipe.${path}`] = value;
@@ -658,6 +660,9 @@ class Session implements PhotosLibrarySession {
   }
 
   setRecipe(versionId: VersionId, recipe: Recipe, label: string): void {
+    this.refuseNewerVersion(versionId);
+    // A recipe this build read from a newer pipeline has lost what it does not know.
+    if (isNewerPipeline(recipe)) throw new NewerPipelineError();
     const current = this.getView().versions.get(versionId)?.recipe;
     const fields = recipeFields(recipe);
     // An area left out of the new recipe is deleted, not left as it was.
@@ -680,6 +685,8 @@ class Session implements PhotosLibrarySession {
     // A render of an older edit, finishing after a newer one (here or on another device), is not kept.
     const version = this.getView().versions.get(versionId);
     if (version && recipeHash(version.recipe) !== preview.recipeHash) return;
+    // Nor is this build's render of a version from a newer pipeline: the newer build's preview stays.
+    if (version && isNewerPipeline(version.recipe)) return;
     this.emit([{ t: 'set', kind: 'version', id: versionId, fields: { [size]: value } }], undefined, true);
   }
 
@@ -689,6 +696,7 @@ class Session implements PhotosLibrarySession {
    * someone changed since, on any device, keeps that newer value.
    */
   undo(versionId: VersionId): boolean {
+    if (this.isNewerVersion(versionId)) return false;
     const writes = this.merge.recipeWrites(versionId);
     const steps = analyseHistory(writes);
     const target = [...steps].reverse().find((s) => this.undoable(versionId, s, steps));
@@ -707,6 +715,7 @@ class Session implements PhotosLibrarySession {
 
   /** Redoes this device's most recently undone step, for the fields its undo still holds. */
   redo(versionId: VersionId): boolean {
+    if (this.isNewerVersion(versionId)) return false;
     const steps = analyseHistory(this.merge.recipeWrites(versionId));
     const target = this.redoTarget(versionId, steps);
     if (!target) return false;
@@ -838,6 +847,8 @@ class Session implements PhotosLibrarySession {
     if (Object.keys(fields).length === 0) return;
     // History is per version, so each version gets its own step and undoes on its own.
     for (const id of new Set(versionIds)) {
+      // A version from a newer pipeline is left as it is; the others still get the change.
+      if (this.isNewerVersion(id)) continue;
       this.emit([{ t: 'set', kind: 'version', id, fields }], { id: newId(this.now()), label });
     }
   }
@@ -930,7 +941,19 @@ class Session implements PhotosLibrarySession {
     }
   }
 
+  /** Whether the version's recipe is from a newer pipeline than this build's (it is then never written). */
+  private isNewerVersion(versionId: VersionId): boolean {
+    const version = this.getView().versions.get(versionId);
+    return version !== undefined && isNewerPipeline(version.recipe);
+  }
+
+  private refuseNewerVersion(versionId: VersionId): void {
+    if (this.isNewerVersion(versionId)) throw new NewerPipelineError();
+  }
+
   private versionFields(assetId: AssetId, name: string, recipe: Recipe | undefined): Record<string, Json> {
+    // A copy of a recipe this build read from a newer pipeline would carry that pipeline without all its settings.
+    if (recipe && isNewerPipeline(recipe)) throw new NewerPipelineError();
     return {
       assetId,
       name,

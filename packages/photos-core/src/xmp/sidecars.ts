@@ -4,6 +4,7 @@
  */
 
 import { isDefaultRecipe } from '../library/recipe';
+import { isNewerPipeline } from '../library/pipeline';
 import type { Asset, AssetId, AssetMarks, LibrarySession, LibraryView, VersionId } from '../library/types';
 import { readXmp, recipeFromXmp } from './read';
 import type { XmpData } from './read';
@@ -92,7 +93,9 @@ export function applyXmp(
     if (hasMarks) session.setMarks([assetId], marks);
     for (const keyword of data.keywords) session.setKeyword([assetId], keyword, true);
   });
-  const recipe = recipeFromXmp(data, fileOrientation);
+  const read = recipeFromXmp(data, fileOrientation);
+  // Edits written by a newer pipeline are not taken: this build would keep only the settings it knows, under that pipeline.
+  const recipe = read && !isNewerPipeline(read) ? read : null;
   if (recipe) session.setRecipe(versionId, recipe, 'XMP sidecar');
   return { marks: hasMarks, keywords: data.keywords.length, recipe: recipe !== null };
 }
