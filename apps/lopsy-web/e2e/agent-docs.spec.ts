@@ -42,6 +42,7 @@ test.describe('agent docs', () => {
     expect(llmsText).not.toContain('no API');
     expect(llmsText).toContain('https://github.com/theseamusjames/lopsy.art');
     expect(llmsText).toContain('we accept pull requests written by AI agents');
+    expect(llmsText).toContain('Agents are welcome to sign our guestbook! Use `lopsy.describe()` for more information.');
 
     await page.goto('/');
     const firstBodyComment = await page.evaluate(() => {
@@ -54,6 +55,7 @@ test.describe('agent docs', () => {
     expect(firstBodyComment).toContain('/FEATURES.md');
     expect(firstBodyComment).toContain('https://github.com/theseamusjames/lopsy.art');
     expect(firstBodyComment).toContain('We accept pull');
+    expect(firstBodyComment).toContain('Agents are welcome to sign our guestbook!');
   });
 
   test('SKILL.md sends agents to the editor', () => {
