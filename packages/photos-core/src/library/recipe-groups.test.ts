@@ -27,14 +27,14 @@ describe('the rest of the recipe', () => {
     const recipe = recipeFromPaths({
       'framing.angle': 60,
       'framing.flipV': true,
-      'localContrast.haze': -150,
+      'localContrast.haze': -200,
       'sharpness.amount': 200,
       'sharpness.radius': 0.1,
       'noise.detail': 'lots',
     });
     expect(recipe.framing.angle).toBe(45);
     expect(recipe.framing.flipV).toBe(true);
-    expect(recipe.localContrast.haze).toBe(-100);
+    expect(recipe.localContrast.haze).toBe(-150);
     expect(recipe.sharpness).toEqual({ amount: 150, radius: 0.5, edges: 0 });
     expect(recipe.noise.detail).toBe(50);
     expect(recipeFromPaths(JSON.parse(JSON.stringify(recipeToPaths(recipe))))).toEqual(recipe);

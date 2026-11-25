@@ -47,7 +47,7 @@ describe('applyChanges', () => {
   it('sets and clamps values', () => {
     const r = applyChanges(DEFAULT_RECIPE, { 'tone.exposure': 0.5, 'tone.contrast': 400 });
     expect(r.tone.exposure).toBe(0.5);
-    expect(r.tone.contrast).toBe(100);
+    expect(r.tone.contrast).toBe(150);
     expect(numberAt(r, 'tone.exposure')).toBe(0.5);
   });
 });

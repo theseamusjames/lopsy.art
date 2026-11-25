@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_RECIPE, HUE_BANDS, isDefaultRecipe, RECIPE_RANGES, recipeFromPaths, recipeHash, recipeToPaths } from './recipe';
+import { DEFAULT_RECIPE, HUE_BANDS, isDefaultRecipe, RECIPE_RANGES, rangeForPath, recipeFromPaths, recipeHash, recipeToPaths, sanitizeRecipeValues } from './recipe';
 
 describe('recipeFromPaths', () => {
   it('gives the default recipe for no paths', () => {
@@ -21,8 +21,70 @@ describe('recipeFromPaths', () => {
   it('clamps numbers to their ranges', () => {
     const recipe = recipeFromPaths({ 'tone.exposure': 12, 'tone.contrast': -500, 'whiteBalance.tint': 40 });
     expect(recipe.tone.exposure).toBe(5);
-    expect(recipe.tone.contrast).toBe(-100);
+    expect(recipe.tone.contrast).toBe(-150);
     expect(recipe.whiteBalance.tint).toBe(40);
+  });
+
+  it('gives each slider 150 where 100 was only a cap, and keeps the ends that are real', () => {
+    const range = (path: string) => {
+      const r = rangeForPath(path);
+      return r ? [r.min, r.max] : null;
+    };
+    const wide = [-150, 150];
+    for (const path of ['whiteBalance.temperature', 'whiteBalance.tint', 'tone.contrast', 'tone.highlights', 'tone.shadows', 'tone.whites', 'tone.blacks']) {
+      expect(range(path), path).toEqual(wide);
+    }
+    for (const path of ['color.vibrance', 'color.saturation', 'localContrast.large', 'localContrast.small', 'colorByHue.red.saturation']) {
+      expect(range(path), path).toEqual([-100, 150]);
+    }
+    for (const path of ['colorByHue.aqua.hue', 'colorByHue.magenta.luminance', 'colorGrading.global.luminance', 'colorGrading.balance']) {
+      expect(range(path), path).toEqual(wide);
+    }
+    for (const path of ['sharpness.amount', 'sharpness.edges', 'noise.luminance', 'finish.grain.amount', 'finish.grain.size']) {
+      expect(range(path), path).toEqual([0, 150]);
+    }
+    expect(range('localContrast.haze')).toEqual([-150, 100]);
+    // The ends that are real limits.
+    expect(range('tone.exposure')).toEqual([-5, 5]);
+    expect(range('finish.vignette')).toEqual([-100, 100]);
+    expect(range('finish.vignetteRoundness')).toEqual([-100, 100]);
+    for (const path of ['finish.vignetteSize', 'finish.vignetteFeather', 'finish.grain.roughness', 'noise.color', 'noise.detail', 'colorGrading.blending', 'colorGrading.shadows.saturation']) {
+      expect(range(path), path).toEqual([0, 100]);
+    }
+    expect(range('colorGrading.midtones.hue')).toEqual([0, 360]);
+    expect(range('sharpness.radius')).toEqual([0.5, 3]);
+    expect(range('framing.angle')).toEqual([-45, 45]);
+    // A mask's sliders, and its own settings, as the photo's.
+    const id = 'area-1';
+    for (const key of ['contrast', 'highlights', 'shadows', 'temperature', 'tint']) expect(range(`areas.${id}.adjustments.${key}`), key).toEqual(wide);
+    expect(range(`areas.${id}.adjustments.saturation`)).toEqual([-100, 150]);
+    expect(range(`areas.${id}.adjustments.localContrast`)).toEqual([-100, 150]);
+    expect(range(`areas.${id}.adjustments.exposure`)).toEqual([-4, 4]);
+    expect(range(`areas.${id}.amount`)).toEqual([0, 100]);
+    expect(range(`areas.${id}.geometry.feather`)).toEqual([0, 100]);
+    expect(range(`areas.${id}.fx.colorByHue.red.luminance`)).toEqual(wide);
+    // Sanitising, as paste and presets do: the new ends are kept, and beyond them clamped.
+    expect(
+      sanitizeRecipeValues({
+        'tone.highlights': -150,
+        'tone.shadows': 151,
+        'whiteBalance.temperature': 150,
+        'whiteBalance.tint': -1000,
+        'color.saturation': -150,
+        'color.vibrance': 150,
+        'finish.vignette': 150,
+        'noise.color': 150,
+      }),
+    ).toEqual({
+      'tone.highlights': -150,
+      'tone.shadows': 150,
+      'whiteBalance.temperature': 150,
+      'whiteBalance.tint': -150,
+      'color.saturation': -100,
+      'color.vibrance': 150,
+      'finish.vignette': 100,
+      'noise.color': 100,
+    });
   });
 
   it('falls back to defaults for invalid values', () => {
@@ -112,6 +174,7 @@ describe('curves, colour by hue and colour grading', () => {
       'curves.red': curve,
       'colorByHue.orange.saturation': -40,
       'colorByHue.blue.hue': 500,
+      'colorByHue.green.saturation': -500,
       'colorGrading.shadows.hue': 400,
       'colorGrading.shadows.saturation': -5,
       'colorGrading.highlights.luminance': 30,
@@ -120,11 +183,12 @@ describe('curves, colour by hue and colour grading', () => {
     });
     expect(recipe.curves.red).toEqual(curve);
     expect(recipe.colorByHue.orange.saturation).toBe(-40);
-    expect(recipe.colorByHue.blue.hue).toBe(100);
+    expect(recipe.colorByHue.blue.hue).toBe(150);
+    expect(recipe.colorByHue.green.saturation).toBe(-100);
     expect(recipe.colorGrading.shadows).toEqual({ hue: 360, saturation: 0, luminance: 0 });
     expect(recipe.colorGrading.highlights.luminance).toBe(30);
     expect(recipe.colorGrading.blending).toBe(80);
-    expect(recipe.colorGrading.balance).toBe(-100);
+    expect(recipe.colorGrading.balance).toBe(-150);
     expect(recipeFromPaths(JSON.parse(JSON.stringify(recipeToPaths(recipe))))).toEqual(recipe);
     expect(isDefaultRecipe(recipe)).toBe(false);
   });

@@ -53,7 +53,7 @@ export type HueBand = 'red' | 'orange' | 'yellow' | 'green' | 'aqua' | 'blue' | 
 export const HUE_BANDS: readonly HueBand[] = ['red', 'orange', 'yellow', 'green', 'aqua', 'blue', 'purple', 'magenta'];
 
 export interface HueAdjustment {
-  /** -100..100 each. */
+  /** Hue and luminance −150..150, saturation −100..150 (−100 is grey). */
   readonly hue: number;
   readonly saturation: number;
   readonly luminance: number;
@@ -63,9 +63,9 @@ export interface HueAdjustment {
 export interface GradeWheel {
   /** Degrees, 0..360. */
   readonly hue: number;
-  /** Tint strength, 0..100. */
+  /** Tint strength, 0..100: 100 is the colour field's edge. */
   readonly saturation: number;
-  /** -100..100. */
+  /** −150..150. */
   readonly luminance: number;
 }
 
@@ -77,9 +77,9 @@ export interface ColorGrading {
   readonly midtones: GradeWheel;
   readonly highlights: GradeWheel;
   readonly global: GradeWheel;
-  /** Overlap between the tonal ranges, 0..100 (Lopsy's default 50). */
+  /** Overlap between the tonal ranges, 0..100 (Lopsy's default 50); 100 is full overlap. */
   readonly blending: number;
-  /** Shifts the ranges toward shadows or highlights, -100..100. */
+  /** Shifts the ranges toward shadows or highlights, −150..150. */
   readonly balance: number;
 }
 
@@ -163,9 +163,9 @@ export interface Recipe {
   readonly profile: { readonly id: string };
   readonly whiteBalance: {
     readonly mode: 'asShot' | 'custom';
-    /** Relative shift, -100 (cooler) to 100 (warmer). Kelvin needs camera data (spec E9). */
+    /** Relative shift, −150 (cooler) to 150 (warmer). Kelvin needs camera data (spec E9). */
     readonly temperature: number;
-    /** Relative shift, -100 (greener) to 100 (more magenta). */
+    /** Relative shift, −150 (greener) to 150 (more magenta). */
     readonly tint: number;
   };
   readonly tone: {
@@ -190,7 +190,7 @@ export interface Recipe {
     readonly vignetteRoundness: number;
     /** Width of the falloff, 0..100. */
     readonly vignetteFeather: number;
-    /** Film grain, each 0..100; the per-photo seed is the app's, not the recipe's. */
+    /** Film grain: amount and size 0..150, roughness 0..100; the per-photo seed is the app's, not the recipe's. */
     readonly grain: { readonly amount: number; readonly size: number; readonly roughness: number };
   };
   readonly framing: {
@@ -201,17 +201,17 @@ export interface Recipe {
     readonly angle: number;
     readonly crop: CropRect | null;
   };
-  /** Local contrast at large and small scales, and haze removal; each -100..100. */
+  /** Local contrast at large and small scales (−100..150), and haze removal (−150..100). */
   readonly localContrast: { readonly large: number; readonly small: number; readonly haze: number };
   readonly sharpness: {
     /** 0..150. */
     readonly amount: number;
     /** 0.5..3, in full-resolution pixels. */
     readonly radius: number;
-    /** Masks sharpening to edges, 0..100. */
+    /** Masks sharpening to edges, 0..150. */
     readonly edges: number;
   };
-  /** Noise reduction, 0..100 each; `detail` keeps texture (default 50). */
+  /** Noise reduction: luminance 0..150, colour and `detail` 0..100; `detail` keeps texture (default 50). */
   readonly noise: { readonly luminance: number; readonly color: number; readonly detail: number };
   /** One curve per channel; the identity is [{0,0},{1,1}]. */
   readonly curves: Readonly<Record<CurveChannel, readonly CurvePoint[]>>;
@@ -231,62 +231,100 @@ export interface RecipeRange {
   readonly step: number;
 }
 
-/** Slider ranges for every numeric leaf, keyed by dotted path. */
+/**
+ * The far end of a slider whose 100 was only a cap: the engine's maths runs
+ * on past it along the same line or curve (`SLIDER_END` in the engine's
+ * `lopsy_core::scene_tone`). A value within the old range renders as it
+ * always did.
+ */
+export const SLIDER_END = 150;
+
+/** ±150: a slider open at both ends. */
+const WIDE: RecipeRange = { min: -SLIDER_END, max: SLIDER_END, step: 1 };
+/**
+ * −100..150: a slider whose −100 is a real end (Saturation, Vibrance and a
+ * band's saturation take chroma to 0 there; a local-contrast slider takes
+ * its detail away exactly), open above.
+ */
+const FLOOR_AT_GREY: RecipeRange = { min: -100, max: SLIDER_END, step: 1 };
+/** 0..150: an amount, open above. */
+const AMOUNT: RecipeRange = { min: 0, max: SLIDER_END, step: 1 };
+
+/**
+ * Slider ranges for every numeric leaf, keyed by dotted path. A slider runs
+ * to 150 where a value past 100 means something; an end that stayed at 100
+ * is a real one, each named beside it.
+ */
 export const RECIPE_RANGES: Readonly<Record<string, RecipeRange>> = {
-  'whiteBalance.temperature': { min: -100, max: 100, step: 1 },
-  'whiteBalance.tint': { min: -100, max: 100, step: 1 },
+  'whiteBalance.temperature': WIDE,
+  'whiteBalance.tint': WIDE,
+  // Stops.
   'tone.exposure': { min: -5, max: 5, step: 0.01 },
-  'tone.contrast': { min: -100, max: 100, step: 1 },
-  'tone.highlights': { min: -100, max: 100, step: 1 },
-  'tone.shadows': { min: -100, max: 100, step: 1 },
-  'tone.whites': { min: -100, max: 100, step: 1 },
-  'tone.blacks': { min: -100, max: 100, step: 1 },
-  'color.vibrance': { min: -100, max: 100, step: 1 },
-  'color.saturation': { min: -100, max: 100, step: 1 },
+  'tone.contrast': WIDE,
+  'tone.highlights': WIDE,
+  'tone.shadows': WIDE,
+  'tone.whites': WIDE,
+  'tone.blacks': WIDE,
+  'color.vibrance': FLOOR_AT_GREY,
+  'color.saturation': FLOOR_AT_GREY,
+  // ±100 takes the corners to black or to white.
   'finish.vignette': { min: -100, max: 100, step: 1 },
+  // 100 already puts the falloff's middle beyond the corners.
   'finish.vignetteSize': { min: 0, max: 100, step: 1 },
+  // −100 is the rectangle, 100 the circle.
   'finish.vignetteRoundness': { min: -100, max: 100, step: 1 },
+  // 100 is a falloff the whole way from the centre to the corners.
   'finish.vignetteFeather': { min: 0, max: 100, step: 1 },
-  'finish.grain.amount': { min: 0, max: 100, step: 1 },
-  'finish.grain.size': { min: 0, max: 100, step: 1 },
+  'finish.grain.amount': AMOUNT,
+  'finish.grain.size': AMOUNT,
+  // A mix of two octaves of grain, whole at 100.
   'finish.grain.roughness': { min: 0, max: 100, step: 1 },
   ...Object.fromEntries(
-    HUE_BANDS.flatMap((band) =>
-      (['hue', 'saturation', 'luminance'] as const).map((field) => [
-        `colorByHue.${band}.${field}`,
-        { min: -100, max: 100, step: 1 },
-      ]),
-    ),
+    HUE_BANDS.flatMap((band) => [
+      [`colorByHue.${band}.hue`, WIDE],
+      [`colorByHue.${band}.saturation`, FLOOR_AT_GREY],
+      [`colorByHue.${band}.luminance`, WIDE],
+    ]),
   ),
   ...Object.fromEntries(
     GRADE_RANGES.flatMap((range) => [
+      // Degrees round the colour wheel.
       [`colorGrading.${range}.hue`, { min: 0, max: 360, step: 1 }],
+      // 100 is the colour field's edge.
       [`colorGrading.${range}.saturation`, { min: 0, max: 100, step: 1 }],
-      [`colorGrading.${range}.luminance`, { min: -100, max: 100, step: 1 }],
+      [`colorGrading.${range}.luminance`, WIDE],
     ]),
   ),
+  // 100 is full overlap between the ranges.
   'colorGrading.blending': { min: 0, max: 100, step: 1 },
-  'colorGrading.balance': { min: -100, max: 100, step: 1 },
+  'colorGrading.balance': WIDE,
+  // Degrees.
   'framing.angle': { min: -45, max: 45, step: 0.1 },
-  'localContrast.large': { min: -100, max: 100, step: 1 },
-  'localContrast.small': { min: -100, max: 100, step: 1 },
-  'localContrast.haze': { min: -100, max: 100, step: 1 },
-  'sharpness.amount': { min: 0, max: 150, step: 1 },
+  'localContrast.large': FLOOR_AT_GREY,
+  'localContrast.small': FLOOR_AT_GREY,
+  // +100 removes the whole measured veil.
+  'localContrast.haze': { min: -SLIDER_END, max: 100, step: 1 },
+  'sharpness.amount': AMOUNT,
+  // Full-resolution pixels.
   'sharpness.radius': { min: 0.5, max: 3, step: 0.1 },
-  'sharpness.edges': { min: 0, max: 100, step: 1 },
-  'noise.luminance': { min: 0, max: 100, step: 1 },
+  'sharpness.edges': AMOUNT,
+  'noise.luminance': AMOUNT,
+  // 100 replaces the colour wholly with the smoothed colour.
   'noise.color': { min: 0, max: 100, step: 1 },
+  // Past about 133 the filter's range would be negative.
   'noise.detail': { min: 0, max: 100, step: 1 },
   // Areas: keyed with `*` for the area ID; `rangeForPath` maps a real path here.
+  // A share of the mask.
   'areas.*.amount': { min: 0, max: 100, step: 1 },
+  // Stops.
   'areas.*.adjustments.exposure': { min: -4, max: 4, step: 0.01 },
-  'areas.*.adjustments.contrast': { min: -100, max: 100, step: 1 },
-  'areas.*.adjustments.highlights': { min: -100, max: 100, step: 1 },
-  'areas.*.adjustments.shadows': { min: -100, max: 100, step: 1 },
-  'areas.*.adjustments.temperature': { min: -100, max: 100, step: 1 },
-  'areas.*.adjustments.tint': { min: -100, max: 100, step: 1 },
-  'areas.*.adjustments.saturation': { min: -100, max: 100, step: 1 },
-  'areas.*.adjustments.localContrast': { min: -100, max: 100, step: 1 },
+  'areas.*.adjustments.contrast': WIDE,
+  'areas.*.adjustments.highlights': WIDE,
+  'areas.*.adjustments.shadows': WIDE,
+  'areas.*.adjustments.temperature': WIDE,
+  'areas.*.adjustments.tint': WIDE,
+  'areas.*.adjustments.saturation': FLOOR_AT_GREY,
+  'areas.*.adjustments.localContrast': FLOOR_AT_GREY,
   'areas.*.geometry.x0': { min: -1, max: 2, step: 0.001 },
   'areas.*.geometry.y0': { min: -1, max: 2, step: 0.001 },
   'areas.*.geometry.x1': { min: -1, max: 2, step: 0.001 },

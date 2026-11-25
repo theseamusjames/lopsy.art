@@ -143,7 +143,14 @@ describe('areas in the recipe', () => {
     expect(rangeForPath(fx('sharpness.radius'))).toEqual(rangeForPath('sharpness.radius'));
     // A leaf alone is sanitized as its recipe setting is; one that is not an area's is dropped.
     expect(sanitizeRecipeValues({ [fx('noise.luminance')]: 500, [fx('tone.exposure')]: 1, [fx('nonsense.value')]: 3 })).toEqual({
-      [fx('noise.luminance')]: 100,
+      [fx('noise.luminance')]: 150,
+    });
+    // A mask's own settings reach the photo's new ends and stop at the real ones.
+    expect(rangeForPath(fx('tone.whites'))).toEqual({ min: -150, max: 150, step: 1 });
+    expect(sanitizeRecipeValues({ [fx('tone.blacks')]: -400, [fx('color.vibrance')]: -400, [fx('localContrast.haze')]: 400 })).toEqual({
+      [fx('tone.blacks')]: -150,
+      [fx('color.vibrance')]: -100,
+      [fx('localContrast.haze')]: 100,
     });
     // A copy carries them.
     const copy = duplicateArea(edited, id, newId(2000))!;

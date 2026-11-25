@@ -133,7 +133,54 @@ describe('crs: edit mapping', () => {
     expect(temperatureForKelvin(SCALE, 5000)).toBe(0);
     expect(kelvinForTemperature(SCALE, 0)).toBe(5000);
     for (const t of [-90, -30, 0, 25, 80]) expect(temperatureForKelvin(SCALE, kelvinForTemperature(SCALE, t)!)).toBeCloseTo(t, 6);
-    expect(temperatureForKelvin(SCALE, 1_000_000)).toBe(100);
+    expect(temperatureForKelvin(SCALE, 1_000_000)).toBeCloseTo(132.67, 2);
+    expect(temperatureForKelvin(SCALE, 1000)).toBe(-150);
+  });
+
+  it('writes a value past their end at their end, and reads it back as that', () => {
+    const recipe = recipeFromPaths({
+      'tone.contrast': 150,
+      'tone.blacks': -140,
+      'color.saturation': 130,
+      'localContrast.haze': -150,
+      'colorByHue.red.luminance': -150,
+      'colorGrading.balance': 150,
+      'sharpness.edges': 150,
+      'noise.luminance': 120,
+      'finish.grain.amount': 150,
+      'finish.grain.size': 150,
+      'tone.highlights': -80,
+      'whiteBalance.mode': 'custom',
+      'whiteBalance.temperature': 150,
+      'whiteBalance.tint': -150,
+    });
+    const asset = { id: 'a', format: 'jpeg', rating: 0, setAside: false, label: null, keywords: [], title: null, caption: null } as unknown as Asset;
+    const version = { id: 'v', assetId: 'a', name: 'Original', recipe } as unknown as Version;
+    const text = writeXmp(asset, version);
+    for (const attr of [
+      'crs:Contrast2012="+100"',
+      'crs:Blacks2012="-100"',
+      'crs:Saturation="+100"',
+      'crs:Dehaze="-100"',
+      'crs:LuminanceAdjustmentRed="-100"',
+      'crs:ColorGradeBalance="+100"',
+      'crs:SharpenEdgeMasking="+100"',
+      'crs:LuminanceSmoothing="+100"',
+      'crs:GrainAmount="+100"',
+      'crs:GrainSize="+100"',
+      'crs:Highlights2012="-80"',
+      'crs:Temperature="+100"',
+      'crs:Tint="-100"',
+    ]) {
+      expect(text, attr).toContain(attr);
+    }
+    // RAW: Kelvin stays within theirs, and our Tint of 150 is their 225, written at their 150.
+    const raw = writeXmp({ ...asset, format: 'raf' } as Asset, version, { kelvinScale: SCALE });
+    expect(raw).toContain('crs:Tint="-150"');
+    const kelvin = Number(/crs:Temperature="(\d+)"/.exec(raw)?.[1]);
+    // Temperature 150 is past infinite Kelvin on this scale: their warmest.
+    expect(kelvin).toBeGreaterThanOrEqual(2000);
+    expect(kelvin).toBeLessThanOrEqual(50000);
   });
 
   it("maps RAW Kelvin only against the photo's as-shot balance", () => {

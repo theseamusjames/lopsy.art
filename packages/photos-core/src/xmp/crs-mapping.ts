@@ -6,43 +6,45 @@
  * Every mapping is approximate. Our controls do not compute what theirs do, so
  * the same number gives the same direction and a similar strength, not
  * the same picture. Where the ranges differ the value is scaled or
- * clamped, as each row says.
+ * clamped, as each row says. Many of our sliders run to 150 where theirs
+ * stop at 100 ("ours" below): a value of ours past their end is written at
+ * their end, the nearest they can hold, and reading one back gives that end.
  *
  * | crs: property                        | Their range     | Recipe path                    | Mapping |
  * |--------------------------------------|-----------------|--------------------------------|---------|
  * | Exposure2012                         | -5..+5 EV       | tone.exposure                  | x1 |
- * | Contrast2012, Highlights2012,        | -100..100       | tone.contrast, .highlights,    | x1 |
+ * | Contrast2012, Highlights2012,        | -100..100       | tone.contrast, .highlights,    | x1; ours -150..150, written within theirs |
  * |   Shadows2012, Whites2012, Blacks2012|                 |   .shadows, .whites, .blacks   |    |
- * | Vibrance, Saturation                 | -100..100       | color.vibrance, .saturation    | x1 |
- * | Clarity2012                          | -100..100       | localContrast.large            | x1 |
- * | Texture                              | -100..100       | localContrast.small            | x1 |
- * | Dehaze                               | -100..100       | localContrast.haze             | x1 |
+ * | Vibrance, Saturation                 | -100..100       | color.vibrance, .saturation    | x1; ours -100..150, the same |
+ * | Clarity2012                          | -100..100       | localContrast.large            | x1; ours -100..150, the same |
+ * | Texture                              | -100..100       | localContrast.small            | x1; ours -100..150, the same |
+ * | Dehaze                               | -100..100       | localContrast.haze             | x1; ours -150..100, the same |
  * | Sharpness                            | 0..150          | sharpness.amount               | x1 |
  * | SharpenRadius                        | 0.5..3          | sharpness.radius               | x1 |
- * | SharpenEdgeMasking                   | 0..100          | sharpness.edges                | x1 |
- * | LuminanceSmoothing                   | 0..100          | noise.luminance                | x1 |
+ * | SharpenEdgeMasking                   | 0..100          | sharpness.edges                | x1; ours 0..150, the same |
+ * | LuminanceSmoothing                   | 0..100          | noise.luminance                | x1; ours 0..150, the same |
  * | ColorNoiseReduction                  | 0..100          | noise.color                    | x1 |
  * | LuminanceNoiseReductionDetail        | 0..100          | noise.detail                   | x1 |
- * | Hue/Saturation/LuminanceAdjustment   | -100..100       | colorByHue.<band>.hue, etc.    | x1, the same eight bands (Aqua included) |
+ * | Hue/Saturation/LuminanceAdjustment   | -100..100       | colorByHue.<band>.hue, etc.    | x1, the same eight bands (Aqua included); ours to 150, the same |
  * |   Red … Magenta                      |                 |                                |    |
  * | ColorGrade{Shadow,Midtone,Highlight, | hue 0..359,     | colorGrading.<range>.hue,      | x1 |
  * |   Global}{Hue,Sat,Lum}               | sat 0..100,     |   .saturation, .luminance      |    |
- * |                                      | lum -100..100   |                                |    |
+ * |                                      | lum -100..100   |                                | ours lum -150..150, the same |
  * | ColorGradeBlending                   | 0..100          | colorGrading.blending          | x1 |
- * | ColorGradeBalance                    | -100..100       | colorGrading.balance           | x1 |
+ * | ColorGradeBalance                    | -100..100       | colorGrading.balance           | x1; ours -150..150, the same |
  * | PostCropVignetteAmount               | -100..100       | finish.vignette                | negated: theirs darkens below 0, ours above |
  * | PostCropVignetteMidpoint             | 0..100 (50)     | finish.vignetteSize            | x1, approximate; read and written only with a vignette |
  * | PostCropVignetteRoundness            | -100..100       | finish.vignetteRoundness       | x1, approximate; the same |
  * | PostCropVignetteFeather              | 0..100 (50)     | finish.vignetteFeather         | x1, approximate; the same |
- * | GrainAmount                          | 0..100          | finish.grain.amount            | x1 |
- * | GrainSize                            | 0..100 (25)     | finish.grain.size              | x1; read and written only with grain |
+ * | GrainAmount                          | 0..100          | finish.grain.amount            | x1; ours 0..150, the same |
+ * | GrainSize                            | 0..100 (25)     | finish.grain.size              | x1; read and written only with grain; ours 0..150, the same |
  * | GrainFrequency                       | 0..100 (50)     | finish.grain.roughness         | x1, approximate (theirs is how fine the pattern is); the same |
  * | ToneCurvePV2012[Red,Green,Blue]      | "x, y" 0..255   | curves.luminance, .red, …      | /255; endpoints added when missing; more than 16 points, or x not increasing, is skipped |
  * | WhiteBalance                         | As Shot, Custom…| whiteBalance.mode              | As Shot -> asShot (Temperature and Tint ignored); anything else -> custom, when its values map |
- * | Temperature (RAW)                    | 2000..50000 K   | whiteBalance.temperature       | only with the photo's `KelvinScale`: (1e6/K - miredAtZero) / miredPerUnit; without it, skipped (As Shot) |
- * | Temperature (JPEG, TIFF)             | -100..100       | whiteBalance.temperature       | x1 |
- * | Tint (RAW)                           | -150..150       | whiteBalance.tint              | /1.5, only with the scale; approximate: it takes the camera's as-shot tint as 0 |
- * | Tint (JPEG, TIFF)                    | -100..100       | whiteBalance.tint              | x1 |
+ * | Temperature (RAW)                    | 2000..50000 K   | whiteBalance.temperature       | only with the photo's `KelvinScale`: (1e6/K - miredAtZero) / miredPerUnit, held to ours, -150..150; without it, skipped (As Shot); written within 2000..50000 K |
+ * | Temperature (JPEG, TIFF)             | -100..100       | whiteBalance.temperature       | x1; ours -150..150, written within theirs |
+ * | Tint (RAW)                           | -150..150       | whiteBalance.tint              | /1.5, only with the scale; approximate: it takes the camera's as-shot tint as 0; ours -150..150 is theirs -225..225, written within theirs |
+ * | Tint (JPEG, TIFF)                    | -100..100       | whiteBalance.tint              | x1; ours -150..150, written within theirs |
  * | CropAngle                            | -45..45 deg     | framing.angle                  | x1; see read.ts for the crop itself |
  *
  * Unmapped: PostCropVignetteStyle and PostCropVignetteHighlightContrast,
@@ -60,6 +62,22 @@ export interface CrsScalar {
   readonly path: string;
   /** Recipe value = crs value × scale. Default 1. */
   readonly scale?: number;
+  /** Their range, where ours runs further: a value is written within it. */
+  readonly theirs?: { readonly min: number; readonly max: number };
+}
+
+/** Their range of the sliders ours run past. */
+const SIGNED_100 = { min: -100, max: 100 } as const;
+const UP_TO_100 = { min: 0, max: 100 } as const;
+/** Their Kelvin range. */
+const THEIR_KELVIN = { min: 2000, max: 50000 } as const;
+/** Their RAW Tint. */
+const THEIR_RAW_TINT = { min: -150, max: 150 } as const;
+/** The end of our Temperature and Tint, as the recipe's ranges have it. */
+const OUR_WB_END = 150;
+
+function within(value: number, range: { readonly min: number; readonly max: number } | undefined): number {
+  return range ? Math.min(range.max, Math.max(range.min, value)) : value;
 }
 
 const BAND_NAMES: Readonly<Record<HueBand, string>> = {
@@ -83,36 +101,36 @@ const GRADE_NAMES: Readonly<Record<GradeRange, string>> = {
 /** Every crs: property that maps to one recipe number (the table above, less white balance, curves and crop). */
 export const CRS_SCALARS: readonly CrsScalar[] = [
   { crs: 'Exposure2012', path: 'tone.exposure' },
-  { crs: 'Contrast2012', path: 'tone.contrast' },
-  { crs: 'Highlights2012', path: 'tone.highlights' },
-  { crs: 'Shadows2012', path: 'tone.shadows' },
-  { crs: 'Whites2012', path: 'tone.whites' },
-  { crs: 'Blacks2012', path: 'tone.blacks' },
-  { crs: 'Vibrance', path: 'color.vibrance' },
-  { crs: 'Saturation', path: 'color.saturation' },
-  { crs: 'Clarity2012', path: 'localContrast.large' },
-  { crs: 'Texture', path: 'localContrast.small' },
-  { crs: 'Dehaze', path: 'localContrast.haze' },
+  { crs: 'Contrast2012', path: 'tone.contrast', theirs: SIGNED_100 },
+  { crs: 'Highlights2012', path: 'tone.highlights', theirs: SIGNED_100 },
+  { crs: 'Shadows2012', path: 'tone.shadows', theirs: SIGNED_100 },
+  { crs: 'Whites2012', path: 'tone.whites', theirs: SIGNED_100 },
+  { crs: 'Blacks2012', path: 'tone.blacks', theirs: SIGNED_100 },
+  { crs: 'Vibrance', path: 'color.vibrance', theirs: SIGNED_100 },
+  { crs: 'Saturation', path: 'color.saturation', theirs: SIGNED_100 },
+  { crs: 'Clarity2012', path: 'localContrast.large', theirs: SIGNED_100 },
+  { crs: 'Texture', path: 'localContrast.small', theirs: SIGNED_100 },
+  { crs: 'Dehaze', path: 'localContrast.haze', theirs: SIGNED_100 },
   { crs: 'Sharpness', path: 'sharpness.amount' },
   { crs: 'SharpenRadius', path: 'sharpness.radius' },
-  { crs: 'SharpenEdgeMasking', path: 'sharpness.edges' },
-  { crs: 'LuminanceSmoothing', path: 'noise.luminance' },
+  { crs: 'SharpenEdgeMasking', path: 'sharpness.edges', theirs: UP_TO_100 },
+  { crs: 'LuminanceSmoothing', path: 'noise.luminance', theirs: UP_TO_100 },
   { crs: 'ColorNoiseReduction', path: 'noise.color' },
   { crs: 'LuminanceNoiseReductionDetail', path: 'noise.detail' },
   ...HUE_BANDS.flatMap((band): CrsScalar[] => [
-    { crs: `HueAdjustment${BAND_NAMES[band]}`, path: `colorByHue.${band}.hue` },
-    { crs: `SaturationAdjustment${BAND_NAMES[band]}`, path: `colorByHue.${band}.saturation` },
-    { crs: `LuminanceAdjustment${BAND_NAMES[band]}`, path: `colorByHue.${band}.luminance` },
+    { crs: `HueAdjustment${BAND_NAMES[band]}`, path: `colorByHue.${band}.hue`, theirs: SIGNED_100 },
+    { crs: `SaturationAdjustment${BAND_NAMES[band]}`, path: `colorByHue.${band}.saturation`, theirs: SIGNED_100 },
+    { crs: `LuminanceAdjustment${BAND_NAMES[band]}`, path: `colorByHue.${band}.luminance`, theirs: SIGNED_100 },
   ]),
   ...GRADE_RANGES.flatMap((range): CrsScalar[] => [
     { crs: `ColorGrade${GRADE_NAMES[range]}Hue`, path: `colorGrading.${range}.hue` },
     { crs: `ColorGrade${GRADE_NAMES[range]}Sat`, path: `colorGrading.${range}.saturation` },
-    { crs: `ColorGrade${GRADE_NAMES[range]}Lum`, path: `colorGrading.${range}.luminance` },
+    { crs: `ColorGrade${GRADE_NAMES[range]}Lum`, path: `colorGrading.${range}.luminance`, theirs: SIGNED_100 },
   ]),
   { crs: 'ColorGradeBlending', path: 'colorGrading.blending' },
-  { crs: 'ColorGradeBalance', path: 'colorGrading.balance' },
+  { crs: 'ColorGradeBalance', path: 'colorGrading.balance', theirs: SIGNED_100 },
   { crs: 'PostCropVignetteAmount', path: 'finish.vignette', scale: -1 },
-  { crs: 'GrainAmount', path: 'finish.grain.amount' },
+  { crs: 'GrainAmount', path: 'finish.grain.amount', theirs: UP_TO_100 },
 ];
 
 /**
@@ -132,7 +150,7 @@ const CRS_DEPENDENT: readonly { readonly when: string; readonly scalars: readonl
   {
     when: 'finish.grain.amount',
     scalars: [
-      { crs: 'GrainSize', path: 'finish.grain.size' },
+      { crs: 'GrainSize', path: 'finish.grain.size', theirs: UP_TO_100 },
       { crs: 'GrainFrequency', path: 'finish.grain.roughness' },
     ],
   },
@@ -169,10 +187,21 @@ export function kelvinForTemperature(scale: KelvinScale, temperature: number): n
   return mired > 0 ? 1e6 / mired : null;
 }
 
-/** The RAW recipe temperature for a Kelvin value on this body, clamped to ±100. */
+/** The RAW recipe temperature for a Kelvin value on this body, clamped to the slider's ±150. */
 export function temperatureForKelvin(scale: KelvinScale, kelvin: number): number {
   const t = (1e6 / kelvin - scale.miredAtZero) / scale.miredPerUnit;
-  return Math.max(-100, Math.min(100, Math.round(t * 100) / 100)) + 0; // + 0 turns -0 into 0
+  return Math.max(-OUR_WB_END, Math.min(OUR_WB_END, Math.round(t * 100) / 100)) + 0; // + 0 turns -0 into 0
+}
+
+/**
+ * The Kelvin to write for a RAW recipe temperature, within theirs. Far
+ * enough up a body's scale the fitted line passes infinite Kelvin (its
+ * mireds reach 0); such a temperature, like one past 50000 K, is written as
+ * their warmest, 50000 K.
+ */
+function kelvinToWrite(scale: KelvinScale, temperature: number): number {
+  const mired = scale.miredAtZero + scale.miredPerUnit * temperature;
+  return within(mired > 0 ? 1e6 / mired : THEIR_KELVIN.max, THEIR_KELVIN);
 }
 
 function isUsableScale(scale: KelvinScale | null | undefined): scale is KelvinScale {
@@ -284,7 +313,7 @@ function whiteBalanceFromCrs(src: CrsSource, kelvinScale: KelvinScale | null | u
   return {
     'whiteBalance.mode': 'custom',
     'whiteBalance.temperature': temperatureForKelvin(kelvinScale, temperature),
-    // RAW tint runs -150..150; ours -100..100 around the as-shot tint, taken as 0.
+    // RAW tint runs -150..150; ours is two thirds of theirs, around the as-shot tint, taken as 0.
     ...(tint !== null ? { 'whiteBalance.tint': Math.round((tint / 1.5) * 100) / 100 } : {}),
   };
 }
@@ -308,29 +337,33 @@ export function recipeToCrs(
   const paths = recipeToPaths(recipe);
   const defaults = recipeToPaths(DEFAULT_RECIPE);
   const attributes: string[] = [];
-  for (const { crs, path, scale } of CRS_SCALARS) {
+  for (const { crs, path, scale, theirs } of CRS_SCALARS) {
     const value = paths[path];
     if (typeof value !== 'number' || value === defaults[path]) continue;
-    attributes.push(`crs:${crs}="${signed(value / (scale ?? 1) + 0)}"`);
+    attributes.push(`crs:${crs}="${signed(within(value / (scale ?? 1), theirs) + 0)}"`);
   }
   for (const { when, scalars } of CRS_DEPENDENT) {
     if (paths[when] === 0) continue;
     // All of them, defaults included: other editors' defaults are not ours.
-    for (const { crs, path } of scalars) {
+    for (const { crs, path, theirs } of scalars) {
       const value = paths[path];
-      if (typeof value === 'number') attributes.push(`crs:${crs}="${signed(Math.round(value))}"`);
+      if (typeof value === 'number') attributes.push(`crs:${crs}="${signed(Math.round(within(value, theirs)))}"`);
     }
   }
   const wb = recipe.whiteBalance;
   if (wb.mode === 'custom') {
-    const kelvin = isRaw && isUsableScale(kelvinScale) ? kelvinForTemperature(kelvinScale, wb.temperature) : null;
+    const kelvin = isRaw && isUsableScale(kelvinScale) ? kelvinToWrite(kelvinScale, wb.temperature) : null;
     if (!isRaw) {
-      attributes.push(`crs:WhiteBalance="Custom"`, `crs:Temperature="${signed(wb.temperature)}"`, `crs:Tint="${signed(wb.tint)}"`);
+      attributes.push(
+        `crs:WhiteBalance="Custom"`,
+        `crs:Temperature="${signed(within(wb.temperature, SIGNED_100))}"`,
+        `crs:Tint="${signed(within(wb.tint, SIGNED_100))}"`,
+      );
     } else if (kelvin !== null) {
       attributes.push(
         `crs:WhiteBalance="Custom"`,
-        `crs:Temperature="${Math.round(kelvin)}"`,
-        `crs:Tint="${signed(Math.round(wb.tint * 1.5))}"`,
+        `crs:Temperature="${Math.round(within(kelvin, THEIR_KELVIN))}"`,
+        `crs:Tint="${signed(Math.round(within(wb.tint * 1.5, THEIR_RAW_TINT)))}"`,
       );
     } else {
       attributes.push(`crs:WhiteBalance="As Shot"`);
