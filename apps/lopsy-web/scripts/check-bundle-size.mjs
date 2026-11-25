@@ -66,9 +66,22 @@ const MARGIN = 0.03;
 // the detail, local contrast, areas, finish and screen-only view passes,
 // the white-balance picker and presets, TIFF, and the decode limits. Every
 // develop pass compiles lazily, so Lopsy pays only the download.
+//
+// Raised for Photonamous' linear pipeline, to what a local release build
+// measures with all of it in and main merged (wasm 4,846,059 B raw and
+// 2,020,125 B gzip, +8.7 % and +6.7 %; glue 266,066 B and 34,038 B, +22.5 %
+// and +39.6 %). The wasm grew by the working space, tone, look and output
+// stages and their CPU references, highlight reconstruction, the linear
+// local contrast, the HDR file encoders (PQ PNG, gain maps and their JPEG
+// container), the ICC profiles built from primaries, and DNG as a RAW
+// photo with the two-illuminant colour method. The glue grew by their
+// exports: about sixty, most taking typed arrays, which is what
+// wasm-bindgen spends bytes on. CI's wasm differs from a local build's by
+// a fraction of a percent, inside the margin; re-base on its numbers when
+// it has run.
 const BUDGET = {
-  'lopsy_wasm_bg.wasm': { raw: 4_459_984, gzip: 1_893_525 },
-  'lopsy_wasm.js': { raw: 217_124, gzip: 24_392 },
+  'lopsy_wasm_bg.wasm': { raw: 4_846_059, gzip: 2_020_125 },
+  'lopsy_wasm.js': { raw: 266_066, gzip: 34_038 },
 };
 
 function format(bytes) {
