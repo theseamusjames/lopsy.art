@@ -305,9 +305,3 @@ test('the app loads no analytics of its own: Cloudflare adds it, as on lopsy.art
   expect(await page.evaluate(() => Reflect.get(window, 'dataLayer'))).toBeUndefined();
   expect(asked).toEqual([]);
 });
-  await page.goto('/');
-  await expect(page.getByRole('navigation', { name: 'About Photonamous' })).toBeVisible();
-  expect(await page.evaluate(() => Reflect.get(window, 'dataLayer'))).toBeUndefined();
-  expect(await page.locator('script[data-tag-manager]').count()).toBe(0);
-  expect(asked).toEqual([]);
-});
