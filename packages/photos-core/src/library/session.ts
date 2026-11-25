@@ -34,6 +34,7 @@ import {
   recipeHash,
   recipeLeafJson,
   recipeToPaths,
+  pipelineFrom,
   UNRECORDED_PIPELINE,
   type Recipe,
 } from './recipe';
@@ -941,10 +942,14 @@ class Session implements PhotosLibrarySession {
     }
   }
 
-  /** Whether the version's recipe is from a newer pipeline than this build's (it is then never written). */
+  /**
+   * Whether the version's recipe is from a newer pipeline than this build's
+   * (it is then never written). Read from the store, as the view reads it,
+   * so a paste onto many photos does not rebuild the view for each one.
+   */
   private isNewerVersion(versionId: VersionId): boolean {
-    const version = this.getView().versions.get(versionId);
-    return version !== undefined && isNewerPipeline(version.recipe);
+    const recorded = this.merge.get('version', versionId)?.fields.get(PIPELINE_FIELD)?.value;
+    return isNewerPipeline({ pipeline: pipelineFrom(recorded) });
   }
 
   private refuseNewerVersion(versionId: VersionId): void {
