@@ -92,7 +92,7 @@ export function StartScreen({ choices, offer, connecting, error, onChoose, onRec
           <h1 className={styles.brand}>
             <Wordmark size="start" />
           </h1>
-          <p className={styles.tagline}>Your photos. Your cloud storage. Completely free.</p>
+          <p className={styles.tagline}>RAW editing. Your cloud storage. Completely free.</p>
 
           {receiving && (
             <p className={styles.receiving} role="status">

@@ -9,7 +9,7 @@ is `docs/photonamous-spec.md`; running and setup are in
 
 - **Start screen.** The page a visitor lands on, in two columns. The left
   two thirds is a short film of the app; the right third, which stays in
-  view, has the wordmark in colour as wide as the column, the line "Your photos.
+  view, has the wordmark in colour as wide as the column, the line "RAW editing.
   Your cloud storage. Completely free.", **Try it now**, and links to
   Privacy and Terms, with GitHub's mark at the right linking to the
   source. On a window under 860 px wide
@@ -29,8 +29,9 @@ is `docs/photonamous-spec.md`; running and setup are in
   and "In your web browser."; before and after under the split divider;
   "No servers."; "Your own cloud storage."; the library in Google Drive,
   clicked through from its folder to a day's originals; "Completely
-  free.", which dissolves into an end card, the wordmark and "Your photos on your
-  own cloud storage." over a photograph from the library.
+  free.", which dissolves into an end card, the wordmark and the start screen's
+  line, "RAW editing. Your cloud storage. Completely free.", over a
+  photograph from the library.
   It starts by itself, muted,
   from a poster; a **Pause the film** button stops it. A visitor who asked
   for reduced motion or to save data gets the poster and **Play the

@@ -26,7 +26,7 @@ The cut, as recorded on 2026-11-21 (24.1 s, 30 fps, 1440 × 1200):
 | 5 | no-servers | 1.1 | **No servers.** over the darkened editor. |
 | 6 | own-cloud | 1.2 | **Your own cloud storage.**, a cut from the last with the dark held between them. |
 | 7 | drive | 4.3 | drive.google.com, clicked through: the pointer opens Originals in the library's folder, then 2026, then 2026-10-25, and the camera pulls back over that day's four RAW files. |
-| 8 | free-end | 5.6 | **Completely free.** in the dark over a photograph edited in the app, held longer than the other titles (1.8 s); then a dissolve: the dark lifts as the title goes, and only when it has gone do the wordmark and, close under it, **Your photos on your own cloud storage.** come up. |
+| 8 | free-end | 5.6 | **Completely free.** in the dark over a photograph edited in the app, held longer than the other titles (1.8 s); then a dissolve: the dark lifts as the title goes, and only when it has gone do the wordmark and, close under it, **RAW editing. Your cloud storage. Completely free.** (the start screen's tagline) come up. |
 
 ## The files
 
@@ -91,7 +91,7 @@ done
 | To change | Edit |
 |---|---|
 | A title's words | The `title(...)` calls in `demo-reel.record.ts`; then the hidden paragraph in `DemoReel.tsx` and the film's entry in `FEATURES.md`. |
-| The end card's line | `TAGLINE` in `demo-reel.record.ts`; then the same two places. |
+| The end card's line | `TAGLINE` in `demo-reel.record.ts`; then the same two places. It is the start screen's tagline (`StartScreen.tsx`), word for word: change both together. It breaks only between its sentences (`taglineHtml`). |
 | The titles' look | `#reel-title` in `stageScript` (Inter 900, 136 px, upper case, letters set just closer than normal: at -0.05em they touched). The last title is not on the app's page: it is `.title` in `END_CARD_CSS`, set the same way. |
 | The last title, its hold and the dissolve | The last shot in the script: the words are passed to `endPage`, the hold is the wait before `end` is added, and the dissolve is the `.end` rules in `END_CARD_CSS`. The wordmark waits `END_TITLE_OUT_MS` for the title to go; the space between the wordmark and the line is `.card`'s `gap`. |
 | The photograph behind the last shot | Replace `e2e/demo-reel-end.jpg`, or name another with `REEL_END`. |

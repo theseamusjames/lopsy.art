@@ -311,8 +311,15 @@ function endPhoto(): Buffer {
   return readFileSync(scaled);
 }
 
-/** The end card's line, under the wordmark. */
-const TAGLINE = 'Your photos on your own cloud storage.';
+/** The end card's line, under the wordmark: the start screen's tagline (StartScreen.tsx), word for word. */
+const TAGLINE = 'RAW editing. Your cloud storage. Completely free.';
+
+/** The line set so it breaks only between its sentences, never inside one. */
+function taglineHtml(): string {
+  return TAGLINE.split(/(?<=\.)\s+/)
+    .map((sentence) => `<span>${sentence}</span>`)
+    .join(' ');
+}
 
 /**
  * Pictures of the library in Google Drive itself, one for each folder on the way down to a day's originals,
@@ -339,6 +346,7 @@ const END_CARD_CSS = `
     .said .title span { opacity: 1; transform: scale(1); }
     .card { position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 14px; pointer-events: none; }
     .card img { width: 880px; height: auto; opacity: 0; transform: scale(1.06); transition: transform 1500ms cubic-bezier(0.16, 1, 0.3, 1), opacity 750ms linear; }
+    .card p span { white-space: nowrap; }
     .card p { max-width: 900px; font-size: 46px; line-height: 1.18; font-weight: 700; letter-spacing: -0.02em; text-align: center; color: #fff; opacity: 0; transform: translateY(10px); transition: transform 900ms cubic-bezier(0.16, 1, 0.3, 1) 250ms, opacity 700ms linear 250ms; }
     .end .dark { opacity: 0; }
     .end .title span { opacity: 0; transition: opacity ${END_TITLE_OUT_MS}ms linear; }
@@ -446,7 +454,7 @@ function endPage(photoBase64: string, fontUrl: string, wordmarkUrl: string, last
     <div class="shade"></div>
     <div class="dark"></div>
     <div class="title"><span>${lastTitle}</span></div>
-    <div class="card"><img src="${wordmarkUrl}" alt=""><p>${TAGLINE}</p></div>
+    <div class="card"><img src="${wordmarkUrl}" alt=""><p>${taglineHtml()}</p></div>
   </body></html>`;
 }
 

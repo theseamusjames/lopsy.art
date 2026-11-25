@@ -71,7 +71,8 @@ export function DemoReel() {
         drink edited step by step, then compared before and after; the library's folders in Google Drive, opened down to
         the RAW files; and the
         Photonamous wordmark over a photograph of trees. Its titles read: Your photos. Professional editing. In your web
-        browser. No servers. Your own cloud storage. Completely free. Your photos on your own cloud storage.
+        browser. No servers. Your own cloud storage. Completely free. The line under the wordmark reads: RAW editing. Your
+        cloud storage. Completely free.
       </p>
       <IconButton
         className={styles.toggle}
