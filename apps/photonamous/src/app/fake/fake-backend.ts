@@ -36,7 +36,7 @@ const LABELS: Record<StorageChoice, string> = {
 };
 
 const MIME: Record<string, string> = {
-  raf: 'image/x-fujifilm-raf',
+  raf: 'image/x-fuji-raf',
   dng: 'image/x-adobe-dng',
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',

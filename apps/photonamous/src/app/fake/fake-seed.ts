@@ -81,7 +81,7 @@ export function seedLibrary(session: FakeSession, count: number): void {
       ...base,
       fileName,
       format: isRaw ? 'raf' : 'jpeg',
-      mimeType: isRaw ? 'image/x-fujifilm-raf' : 'image/jpeg',
+      mimeType: isRaw ? 'image/x-fuji-raf' : 'image/jpeg',
       marks,
       keywords,
       recipe,

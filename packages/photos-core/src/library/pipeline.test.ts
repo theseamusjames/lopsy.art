@@ -18,7 +18,7 @@ function photo(n: number): NewAsset {
     fileName: `DSCF${1000 + n}.RAF`,
     byteSize: 30_000_000,
     format: 'raf',
-    mimeType: 'image/x-fujifilm-raf',
+    mimeType: 'image/x-fuji-raf',
     capturedAt: '2026-11-14T16:02:11',
     importedAt: '2026-11-15T10:00:00.000Z',
     importId: 'imp-1',

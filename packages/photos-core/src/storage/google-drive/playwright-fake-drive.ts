@@ -74,20 +74,21 @@ async function serve(route: Route, drive: FakeDrive): Promise<void> {
  * more, which is also what a Picker stuck on Google's sign-in page looks
  * like from outside. A test answers for the user through
  * `window.__lopsyPickerStub`: `pick(ids)` or `cancel()`; `shown` and
- * `disposed` count.
+ * `disposed` count, and `mimeTypes` is the list the view was filtered to.
  */
 export function pickerStubInitScript(): string {
   return `(() => {
   const stub = {
     shown: 0,
     disposed: 0,
+    mimeTypes: '',
     callback: null,
     pick(ids) { if (stub.callback) stub.callback({ action: 'picked', docs: ids.map((id) => ({ id })) }); },
     cancel() { if (stub.callback) stub.callback({ action: 'cancel' }); },
   };
   window.__lopsyPickerStub = stub;
   class DocsView {
-    setMimeTypes() { return this; }
+    setMimeTypes(types) { stub.mimeTypes = types; return this; }
     setIncludeFolders() { return this; }
     setSelectFolderEnabled() { return this; }
   }

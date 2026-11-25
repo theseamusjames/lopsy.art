@@ -49,7 +49,7 @@ let adapter: MemoryAdapter;
 
 async function addOriginal(): Promise<{ assetId: string; versionId: string }> {
   const file = await adapter.createFile(
-    { parentId: session.layout.originalsId, name: 'DSCF1234.RAF', mimeType: 'image/x-fujifilm-raf' },
+    { parentId: session.layout.originalsId, name: 'DSCF1234.RAF', mimeType: 'image/x-fuji-raf' },
     new Blob(['raw']),
   );
   return session.addAsset({
@@ -59,7 +59,7 @@ async function addOriginal(): Promise<{ assetId: string; versionId: string }> {
     fileName: 'DSCF1234.RAF',
     byteSize: 3,
     format: 'raf',
-    mimeType: 'image/x-fujifilm-raf',
+    mimeType: 'image/x-fuji-raf',
     capturedAt: '2026-11-14T16:02:11',
     importedAt: '2026-11-15T00:00:00.000Z',
     importId: 'imp-1',

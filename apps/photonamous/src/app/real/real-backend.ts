@@ -31,9 +31,7 @@ import type { DrivePicker } from '../../import/drive-picker';
 import { drivePickRedirectUri } from './drive-pick-return';
 import { budgetFor, OriginalsDownload, type KeepOriginals } from '@lopsy/photos-core/cache/keep-originals';
 import { PREVIEWS_DEFAULT_BUDGET } from '@lopsy/photos-core/cache/preview-cache';
-
-/** What the Picker offers: photos the importer reads. */
-const DRIVE_PICK_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/x-fujifilm-raf', 'image/x-adobe-dng', 'application/octet-stream'];
+import { IMPORTABLE_MIME_TYPES } from '@lopsy/photos-core/import/detect-format';
 import { createBrowserPreviewRenderer } from '@lopsy/photos-core/import/browser-preview-renderer';
 import { startExport } from '@lopsy/photos-core/export/exporter';
 import {
@@ -372,14 +370,14 @@ export class RealBackend implements PhotosBackend {
     let picking: Promise<string[]>;
     if (options.picker === 'window' || !developerKey || !appId) {
       // Before anything is awaited: Google's window is a pop-up, which a browser allows only straight from the click.
-      picking = pickDriveFilesInWindow({ clientId, redirectUri: drivePickRedirectUri(), mimeTypes: DRIVE_PICK_TYPES });
+      picking = pickDriveFilesInWindow({ clientId, redirectUri: drivePickRedirectUri(), mimeTypes: IMPORTABLE_MIME_TYPES });
     } else {
       picking = tokenSource.getToken().then((oauthToken) =>
         pickDriveFiles({
           developerKey,
           appId,
           oauthToken,
-          mimeTypes: DRIVE_PICK_TYPES,
+          mimeTypes: IMPORTABLE_MIME_TYPES,
           title: 'Choose photos to add to your library',
           ...(options.signal ? { signal: options.signal } : {}),
         }),
