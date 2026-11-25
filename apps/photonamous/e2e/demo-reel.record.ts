@@ -550,11 +550,13 @@ test('record the demo reel', async ({ page, baseURL }) => {
   await expect(tiles(page).first()).toBeVisible({ timeout: 60_000 });
   await page.getByLabel('Thumbnail size').fill(process.env.REEL_THUMB ?? '168');
   await page.waitForTimeout(600);
-  // Only tiles wholly in view are touched: a click on one that is not would scroll the grid.
+  // Only tiles wholly in view are touched: a click on one that is not would scroll the grid. The grid ends
+  // at the status bar along the bottom of the window.
+  const gridBottom = (await page.getByTestId('status-bar').boundingBox())?.y ?? H;
   const inView: { index: number; x: number; y: number }[] = [];
   for (let i = 0; i < (await tiles(page).count()); i++) {
     const box = await tiles(page).nth(i).boundingBox();
-    if (box && box.y > 240 && box.y + box.height < H - 20) inView.push({ index: i, x: box.x + box.width / 2, y: box.y + box.height / 2 });
+    if (box && box.y > 240 && box.y + box.height < gridBottom - 12) inView.push({ index: i, x: box.x + box.width / 2, y: box.y + box.height / 2 });
   }
   if (inView.length === 0) throw new Error('No tile is in view');
   /** The tile the second shot picks: the one nearest the middle of the grid, clear of the toolbar and the sidebar. */
@@ -626,6 +628,11 @@ test('record the demo reel', async ({ page, baseURL }) => {
   await tiles(editor).first().click();
   await editor.keyboard.press('Enter');
   await waitForReady(editor, 120_000);
+  // The header names a library in this browser, which only development builds offer; the film's library is
+  // the Drive one, whose header names nothing. Seen under the claims' dark (shots 5 and 6).
+  await editor.getByRole('banner').getByText('This browser', { exact: true }).evaluate((el: HTMLElement) => {
+    el.style.visibility = 'hidden';
+  });
   await editor.waitForTimeout(5000);
   const edit = editor.getByTestId('edit-view');
   const applyStep = ([label, changes]: EditStep): Promise<void> =>

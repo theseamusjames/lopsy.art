@@ -15,11 +15,11 @@ titles over the page, replays an edit, and captures each shot as Chromium
 draws it. ffmpeg then cuts the shots together and encodes them. To change
 the film, change the script and record again: about two minutes.
 
-The cut, as recorded on 2026-11-21 (24.1 s, 30 fps, 1440 × 1200):
+The cut, as recorded on 2026-11-24 on the app's default renderer, WebGPU (24.1 s, 30 fps, 1440 × 1200). It is the cut of 2026-11-21 shot for shot, re-recorded on the interface of that date: the status bar along the foot of the library and the Edit view, the Edit view's grouped top bar and moved zoom field.
 
 | # | Shot | Seconds | What happens |
 |---|---|---|---|
-| 1 | library | 2.3 | The grid of a 45-photo Drive library drifts in under **Your photos.** Its first frame is the poster. |
+| 1 | library | 2.3 | The grid of a 45-photo Drive library drifts in under **Your photos.** and settles with the status bar at the foot of the frame. Its first frame is the poster. |
 | 2 | pick | 1.3 | Close on one tile: clicked, then given five stars. |
 | 3 | timelapse | 5.6 | The Edit view on `DSCF8078.RAF`. **Professional editing.**, a cut to **In your web browser.**, and a real edit replayed step by step: 40 steps, the History list filling as the photo changes. The camera moves in and comes to rest on the whole photograph, and the pointer arrives at its left edge. |
 | 4 | before-after | 2.7 | Split view, cut in on the framing shot 3 ended on, with the divider at the left edge: nothing moves at the cut. The pointer drags the divider across the photograph and back. |
@@ -34,12 +34,12 @@ Committed, in `apps/photonamous/`:
 
 | File | What it is |
 |---|---|
-| `src/components/DemoReel/demo-reel.av1.mp4` | The film, AV1 (1.5 MB). What most browsers play. |
+| `src/components/DemoReel/demo-reel.av1.mp4` | The film, AV1 (1.4 MB). What most browsers play. |
 | `src/components/DemoReel/demo-reel.h264.mp4` | The same, H.264 (1.7 MB), for browsers without AV1. |
-| `src/components/DemoReel/demo-reel-poster.jpg` | The film's first frame (121 KB), shown before it plays and in place of it. |
+| `src/components/DemoReel/demo-reel-poster.jpg` | The film's first frame (122 KB), shown before it plays and in place of it. |
 | `src/components/DemoReel/DemoReel.tsx` | The player: autoplay, the Pause button, reduced motion and Save-Data, and the film's text alternative. **Its hidden paragraph repeats the titles: change it when they change.** |
 | `e2e/demo-reel.record.ts` | The director: every shot, title, camera move and timing. |
-| `e2e/demo-reel.config.ts` | Its Playwright config: the 1440 × 1200 frame captured at 2×, Chromium with the GPU, a dev server of its own on port 5194. |
+| `e2e/demo-reel.config.ts` | Its Playwright config: the 1440 × 1200 frame captured at 2×, Chromium with the GPU, a dev server of its own on port 5194 (`REEL_PORT` moves it, when another checkout's recording holds 5194). |
 | `e2e/demo-reel-edit.json` | The edit shot 3 replays: the 41 History steps of a real edit of `DSCF8078.RAF`, each as `[label, changes]`. Its crop is applied before the shot (gotcha 14). |
 | `e2e/demo-reel-end.jpg` | The photograph behind the last shot: `DSCF8517`, edited and exported from the app, 2880 px wide. |
 | `e2e/demo-reel-drive-1.png` to `-4.png` | Shot 7's pictures: captures of drive.google.com (2238 × 932 each), one for each folder from `Photonamous` down to `Originals/2026/2026-10-25`. |
@@ -47,9 +47,9 @@ Committed, in `apps/photonamous/`:
 
 Not committed (too large, and not the repository's):
 
-| What | Where it was on 2026-11-21 |
+| What | Where it was on 2026-11-24 |
 |---|---|
-| The master: the same cut at visually lossless quality (H.264, CRF 14, 19 MB), to encode from again without recording | `samples/photonamous-demo-reel/demo-reel-master.mp4` in the main checkout (`/samples` is git-ignored) |
+| The master: the same cut at visually lossless quality (H.264, CRF 14, 19 MB), to encode from again without recording | `samples/photonamous-demo-reel/demo-reel-master.mp4` in the main checkout (`/samples` is git-ignored), with `contact-sheet.jpg` beside it: 36 frames of the cut in order, at 0.05, 0.8, 1.6, 2.2, 2.6, 3.2, 3.8, 4.4, 5.2, 6, 7, 7.8, 8.6, 9.2, 9.8, 10.4, 11, 11.6, 12, 12.4, 13, 13.6, 14.2, 15, 16, 17, 18, 18.6, 19.2, 20, 21, 22, 22.6, 23.2, 23.7 and 24.05 s |
 | The 45 sample photos (30 JPEG, 15 named `.RAF`) the library was built from | `apps/photonamous/public/samples/` in the main checkout. **They should not stay under `public/`**: a production build would ship and precache all 1.2 GB. `samples/photonamous-demo-reel/photos/` is the place for them. |
 | `DSCF8078.RAF`, the photo the timelapse edits | https://github.com/theseamusjames/sample-raf-images |
 
@@ -77,7 +77,14 @@ chromium`). A run prints each shot's frame count and how much it was sped
 up, then the three files' sizes. `REEL_END` names another photograph for
 the end card (default `e2e/demo-reel-end.jpg`).
 
-**Look at the result before keeping it.** Pull frames and tile them:
+**Look at the result before keeping it.** Count the held frames, then pull frames and tile them:
+
+```bash
+ffmpeg -i src/components/DemoReel/demo-reel.av1.mp4 \
+  -vf "scale=480:400,mpdecimate=hi=200:lo=100:frac=0.1,showinfo" -f null - 2>&1 | grep -c pts_time
+# The good AV1 cuts of 2026-11-21 and 2026-11-24 have 473 and 472 (the masters, 461 and 462);
+# a take on a loaded machine had 434.
+```
 
 ```bash
 for t in 0.1 3 5 8 11 13 15 18; do
@@ -184,6 +191,19 @@ that looks odd.
     photograph is the edit. The cut adds the divider and the Before and
     After labels and moves nothing. A cut between two framings of the
     same photograph a few percent apart looks like a mistake.
+16. **The grid ends at the status bar.** The tiles the script clicks to
+    rate are the ones wholly above it; a click on one under the bar would
+    land on the bar.
+17. **The edit shots' library is one only development builds offer.** Its
+    header names it ("This browser"), which the film's Drive library
+    never does, so the script hides that label. It shows under the dark
+    of shots 5 and 6.
+18. **Record on a quiet machine.** Other test runs on the same machine
+    take the GPU and the CPU from the capture: the camera moves then hold
+    a frame here and there. Count the held frames
+    (the `mpdecimate` count under Recording it again) and compare with the last good cut; the edit
+    steps of shot 3 and the titles' holds always show as held, nothing
+    else should.
 
 ## What the page does with it
 
