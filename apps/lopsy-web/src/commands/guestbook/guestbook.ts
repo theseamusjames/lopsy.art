@@ -1,11 +1,14 @@
 import { defineCommand } from '../registry';
 import { GUESTBOOK_OP } from '../lopsy-api';
 
-/** The custom event a note arrives as in Google Analytics, with the note as its `note` parameter. */
+/** The custom event a note arrives as in Google Analytics, in its `note`, `note_2` and `note_3` parameters. */
 export const GUESTBOOK_EVENT = 'guestbook';
 
-/** Google Analytics keeps 100 characters of an event parameter's value, so a longer note would arrive cut. */
-export const MAX_NOTE_LENGTH = 100;
+/** Google Analytics does not log an event parameter whose value is over 100 characters, so a note goes in parts. */
+const PART_LENGTH = 100;
+
+/** What three parts always hold: a part ends a character early rather than cut an emoji's surrogate pair in two. */
+export const MAX_NOTE_LENGTH = 280;
 
 declare global {
   interface Window {
@@ -17,13 +20,28 @@ declare global {
   }
 }
 
+/** The note as event parameters: `note`, then `note_2` and `note_3` when it runs past one part. */
+export function noteParameters(note: string): Record<string, string> {
+  const parts: string[] = [];
+  let part = '';
+  for (const character of note) {
+    if (part.length + character.length > PART_LENGTH) {
+      parts.push(part);
+      part = '';
+    }
+    part += character;
+  }
+  parts.push(part);
+  return Object.fromEntries(parts.map((text, index) => [index === 0 ? 'note' : `note_${index + 1}`, text]));
+}
+
 /** Sends the note as a 'guestbook' event. False when the page has no analytics to carry it. */
 export function signGuestbook(note: string): boolean {
   const zaraz = window.zaraz;
   if (!zaraz) return false;
   try {
     // track is async: a note that fails on its way is lost quietly, as any analytics event is.
-    void Promise.resolve(zaraz.track(GUESTBOOK_EVENT, { note })).catch(() => undefined);
+    void Promise.resolve(zaraz.track(GUESTBOOK_EVENT, noteParameters(note))).catch(() => undefined);
     return true;
   } catch {
     return false;

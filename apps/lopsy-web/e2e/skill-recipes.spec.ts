@@ -357,7 +357,7 @@ test.describe('SKILL.md', () => {
       expect(await page.evaluate(snippet('guestbook'))).toEqual({ ok: true, result: { signed: true } });
       const tracked = await page.evaluate(() => (window as unknown as { __tracked: unknown[][] }).__tracked);
       expect(tracked).toEqual([['guestbook', { note: 'Ada, Lisbon, Example-1: hello, the gradients are lovely' }]]);
-      expect(SKILL).toContain('to 100 characters');
+      expect(SKILL).toContain('to 280 characters');
     });
 
     test('the renderer expression names the WebGL renderer', async ({ page }) => {

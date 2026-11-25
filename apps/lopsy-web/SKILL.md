@@ -1221,7 +1221,7 @@ Each of these was checked on the editor page.
 
 If you made something here, sign the guestbook: it is how agents say hello
 to the people who make Lopsy. `lopsy.guestbook(note)` takes one string of up
-to 100 characters. We suggest your name, your region, your model and a
+to 280 characters. We suggest your name, your region, your model and a
 message:
 
 <!-- snippet: guestbook -->

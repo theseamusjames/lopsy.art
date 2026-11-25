@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CommandError } from '../command';
 import { describeCommands, runCommand } from '../registry';
 import { GUESTBOOK_OP } from '../lopsy-api';
-import { GUESTBOOK_EVENT, MAX_NOTE_LENGTH, signGuestbook } from './guestbook';
+import { GUESTBOOK_EVENT, MAX_NOTE_LENGTH, noteParameters, signGuestbook } from './guestbook';
 
 const NOTE = 'Ada, Lisbon, Example-1: hello';
 
@@ -52,9 +52,38 @@ describe('guestbook.sign', () => {
     for (const params of [{}, { note: '' }, { note: 42 }, { note: tooLong }]) {
       expect((await failure(runCommand(GUESTBOOK_OP, params))).code).toBe('invalid');
     }
-    expect((await failure(runCommand(GUESTBOOK_OP, { note: tooLong }))).message).toContain('100 characters');
+    expect((await failure(runCommand(GUESTBOOK_OP, { note: tooLong }))).message).toContain('280 characters');
     expect(track).not.toHaveBeenCalled();
     expect(await runCommand(GUESTBOOK_OP, { note: 'a'.repeat(MAX_NOTE_LENGTH) })).toEqual({ signed: true });
+  });
+
+  it('sends a note longer than Google Analytics takes in one parameter in parts of 100 characters', async () => {
+    const track = vi.fn();
+    window.zaraz = { track };
+    const note = `${'a'.repeat(100)}${'b'.repeat(100)}${'c'.repeat(80)}`;
+    await runCommand(GUESTBOOK_OP, { note });
+    expect(track.mock.calls).toEqual([
+      [GUESTBOOK_EVENT, { note: 'a'.repeat(100), note_2: 'b'.repeat(100), note_3: 'c'.repeat(80) }],
+    ]);
+    expect(noteParameters('a'.repeat(100))).toEqual({ note: 'a'.repeat(100) });
+    expect(noteParameters('a'.repeat(101))).toEqual({ note: 'a'.repeat(100), note_2: 'a' });
+  });
+
+  it('never cuts an emoji in two, and the longest note still fits three parts', () => {
+    // Each emoji is two UTF-16 units: after 99 letters one does not fit the part, so it starts the next.
+    const straddling = `${'a'.repeat(99)}\u{1F44B}${'b'.repeat(97)}\u{1F3A8}${'c'.repeat(80)}`;
+    expect(straddling).toHaveLength(MAX_NOTE_LENGTH);
+    const parameters = noteParameters(straddling);
+    expect(parameters).toEqual({
+      note: 'a'.repeat(99),
+      note_2: `\u{1F44B}${'b'.repeat(97)}`,
+      note_3: `\u{1F3A8}${'c'.repeat(80)}`,
+    });
+    expect(Object.values(parameters).join('')).toBe(straddling);
+
+    const worst = noteParameters(`a${'\u{1F44B}'.repeat(139)}a`);
+    expect(Object.keys(worst)).toEqual(['note', 'note_2', 'note_3']);
+    expect(Object.values(worst).every((part) => part.length <= 100)).toBe(true);
   });
 
   it('tells agents what it is for and what to leave', () => {

@@ -47,9 +47,18 @@ test.describe('guestbook.sign', () => {
     await installAnalytics(page);
     expect((await runError(page, { op: 'guestbook.sign' })).code).toBe('invalid');
     expect((await runError(page, { op: 'guestbook.sign', note: '' })).code).toBe('invalid');
-    const tooLong = await runError(page, { op: 'guestbook.sign', note: 'a'.repeat(101) });
+    const tooLong = await runError(page, { op: 'guestbook.sign', note: 'a'.repeat(281) });
     expect(tooLong.code).toBe('invalid');
-    expect(tooLong.message).toContain('100 characters');
+    expect(tooLong.message).toContain('280 characters');
     expect(await tracked(page)).toEqual([]);
+  });
+
+  test('sends a long note in parts of 100 characters, the most Google Analytics takes in one parameter', async ({ page }) => {
+    await installAnalytics(page);
+    const note = `${'a'.repeat(100)}${'b'.repeat(100)}${'c'.repeat(80)}`;
+    expect(await run(page, { op: 'guestbook.sign', note })).toEqual({ signed: true });
+    expect(await tracked(page)).toEqual([
+      { name: 'guestbook', properties: { note: 'a'.repeat(100), note_2: 'b'.repeat(100), note_3: 'c'.repeat(80) } },
+    ]);
   });
 });
