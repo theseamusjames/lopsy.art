@@ -1,4 +1,5 @@
 import { expect, test } from './test';
+import { suiteBrowser } from './gpu-args';
 import { gisStubInitScript, routeFakeDrive } from '../../../packages/photos-core/src/storage/google-drive/playwright-fake-drive';
 import { generatedJpeg, importFiles, tiles } from './library';
 
@@ -9,7 +10,9 @@ import { generatedJpeg, importFiles, tiles } from './library';
  * photos-core's fake Drive.
  */
 test('Google Drive: share an export folder by link, then stop sharing', async ({ page, context }) => {
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  // Only Chromium lets a test grant the clipboard and read it back; elsewhere the link is read from its field.
+  const canReadClipboard = suiteBrowser === 'chromium';
+  if (canReadClipboard) await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const drive = await routeFakeDrive(context);
   await page.addInitScript(gisStubInitScript());
   await page.goto('/');
@@ -38,13 +41,15 @@ test('Google Drive: share an export folder by link, then stop sharing', async ({
   await expect(confirm).toContainText('Anyone who has the link will be able to see and download the 1 photo in the export folder “Shared trip”');
   expect(drive.requests.some((request) => request.url.pathname.endsWith('/permissions'))).toBe(false);
   await confirm.getByRole('button', { name: 'Share and copy link' }).click();
-  await expect(panel.getByText(/Link copied/)).toBeVisible();
+  if (canReadClipboard) await expect(panel.getByText(/Link copied/)).toBeVisible();
 
-  const link = await page.evaluate(() => navigator.clipboard.readText());
+  await expect(panel.getByLabel('Share link')).toHaveValue(/\/drive\/folders\//);
+  const shown = await panel.getByLabel('Share link').inputValue();
+  const link = canReadClipboard ? await page.evaluate(() => navigator.clipboard.readText()) : shown;
   const folderId = /\/drive\/folders\/([^/?]+)/.exec(link)?.[1] ?? '';
   expect(folderId).not.toBe('');
   expect(drive.isSharedWithAnyone(folderId)).toBe(true);
-  expect(await panel.getByLabel('Share link').inputValue()).toBe(link);
+  expect(shown).toBe(link);
 
   await panel.getByRole('button', { name: 'Stop sharing' }).click();
   await expect(panel.getByRole('button', { name: 'Copy share link' })).toBeEnabled();

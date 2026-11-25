@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { LibrarySession } from '@lopsy/photos-core/library/types';
 import type { ExportFolder } from '../../app/backend';
+import { copyWhenReady } from '../../app/copy-when-ready';
 import { Button } from '../Button/Button';
 import { Modal } from '../Modal/Modal';
 import { focusedElement } from '@lopsy/ui/a11y/focus-trap';
@@ -47,12 +48,11 @@ export function ExportShare({ session, folder, photoCount }: ExportShareProps) {
     if (!adapter.shareLink) return;
     setState({ kind: 'working' });
     try {
-      const link = await adapter.shareLink(folder.id);
-      const copied = await navigator.clipboard.writeText(link).then(
-        () => true,
-        () => false,
-      );
-      setState({ kind: 'shared', link, copied });
+      // The copy starts here, inside the click and before the wait for the link: Safari refuses one begun after it.
+      const sharing = adapter.shareLink(folder.id);
+      const copying = copyWhenReady(sharing);
+      const link = await sharing;
+      setState({ kind: 'shared', link, copied: await copying });
     } catch (error) {
       setState({ kind: 'error', message: error instanceof Error ? error.message : String(error) });
     }
