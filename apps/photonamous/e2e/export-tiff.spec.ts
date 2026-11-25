@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test';
 import { generatedJpeg, importFiles } from './library';
 
 /** One IFD entry: tag, type, count and the value or offset (little-endian TIFF). */

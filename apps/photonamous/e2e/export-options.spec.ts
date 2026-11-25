@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test';
 import { generatedJpeg, importFiles } from './library';
 
 /** The names in a zip's central directory. */

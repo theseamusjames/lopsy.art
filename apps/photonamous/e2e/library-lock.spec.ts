@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test';
 import { tiles } from './library';
 
 /** One tab writes to a library at a time; a second tab can take it over. */

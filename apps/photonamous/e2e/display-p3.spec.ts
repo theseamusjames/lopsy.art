@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { inflateSync } from 'node:zlib';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { importFiles } from './library';
-import { gpuArgs } from './gpu-args';
+import { gpuArgs, isChromium } from './gpu-args';
 
 /**
  * On a Display P3 display the canvas is Display P3, on both builds, and
@@ -10,9 +10,11 @@ import { gpuArgs } from './gpu-args';
  * an sRGB 8-bit export holds sRGB numbers, a Display P3 one P3 numbers.
  * Chromium's --force-color-profile gives the headless browser a P3
  * display, so `(color-gamut: p3)` matches; it cannot show what a person
- * sees on a real one.
+ * sees on a real one. Firefox and WebKit have no such switch: there the
+ * display is the machine's, so the spec runs in Chromium only.
  */
-test.use({ launchOptions: { args: [...gpuArgs, '--force-color-profile=display-p3-d65'] } });
+test.skip(!isChromium, 'gives the browser a Display P3 display with a Chromium flag');
+test.use(isChromium ? { launchOptions: { args: [...gpuArgs, '--force-color-profile=display-p3-d65'] } } : {});
 
 interface PngChunk {
   readonly type: string;

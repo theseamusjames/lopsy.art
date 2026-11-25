@@ -1,8 +1,8 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test';
 import { imageStats, openHarness, previewCount, raiseExposure, settledPreview, waitForPreview, waitForReady, type ImageStats } from './harness';
-import type { Page } from '@playwright/test';
+import type { Page } from './test';
 
 /** Makes an edit and measures the screen preview rendered for it, once the edit has settled. */
 async function previewAfter(page: Page, edit: () => Promise<void>): Promise<ImageStats> {

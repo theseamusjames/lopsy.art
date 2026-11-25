@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test';
 import { generatedJpeg, importStrip, toast } from './library';
 
 /** The import sheet adds to an album with keywords, and warns about photos already in the library before importing. */

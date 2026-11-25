@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test';
 
 /**
  * Off the happy path: a sidebar list with many rows. It shows its first

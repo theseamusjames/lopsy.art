@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test';
 import { raiseExposure, waitForReady } from './harness';
 import { generatedJpeg, importFiles } from './library';
 

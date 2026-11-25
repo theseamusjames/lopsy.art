@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test';
 import { generatedJpeg, importFiles } from './library';
 
 /** Drop moves the selection to the next photo; Undo (toast or Ctrl+Z) brings it back. */

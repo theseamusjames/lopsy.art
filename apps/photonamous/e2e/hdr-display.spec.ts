@@ -1,6 +1,6 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { generatedJpeg, importFiles } from './library';
-import { gpuArgs, suiteRenderer } from './gpu-args';
+import { gpuArgs, isChromium, suiteRenderer } from './gpu-args';
 import { axeViolations } from './axe';
 
 /**
@@ -9,9 +9,11 @@ import { axeViolations } from './axe';
  * for an HDR canvas, the status bar says HDR, and its switch turns the HDR
  * view on and off. Chromium's --force-color-profile=hdr10 makes
  * `(dynamic-range: high)` match headless; it cannot show what a person sees
- * on a real HDR display.
+ * on a real HDR display. Firefox and WebKit have no such switch, so the
+ * spec runs in Chromium only.
  */
-test.use({ launchOptions: { args: [...gpuArgs, '--force-color-profile=hdr10'] } });
+test.skip(!isChromium, 'gives the browser an HDR display with a Chromium flag');
+test.use(isChromium ? { launchOptions: { args: [...gpuArgs, '--force-color-profile=hdr10'] } } : {});
 
 async function openInEdit(page: Page): Promise<void> {
   await page.goto('/');

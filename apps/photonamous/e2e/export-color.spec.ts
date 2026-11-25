@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { inflateSync } from 'node:zlib';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { importFiles } from './library';
 
 /**

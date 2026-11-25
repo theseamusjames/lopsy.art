@@ -1,5 +1,5 @@
 import { writeFileSync } from 'node:fs';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { axeViolations } from './axe';
 import { generatedJpeg, importStrip, tiles, toast } from './library';
 import { newMask } from './masks';

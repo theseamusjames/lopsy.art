@@ -10,7 +10,7 @@
  * as Lopsy's layer readback writes it.
  */
 import { inflateSync } from 'node:zlib';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 
 const W = 16;
 const H = 8;

@@ -4,7 +4,7 @@
  * warm Temperature brings the balance back to neutral. RAW presets and
  * Kelvin need a RAF and are covered by unit tests of their parsing.
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { openGeneratedImage, openHarness, waitForPreview, waitForReady } from './harness';
 
 const steps = (page: Page) => page.evaluate(() => window.__photosHarness?.steps ?? []);

@@ -398,6 +398,36 @@ browser without WebGPU runs WebGL either way. A tab where WebGPU failed to
 start keeps to WebGL until it is closed (the `photonamous:renderer-failed`
 flag in sessionStorage); open a new tab to try WebGPU again.
 
+**Browser engines.** The suite runs in Chromium unless
+`PHOTONAMOUS_BROWSER` says `firefox` or `webkit`, which runs the same
+specs in Playwright's own Firefox or WebKit (`npx playwright install
+firefox webkit` once; `apps/photonamous/e2e/gpu-args.ts`). Neither gets
+Chromium's flags:
+
+- **Firefox** draws on the machine's GPU even headless. Its WebGPU
+  answers "WebGPU is disabled by blocklist" on macOS (its blocklist
+  preferences do not change that), so the page falls back to WebGL, as for
+  a person whose Firefox has none, and the suite expects WebGL there.
+- **WebKit** has no WebGPU in Playwright's build (Safari 26 has it), so it
+  runs WebGL. Playwright's WebKit contexts are ephemeral, like Private
+  Browsing, and there the browser's private file system will not open, so
+  every test there runs in a persistent context of its own instead
+  (`apps/photonamous/e2e/test.ts`, which every spec imports `test` from).
+  WebKit keeps the private file system of all its persistent contexts in
+  one place (`~/Library/WebKit/org.webkit.Playwright` on macOS), so each
+  test empties it for its origins first and the WebKit suite runs on one
+  worker (the test refuses more).
+
+The dev server keeps the production default (WebGPU) on both, so the page
+probes for an adapter and falls back as it would for those browsers'
+users. Specs that need Chromium (its colour-profile flags, CDP) skip
+themselves with the reason.
+
+```bash
+cd apps/photonamous && PHOTONAMOUS_BROWSER=firefox npx playwright test --workers=3
+cd apps/photonamous && PHOTONAMOUS_BROWSER=webkit npx playwright test     # one worker only
+```
+
 **Measuring on the real GPU.** `e2e/edit-speed.spec.ts` times a RAF's
 load, one edit frame for four recipes at the working size and at 100 %,
 and full-size exports, on the new linear chain and on the old one. It

@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { expect, test, type Download, type Page } from '@playwright/test';
+import { expect, test, type Download, type Page } from './test';
 import { openHarness, waitForReady } from './harness';
 import { generatedJpeg, importFiles, tiles } from './library';
 import { setMaskValue } from './masks';

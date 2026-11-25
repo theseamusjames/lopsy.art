@@ -1,7 +1,7 @@
 import { chromium, defineConfig, devices } from '@playwright/test';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { gpuArgs, hardwareGpuArgs, isHardwareGpu, rendererEnv } from './e2e/gpu-args';
+import { firefoxUserPrefs, gpuArgs, hardwareGpuArgs, isHardwareGpu, rendererEnv, suiteBrowser } from './e2e/gpu-args';
 
 /**
  * The Chromium to run. Playwright's own build when it is installed; else
@@ -37,6 +37,10 @@ export function chromiumExecutable(): string | undefined {
  *
  * PHOTONAMOUS_GPU=hardware runs the browser on the machine's GPU, in the
  * full Chromium binary, for the specs that measure speed (gpu-args.ts).
+ *
+ * PHOTONAMOUS_BROWSER=firefox or webkit runs the suite in Playwright's
+ * Firefox or WebKit instead of Chromium (gpu-args.ts); the specs that need
+ * Chromium's flags or CDP skip themselves there.
  */
 const port = Number(process.env.VITE_PORT ?? 5174);
 /**
@@ -69,6 +73,55 @@ export function withEditSectionsOpen(...origins: string[]) {
   };
 }
 
+/**
+ * The suite in Chromium (the default): the app's specs, and the Drive
+ * specs against the second server.
+ */
+const chromiumProjects = [
+  {
+    name: 'chromium',
+    testIgnore: [DRIVE_SPECS, ...OWN_CONFIG_SPECS],
+    use: {
+      ...devices['Desktop Chrome'],
+      viewport: { width: 1280, height: 800 },
+      ...(isHardwareGpu
+        ? { channel: 'chromium', launchOptions: { args: hardwareGpuArgs } }
+        : { launchOptions: { args: gpuArgs, executablePath: chromiumExecutable() } }),
+    },
+  },
+  {
+    name: 'chromium-drive',
+    testMatch: DRIVE_SPECS,
+    use: {
+      ...devices['Desktop Chrome'],
+      baseURL: `http://localhost:${drivePort}`,
+      viewport: { width: 1280, height: 800 },
+      launchOptions: { args: gpuArgs, executablePath: chromiumExecutable() },
+    },
+  },
+];
+
+/**
+ * The same two projects in Playwright's Firefox or WebKit
+ * (PHOTONAMOUS_BROWSER, e2e/gpu-args.ts), with none of Chromium's flags.
+ */
+function otherEngineProjects(engine: 'firefox' | 'webkit') {
+  const device = engine === 'firefox' ? devices['Desktop Firefox'] : devices['Desktop Safari'];
+  const launchOptions = engine === 'firefox' ? { firefoxUserPrefs } : {};
+  return [
+    {
+      name: engine,
+      testIgnore: [DRIVE_SPECS, ...OWN_CONFIG_SPECS],
+      use: { ...device, viewport: { width: 1280, height: 800 }, launchOptions },
+    },
+    {
+      name: `${engine}-drive`,
+      testMatch: DRIVE_SPECS,
+      use: { ...device, baseURL: `http://localhost:${drivePort}`, viewport: { width: 1280, height: 800 }, launchOptions },
+    },
+  ];
+}
+
 export default defineConfig({
   testDir: './e2e',
   testIgnore: OWN_CONFIG_SPECS,
@@ -82,29 +135,7 @@ export default defineConfig({
     viewport: { width: 1280, height: 800 },
     storageState: withEditSectionsOpen(`http://localhost:${port}`, `http://localhost:${drivePort}`),
   },
-  projects: [
-    {
-      name: 'chromium',
-      testIgnore: [DRIVE_SPECS, ...OWN_CONFIG_SPECS],
-      use: {
-        ...devices['Desktop Chrome'],
-        viewport: { width: 1280, height: 800 },
-        ...(isHardwareGpu
-          ? { channel: 'chromium', launchOptions: { args: hardwareGpuArgs } }
-          : { launchOptions: { args: gpuArgs, executablePath: chromiumExecutable() } }),
-      },
-    },
-    {
-      name: 'chromium-drive',
-      testMatch: DRIVE_SPECS,
-      use: {
-        ...devices['Desktop Chrome'],
-        baseURL: `http://localhost:${drivePort}`,
-        viewport: { width: 1280, height: 800 },
-        launchOptions: { args: gpuArgs, executablePath: chromiumExecutable() },
-      },
-    },
-  ],
+  projects: suiteBrowser === 'chromium' ? chromiumProjects : otherEngineProjects(suiteBrowser),
   webServer: [
     {
       command: `npx vite --port ${port} --strictPort`,

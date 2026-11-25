@@ -43,6 +43,17 @@ ESLint refuses them from the glue. A new readback the app uses goes in
 `wasm.ts` and in that ESLint list. The RAF workers load the glue by its
 `.js` name, past the selector, for the build the page runs.
 
+**Three engines.** The e2e suite runs in Chromium by default, and in
+Playwright's Firefox or WebKit with `PHOTONAMOUS_BROWSER=firefox|webkit`
+(`e2e/gpu-args.ts`; neither offers a WebGPU adapter there, so both run
+WebGL). Specs import `test` and `expect` from `e2e/test.ts`, not from
+`@playwright/test`: in WebKit it gives each test a persistent context,
+without which the browser's private file system does not open (the specs
+with configs of their own, site, offline and roundtrip, run in Chromium
+only and keep Playwright's). A spec
+that needs Chromium (its flags, CDP) skips itself elsewhere with the
+reason (`isChromium`). `docs/photonamous-setup.md` has the details.
+
 **Colour.** Every engine is made by `createDevelopEngine`
 (`src/engine/develop-engine.ts`), which turns on the engine's linear
 Rec. 2020 working space where the GPU renders to float targets (not on the
@@ -181,6 +192,7 @@ npm run storybook:photos        # Storybook on port 6007
 npm run build-storybook:photos  # static build (storybook-static/; delete it after)
 npm run test:e2e:photos    # Playwright, on WebGPU (the app's default)
 PHOTONAMOUS_RENDERER=webgl npm run test:e2e:photos   # Playwright on WebGL
+PHOTONAMOUS_BROWSER=firefox npm run test:e2e:photos  # in Playwright's Firefox (or webkit); both run WebGL
 
 # The production build, as photonamous.com serves it (spec 6.3)
 npm run build:photos       # apps/photonamous/dist; the engine must be built first

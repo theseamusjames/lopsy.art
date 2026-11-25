@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { imageStats, openGeneratedImage, openHarness, settledPreview, waitForPreview, waitForReady } from './harness';
 
 /**

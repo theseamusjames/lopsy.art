@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test';
 import { generatedJpeg, importFiles, tiles } from './library';
 
 /** Check library finds an original that went missing behind the app's back, and badges its tile. */

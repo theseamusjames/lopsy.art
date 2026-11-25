@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { isHardwareGpu, suiteRenderer } from './gpu-args';
 import { waitForReady } from './harness';
 import { tiles, toast } from './library';

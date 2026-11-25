@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { imageStats, openGeneratedImage, openGeneratedImages, openHarness, settledPreview, waitForPreview, waitForReady } from './harness';
 
 /** Types a value into a slider's readout: one history step. */

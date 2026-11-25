@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { imageStats, openGeneratedImage, openHarness, openTopBottomImage, settledPreview, waitForPreview, waitForReady } from './harness';
 
 async function setValue(page: Page, label: string, value: string): Promise<void> {

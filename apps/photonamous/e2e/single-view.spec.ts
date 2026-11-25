@@ -1,4 +1,4 @@
-import { expect, test, type BrowserContext, type Locator, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Locator, type Page } from './test';
 import { generatedJpeg, importFiles } from './library';
 
 /**

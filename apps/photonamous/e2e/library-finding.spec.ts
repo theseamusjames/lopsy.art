@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test';
 import { withExif } from './exif';
 import { generatedJpeg, importFiles, tiles } from './library';
 
