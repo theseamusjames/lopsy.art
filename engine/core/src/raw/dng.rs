@@ -3,7 +3,7 @@
 //! the matrix per white, measured Kelvin, CIE illuminant presets.
 
 use super::white_balance::{illuminant_presets, measured_white, temperature_for_kelvin};
-use super::{camera_and_monochrome, KelvinModel, MatrixModel, OpeningLook, PresetSource, RawDescription, RawFormat, RawFormatId, RawPlane, RawWhite, WhiteBalanceModel};
+use super::{standard_profiles, KelvinModel, MatrixModel, OpeningLook, PresetSource, RawDescription, RawFormat, RawFormatId, RawPlane, RawWhite, WhiteBalanceModel};
 use crate::dng::linear::{self, DngRenderParams, PlaneParams};
 use crate::raf::{RafBand, RafBandPixels};
 
@@ -57,7 +57,7 @@ impl RawFormat for Dng {
             camera_model: p.camera_model.clone(),
             color_note: None,
             not_applied: prep.not_applied.clone(),
-            profiles: camera_and_monochrome(&defaults),
+            profiles: standard_profiles(&defaults),
             develop_defaults: defaults,
             white_balance: WhiteBalanceModel {
                 matrix: MatrixModel::PerWhite,

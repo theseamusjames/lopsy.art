@@ -456,7 +456,13 @@ fn every_candidate_opens_an_arw_at_the_cameras_brightness_through_its_curve() {
             let m = matched_median(&data, &prep, &preview);
             println!("{name} {label}: {ev:+.3} EV (today {:+.3}), median {m:.3} against {:.3}", today.description.develop_defaults.exposure_ev, preview.median);
             assert!((m - preview.median).abs() < 0.01 || ev == lopsy_core::arw::exposure::MIN_EV || ev == lopsy_core::arw::exposure::MAX_EV, "{name} {label}: {m} against {}", preview.median);
-            assert!(prep.description.profiles.iter().all(|p| p.settings.exposure_ev == ev && p.settings.base_curve == Some(look.curve.lut())));
+            assert!(prep.description.profiles.iter().all(|p| p.settings.exposure_ev == ev));
+            let ids: Vec<&str> = prep.description.profiles.iter().map(|p| p.id.as_str()).collect();
+            assert_eq!(ids, ["camera", "neutral", "monochrome"], "{name}");
+            let curve = |id: &str| prep.description.profiles.iter().find(|p| p.id == id).unwrap().settings.base_curve.clone();
+            assert_eq!(curve("camera"), Some(look.curve.lut()));
+            assert_eq!(curve("monochrome"), Some(look.curve.lut()));
+            assert_eq!(curve("neutral"), Some(OpeningCurve::Neutral.lut()));
         }
     }
 }

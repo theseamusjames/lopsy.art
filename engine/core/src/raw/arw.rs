@@ -4,7 +4,7 @@
 //! and no presets.
 
 use super::white_balance::{fixed_white, illuminant_presets, measured_white, temperature_for_kelvin};
-use super::{camera_and_monochrome, KelvinModel, MatrixModel, OpeningLook, PresetSource, RawDescription, RawFormat, RawFormatId, RawPlane, RawWhite, WhiteBalanceModel};
+use super::{standard_profiles, KelvinModel, MatrixModel, OpeningLook, PresetSource, RawDescription, RawFormat, RawFormatId, RawPlane, RawWhite, WhiteBalanceModel};
 use crate::arw::linear::{self, ArwRenderParams};
 use crate::dng::linear::{render_binned_linear_for, render_linear_band, PlaneParams};
 use crate::raf::{RafBand, RafBandPixels};
@@ -56,7 +56,7 @@ impl RawFormat for Arw {
             camera_model: p.camera_model.clone(),
             color_note: p.colour.note().map(str::to_string),
             not_applied: prep.not_applied.clone(),
-            profiles: camera_and_monochrome(&defaults),
+            profiles: standard_profiles(&defaults),
             develop_defaults: defaults,
             white_balance,
             finished_bands: false,

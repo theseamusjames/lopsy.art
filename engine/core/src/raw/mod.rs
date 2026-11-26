@@ -206,19 +206,26 @@ pub trait RawFormat {
     fn temperature_for_kelvin(p: &Self::Params, kelvin: f32, tint: f32) -> Result<f32, String>;
 }
 
-/// The Camera look and Monochrome for a format without film looks: the
-/// develop defaults as they are, and the same with no colour.
-pub(crate) fn camera_and_monochrome(defaults: &RawDevelopSettings) -> Vec<DevelopProfile> {
-    let settings = |saturation: f32| ProfileSettings {
+/// The Profile control of a format without film looks (DNG, ARW):
+/// - `camera`, "Standard": the develop defaults, the Standard look
+///   (`look::OpeningLook::default`). The app reads the engine's `camera`
+///   entry as its recipe's default profile, `standard`.
+/// - `neutral`, "Neutral": the near-linear `NEUTRAL` curve and no added
+///   saturation, the look these formats opened with before Standard: a flat
+///   start for grading. Same exposure as Standard.
+/// - `monochrome`, "Monochrome": Standard with no colour.
+pub(crate) fn standard_profiles(defaults: &RawDevelopSettings) -> Vec<DevelopProfile> {
+    let settings = |saturation: f32, base_curve: Option<Vec<f32>>| ProfileSettings {
         cam_to_rgb: defaults.cam_to_rgb,
         exposure_ev: defaults.exposure_ev,
         saturation,
         highlight_desaturation: defaults.highlight_desaturation,
-        base_curve: defaults.base_curve.clone(),
+        base_curve,
     };
     vec![
-        DevelopProfile { id: "camera".into(), name: "Standard".into(), settings: settings(defaults.saturation) },
-        DevelopProfile { id: "monochrome".into(), name: "Monochrome".into(), settings: settings(0.0) },
+        DevelopProfile { id: "camera".into(), name: "Standard".into(), settings: settings(defaults.saturation, defaults.base_curve.clone()) },
+        DevelopProfile { id: "neutral".into(), name: "Neutral".into(), settings: settings(1.0, Some(OpeningCurve::Neutral.lut())) },
+        DevelopProfile { id: "monochrome".into(), name: "Monochrome".into(), settings: settings(0.0, defaults.base_curve.clone()) },
     ]
 }
 
