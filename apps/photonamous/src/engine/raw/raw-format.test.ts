@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatHasFinishedBands, parseRawDescription, RAW_PATH_FORMATS, rawLoadPath } from './raw-format';
+import { parseRawDescription, RAW_PATH_FORMATS, rawLoadPath } from './raw-format';
 import { rawWhiteBalanceFor } from './raw-white-balance';
 import { wbRatioFor } from '../raw-develop';
 
@@ -160,17 +160,20 @@ describe('RAW_PATH_FORMATS and finished bands', () => {
   });
 
   it('opens every RAW file through the RAW interface, or baked where the GPU cannot render it', () => {
-    for (const format of ['raf', 'dng', 'arw'] as const) expect(rawLoadPath(format, true)).toBe('raw');
-    // Without float targets: RAF renders its finished look in bands; DNG and ARW take the baked decode.
-    expect(rawLoadPath('raf', false)).toBe('raw');
-    expect(rawLoadPath('dng', false)).toBe('baked');
-    expect(rawLoadPath('arw', false)).toBe('baked');
-    for (const format of ['jpeg', 'png', 'webp'] as const) expect(rawLoadPath(format, true)).toBe('image');
-  });
-
-  it('knows before preparing which formats render their finished look in bands', () => {
-    expect(formatHasFinishedBands('raf')).toBe(true);
-    expect(formatHasFinishedBands('dng')).toBe(false);
-    expect(formatHasFinishedBands('arw')).toBe(false);
+    // As the engine's rawRendersFinishedBands answers today: RAF only.
+    const asked: string[] = [];
+    const finished = (format: string) => {
+      asked.push(format);
+      return format === 'raf';
+    };
+    for (const format of ['raf', 'dng', 'arw'] as const) expect(rawLoadPath(format, true, finished)).toBe('raw');
+    expect(asked).toEqual([]);
+    // Without float targets: a format with finished bands renders them; the others take the baked decode.
+    expect(rawLoadPath('raf', false, finished)).toBe('raw');
+    expect(rawLoadPath('dng', false, finished)).toBe('baked');
+    expect(rawLoadPath('arw', false, finished)).toBe('baked');
+    expect(asked).toEqual(['raf', 'dng', 'arw']);
+    for (const format of ['jpeg', 'png', 'webp'] as const) expect(rawLoadPath(format, false, finished)).toBe('image');
+    expect(asked).toHaveLength(3);
   });
 });

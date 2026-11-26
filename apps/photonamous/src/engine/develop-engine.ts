@@ -68,6 +68,7 @@ import initWasm, {
   clearImageCurves,
   clearRawDevelop,
   decodeAndUploadRawBaked,
+  rawRendersFinishedBands,
   rawTemperatureForKelvin,
   rawWhiteBalance,
   decodeAndUploadImage,
@@ -885,7 +886,7 @@ class PhotoEngine implements DevelopEngine {
     // Photos sit on opaque black; only a Lopsy layer keeps its transparency.
     setBackgroundColor(this.engine, 0, 0, 0, 1);
     // Decided before any worker starts: without float targets a format with no finished look in bands opens baked.
-    const path = rawLoadPath(format, this.hasFloat);
+    const path = rawLoadPath(format, this.hasFloat, rawRendersFinishedBands);
     if (path === 'baked') return this.decodeBaked(new Uint8Array(await source.arrayBuffer()), signal, report);
     if (path === 'raw') return this.decodeRaw(source, signal, report, mode);
     if (format === 'png' && mode === 'full') {
