@@ -26,6 +26,17 @@ describe('summarizeImport', () => {
     const paths = ['a/IMG_1.dng', 'b/IMG_1.jpg'];
     expect(summarizeImport(files, (i) => paths[i] ?? '').pairCount).toBe(0);
   });
+
+  it('counts a Sony ARW as a photo, and as the RAW half of a pair', () => {
+    const s = summarizeImport([
+      { name: 'DSC06677.ARW', size: 40_000_000 },
+      { name: 'DSC06677.JPG', size: 7_000_000 },
+    ]);
+    expect(s.photoCount).toBe(2);
+    expect(s.skippedNames).toEqual([]);
+    expect(s.pairCount).toBe(1);
+    expect(s.pairJpegBytes).toBe(7_000_000);
+  });
 });
 
 describe('formatting', () => {

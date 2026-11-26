@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_RECIPE } from '@lopsy/photos-core/library/recipe';
-import { compareAssets, isEdited, lastEditedIn, pairPartners, SORT_DESCENDING, sortDirectionLabel, queryAssets, sidebarCounts, type AssetQuery } from './asset-query';
+import { compareAssets, isEdited, isHiddenPairHalf, isRaw, lastEditedIn, pairPartners, SORT_DESCENDING, sortDirectionLabel, queryAssets, sidebarCounts, type AssetQuery } from './asset-query';
 import { importBatches } from './finding';
 import { makeAsset, makeView } from './test-fixtures';
 
@@ -121,6 +121,15 @@ describe('RAW+JPEG pairs', () => {
     expect(sidebarCounts(view).all).toBe(2);
     expect(importBatches(view).reduce((n, b) => n + b.count, 0)).toBe(2);
     expect(pairPartners(makeView([raw, { ...jpeg, deleted: true }]).assets).size).toBe(0);
+  });
+
+  it('takes RAF, DNG and ARW for RAW, and hides the JPEG paired with one', () => {
+    const formats = ['raf', 'dng', 'arw', 'jpeg', 'png'] as const;
+    expect(formats.map((format) => isRaw(makeAsset('a', { format })))).toEqual([true, true, true, false, false]);
+    const arw = makeAsset('s', { format: 'arw' });
+    const jpeg = makeAsset('j', { format: 'jpeg', pairedWith: 's' });
+    expect(isHiddenPairHalf(jpeg, makeView([arw, jpeg]).assets)).toBe(true);
+    expect(isHiddenPairHalf(arw, makeView([arw, jpeg]).assets)).toBe(false);
   });
 });
 

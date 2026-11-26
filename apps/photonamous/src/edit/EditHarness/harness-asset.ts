@@ -6,6 +6,7 @@ import type { Asset, ImageFormat, PreviewRef, Version } from '@lopsy/photos-core
 const BY_EXTENSION: Readonly<Record<string, ImageFormat>> = {
   raf: 'raf',
   dng: 'dng',
+  arw: 'arw',
   jpg: 'jpeg',
   jpeg: 'jpeg',
   png: 'png',
@@ -18,6 +19,7 @@ const BY_MIME: Readonly<Record<string, ImageFormat>> = {
   'image/webp': 'webp',
   'image/x-fuji-raf': 'raf',
   'image/x-adobe-dng': 'dng',
+  'image/x-sony-arw': 'arw',
 };
 
 export function formatOf(fileName: string, mimeType: string): ImageFormat | null {

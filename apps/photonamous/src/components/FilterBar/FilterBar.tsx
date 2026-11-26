@@ -25,6 +25,7 @@ const LABEL_WORDS: Readonly<Record<LabelChoice, string>> = {
 const FORMAT_WORDS: Readonly<Record<string, string>> = {
   raf: 'RAW (Fujifilm)',
   dng: 'RAW (DNG)',
+  arw: 'RAW (Sony)',
   jpeg: 'JPEG',
   png: 'PNG',
   webp: 'WebP',

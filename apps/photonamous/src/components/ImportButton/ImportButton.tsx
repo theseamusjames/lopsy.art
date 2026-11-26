@@ -14,7 +14,7 @@ import { useMenuKeys } from '@lopsy/ui/a11y/use-menu-keys';
 import { Menu, MenuItem } from '@lopsy/ui/Menu';
 import styles from './ImportButton.module.css';
 
-const ACCEPT = '.raf,.dng,.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp';
+const ACCEPT = '.raf,.dng,.arw,.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp';
 
 /** Import photos: pick files, or a whole folder. */
 export function ImportButton({ variant = 'primary' }: { variant?: 'primary' | 'secondary' }) {
