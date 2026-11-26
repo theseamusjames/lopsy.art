@@ -50,6 +50,9 @@ function readArwHead(path: string): Uint8Array {
   return end > head.length ? readBytes(path, Math.min(end, 32 * 1024 * 1024)) : head;
 }
 
+/** The Sony A7 IV sample in its compressed (lossy) encoding, the one the preview offsets below are for. */
+const COMPRESSED_A7IV = 'ILCE-7M4_DSC06677_FullFrame-Raw-Compressed.ARW';
+
 /** Where each embedded JPEG of the sample is (IFD0, IFD1, IFD2), and its size. */
 const SAMPLE_JPEGS = {
   preview: { offset: 192_674, length: 498_845, width: 1616, height: 1080 },
@@ -59,15 +62,46 @@ const SAMPLE_JPEGS = {
 
 describe.skipIf(!arwDir)('the real ARW sample (LOPSY_ARW_SAMPLES)', () => {
   const files = arwDir ? readdirSync(arwDir).filter((f) => /\.arw$/i.test(f)).sort() : [];
-  const sample = files.find((f) => f.startsWith('ILCE-7M4_')) ?? '';
+  const sample = files.find((f) => f === COMPRESSED_A7IV) ?? '';
   const path = `${arwDir ?? ''}/${sample}`;
 
-  it('has the Sony A7 IV sample', () => {
+  it('has the compressed Sony A7 IV sample', () => {
     expect(sample).not.toBe('');
   });
 
   it.each(files)('%s is an ARW, by its bytes', (name: string) => {
     expect(detectFormat(readBytes(`${arwDir ?? ''}/${name}`, HEAD))).toBe('arw');
+  });
+
+  // Sony's older formats, which the engine refuses: import turns them away as files it cannot read.
+  const older = arwDir ? readdirSync(arwDir).filter((f) => /\.(sr2|srf)$/i.test(f)).sort() : [];
+  it.each(older)('%s (an SR2 or SRF) is not a photo import reads', (name: string) => {
+    expect(detectFormat(readArwHead(`${arwDir ?? ''}/${name}`))).toBeNull();
+  });
+
+  /**
+   * The size import records is the one the engine's decode gives: the
+   * DefaultCropSize where the camera wrote one, else (A6000, RX100 III) the
+   * Exif pixel dimensions, which are Sony's crop of the sensor.
+   */
+  const EXPECTED_SIZES: readonly (readonly [string, number, number])[] = [
+    ['ILCE-7M4_DSC06673_FullFrame-Raw-Uncompressed.ARW', 7008, 4672],
+    ['ILCE-7M4_DSC06674_FullFrame-LossLess-Compressed-Large.ARW', 7008, 4672],
+    ['ILCE-7M4_DSC06677_FullFrame-Raw-Compressed.ARW', 7008, 4672],
+    ['ILCE-7M3_DSC0009.ARW', 6000, 4000],
+    ['ILCE-6000_DSC01542.ARW', 6000, 4000],
+    ['DSC-RX100M3_DSC00734.ARW', 5472, 3648],
+  ];
+
+  it('holds every ARW whose size is pinned', () => {
+    expect(files).toEqual(EXPECTED_SIZES.map(([name]) => name).sort());
+  });
+
+  it.each(EXPECTED_SIZES)('%s records %i x %i, with its camera and a preview', (name: string, width: number, height: number) => {
+    const inspected = inspectImage(readArwHead(`${arwDir ?? ''}/${name}`));
+    expect(inspected?.metadata).toMatchObject({ format: 'arw', width, height, camera: { make: 'SONY', model: name.split('_')[0] } });
+    expect(inspected?.metadata.capturedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+    expect(inspected?.preview?.width).toBeGreaterThanOrEqual(1024);
   });
 
   it('reads its camera, capture time, exposure and picture size (the default crop, not the sensor)', () => {
