@@ -1,6 +1,7 @@
 //! An experiment, not a check: how far the default ARW renders are from
 //! the camera's own brightness. For each ARW in `LOPSY_ARW_SAMPLES`, both
-//! the baked decode (`arw::read_arw`) and the RAW develop defaults (the
+//! the baked decode without exposure matching (`arw::bake_prepared`) and
+//! the RAW develop defaults (the
 //! binned view through the CPU references, working space on, sRGB) are
 //! rendered (a) as they ship and (b) with the exposure, in stops, at which
 //! their median luminance equals that of the smallest JPEG the camera
