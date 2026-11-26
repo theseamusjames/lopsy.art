@@ -979,7 +979,7 @@ was.
     (counted again when the presets moved from a table to the file),
     10 presets are past ±100 (Tungsten on DSCF6952, DSCF7795, DSCF7863,
     DSCF8078 and DSCF8267, five on DSCF8169, shot under warm light), 2
-    past ±150, DSCF8169's Cloudy (+170) and Fluorescent (daylight)
+    past ±150, DSCF8169's Shade (+170) and Fluorescent (daylight)
     (+191), and none past ±200 (`core/tests/raf_wb_presets.rs` prints
     them). White balance is a
     power of two of the value, so a value within the old range renders

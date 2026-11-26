@@ -84,7 +84,7 @@ test.describe('White balance on a RAF', () => {
     );
     expect(listed.map((p) => p.name)).toEqual([
       'Daylight',
-      'Cloudy',
+      'Shade',
       'Tungsten',
       'Fluorescent (daylight)',
       'Fluorescent (day white)',

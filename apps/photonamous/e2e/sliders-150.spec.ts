@@ -274,7 +274,7 @@ test.describe('White balance presets past 100 on a RAF', () => {
   });
 
   /**
-   * A frame shot under warm light, whose Cloudy and Daylight Fluorescent
+   * A frame shot under warm light, whose Shade and Fluorescent (daylight)
    * presets are Temperature +170 and +191 from as shot: ±150 cut both off.
    */
   test('presets past 150 apply the camera’s own Temperature, short of the end', async ({ page }) => {
@@ -285,7 +285,7 @@ test.describe('White balance presets past 100 on a RAF', () => {
     await waitForReady(page, 120_000);
     const mode = page.getByLabel('White balance mode');
     const chosen: number[] = [];
-    for (const label of ['Cloudy', 'Fluorescent (daylight)']) {
+    for (const label of ['Shade', 'Fluorescent (daylight)']) {
       await mode.selectOption({ label });
       // The menu names the preset it applied: its values were not cut to another's.
       await expect.poll(() => mode.evaluate((el) => (el as HTMLSelectElement).selectedOptions[0]?.label)).toBe(label);

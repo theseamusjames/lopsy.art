@@ -448,7 +448,7 @@ the newer version made.
   be level). The crop shrinks to the largest rectangle inside.
 - **White balance**: under its heading, a **Mode** menu (As shot; Auto,
   on RAW files; the RAW file's presets — on a RAF, the camera's own,
-  read from the file: Daylight, Cloudy, Tungsten and three fluorescents
+  read from the file: Daylight, Shade, Tungsten and three fluorescents
   (daylight, day white, cool white), none on a RAF whose header does not
   hold them (one whose values are those of another is listed once); on a DNG or a Sony ARW with
   measured colour, the standard illuminants Daylight, Cloudy, Shade and
