@@ -8,7 +8,9 @@
  *
  * The recipe's default profile id is 'standard'. On a RAW file that is the
  * camera's look, which the engine calls 'camera': the engine's entry is
- * read under the recipe's id.
+ * read under the recipe's id. An engine entry whose own id is 'standard'
+ * (a ProRAW's Standard look, beside its Camera) is read as 'standard-look',
+ * so the two never share a recipe id (`recipeProfileId`).
  */
 
 import type { RawDevelopSettings } from './raw-develop';
@@ -41,6 +43,18 @@ const ROLES: ReadonlySet<string> = new Set<ProfileRole>(['camera', 'look', 'neut
 const CAMERA_LOOK: DevelopProfile = { id: 'standard', name: 'Camera look' };
 /** The engine's id for the camera's own look. */
 const ENGINE_CAMERA_ID = 'camera';
+
+/**
+ * The recipe's id for an engine profile id: the camera's entry is the
+ * recipe's 'standard'; an engine entry that is itself called 'standard'
+ * (not the camera) takes 'standard-look', so it is not dropped as a
+ * second 'standard' and a recipe saying 'standard' still means the camera.
+ */
+export function recipeProfileId(engineId: string): string {
+  if (engineId === ENGINE_CAMERA_ID) return CAMERA_LOOK.id;
+  if (engineId === CAMERA_LOOK.id) return `${CAMERA_LOOK.id}-look`;
+  return engineId;
+}
 
 export const RAW_FALLBACK_PROFILES: readonly DevelopProfile[] = [
   CAMERA_LOOK,
@@ -80,7 +94,7 @@ function readProfile(value: unknown): DevelopProfile | null {
   const rawId = v.id;
   const name = typeof v.name === 'string' ? v.name : typeof v.label === 'string' ? v.label : null;
   if (typeof rawId !== 'string' || rawId === '' || name === null) return null;
-  const id = rawId === ENGINE_CAMERA_ID ? CAMERA_LOOK.id : rawId;
+  const id = recipeProfileId(rawId);
   const settings = readSettings(v.settings);
   return {
     id,
@@ -89,7 +103,7 @@ function readProfile(value: unknown): DevelopProfile | null {
     ...(typeof v.role === 'string' && ROLES.has(v.role) ? { role: v.role as ProfileRole } : {}),
     ...(typeof v.menuName === 'string' && v.menuName !== '' ? { menuName: v.menuName } : {}),
     ...(typeof v.listed === 'boolean' ? { listed: v.listed } : {}),
-    ...(typeof v.sameAs === 'string' || v.sameAs === null ? { sameAs: v.sameAs } : {}),
+    ...(typeof v.sameAs === 'string' ? { sameAs: recipeProfileId(v.sameAs) } : v.sameAs === null ? { sameAs: null } : {}),
     ...(typeof v.makerStandard === 'boolean' ? { makerStandard: v.makerStandard } : {}),
   };
 }

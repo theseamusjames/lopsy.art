@@ -353,7 +353,8 @@ edits or Reset from the grid passes it by, and its previews stay the ones
 the newer version made.
 
 - **Loading and working size.** RAF, DNG and Sony ARW decode on a pool of
-  workers into the engine's RAW develop stage. A DNG the RAW path cannot
+  workers into the engine's RAW develop stage; an iPhone ProRAW's local
+  tone map (its gain table map) is applied there. A DNG the RAW path cannot
   read (a lossy one), and DNG and ARW on a GPU without float targets,
   open as the engine's finished picture and are edited as an ordinary
   photo; when that cannot be read either, the Edit view says why. 16-bit
@@ -435,9 +436,14 @@ the newer version made.
 - **Profile**: for RAW, the camera's look first ("Camera (Velvia look)",
   not listed a second time), then the engine's film looks with Provia
   shown as "Standard (Provia look)" (or "Camera (Provia look, Standard)"
-  when the camera shot Provia), Neutral and Monochrome; for a DNG or a
-  Sony ARW, Standard, Neutral and Monochrome; for other photos, Standard
-  and Monochrome. Eleven Sony bodies have colour computed from measured
+  when the camera shot Provia), Neutral and Monochrome; for an iPhone
+  ProRAW (a DNG carrying Apple's local tone map), **Camera** first and
+  chosen (the file's own tone curve and local tone map at the file's own
+  exposure), then Standard (the app's curve, at an exposure matched to
+  the photo's embedded preview), Neutral and Monochrome; for any other
+  DNG or a Sony ARW, Standard, Neutral and Monochrome; for other photos,
+  Standard and Monochrome. Each profile brings its own exposure, to which
+  the Exposure slider adds. Eleven Sony bodies have colour computed from measured
   sensor data (RX100 IV, A6400, A7C II, A7 III, A7 IV, A7R II, A7R III,
   A7R IV, A7S II, A7S III, A9). For any other body the colour is only
   approximate (the file carries part of the camera's colour, so it is
