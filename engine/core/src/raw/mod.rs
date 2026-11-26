@@ -37,6 +37,15 @@ pub use look::{OpeningCurve, OpeningLook, STANDARD_SATURATION};
 use crate::raf::wb_presets::RecipeWbPreset;
 use crate::raf::{RafBand, RafBandPixels};
 
+/// Rows of a plane to render: output rows `[y0, y1)` from plane rows
+/// `[src_y0, src_y1)` (the halo included). Every format's bands are this
+/// type, which RAF introduced.
+pub type RawBand = RafBand;
+
+/// Rendered rows: where they go in the oriented frame, their size and RGBA
+/// f32 pixels. Every format's renders are this type, which RAF introduced.
+pub type RawBandPixels = RafBandPixels;
+
 /// The formats the RAW interface knows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -190,13 +199,13 @@ pub trait RawFormat {
     fn describe(data: &[u8], prep: &RawPlane<Self::Params>, look: &OpeningLook) -> Result<RawDescription, String>;
     /// The plane's height, which bands are planned over.
     fn plane_height(p: &Self::Params) -> u32;
-    fn plan_bands(p: &Self::Params, max_bands: u32) -> Vec<RafBand> {
+    fn plan_bands(p: &Self::Params, max_bands: u32) -> Vec<RawBand> {
         crate::raf::plan_bands(Self::plane_height(p), max_bands)
     }
-    fn render_linear_band(src: &[f32], p: &Self::Params, band: RafBand) -> Result<RafBandPixels, String>;
+    fn render_linear_band(src: &[f32], p: &Self::Params, band: RawBand) -> Result<RawBandPixels, String>;
     fn render_binned_linear(plane: &[f32], p: &Self::Params, min_long_edge: u32) -> Result<(u32, u32, Vec<f32>), String>;
     /// The finished look of a band, for formats that have one (RAF).
-    fn render_finished_band(_src: &[f32], _p: &Self::Params, _band: RafBand) -> Option<Result<RafBandPixels, String>> {
+    fn render_finished_band(_src: &[f32], _p: &Self::Params, _band: RawBand) -> Option<Result<RawBandPixels, String>> {
         None
     }
     /// The RAW step's white balance for the recipe's temperature and tint.
@@ -329,13 +338,13 @@ pub fn prepare_with(data: &[u8], look: &OpeningLook) -> Result<PreparedRaw, Stri
 }
 
 /// Bands for the plane of a prepared file.
-pub fn plan_bands(format: RawFormatId, params_json: &str, max_bands: u32) -> Result<Vec<RafBand>, String> {
+pub fn plan_bands(format: RawFormatId, params_json: &str, max_bands: u32) -> Result<Vec<RawBand>, String> {
     dispatch!(format, F => Ok(F::plan_bands(&params_from::<<F as RawFormat>::Params>(format, params_json)?, max_bands)))
 }
 
 /// Render plane rows `[band.src_y0, band.src_y1)` (`src`) to linear camera
 /// RGB: oriented RGBA f32, bit-identical to the same rows of the whole frame.
-pub fn render_linear_band(format: RawFormatId, src: &[f32], params_json: &str, band: RafBand) -> Result<RafBandPixels, String> {
+pub fn render_linear_band(format: RawFormatId, src: &[f32], params_json: &str, band: RawBand) -> Result<RawBandPixels, String> {
     dispatch!(format, F => F::render_linear_band(src, &params_from::<<F as RawFormat>::Params>(format, params_json)?, band))
 }
 
@@ -345,7 +354,7 @@ pub fn render_binned_linear(format: RawFormatId, plane: &[f32], params_json: &st
 }
 
 /// The finished look of a band (RAF); an error for a format without one.
-pub fn render_finished_band(format: RawFormatId, src: &[f32], params_json: &str, band: RafBand) -> Result<RafBandPixels, String> {
+pub fn render_finished_band(format: RawFormatId, src: &[f32], params_json: &str, band: RawBand) -> Result<RawBandPixels, String> {
     dispatch!(format, F => {
         let p = params_from::<<F as RawFormat>::Params>(format, params_json)?;
         F::render_finished_band(src, &p, band).unwrap_or_else(|| Err(format!("{} has no finished bands: use the baked decode", format.as_str().to_uppercase())))
