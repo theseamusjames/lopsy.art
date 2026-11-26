@@ -184,6 +184,8 @@ declare global {
       readHistogram: () => Promise<number[] | null>;
       /** What the Edit view has rendered at its working size, for the RAW parity fingerprints (e2e/raw-parity.spec.ts). */
       readRendered: () => Promise<RenderedForTest | null>;
+      /** The RAW develop settings last sent to the engine (`setRawDevelop`'s JSON); null for a photo that is not RAW. */
+      rawDevelopSettings: () => string | null;
     };
   }
 }
@@ -803,6 +805,7 @@ class PhotoEngine implements DevelopEngine {
           return bins ? [...bins] : null;
         },
         readRendered: () => this.readRenderedForTest(),
+        rawDevelopSettings: () => this.appliedRawJson,
       };
     }
     this.resizeObserver = new ResizeObserver((entries) => this.handleResize(entries));
