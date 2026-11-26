@@ -506,7 +506,12 @@ the directory `LOPSY_ARW_SAMPLES` names: the A7 IV in three encodings
 and lossless siblings), the A7 III, A6000 and RX100 III ARWs, and an SR2
 and an SRF that must be refused; and
 `arw.test.ts` checks that every `.dng` in `LOPSY_DNG_SAMPLES` is still
-taken for a DNG; each is skipped without its variable.
+taken for a DNG. The DNG tests (`e2e/edit-dng.spec.ts`,
+`e2e/white-balance-dng.spec.ts`) read the iPhone ProRAW files
+`sample_dng_00.dng` and `sample_dng_01.dng` from `LOPSY_DNG_SAMPLES`, and
+the Canon 5D Mark III DNGs from raw.pixls.us (`5D3-adobe-lossless.dng`,
+`5D3-adobe-lossless-rgb.dng`, `5D3-adobe-lossy.dng`) from
+`LOPSY_DNG_ADOBE_SAMPLES`. Each is skipped without its variable.
 
 **RAW parity.** `e2e/raw-parity.spec.ts` renders each RAF in
 `LOPSY_RAF_SAMPLES` in the Edit view at its working size under three
