@@ -1227,8 +1227,20 @@ section 8's, for Seamus to review).
     render on fine detail (about 30 % on an X100VI photo;
     `engine/core/tests/raf_develop.rs` has the numbers). One matrix per
     body: it does not follow the white balance. Other Fujifilm sensors
-    (X-Trans 3 and earlier, the X-H2S, GFX) keep the matrices they had.
+    (X-Trans 3 and earlier, the X-H2S) keep the matrices they had.
     Leica needed nothing: its DNGs carry their own calibration.
+74. **Fujifilm GFX files open.** Two faults in the RAF reader, found with
+    the first three GFX files it was given. A GFX 50S II's and a
+    GFX100RF's plain 16-bit strips were taken for compressed data and
+    refused, because the reader guessed from a strip's first bytes
+    (plain strips had always opened on zeroes; these open on picture
+    data): a strip of exactly two bytes a sample is now plain. And a
+    GFX 100 opened magenta, because a Bayer RAF's pattern was taken as
+    RGGB from the picture's corner, where it is the sensor's RGGB as the
+    crop finds it (GBRG when the crop starts on an odd row). The three
+    medium-format sensors have matrices in `camera_colour` too. No GFX
+    file is in the test samples: the two rules have unit tests, and the
+    three files were opened and measured by hand.
 
 ### Verified at the end
 
@@ -1268,8 +1280,10 @@ On the final tree (86ca279f4) and the engine built from it:
 
 - **A clipped glint under a moved white balance** takes the tint, and
   the lossy 5D3 file's glints keep a lavender halo (decision 70).
-- **Fujifilm sensors other than X-Trans 4 and 5** (X-Trans 3 and
-  earlier, the X-H2S, GFX) keep the matrices they had (decision 73).
+- **Fujifilm sensors other than X-Trans 4 and 5 and GFX** (X-Trans 3
+  and earlier, the X-H2S) keep the matrices they had (decision 73).
+- **A Bayer RAF is demosaiced bilinearly**, where an X-Trans one has a
+  better method: a GFX file is softer at 100 % than it could be.
 - **Standard as a profile on a RAF**: it would need its own opening
   exposure. With the matrices of decision 73 the film looks sit at
   0.87 to 1.23 of the camera JPEG's chroma over the eight samples, 1.02
@@ -1290,10 +1304,6 @@ On the final tree (86ca279f4) and the engine built from it:
   asked for again on every view change, and "Loading full resolution…"
   never goes away; on the no-float way the photo does not open. Any
   format, found with the Q2. This Mac's GPU takes 16384 and shows it.
-- **Fujifilm GFX.** A GFX 100 RAF opens magenta with its highlights
-  blown to white, and GFX 50S II and GFX100RF files are refused for
-  their compression (`raw_type` 0x2001 and 0x6c03). No GFX file had been
-  tried before.
 - **A Leica DNG's Kelvin readout** is high: 10200 to 11300 K for two
   files shot under daylight-balanced light, where a Sony A7 III reads
   5900 K. Not looked into.
