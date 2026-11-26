@@ -142,8 +142,15 @@ test.describe('Edit view on a Sony ARW', () => {
       .toBeGreaterThan(0);
     expect(await image.evaluate((img: HTMLImageElement) => img.naturalWidth / img.naturalHeight)).toBeCloseTo(7008 / 4672, 2);
 
-    // Export, original size, JPEG (the defaults): the size the library recorded.
+    // A preset applied from the grid: the preview is rendered again from the ARW, by the engine off screen.
+    const editedHash = (await tile.getAttribute('data-preview-hash')) ?? '';
     await tile.click();
+    await page.getByRole('button', { name: 'Presets', exact: true }).click();
+    await page.getByRole('menu', { name: 'Presets' }).getByRole('menuitem', { name: 'Punchy' }).click();
+    await expect(tile).not.toHaveAttribute('data-preview-hash', editedHash, { timeout: 120_000 });
+    await expect(tile.getByRole('img', { name: 'Updating' })).toHaveCount(0, { timeout: 60_000 });
+
+    // Export, original size, JPEG (the defaults): the size the library recorded.
     await page.getByRole('button', { name: /^Export 1/ }).click();
     await expect(page.getByRole('radio', { name: /^JPEG/ })).toBeChecked();
     await expect(page.getByRole('combobox', { name: 'Size' })).toHaveValue('original');
