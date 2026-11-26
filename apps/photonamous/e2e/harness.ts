@@ -218,3 +218,49 @@ export async function raiseExposure(page: Page, tenths: number): Promise<void> {
   for (let i = 0; i < tenths * 10; i++) await page.keyboard.down('ArrowRight');
   await page.keyboard.up('ArrowRight');
 }
+
+/** A JPEG's size from its frame header, without decoding it. */
+export function jpegSize(bytes: Uint8Array): { width: number; height: number } | null {
+  let p = 2;
+  while (p + 9 < bytes.length && bytes[p] === 0xff) {
+    const marker = bytes[p + 1] ?? 0;
+    const length = ((bytes[p + 2] ?? 0) << 8) | (bytes[p + 3] ?? 0);
+    if (marker >= 0xc0 && marker <= 0xc3) {
+      return { height: ((bytes[p + 5] ?? 0) << 8) | (bytes[p + 6] ?? 0), width: ((bytes[p + 7] ?? 0) << 8) | (bytes[p + 8] ?? 0) };
+    }
+    p += 2 + length;
+  }
+  return null;
+}
+
+/** The size of the harness's last export (a JPEG), read from its header. */
+export async function lastExportSize(page: Page): Promise<{ width: number; height: number } | null> {
+  const head = await page.evaluate(async () => {
+    const blob = window.__photosHarness?.exports.at(-1)?.blob;
+    return blob ? Array.from(new Uint8Array(await blob.slice(0, 256 * 1024).arrayBuffer())) : [];
+  });
+  return jpegSize(Uint8Array.from(head));
+}
+
+/** The harness's history steps so far. */
+export async function harnessSteps(page: Page): Promise<string[]> {
+  return page.evaluate(() => [...(window.__photosHarness?.steps ?? [])]);
+}
+
+/**
+ * Asks for the full resolution (Full), as zooming to 50 % or closer does,
+ * and waits for it: the working image came first, and the full-size
+ * decode replaces it.
+ */
+export async function loadFullResolution(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Full', exact: true }).click();
+  await expect(page.getByTestId('loading-badge')).toHaveText('Loading full resolution…', { timeout: 30_000 });
+  await expect(page.getByTestId('loading-badge')).toHaveCount(0, { timeout: 5 * 60_000 });
+  await expect(page.getByTestId('zoom-readout')).toHaveValue('100%');
+}
+
+/** The Temperature readout in Kelvin, as a number; NaN when it does not read in Kelvin. */
+export async function temperatureKelvin(page: Page): Promise<number> {
+  const text = await page.getByLabel('Temperature value').inputValue();
+  return /^\d+ K$/.test(text) ? Number(text.replace(' K', '')) : Number.NaN;
+}

@@ -3,16 +3,34 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from './test';
 import type { Page } from './test';
-import { imageStats, openHarness, previewCount, raiseExposure, settledPreview, waitForPreview, waitForReady, type ImageStats } from './harness';
+import {
+  harnessSteps,
+  imageStats,
+  jpegSize,
+  lastExportSize,
+  loadFullResolution,
+  openHarness,
+  previewCount,
+  raiseExposure,
+  settledPreview,
+  temperatureKelvin,
+  waitForPreview,
+  waitForReady,
+  type ImageStats,
+} from './harness';
 import { importStrip, toast } from './library';
 
 /**
- * Real Sony RAWs (ARW) in the Edit view, decoded by the engine at full
- * size. The samples are not in the repository: point LOPSY_ARW_SAMPLES at
- * the directory that holds them (raw.pixls.us, CC0).
+ * Real Sony RAWs (ARW) in the Edit view on the RAW path: prepared in
+ * workers, a working image first and the full size when asked for, with
+ * the white balance the engine describes (measured Kelvin and illuminant
+ * presets for bodies with measured colour; relative Temperature and a
+ * colour note for the others). The samples are not in the repository:
+ * point LOPSY_ARW_SAMPLES at the directory that holds them (raw.pixls.us,
+ * CC0).
  *
- * Brightness and saturation against the camera's JPEG are not asserted:
- * the ARW develop is known to be darker and less saturated for now.
+ * Brightness and saturation are not asserted: the default look of these
+ * formats is being decided.
  */
 const samples = process.env.LOPSY_ARW_SAMPLES;
 const COMPRESSED_A7IV = 'ILCE-7M4_DSC06677_FullFrame-Raw-Compressed.ARW';
@@ -50,27 +68,23 @@ async function setExposure(page: Page, value: string): Promise<void> {
   await readout.press('Enter');
 }
 
-/** A JPEG's size from its frame header, without decoding it. */
-function jpegSize(bytes: Uint8Array): { width: number; height: number } | null {
-  let p = 2;
-  while (p + 9 < bytes.length && bytes[p] === 0xff) {
-    const marker = bytes[p + 1] ?? 0;
-    const length = ((bytes[p + 2] ?? 0) << 8) | (bytes[p + 3] ?? 0);
-    if (marker >= 0xc0 && marker <= 0xc3) {
-      return { height: ((bytes[p + 5] ?? 0) << 8) | (bytes[p + 6] ?? 0), width: ((bytes[p + 7] ?? 0) << 8) | (bytes[p + 8] ?? 0) };
-    }
-    p += 2 + length;
-  }
-  return null;
+/** Bodies with measured colour, and the as-shot Kelvin their description gives. */
+const MEASURED: Readonly<Record<string, number>> = {
+  [COMPRESSED_A7IV]: 4540.94,
+  'ILCE-7M4_DSC06673_FullFrame-Raw-Uncompressed.ARW': 4745.68,
+  'ILCE-7M4_DSC06674_FullFrame-LossLess-Compressed-Large.ARW': 4516.17,
+  'ILCE-7M3_DSC0009.ARW': 4256.09,
+};
+
+async function lastStep(page: Page): Promise<string | undefined> {
+  return (await harnessSteps(page)).at(-1);
 }
 
-/** The harness's last export's first 256 KB, where the JPEG frame header is. */
-async function lastExportHead(page: Page): Promise<Uint8Array> {
-  const head = await page.evaluate(async () => {
-    const blob = window.__photosHarness?.exports.at(-1)?.blob;
-    return blob ? Array.from(new Uint8Array(await blob.slice(0, 256 * 1024).arrayBuffer())) : [];
-  });
-  return Uint8Array.from(head);
+async function exportedSize(page: Page): Promise<{ width: number; height: number } | null> {
+  const download = page.waitForEvent('download', { timeout: 5 * 60_000 });
+  await page.getByRole('button', { name: 'Export' }).click();
+  await download;
+  return lastExportSize(page);
 }
 
 test.describe('Edit view on a Sony ARW', () => {
@@ -78,7 +92,7 @@ test.describe('Edit view on a Sony ARW', () => {
   test.skip(!sample, 'Set LOPSY_ARW_SAMPLES to the directory of Sony ARW samples to run this test');
   test.setTimeout(6 * 60_000);
 
-  test('the harness opens it at full size with measured colour and no note, edits and exports it', async ({ page }) => {
+  test('the harness opens it as RAW at its working size, with measured colour and no note, edits and exports it', async ({ page }) => {
     await openHarness(page);
     await page.getByTestId('harness-file').setInputFiles(sample ?? '');
     await waitForReady(page, 120_000);
@@ -86,12 +100,11 @@ test.describe('Edit view on a Sony ARW', () => {
     // The A7 IV's colour is measured, so the decoder sends no note and the Profile menu has none.
     await expect(page.getByTestId('color-note')).toHaveCount(0);
     await expect(page.getByRole('combobox', { name: 'Profile' })).toHaveAccessibleDescription('');
+    await expect(page.getByRole('combobox', { name: 'Profile' }).locator('option')).toHaveText(['Standard', 'Monochrome', 'Neutral']);
     await page.screenshot({ path: test.info().outputPath('arw-harness.png') });
 
-    // A DNG-like decode: the whole picture at once, so the full resolution is already there.
-    await page.getByRole('button', { name: 'Full', exact: true }).click();
-    await expect(page.getByTestId('zoom-readout')).toHaveValue('100%');
-    await expect(page.getByTestId('loading-badge')).toHaveCount(0);
+    // The working image first; the full size is decoded when asked for.
+    await loadFullResolution(page);
 
     // The screen preview is the picture at 3:2, and Exposure moves it.
     const darker = await previewAfter(page, () => setExposure(page, '-1'));
@@ -105,7 +118,7 @@ test.describe('Edit view on a Sony ARW', () => {
     const download = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export' }).click();
     expect((await download).suggestedFilename()).toBe(COMPRESSED_A7IV.replace(/\.ARW$/, '.jpg'));
-    expect(jpegSize(await lastExportHead(page))).toEqual({ width: 7008, height: 4672 });
+    expect(await lastExportSize(page)).toEqual({ width: 7008, height: 4672 });
   });
 
   test('imported into a library, it opens at the size recorded, edits, and exports at that size', async ({ page }) => {
@@ -184,8 +197,8 @@ test.describe('Edit view on a Sony ARW', () => {
   });
 });
 
-test.describe('Every ARW sample opens and renders', () => {
-  test.setTimeout(4 * 60_000);
+test.describe('Every ARW sample opens on the RAW path, at the size the baked decode gave', () => {
+  test.setTimeout(6 * 60_000);
   for (const [name, width, height] of SIZES.slice(1)) {
     test(name, async ({ page }) => {
       const path = samplePath(name);
@@ -193,18 +206,57 @@ test.describe('Every ARW sample opens and renders', () => {
       await openHarness(page);
       await page.getByTestId('harness-file').setInputFiles(path ?? '');
       await waitForReady(page, 150_000);
-      // A body without measured colour says so, quietly under the Profile menu and read with it.
+      const temperature = page.getByLabel('Temperature value');
+      const mode = page.getByLabel('White balance mode');
       const note = page.getByTestId('color-note');
-      if (APPROXIMATE.has(name)) {
+      const asShot = MEASURED[name];
+      if (asShot !== undefined) {
+        // Measured colour: Kelvin read from the file, the standard illuminants, no note.
+        await expect(note).toHaveCount(0);
+        await expect(temperature).toHaveValue(`${Math.round(asShot / 50) * 50} K`);
+        await expect(mode.locator('option')).toHaveText(['As shot', 'Auto', 'Daylight', 'Cloudy', 'Shade', 'Tungsten', 'Custom']);
+        await temperature.fill('5500');
+        await temperature.press('Enter');
+        await expect.poll(() => temperatureKelvin(page)).toBeGreaterThanOrEqual(5450);
+        expect(await temperatureKelvin(page)).toBeLessThanOrEqual(5550);
+        await mode.selectOption({ label: 'Daylight' });
+        await expect.poll(() => lastStep(page)).toBe('White balance: Daylight');
+      } else {
+        // No measured colour: Temperature in relative numbers, no presets, and the note, quietly under Profile and read with it.
         await expect(note).toHaveText(COLOR_NOTE);
         await expect(page.getByRole('combobox', { name: 'Profile' })).toHaveAccessibleDescription(COLOR_NOTE);
-      } else {
-        await expect(note).toHaveCount(0);
+        await expect(temperature).toHaveValue('0');
+        await expect(mode.locator('option')).toHaveText(['As shot', 'Auto', 'Custom']);
       }
+      // Auto and the picker work either way.
+      await mode.selectOption('auto');
+      await expect.poll(() => lastStep(page)).toBe('White balance: Auto');
+      await page.getByRole('button', { name: 'Pick a neutral grey' }).click();
+      const canvas = await page.getByTestId('edit-canvas').boundingBox();
+      if (!canvas) throw new Error('no canvas');
+      await page.mouse.click(canvas.x + canvas.width / 2, canvas.y + canvas.height / 2);
+      await expect.poll(() => lastStep(page), { timeout: 10_000 }).toBe('White balance: picked');
+
       const shown = await previewAfter(page, () => setExposure(page, '0.5'));
       expect(Math.max(shown.width, shown.height)).toBe(2048);
       expect(shown.width / shown.height).toBeCloseTo(width / height, 2);
       expect(shown.spread).toBeGreaterThan(5);
+      // At full size the picture is the size the baked decode gave, which import records and crops rely on.
+      expect(await exportedSize(page)).toEqual({ width, height });
     });
   }
+
+  test('without float targets an ARW opens with the baked decode, as an ordinary photo, at the same size', async ({ page }) => {
+    const name = 'ILCE-7M3_DSC0009.ARW';
+    const path = samplePath(name);
+    test.skip(!path, `needs ${name} in LOPSY_ARW_SAMPLES`);
+    await page.goto('/edit-harness.html?develop=no-float');
+    await expect(page.getByTestId('harness-file')).toBeAttached();
+    await page.getByTestId('harness-file').setInputFiles(path ?? '');
+    await waitForReady(page, 150_000);
+    await expect(page.getByRole('combobox', { name: 'Profile' }).locator('option')).toHaveText(['Standard', 'Monochrome']);
+    await expect(page.getByLabel('Temperature value')).toHaveValue('0');
+    await expect(page.getByLabel('White balance mode').locator('option')).toHaveText(['As shot', 'Custom']);
+    expect(await exportedSize(page)).toEqual({ width: 6000, height: 4000 });
+  });
 });
