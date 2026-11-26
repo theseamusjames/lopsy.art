@@ -210,3 +210,33 @@ fn a_lossy_dng_is_a_linear_dng_like_any_other() {
         println!("LOPSY_DNG_ADOBE_SAMPLES is not set: skipping.");
     }
 }
+
+/// The baked decode (Lopsy's import, and the app's fallback) opens each
+/// lossy file at its sibling's size with the same brightness, full size,
+/// within the same JPEG-sized differences.
+#[test]
+fn the_baked_decode_opens_lossy_dngs_like_their_siblings() {
+    let mut seen = 0;
+    for (lossless, lossy) in PAIRS {
+        let (Some(a), Some(b)) = (sample(lossless), sample(lossy)) else { continue };
+        let (ia, ib) = (lopsy_core::dng::read_dng(&a).unwrap(), lopsy_core::dng::read_dng(&b).unwrap_or_else(|e| panic!("{lossy}: {e}")));
+        assert_eq!((ia.width, ia.height), (ib.width, ib.height), "{lossy}");
+        let to8 = |px: &[f32]| -> Vec<u8> { px.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).map(|v| (v.clamp(0.0, 1.0) * 255.0 + 0.5) as u8).collect() };
+        let (da, db) = (to8(&ia.pixels), to8(&ib.pixels));
+        let mut diffs: Vec<u8> = da.iter().zip(&db).map(|(x, y)| x.abs_diff(*y)).collect();
+        let mean = diffs.iter().map(|&d| f64::from(d)).sum::<f64>() / diffs.len() as f64;
+        let at = (diffs.len() as f64 * 0.99) as usize;
+        let p99 = *diffs.select_nth_unstable(at).1;
+        let (sa, sb) = (stats(&da), stats(&db));
+        println!(
+            "| baked {lossy} vs {lossless} | {}×{} | {:.3} / {:.3} | {:.2} % / {:.2} % | {mean:.2} | {p99} |",
+            ia.width, ia.height, sa.0, sb.0, sa.1 * 100.0, sb.1 * 100.0
+        );
+        assert!((sa.0 - sb.0).abs() < 0.02 && (sa.1 - sb.1).abs() < 0.005, "{lossy}: {sa:?} against {sb:?}");
+        assert!(mean < 4.0 && p99 < 32, "{lossy}: mean {mean}, 99th percentile {p99}");
+        seen += 1;
+    }
+    if seen == 0 {
+        println!("LOPSY_DNG_ADOBE_SAMPLES is not set: skipping.");
+    }
+}

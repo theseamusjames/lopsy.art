@@ -117,12 +117,6 @@ fn dng_and_arw_through_the_interface() {
         assert_eq!(d.format, format);
         bands_equal_whole(&name, &prep);
         let baked = match format {
-            // The baked decode does not read a lossy DNG.
-            RawFormatId::Dng if name.contains("lossy") => {
-                let e = lopsy_core::dng::read_dng(&data).err().unwrap_or_default();
-                assert!(e.starts_with(lopsy_core::dng::LOSSY_REFUSAL), "{name}: {e}");
-                (d.width, d.height)
-            }
             RawFormatId::Dng => {
                 let b = lopsy_core::dng::read_dng(&data).unwrap();
                 (b.width, b.height)

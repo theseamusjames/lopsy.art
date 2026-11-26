@@ -28,8 +28,8 @@
 //! hues within 2° of them; the uncompressed and lossless files decode bit
 //! for bit the same. Lossy JPEG DNGs (`Compression` 34892) are read as
 //! tiles of 8-bit LinearRaw RGB (`decode_lossy_tiled`) for the linear path,
-//! whose `OpcodeList2` makes them linear (`opcodes`); this baked decode
-//! refuses them.
+//! whose `OpcodeList2` makes them linear (`opcodes`), and for this baked
+//! decode, which applies the same polynomials after normalizing.
 //!
 //! (This baked decode leaves the gain map off by default — see the
 //! ProfileGainTableMap note below. The linear path, `linear::prepare_dng`,
@@ -87,8 +87,7 @@
 //! - ProfileLookTable (tag 50981): 3D LUT for profile "look".
 //! - Move gain table map processing to a background thread/worker — it's
 //!   O(width × height) with 8 gain lookups per pixel, ~2-3s for 24MP.
-//! - Support additional compression formats (JPEG XL), and lossy JPEG in
-//!   this baked decode (the linear path reads it).
+//! - Support additional compression formats (JPEG XL).
 //! - Test with DNGs from other converters and cameras.
 
 pub mod tiff;
@@ -390,12 +389,21 @@ pub(crate) fn shift_cfa(pattern: [u8; 4], (dy, dx): (usize, usize)) -> [u8; 4] {
 pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     let mut debug_log: Vec<String> = Vec::new();
     let stored = read_stored_image(data, &mut debug_log)?;
-    if stored.lossy {
-        return Err(format!("{LOSSY_REFUSAL}: the baked decode does not read it"));
-    }
+    let lossy = stored.lossy;
     macro_rules! dng_log {
         ($($arg:tt)*) => { debug_log.push(format!($($arg)*)); };
     }
+    // OpcodeList2's polynomials, as the linear path applies them
+    // (`opcodes`): a lossy file needs them to be linear and is refused
+    // without them; a file without the list decodes as before.
+    let opcode_list2 = stored.main_ifd.iter().find(|e| e.tag == TagId::OpcodeList2 as u16).or_else(|| stored.ifd0.iter().find(|e| e.tag == TagId::OpcodeList2 as u16));
+    let stored_spp = if stored.is_linear() { stored.samples as usize } else { 1 };
+    let maps = match opcode_list2.map(|e| opcodes::read_opcode_list2(&e.raw_bytes, stored.width, stored.height, stored_spp)) {
+        Some(Ok(maps)) => Some(maps),
+        Some(Err(why)) if lossy => return Err(format!("{LOSSY_REFUSAL}: its OpcodeList2 cannot be applied ({why})")),
+        None if lossy => return Err(format!("{LOSSY_REFUSAL}: it has no OpcodeList2 to make its samples linear")),
+        _ => None,
+    };
     let StoredImage { ifd0, main_ifd, width, height, bits, samples, photo_interp, mut pixel_data, expected_pixels, .. } = stored;
     let is_linear = photo_interp == 34892;
     let is_cfa = photo_interp == 32803;
@@ -486,7 +494,9 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     // Without a table, WhiteLevel may be 65535 even for 10/12/14-bit data (Apple
     // ProRAW does this), so fall back to measured max when WhiteLevel is clearly wrong.
     let measured_max = pixel_data[..expected_pixels].iter().copied().max().unwrap_or(1) as f64;
-    let max_val = if linearization_table.is_some() {
+    // Lossy data is 8-bit through a curve: its WhiteLevel is the
+    // specification's, not a guess to check against the data.
+    let max_val = if linearization_table.is_some() || lossy {
         // Table was applied; WhiteLevel matches the table's output range.
         white_level.map(|wl| wl as f64).unwrap_or(measured_max.max(1.0))
     } else if let Some(wl) = white_level {
@@ -511,7 +521,8 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
             for s in 0..3 {
                 let b = black.at(row + dy, col + dx, s);
                 let v = pixel_data[i * samples as usize + s] as f64;
-                rgb_f32.push(((v - b) / (max_val - b)).max(0.0) as f32);
+                let x = ((v - b) / (max_val - b)).max(0.0);
+                rgb_f32.push(maps.as_ref().map_or(x, |m| m.apply(s as usize, x)) as f32);
             }
         }
     } else if is_cfa {
@@ -528,7 +539,8 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
             .enumerate()
             .map(|(i, &v)| {
                 let b = black.at(i / w + dy, i % w + dx, 0);
-                ((v as f64 - b) / (max_val - b)).max(0.0) as f32
+                let x = ((v as f64 - b) / (max_val - b)).max(0.0);
+                maps.as_ref().map_or(x, |m| m.apply(0, x)) as f32
             })
             .collect();
 

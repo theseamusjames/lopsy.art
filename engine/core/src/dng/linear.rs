@@ -43,7 +43,7 @@
 //! with the file's own preview and macOS's decode at no shift, with hues
 //! within 1° of them. The lossy JPEG variants (compression 34892: 8-bit
 //! LinearRaw RGB in baseline JPEG tiles, stored through a curve) are read
-//! too: their `OpcodeList2` `MapPolynomial` opcodes, applied to the linear
+//! too, here and by the baked decode: their `OpcodeList2` `MapPolynomial` opcodes, applied to the linear
 //! reference values (0..1) before the as-shot gain as the specification
 //! orders (`dng::opcodes`), make them linear, and they open like their
 //! lossless siblings (`tests/dng_lossy.rs`). A lossy file whose
