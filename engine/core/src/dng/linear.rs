@@ -667,18 +667,28 @@ fn check_band(src: &[f32], params: &PlaneLayout, band: RafBand, reach: u32) -> R
     Ok(src_h)
 }
 
+/// The sentence a render returns when its output cannot be allocated.
+const NO_MEMORY: &str = "not enough memory for the DNG's linear pixels";
+
+/// An empty vector with room for `n` values, or the sentence.
+fn try_capacity(n: usize) -> Result<Vec<f32>, String> {
+    let mut v = Vec::new();
+    v.try_reserve_exact(n).map_err(|_| NO_MEMORY.to_string())?;
+    Ok(v)
+}
+
 /// Orient a band's RGBA rows and place them in the oriented image, as the
 /// RAF renders do.
-fn orient_band(rgba: Vec<f32>, params: &PlaneLayout, band: RafBand) -> RafBandPixels {
+fn orient_band(rgba: Vec<f32>, params: &PlaneLayout, band: RafBand) -> Result<RafBandPixels, String> {
     let band_h = band.y1 - band.y0;
-    let (ow, oh, pixels) = crate::orientation::apply_exif_orientation_owned(params.width, band_h, rgba, params.orientation);
+    let (ow, oh, pixels) = crate::orientation::try_apply_exif_orientation_owned(params.width, band_h, rgba, params.orientation).ok_or(NO_MEMORY)?;
     let (x, y) = match params.orientation {
         3 | 4 => (0, params.height - band.y1),
         5 | 8 => (band.y0, 0),
         6 | 7 => (params.height - band.y1, 0),
         _ => (0, band.y0),
     };
-    RafBandPixels { x, y, width: ow, height: oh, pixels }
+    Ok(RafBandPixels { x, y, width: ow, height: oh, pixels })
 }
 
 /// Render one band to linear camera RGB. `src` holds plane rows
@@ -693,7 +703,7 @@ pub fn render_linear_band<P: PlaneParams + ?Sized>(src: &[f32], params: &P, band
     let w = params.width as usize;
     let skip = (band.y0 - band.src_y0) as usize;
     let rows = (band.y1 - band.y0) as usize;
-    let mut rgba = Vec::with_capacity(w * rows * 4);
+    let mut rgba = try_capacity(w * rows * 4)?;
     match params.kind {
         DngKind::Linear => {
             for px in src[skip * w * 3..(skip + rows) * w * 3].chunks_exact(3) {
@@ -705,13 +715,13 @@ pub fn render_linear_band<P: PlaneParams + ?Sized>(src: &[f32], params: &P, band
             // the frame, as a RAF's are.
             let reconstructed = grid.and_then(|g| g.reconstruct(src, w, src_h, band.src_y0 as usize, &params.cfa, 2));
             let src = reconstructed.as_deref().unwrap_or(src);
-            let rgb = super::demosaic::bilinear(src, params.width, src_h as u32, &params.cfa);
+            let rgb = super::demosaic::try_bilinear(src, params.width, src_h as u32, &params.cfa).ok_or(NO_MEMORY)?;
             for px in rgb[skip * w * 3..(skip + rows) * w * 3].chunks_exact(3) {
                 rgba.extend_from_slice(&[px[0], px[1], px[2], 1.0]);
             }
         }
     }
-    Ok(orient_band(rgba, params, band))
+    orient_band(rgba, params, band)
 }
 
 /// Largest factor the binned view considers.
@@ -757,8 +767,11 @@ pub fn render_binned_linear<P: PlaneParams + ?Sized>(plane: &[f32], params: &P, 
     if bw == 0 || bh == 0 {
         return Err(format!("A {w}×{h} frame is smaller than one {f}×{f} block"));
     }
-    let mut rgba = vec![0.0f32; bw * bh * 4];
-    let mut sums = vec![[0.0f32; 3]; bw];
+    let mut rgba = try_capacity(bw * bh * 4)?;
+    rgba.resize(bw * bh * 4, 0.0);
+    let mut sums: Vec<[f32; 3]> = Vec::new();
+    sums.try_reserve_exact(bw).map_err(|_| NO_MEMORY.to_string())?;
+    sums.resize(bw, [0.0; 3]);
     let mut counts = [0.0f32; 3];
     for c in 0..3 {
         counts[c] = match params.kind {
@@ -805,7 +818,7 @@ pub fn render_binned_linear<P: PlaneParams + ?Sized>(plane: &[f32], params: &P, 
             rgba[o + 3] = 1.0;
         }
     }
-    Ok(crate::orientation::apply_exif_orientation_owned(bw as u32, bh as u32, rgba, params.orientation))
+    crate::orientation::try_apply_exif_orientation_owned(bw as u32, bh as u32, rgba, params.orientation).ok_or_else(|| NO_MEMORY.to_string())
 }
 
 /// [`render_binned_linear`] with the factor [`binned_factor_for`] picks.

@@ -5,9 +5,25 @@
 /// Common patterns: RGGB=[0,1,1,2], BGGR=[2,1,1,0], GRBG=[1,0,2,1], GBRG=[1,2,0,1]
 
 pub fn bilinear(raw: &[f32], width: u32, height: u32, pattern: &[u8]) -> Vec<f32> {
+    let mut rgb = vec![0.0f32; width as usize * height as usize * 3];
+    bilinear_into(raw, width, height, pattern, &mut rgb);
+    rgb
+}
+
+/// [`bilinear`], or `None` when its output cannot be allocated (a band
+/// render returns a sentence then instead of aborting the worker).
+pub fn try_bilinear(raw: &[f32], width: u32, height: u32, pattern: &[u8]) -> Option<Vec<f32>> {
+    let n = (width as usize).checked_mul(height as usize)?.checked_mul(3)?;
+    let mut rgb: Vec<f32> = Vec::new();
+    rgb.try_reserve_exact(n).ok()?;
+    rgb.resize(n, 0.0);
+    bilinear_into(raw, width, height, pattern, &mut rgb);
+    Some(rgb)
+}
+
+fn bilinear_into(raw: &[f32], width: u32, height: u32, pattern: &[u8], rgb: &mut [f32]) {
     let w = width as usize;
     let h = height as usize;
-    let mut rgb = vec![0.0f32; w * h * 3];
 
     // Map CFA pattern to per-pixel color channel
     let cfa = |row: usize, col: usize| -> usize {
@@ -49,8 +65,6 @@ pub fn bilinear(raw: &[f32], width: u32, height: u32, pattern: &[u8]) -> Vec<f32
             }
         }
     }
-
-    rgb
 }
 
 fn avg_cross(raw: &[f32], w: usize, h: usize, row: usize, col: usize) -> f32 {
@@ -87,4 +101,16 @@ fn avg_vert(raw: &[f32], w: usize, h: usize, row: usize, col: usize) -> f32 {
     if row > 0     { sum += raw[(row - 1) * w + col]; count += 1; }
     if row < h - 1 { sum += raw[(row + 1) * w + col]; count += 1; }
     if count > 0 { sum / count as f32 } else { 0.0 }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_fallible_demosaic_is_the_same_demosaic() {
+        let raw: Vec<f32> = (0..6 * 4).map(|i| ((i * 37) % 11) as f32 / 10.0).collect();
+        let want = bilinear(&raw, 6, 4, &[1, 0, 2, 1]);
+        assert_eq!(try_bilinear(&raw, 6, 4, &[1, 0, 2, 1]), Some(want));
+    }
 }
