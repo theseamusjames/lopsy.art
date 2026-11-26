@@ -27,14 +27,20 @@ function startsWith(bytes: Uint8Array, text: string): boolean {
   return true;
 }
 
+/** The one camera that wrote Sony's older SR2 format, which the engine does not decode. */
+const SR2_MODEL = 'DSC-R1';
+
 /**
  * A Sony RAW (ARW): a TIFF that is not a DNG (checked first), whose IFD0
  * Make is SONY, holding a full-resolution CFA image. The file's extension
  * plays no part. A JPEG from a Sony camera starts with a JPEG marker, and a
- * TIFF Sony software writes holds RGB, not CFA, so neither is one.
+ * TIFF Sony software writes holds RGB, not CFA, so neither is one. An SR2
+ * (IFD0 Model exactly DSC-R1) looks the same but is not one; an SRF holds
+ * no CFA image in a TIFF IFD, so it never matches.
  */
 function isSonyRaw(tiff: TiffFile, ifd0: TiffIfd): boolean {
   if (getString(tiff, ifd0, TiffTag.Make)?.toUpperCase() !== 'SONY') return false;
+  if (getString(tiff, ifd0, TiffTag.Model) === SR2_MODEL) return false;
   return findCfaImageIfd(tiff) !== null;
 }
 
