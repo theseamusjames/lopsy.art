@@ -448,7 +448,7 @@ fn the_dng_preview_match_takes_only_camera_previews_of_gain_mapped_files() {
             if let Prepared::Dng(d) = &prep.prepared {
                 if d.params.camera_curve.is_some() {
                     assert_eq!(ev, baseline, "{name} {label}: a camera-curve file opens at its baseline");
-                    if let Some(s) = prep.description.profiles.iter().find(|p| p.id == "standard").map(|p| &p.settings) {
+                    if let Some(s) = prep.description.profiles.iter().find(|p| p.id == "standard-look").map(|p| &p.settings) {
                         settings = RawDevelopSettings { cam_to_rgb: s.cam_to_rgb, exposure_ev: s.exposure_ev, saturation: s.saturation, highlight_desaturation: s.highlight_desaturation, base_curve: s.base_curve.clone(), ..settings };
                         ev = s.exposure_ev;
                     }

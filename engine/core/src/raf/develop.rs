@@ -136,7 +136,10 @@ pub struct ProfileSettings {
 #[serde(rename_all = "camelCase")]
 pub struct DevelopProfile {
     /// Stable id: `camera`, `provia`, `velvia`, `astia`, `classic-chrome`,
-    /// `pro-neg`, `neutral`, `monochrome`.
+    /// `pro-neg`, `standard-look` (a gain-mapped DNG's Standard look),
+    /// `neutral`, `monochrome`. Unique in a list; only the camera entry is
+    /// `camera`, and none is `standard`, the app's recipe id for the camera
+    /// entry.
     pub id: String,
     /// The entry's own name (a RAF look's "Velvia look"; the camera entry's
     /// "Camera (Velvia look)").
@@ -694,6 +697,13 @@ mod tests {
                 assert!(json.get(key).is_some(), "{key}");
             }
             assert_eq!(json["role"], "camera");
+        }
+    }
+
+    #[test]
+    fn profile_ids_are_unique_and_none_is_the_apps_standard() {
+        for mode in [None, Some(0x000), Some(0x100), Some(0x200), Some(0x400), Some(0x500), Some(0x501), Some(0x600), Some(0x9999)] {
+            crate::raw::assert_profile_ids_are_safe(&develop_profiles(&params_with_film_mode(mode)));
         }
     }
 
