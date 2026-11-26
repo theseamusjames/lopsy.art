@@ -79,9 +79,17 @@ const MARGIN = 0.03;
 // wasm-bindgen spends bytes on. CI's wasm differs from a local build's by
 // a fraction of a percent, inside the margin; re-base on its numbers when
 // it has run.
+//
+// Raised for Sony ARW (the lossy, uncompressed and lossless decoders, the
+// SR2 block's cipher, and decodeAndUploadArw, isSonyRaw, sonyRawInfo and
+// the arw… linear exports), to what a local release build measures with
+// them in. A build of the same tree without those exports measured wasm
+// 4,848,472 B raw and 2,021,835 B gzip, glue 266,750 B and 34,297 B; with
+// them, +55,320 B (+1.1 %) and +22,341 B of wasm, +9,335 B and +1,348 B
+// of glue (+3.5 % and +3.9 %, past the margin on their own).
 const BUDGET = {
-  'lopsy_wasm_bg.wasm': { raw: 4_846_059, gzip: 2_020_125 },
-  'lopsy_wasm.js': { raw: 266_066, gzip: 34_038 },
+  'lopsy_wasm_bg.wasm': { raw: 4_903_792, gzip: 2_044_176 },
+  'lopsy_wasm.js': { raw: 276_085, gzip: 35_645 },
 };
 
 function format(bytes) {
