@@ -825,7 +825,10 @@ pub fn render_linear_band<P: PlaneParams + ?Sized>(src: &[f32], params: &P, band
         DngKind::Bayer => {
             // Clipped channels first, with the chroma at the rows' place in
             // the frame, as a RAF's are.
-            let reconstructed = grid.and_then(|g| g.reconstruct(src, w, src_h, band.src_y0 as usize, &params.cfa, 2));
+            let reconstructed = match grid {
+                Some(g) => g.try_reconstruct(src, w, src_h, band.src_y0 as usize, &params.cfa, 2)?,
+                None => None,
+            };
             let src = reconstructed.as_deref().unwrap_or(src);
             let rgb = super::demosaic::try_bilinear(src, params.width, src_h as u32, &params.cfa).ok_or(NO_MEMORY)?;
             for px in rgb[skip * w * 3..(skip + rows) * w * 3].chunks_exact(3) {

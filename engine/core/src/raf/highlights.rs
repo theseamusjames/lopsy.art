@@ -354,6 +354,16 @@ impl ChromaGrid {
     /// the result does not depend on the order samples are visited.
     #[allow(clippy::too_many_arguments)]
     pub fn reconstruct(&self, src: &[f32], w: usize, rows: usize, y_offset: usize, cfa: &[u8], p: usize) -> Option<Vec<f32>> {
+        self.try_reconstruct(src, w, rows, y_offset, cfa, p).expect("not enough memory to reconstruct the highlights")
+    }
+
+    /// [`reconstruct`](Self::reconstruct), with its allocations fallible:
+    /// an error (a sentence) when the copy or the list of changes cannot
+    /// be allocated, for a band render that returns one instead of
+    /// aborting the worker. The same result otherwise.
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_reconstruct(&self, src: &[f32], w: usize, rows: usize, y_offset: usize, cfa: &[u8], p: usize) -> Result<Option<Vec<f32>>, String> {
+        const NO_MEMORY: &str = "not enough memory to reconstruct the highlights";
         let thresholds = self.thresholds();
         let mut updates: Vec<(usize, f32)> = Vec::new();
         for y in 0..rows {
@@ -362,19 +372,24 @@ impl ChromaGrid {
                 if v >= thresholds[cfa[(y % p) * p + x % p] as usize % 3] {
                     let out = self.sample(src, w, rows, x, y, y_offset, cfa, p);
                     if out.to_bits() != v.to_bits() {
+                        if updates.len() == updates.capacity() {
+                            updates.try_reserve(updates.len().max(256)).map_err(|_| NO_MEMORY.to_string())?;
+                        }
                         updates.push((y * w + x, out));
                     }
                 }
             }
         }
         if updates.is_empty() {
-            return None;
+            return Ok(None);
         }
-        let mut out = src[..w * rows].to_vec();
+        let mut out: Vec<f32> = Vec::new();
+        out.try_reserve_exact(w * rows).map_err(|_| NO_MEMORY.to_string())?;
+        out.extend_from_slice(&src[..w * rows]);
         for (i, v) in updates {
             out[i] = v;
         }
-        Some(out)
+        Ok(Some(out))
     }
 }
 
