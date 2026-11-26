@@ -10,6 +10,8 @@ import { DEFAULT_EXTRAS, withExtras } from '../library/export-size';
 interface FakeEngine {
   readonly engine: DevelopEngine;
   readonly loads: string[];
+  /** Each load's `rawDevelop`. */
+  readonly rawDevelops: (boolean | undefined)[];
   readonly recipes: Recipe[];
   readonly exports: ExportOptions[];
   isDisposed: boolean;
@@ -23,6 +25,7 @@ interface FakeEngine {
 function fakeEngine(): FakeEngine {
   const fake: FakeEngine = {
     loads: [],
+    rawDevelops: [],
     recipes: [],
     exports: [],
     isDisposed: false,
@@ -35,6 +38,7 @@ function fakeEngine(): FakeEngine {
     setGrainSeed: () => undefined,
     load: async (source, _format, _onProgress, options) => {
       fake.loads.push(await source.text());
+      fake.rawDevelops.push(options?.rawDevelop);
       fake.resolution = options?.resolution === 'full' ? 'full' : 'working';
       return { width: 10, height: 10 };
     },
@@ -58,6 +62,13 @@ function fakeEngine(): FakeEngine {
   };
   return Object.assign(fake, { engine: engine as DevelopEngine });
 }
+
+/** What photos-core's developsAsRaw answers in these tests: true unless a recipe's pipeline is listed. */
+const bakedPipelines = new Set<number>();
+vi.mock('@lopsy/photos-core/library/pipeline', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@lopsy/photos-core/library/pipeline')>()),
+  developsAsRaw: (_format: string, recipe: { pipeline: number }) => !bakedPipelines.has(recipe.pipeline),
+}));
 
 const assetA = harnessAsset('a', 'a.jpg', 1, 'jpeg', 'image/jpeg');
 const assetB = harnessAsset('b', 'b.jpg', 1, 'jpeg', 'image/jpeg');
@@ -88,6 +99,26 @@ describe('createEngineExportRenderer', () => {
       },
     });
   }
+
+  it("loads again when the version's RAW-or-baked answer changes, and says it to the load", async () => {
+    const r = renderer();
+    const raw = harnessAsset('r', 'r.dng', 1, 'dng', 'image/x-adobe-dng');
+    const signal = new AbortController().signal;
+    bakedPipelines.add(-1);
+    try {
+      const old: Recipe = { ...DEFAULT_RECIPE, pipeline: -1 };
+      const small = { ...DEFAULT_EXPORT_SETTINGS, maxLongEdge: 2048 };
+      await r.render(raw, harnessVersion(raw, DEFAULT_RECIPE), small, signal);
+      await r.render(raw, harnessVersion(raw, warm), small, signal);
+      await r.render(raw, harnessVersion(raw, old), small, signal);
+      await r.render(raw, harnessVersion(raw, old), small, signal);
+      const [f] = fakes;
+      expect(f?.loads).toEqual(['r', 'r']);
+      expect(f?.rawDevelops).toEqual([true, false]);
+    } finally {
+      bakedPipelines.clear();
+    }
+  });
 
   it('loads, applies the version recipe and exports at the settings size', async () => {
     const r = renderer();

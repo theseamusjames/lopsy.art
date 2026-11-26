@@ -6,6 +6,7 @@
  */
 
 import { colorSpacesFor, isAlwaysFullSize, isHdrFormat, type ExportRenderer, type ExportSettings } from '@lopsy/photos-core/export/types';
+import { developsAsRaw } from '@lopsy/photos-core/library/pipeline';
 import type { Asset, Version } from '@lopsy/photos-core/library/types';
 import type { DevelopEngine } from './develop-engine';
 import { buildExportExif } from '@lopsy/photos-core/export/exif-writer';
@@ -78,7 +79,8 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
   const idleMs = options.idleMs ?? DEFAULT_IDLE_MS;
   const create = options.createEngine ?? createRealEngine;
   let engine: Promise<DevelopEngine> | null = null;
-  let loadedAssetId: string | null = null;
+  /** What the engine holds: the asset, and whether it was developed from the RAW data (`developsAsRaw`). */
+  let loadedKey: string | null = null;
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
   let queue: Promise<unknown> = Promise.resolve();
   let isDisposed = false;
@@ -89,7 +91,7 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
     idleTimer = null;
     const current = engine;
     engine = null;
-    loadedAssetId = null;
+    loadedKey = null;
     current?.then((e) => e.dispose()).catch(() => undefined);
   };
 
@@ -108,7 +110,7 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
    * at the working size is brought up to full size in place when a larger
    * output needs it.
    */
-  const loaded = async (asset: Asset, signal: AbortSignal, resolution: 'working' | 'full'): Promise<DevelopEngine> => {
+  const loaded = async (asset: Asset, version: Version, signal: AbortSignal, resolution: 'working' | 'full'): Promise<DevelopEngine> => {
     checkSignal(signal);
     if (isDisposed) throw new Error('The export renderer was disposed');
     let e = await getEngine();
@@ -118,13 +120,15 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
       e = await getEngine();
     }
     checkSignal(signal);
-    if (loadedAssetId !== asset.id) {
-      loadedAssetId = null;
-      const source = developSource(asset);
+    const source = developSource(asset);
+    const rawDevelop = developsAsRaw(source.format, version.recipe);
+    const key = `${asset.id}:${rawDevelop}`;
+    if (loadedKey !== key) {
+      loadedKey = null;
       const original = await options.loadOriginal(source, signal);
       checkSignal(signal);
-      await e.load(original, source.format, undefined, { resolution });
-      loadedAssetId = asset.id;
+      await e.load(original, source.format, undefined, { resolution, rawDevelop });
+      loadedKey = key;
       checkSignal(signal);
     } else if (resolution === 'full' && !e.isFullResolution()) {
       await e.ensureFullResolution();
@@ -141,7 +145,7 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
     const byLongEdge = (extras.size.mode === 'original' || extras.size.mode === 'long') && !extras.allowEnlarge;
     const fullSize = isAlwaysFullSize(settings.format);
     const isSmall = byLongEdge && !fullSize && settings.maxLongEdge !== null && settings.maxLongEdge <= 2048;
-    const e = await loaded(asset, signal, isSmall ? 'working' : 'full');
+    const e = await loaded(asset, version, signal, isSmall ? 'working' : 'full');
     e.setRecipe(version.recipe);
     const image = e.imageSize();
     if (isHdrFormat(settings.format)) {
@@ -179,7 +183,7 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
 
   const renderPreviewsOne = async (asset: Asset, version: Version, signal: AbortSignal): Promise<RenderedPreviews> => {
     // Previews are at most the screen size, which the working image always covers.
-    const e = await loaded(asset, signal, 'working');
+    const e = await loaded(asset, version, signal, 'working');
     e.setRecipe(version.recipe);
     const thumb = await e.renderPreview(THUMB_LONG_EDGE);
     checkSignal(signal);

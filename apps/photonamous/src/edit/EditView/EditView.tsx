@@ -215,7 +215,7 @@ export function EditView({
   const [problem, setProblem] = useState<{ readonly id: number; readonly text: string } | null>(null);
   const announce = useCallback((text: string) => setNews({ id: ++messageId.current, text }), []);
   const reportProblem = useCallback((text: string) => setProblem({ id: ++messageId.current, text }), []);
-  const { engine, status, view, canvasKey } = usePhotoEngine(canvasRef, asset, loadOriginal);
+  const { engine, status, view, canvasKey } = usePhotoEngine(canvasRef, asset, version, loadOriginal);
   useClippingWarningOnEngine(engine);
   useGrainSeed(engine, asset.id);
   useEditSizes(engine, view, status.kind === 'ready');

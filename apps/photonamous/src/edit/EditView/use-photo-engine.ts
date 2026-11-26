@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import type { Asset } from '@lopsy/photos-core/library/types';
+import { developsAsRaw } from '@lopsy/photos-core/library/pipeline';
+import type { Asset, Version } from '@lopsy/photos-core/library/types';
 import {
   createDevelopEngine,
   DecodeAbortedError,
@@ -26,7 +27,9 @@ const CONTEXT_RESTORE_MS = 3000;
 
 /**
  * Starts a develop engine on the canvas and loads the asset's original into
- * it, again whenever the asset changes. The engine lives as long as the
+ * it, again whenever the asset changes, or whether the version shown is
+ * developed from the RAW data or opened as the baked picture
+ * (`developsAsRaw`) does. The engine lives as long as the
  * component; StrictMode's second mount gets a fresh one.
  *
  * A lost GPU (a WebGPU device, or a WebGL context) makes a new engine and
@@ -39,6 +42,7 @@ const CONTEXT_RESTORE_MS = 3000;
 export function usePhotoEngine(
   canvasRef: RefObject<HTMLCanvasElement | null>,
   asset: Asset,
+  version: Pick<Version, 'recipe'>,
   loadOriginal: (asset: Asset) => Promise<Blob>,
 ): { engine: DevelopEngine | null; status: EngineStatus; view: View | null; canvasKey: number } {
   const [engine, setEngine] = useState<DevelopEngine | null>(null);
@@ -52,6 +56,9 @@ export function usePhotoEngine(
   loadOriginalRef.current = loadOriginal;
   const assetRef = useRef(asset);
   assetRef.current = asset;
+  const isRawDevelop = developsAsRaw(developSource(asset).format, version.recipe);
+  const rawDevelopRef = useRef(isRawDevelop);
+  rawDevelopRef.current = isRawDevelop;
   /** Set when the GPU was lost: the next load into a new engine is a recovery, and says so. */
   const isRecovering = useRef(false);
 
@@ -138,14 +145,20 @@ export function usePhotoEngine(
     const isReload = isRecovering.current;
     isRecovering.current = false;
     const current = developSource(assetRef.current);
+    const rawDevelop = rawDevelopRef.current;
     setStatus({ kind: 'loading', progress: null });
     loadOriginalRef
       .current(current)
       .then((blob) => {
         if (isCancelled) return null;
-        return engine.load(blob, current.format, (progress) => {
-          if (!isCancelled) setStatus({ kind: 'loading', progress });
-        });
+        return engine.load(
+          blob,
+          current.format,
+          (progress) => {
+            if (!isCancelled) setStatus({ kind: 'loading', progress });
+          },
+          { rawDevelop },
+        );
       })
       .then((size) => {
         if (isCancelled || !size) return;
@@ -160,7 +173,7 @@ export function usePhotoEngine(
       isCancelled = true;
     };
     // A Lopsy document saved again from Lopsy keeps its id and gets a new render, and a new sha256.
-  }, [engine, asset.id, asset.sha256]);
+  }, [engine, asset.id, asset.sha256, isRawDevelop]);
 
   return { engine, status, view, canvasKey };
 }
