@@ -1,7 +1,7 @@
 /**
  * A small TIFF/IFD reader for metadata (EXIF in JPEG/PNG/WebP/RAF, DNG
- * structure). Every read is bounds-checked; malformed input yields null or
- * a partial result, never an exception.
+ * and ARW structure). Every read is bounds-checked; malformed input yields
+ * null or a partial result, never an exception.
  */
 
 export const TiffTag = {
@@ -9,6 +9,7 @@ export const TiffTag = {
   ImageWidth: 0x0100,
   ImageLength: 0x0101,
   Compression: 0x0103,
+  PhotometricInterpretation: 0x0106,
   Make: 0x010f,
   Model: 0x0110,
   StripOffsets: 0x0111,
@@ -160,6 +161,22 @@ export function collectImageIfds(tiff: TiffFile): TiffIfd[] {
   };
   for (const ifd of readIfdChain(tiff)) visit(ifd, 0);
   return out;
+}
+
+/** PhotometricInterpretation of a colour filter array: a camera's raw sensor data. */
+export const PHOTOMETRIC_CFA = 32803;
+
+/**
+ * The full-resolution CFA image (NewSubfileType 0, absent counting as 0,
+ * and PhotometricInterpretation CFA) among IFD0's chain and its SubIFDs;
+ * null when there is none.
+ */
+export function findCfaImageIfd(tiff: TiffFile): TiffIfd | null {
+  for (const ifd of collectImageIfds(tiff)) {
+    if ((getNumber(tiff, ifd, TiffTag.NewSubfileType) ?? 0) !== 0) continue;
+    if (getNumber(tiff, ifd, TiffTag.PhotometricInterpretation) === PHOTOMETRIC_CFA) return ifd;
+  }
+  return null;
 }
 
 export function readPointedIfd(tiff: TiffFile, ifd: TiffIfd, tag: number): TiffIfd | null {

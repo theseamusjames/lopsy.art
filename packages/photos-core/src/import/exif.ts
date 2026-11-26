@@ -5,6 +5,7 @@ import {
   GpsTag,
   TiffTag,
   collectImageIfds,
+  findCfaImageIfd,
   getNumber,
   getNumbers,
   getRational,
@@ -153,16 +154,31 @@ export function swapsAxes(orientation: number): boolean {
   return orientation >= 5 && orientation <= 8;
 }
 
+/** An image IFD's picture size: its DefaultCropSize when present, else its stored size. */
+function croppedSize(tiff: TiffFile, ifd: TiffIfd): { width: number; height: number } | null {
+  const crop = getNumbers(tiff, ifd, TiffTag.DefaultCropSize);
+  const width = crop?.[0] ?? getNumber(tiff, ifd, TiffTag.ImageWidth);
+  const height = crop?.[1] ?? getNumber(tiff, ifd, TiffTag.ImageLength);
+  return width && height && width > 0 && height > 0 ? { width: Math.round(width), height: Math.round(height) } : null;
+}
+
 /** A DNG's main image size: the IFD with NewSubfileType 0, DefaultCropSize when present. */
 export function dngImageSize(tiff: TiffFile): { width: number; height: number } | null {
   for (const ifd of collectImageIfds(tiff)) {
     if ((getNumber(tiff, ifd, TiffTag.NewSubfileType) ?? 0) !== 0) continue;
-    const crop = getNumbers(tiff, ifd, TiffTag.DefaultCropSize);
-    const width = crop?.[0] ?? getNumber(tiff, ifd, TiffTag.ImageWidth);
-    const height = crop?.[1] ?? getNumber(tiff, ifd, TiffTag.ImageLength);
-    if (width && height && width > 0 && height > 0) return { width: Math.round(width), height: Math.round(height) };
+    const size = croppedSize(tiff, ifd);
+    if (size) return size;
   }
   return null;
+}
+
+/**
+ * An ARW's picture size: the raw (CFA) image's DefaultCropSize, the part
+ * of the sensor the engine's decode keeps, else the raw image's stored size.
+ */
+export function arwImageSize(tiff: TiffFile): { width: number; height: number } | null {
+  const raw = findCfaImageIfd(tiff);
+  return raw ? croppedSize(tiff, raw) : null;
 }
 
 function camera(make: string | null, model: string | null): CameraInfo | null {
@@ -209,6 +225,13 @@ function readFacts(bytes: Uint8Array, format: ImageFormat): Facts {
       const ifd0 = tiff ? readIfd(tiff, tiff.firstIfd) : null;
       if (!tiff || !ifd0) return { tags: EMPTY_TIFF_METADATA, width: null, height: null };
       const size = dngImageSize(tiff);
+      return { tags: readTiffMetadata(tiff, ifd0), width: size?.width ?? null, height: size?.height ?? null };
+    }
+    case 'arw': {
+      const tiff = openTiff(bytes);
+      const ifd0 = tiff ? readIfd(tiff, tiff.firstIfd) : null;
+      if (!tiff || !ifd0) return { tags: EMPTY_TIFF_METADATA, width: null, height: null };
+      const size = arwImageSize(tiff);
       return { tags: readTiffMetadata(tiff, ifd0), width: size?.width ?? null, height: size?.height ?? null };
     }
     case 'lopsy':

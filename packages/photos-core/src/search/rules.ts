@@ -34,7 +34,7 @@ export type AssetPredicate = (asset: Asset, view: LibraryView) => boolean;
 export const SAVED_SEARCHES_KEY = 'savedSearches';
 
 const LABELS: readonly LabelChoice[] = ['red', 'yellow', 'green', 'blue', 'purple', 'none'];
-const FORMATS: readonly ImageFormat[] = ['raf', 'dng', 'jpeg', 'png', 'webp', 'lopsy'];
+const FORMATS: readonly ImageFormat[] = ['raf', 'dng', 'arw', 'jpeg', 'png', 'webp', 'lopsy'];
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_DEPTH = 8;
 const MAX_RULES = 200;

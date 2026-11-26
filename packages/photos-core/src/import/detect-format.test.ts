@@ -11,6 +11,11 @@ describe('the MIME types a file picker is filtered to', () => {
     expect(IMPORTABLE_MIME_TYPES).toContain('image/x-fuji-raf');
   });
 
+  it('names a Sony RAW image/x-sony-arw, so the picker offers a .ARW', () => {
+    expect(MIME_TYPES.arw).toBe('image/x-sony-arw');
+    expect(IMPORTABLE_MIME_TYPES).toContain('image/x-sony-arw');
+  });
+
   it('includes the type of a file whose uploader did not say what it is, and nothing twice', () => {
     expect(IMPORTABLE_MIME_TYPES).toContain('application/octet-stream');
     expect(new Set(IMPORTABLE_MIME_TYPES).size).toBe(IMPORTABLE_MIME_TYPES.length);

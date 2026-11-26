@@ -1,12 +1,13 @@
 /**
- * The preview a file carries: RAF's embedded JPEG, a DNG's largest JPEG
- * preview, or the file itself for JPEG, PNG and WebP.
+ * The preview a file carries: RAF's embedded JPEG, a DNG's or an ARW's
+ * largest JPEG preview, or the file itself for JPEG, PNG and WebP.
  *
  * `EmbeddedPreview.orientation` is relative to a browser decode, which
  * applies the preview's own EXIF orientation (`<img>` and
  * `createImageBitmap`'s default 'from-image' both do). A RAF's JPEG carries
- * the camera's orientation tag, so nothing is left to apply; a DNG preview
- * usually has no EXIF, so IFD0's orientation is left to apply.
+ * the camera's orientation tag, so nothing is left to apply; a DNG's or an
+ * ARW's preview usually has no EXIF, so IFD0's orientation is left to
+ * apply.
  */
 
 import type { ImageFormat } from '../library/types';
@@ -37,8 +38,13 @@ function withinFile(bytes: Uint8Array, start: number | null, length: number | nu
   return end <= bytes.length ? { start, end } : null;
 }
 
-/** The largest browser-decodable JPEG among IFD0, its chain and its SubIFDs. */
-export function findDngPreview(bytes: Uint8Array): Slice | null {
+/**
+ * The largest browser-decodable JPEG among IFD0, its chain and its SubIFDs,
+ * by JPEGInterchangeFormat or a single JPEG strip: a DNG's previews, and an
+ * ARW's (IFD0 holds a 1616-wide one, IFD1 the thumbnail, IFD2 the
+ * full-size one).
+ */
+export function findTiffPreview(bytes: Uint8Array): Slice | null {
   const tiff = openTiff(bytes);
   if (!tiff) return null;
   let best: { slice: Slice; pixels: number } | null = null;
@@ -119,8 +125,9 @@ export function extractPreview(
       if (!slice || !jpegSliceIsDecodable(bytes, slice)) return null;
       return jpegPreview(bytes, slice, wanted, sliceBlob(bytes, slice, 'image/jpeg'));
     }
-    case 'dng': {
-      const slice = findDngPreview(bytes);
+    case 'dng':
+    case 'arw': {
+      const slice = findTiffPreview(bytes);
       return slice ? jpegPreview(bytes, slice, wanted, sliceBlob(bytes, slice, 'image/jpeg')) : null;
     }
     case 'lopsy':
