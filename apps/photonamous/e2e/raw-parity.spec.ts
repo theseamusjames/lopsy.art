@@ -37,8 +37,9 @@ import { previewCount, settledPreview, waitForPreview, waitForReady } from './ha
  *
  * DNG and Sony ARW samples are fingerprinted the same way, on the linear
  * and no-float ways (the second opens them with the baked decode): the
- * four Sony bodies from LOPSY_ARW_SAMPLES, the two Canon DNGs from
- * LOPSY_DNG_ADOBE_SAMPLES and the two iPhone ProRAW files from
+ * four Sony bodies from LOPSY_ARW_SAMPLES, the four Canon DNGs (lossless
+ * and lossy JPEG, mosaic and linear) from LOPSY_DNG_ADOBE_SAMPLES and the
+ * two iPhone ProRAW files from
  * LOPSY_DNG_SAMPLES. In recipe 2 a DNG or ARW takes the first look after
  * its camera's (Neutral, or a ProRAW's Standard).
  *
@@ -51,7 +52,7 @@ const samples = process.env.LOPSY_RAF_SAMPLES;
 const arwSamples = process.env.LOPSY_ARW_SAMPLES;
 const dngSamples = process.env.LOPSY_DNG_ADOBE_SAMPLES;
 const prorawSamples = process.env.LOPSY_DNG_SAMPLES;
-/** The DNG and ARW samples fingerprinted: four Sony bodies (two with measured colour, two without) and a mosaic and a linear DNG. */
+/** The DNG and ARW samples fingerprinted: four Sony bodies (two with measured colour, two without), four Canon DNGs (a mosaic, a linear one and their lossy JPEG conversions) and two ProRAW files. */
 const OTHER_RAW: readonly { readonly dir: string | undefined; readonly name: string }[] = [
   { dir: arwSamples, name: 'ILCE-7M3_DSC0009.ARW' },
   { dir: arwSamples, name: 'ILCE-7M4_DSC06677_FullFrame-Raw-Compressed.ARW' },
@@ -59,6 +60,8 @@ const OTHER_RAW: readonly { readonly dir: string | undefined; readonly name: str
   { dir: arwSamples, name: 'DSC-RX100M3_DSC00734.ARW' },
   { dir: dngSamples, name: '5D3-adobe-lossless.dng' },
   { dir: dngSamples, name: '5D3-adobe-lossless-rgb.dng' },
+  { dir: dngSamples, name: '5D3-adobe-lossy.dng' },
+  { dir: dngSamples, name: '5D3-adobe-lossy-rgb.dng' },
   { dir: prorawSamples, name: 'sample_dng_00.dng' },
   { dir: prorawSamples, name: 'sample_dng_01.dng' },
 ];
