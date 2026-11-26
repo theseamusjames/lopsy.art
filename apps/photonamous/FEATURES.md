@@ -447,10 +447,10 @@ the newer version made.
 - **Straighten**: Angle, and **Level** (draw along something that should
   be level). The crop shrinks to the largest rectangle inside.
 - **White balance**: under its heading, a **Mode** menu (As shot; Auto,
-  on RAW files; the RAW file's presets — on a RAF, Daylight, Cloudy,
-  Shade, Tungsten, the fluorescents, Flash, Underwater, as the body has
-  them (one whose values are those of another, as Underwater is of
-  Daylight on many bodies, is listed once); on a DNG or a Sony ARW with
+  on RAW files; the RAW file's presets — on a RAF, the camera's own,
+  read from the file: Daylight, Cloudy, Tungsten and three fluorescents
+  (daylight, day white, cool white), none on a RAF whose header does not
+  hold them (one whose values are those of another is listed once); on a DNG or a Sony ARW with
   measured colour, the standard illuminants Daylight, Cloudy, Shade and
   Tungsten through the file's own calibration; none on an ARW without);
   and Custom, which the sliders set) and a **picker** (the pipette):
@@ -460,8 +460,9 @@ the newer version made.
   an ARW with measured colour) the Temperature readout shows Kelvin and
   takes typed Kelvin (clamped to 2000–50000 K, then to what the slider
   reaches, with the readout showing the Kelvin reached; text that is not
-  a number puts the readout back): a RAF's from a scale fitted to the
-  body's presets, a DNG's or ARW's measured, the colour temperature of
+  a number puts the readout back): a RAF's from a scale fitted through
+  the camera's illuminant A and D65 whites in the file (none without
+  them), a DNG's or ARW's measured, the colour temperature of
   the white both sliders make, exactly the file's as-shot Kelvin at As
   shot. On an ARW without measured colour Temperature is relative. On
   every RAW file the group waits,

@@ -118,8 +118,9 @@ Read from the code on this branch. Each item names the file to look in.
   one light source, with no adaptation between white points
   (`color_matrix_for_model`, `engine/core/src/dng/color.rs`).
 - **Kelvin is a readout only.** It is a line fitted through the camera's
-  presets (`engine/core/src/raf/wb_presets.rs`); the matrix does not
-  follow white balance.
+  whites for illuminants A and D65, which the RAF carries
+  (`engine/core/src/raf/wb_presets.rs`); the matrix does not follow
+  white balance.
 - **A two-illuminant profile reader exists and is unused**
   (`engine/core/src/raf/dcp.rs`).
 - **Bayer RAF files are always read as RGGB**, whatever the file says,
@@ -974,11 +975,13 @@ was.
 59. **Temperature and Tint run to ±200**, the photo's and a mask's
     (`WB_SLIDER_END`, in the engine and the recipe); the other sliders
     stay at 150. The reason is the camera's presets, which clamp to the
-    same end: on the eight samples 9 presets were cut off at ±100
-    (Tungsten on DSCF7863, DSCF8078 and DSCF8267, six on DSCF8169, shot
-    under warm light), 2 still were at ±150, DSCF8169's Cloudy (+173)
-    and Daylight Fluorescent (+191), and none is at ±200
-    (`core/tests/raf_wb_presets.rs` prints them). White balance is a
+    same end: on the eight samples, with the presets the files carry
+    (counted again when the presets moved from a table to the file),
+    10 presets are past ±100 (Tungsten on DSCF6952, DSCF7795, DSCF7863,
+    DSCF8078 and DSCF8267, five on DSCF8169, shot under warm light), 2
+    past ±150, DSCF8169's Cloudy (+170) and Fluorescent (daylight)
+    (+191), and none past ±200 (`core/tests/raf_wb_presets.rs` prints
+    them). White balance is a
     power of two of the value, so a value within the old range renders
     as before and the golden renders did not move. Through a mask the
     blended white balance now reaches ±400. The Kelvin readout still
