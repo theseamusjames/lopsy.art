@@ -25,7 +25,6 @@
 
 use std::path::{Path, PathBuf};
 
-use lopsy_core::dng::tiff::TiffReader;
 use lopsy_core::output::{output_reference, OutputSettings, OutputTarget};
 use lopsy_core::raf::develop::{scene_reference, tone_settings, RawDevelopSettings};
 use lopsy_core::raf::standard_curve::CANDIDATES;
@@ -34,6 +33,8 @@ use lopsy_core::working_space::{srgb_encode, Gamut};
 
 #[path = "support/raw_compare.rs"]
 mod raw_compare;
+#[path = "support/previews.rs"]
+mod previews;
 use raw_compare::Picture;
 
 const STATS_LONG_EDGE: u32 = 2000;
@@ -68,83 +69,6 @@ fn develop_rgba(binned: &[f32], w: u32, h: u32, settings: &RawDevelopSettings) -
 fn develop(prep: &PreparedRaw, settings: &RawDevelopSettings, long: u32) -> Picture {
     let (w, h, binned) = prep.binned_linear(long).unwrap();
     develop_rgba(&binned, w, h, settings)
-}
-
-fn orientation(prep: &PreparedRaw) -> u16 {
-    match &prep.prepared {
-        Prepared::Raf(p) => p.params.orientation,
-        Prepared::Dng(p) => p.params.orientation,
-        Prepared::Arw(p) => p.params.orientation,
-    }
-}
-
-/// The JPEG previews a TIFF-based raw holds: `JPEGInterchangeFormat` in
-/// IFD0's chain or a SubIFD, and every one-strip, JPEG-compressed,
-/// reduced-resolution (`NewSubFileType` 1) RGB or YCbCr image. The raw
-/// image itself (a lossless JPEG, CFA or LinearRaw) is never one.
-fn tiff_jpegs(data: &[u8]) -> Vec<(usize, usize)> {
-    let Ok(reader) = TiffReader::new(data) else { return Vec::new() };
-    let mut ifds = Vec::new();
-    for i in 0..8 {
-        let Ok(ifd) = reader.read_ifd(i) else { break };
-        let subs: Vec<u32> = ifd.iter().find(|e| e.tag == 0x14a).and_then(|e| e.as_u32_vec()).unwrap_or_default();
-        ifds.extend(subs.iter().filter_map(|&o| reader.read_ifd_at(o).ok()));
-        ifds.push(ifd);
-    }
-    let mut out = Vec::new();
-    for ifd in &ifds {
-        let get = |tag: u16| ifd.iter().find(|e| e.tag == tag).and_then(|e| e.as_u32());
-        let count = |tag: u16| ifd.iter().find(|e| e.tag == tag).map_or(0, |e| e.count);
-        if let (Some(o), Some(n)) = (get(0x201), get(0x202)) {
-            out.push((o as usize, n as usize));
-        } else if get(0xfe) == Some(1) && get(0x103) == Some(7) && matches!(get(0x106), Some(2 | 6)) && count(0x111) == 1 {
-            if let (Some(o), Some(n)) = (get(0x111), get(0x117)) {
-                out.push((o as usize, n as usize));
-            }
-        }
-    }
-    out
-}
-
-/// The largest embedded JPEG of the whole picture, turned upright.
-fn preview_picture(data: &[u8], prep: &PreparedRaw) -> Option<Picture> {
-    let (ow, oh) = (prep.description.width, prep.description.height);
-    let aspect = f64::from(ow) / f64::from(oh);
-    let blobs: Vec<Vec<u8>> = if prep.format == raw::RawFormatId::Raf {
-        vec![lopsy_core::raf::extract_jpeg_preview(data).ok()?]
-    } else {
-        tiff_jpegs(data).into_iter().filter_map(|(o, n)| data.get(o..o + n).map(<[u8]>::to_vec)).collect()
-    };
-    let mut best: Option<(usize, u32, u32)> = None;
-    for (i, bytes) in blobs.iter().enumerate() {
-        let mut dec = jpeg_decoder::Decoder::new(&bytes[..]);
-        if dec.read_info().is_err() {
-            continue;
-        }
-        let Some(info) = dec.info() else { continue };
-        let (w, h) = (u32::from(info.width), u32::from(info.height));
-        let a = f64::from(w) / f64::from(h);
-        let whole = (a / aspect - 1.0).abs() < 0.01 || (a * aspect - 1.0).abs() < 0.01;
-        if whole && best.is_none_or(|b| w * h > b.1 * b.2) {
-            best = Some((i, w, h));
-        }
-    }
-    let (i, _, _) = best?;
-    let mut dec = jpeg_decoder::Decoder::new(&blobs[i][..]);
-    let px = dec.decode().ok()?;
-    let info = dec.info()?;
-    if info.pixel_format != jpeg_decoder::PixelFormat::RGB24 {
-        return None;
-    }
-    let (w, h) = (u32::from(info.width), u32::from(info.height));
-    let pic = Picture::from_rgb8(w as usize, h as usize, &px);
-    // Stored in the sensor's orientation: turn it as the raw is turned.
-    if (f64::from(w) / f64::from(h) / aspect - 1.0).abs() < 0.01 {
-        return Some(pic);
-    }
-    let rgba: Vec<f32> = pic.rgb.chunks_exact(3).flat_map(|c| [c[0], c[1], c[2], 1.0]).collect();
-    let (rw, rh, turned) = lopsy_core::orientation::apply_exif_orientation(w, h, &rgba, orientation(prep));
-    Some(Picture { w: rw as usize, h: rh as usize, rgb: turned.chunks_exact(4).flat_map(|c| [c[0], c[1], c[2]]).collect() })
 }
 
 // ── Contact sheets ───────────────────────────────────────────────────
@@ -259,9 +183,15 @@ struct Panel {
     label: String,
     /// The opening exposure, when it is a render.
     ev: Option<f32>,
+    /// As shown: linear sRGB.
     pic: Picture,
     median: f32,
     white: f32,
+    /// Oklab on the chroma grid, in the picture's own space (a P3
+    /// preview's colours beyond sRGB included).
+    lab: Vec<[f32; 3]>,
+    /// Chroma against the sheet's preview (`previews::chroma_ratio`).
+    chroma: Option<f32>,
 }
 
 const SHEET_WIDTH: usize = 2400;
@@ -270,11 +200,18 @@ const TEXT_SCALE: usize = 2;
 const LINE: usize = 9 * TEXT_SCALE;
 
 /// Every panel's numbers at one width, the smallest of them (a camera's
-/// preview can be smaller than the render).
+/// preview can be smaller than the render), and, when the first panel is
+/// a preview, each render's chroma against it.
 fn common_stats(panels: &mut [Panel]) {
     let w = panels.iter().map(|p| p.pic.w).min().unwrap();
     for p in panels.iter_mut() {
         (p.median, p.white) = if p.pic.w > w { stats(&p.pic.resample(w)) } else { stats(&p.pic) };
+    }
+    if panels[0].ev.is_none() {
+        let preview = panels[0].lab.clone();
+        for p in panels.iter_mut().skip(1) {
+            p.chroma = Some(previews::chroma_ratio(&p.lab, &preview));
+        }
     }
 }
 
@@ -284,7 +221,8 @@ fn write_sheet(path: &Path, title: &str, panels: &[Panel]) {
     let small: Vec<Picture> = panels.iter().map(|p| p.pic.resample(pw)).collect();
     let ph = small.iter().map(|p| p.h).max().unwrap();
     let top = GAP + 2 * LINE + GAP;
-    let h = top + ph + GAP + 4 * LINE + GAP;
+    let lines = if panels.iter().any(|p| p.chroma.is_some()) { 5 } else { 4 };
+    let h = top + ph + GAP + lines * LINE + GAP;
     let mut sheet = Sheet::new(SHEET_WIDTH, h, 24);
     sheet.text(GAP, GAP, title, TEXT_SCALE, [235, 235, 235]);
     for (i, (p, s)) in panels.iter().zip(&small).enumerate() {
@@ -296,6 +234,9 @@ fn write_sheet(path: &Path, title: &str, panels: &[Panel]) {
         sheet.text(x, y + LINE, &ev, TEXT_SCALE, [190, 190, 190]);
         sheet.text(x, y + 2 * LINE, &format!("median {:.3}", p.median), TEXT_SCALE, [235, 235, 120]);
         sheet.text(x, y + 3 * LINE, &format!("white {:.2} %", p.white * 100.0), TEXT_SCALE, [235, 235, 120]);
+        if let Some(c) = p.chroma {
+            sheet.text(x, y + 4 * LINE, &format!("chroma x{c:.2} of preview"), TEXT_SCALE, [140, 220, 255]);
+        }
     }
     sheet.write_jpeg(path);
 }
@@ -303,30 +244,36 @@ fn write_sheet(path: &Path, title: &str, panels: &[Panel]) {
 fn render_panel(label: &str, prep: &PreparedRaw, settings: &RawDevelopSettings) -> Panel {
     let pic = develop(prep, settings, STATS_LONG_EDGE);
     let (median, white) = stats(&pic);
-    Panel { label: label.into(), ev: Some(settings.exposure_ev), pic, median, white }
+    let lab = previews::oklab_grid(&pic, Gamut::Srgb);
+    Panel { label: label.into(), ev: Some(settings.exposure_ev), pic, median, white, lab, chroma: None }
 }
 
 fn preview_panel(label: &str, data: &[u8], prep: &PreparedRaw, width: usize) -> Option<Panel> {
-    let pic = preview_picture(data, prep)?;
+    let (own, gamut) = previews::preview_with_gamut(data, prep)?;
     // Box-resampling only ever reduces (it leaves pixels empty going up).
-    let pic = if pic.w > width { pic.resample(width) } else { pic };
+    let own = if own.w > width { own.resample(width) } else { own };
+    let lab = previews::oklab_grid(&own, gamut);
+    // Shown and measured as sRGB, like the renders; a P3 preview converted.
+    let pic = previews::to_srgb(&own, gamut);
     let (median, white) = stats(&pic);
-    Some(Panel { label: label.into(), ev: None, pic, median, white })
+    let label = if gamut == Gamut::DisplayP3 { format!("{label} (P3)") } else { label.to_string() };
+    Some(Panel { label, ev: None, pic, median, white, lab, chroma: None })
 }
 
+/// The three curves as first compared: before the look had a saturation.
 fn looks(preview_match: bool) -> Vec<(String, OpeningLook)> {
     let names = ["A gentle", "B medium", "C punchy"];
     CANDIDATES
         .iter()
         .zip(names)
-        .map(|(c, n)| (format!("{n}{}", if preview_match { " +match" } else { "" }), OpeningLook { curve: OpeningCurve::Standard(*c), saturation: lopsy_core::raw::STANDARD_SATURATION, dng_preview_exposure: preview_match }))
+        .map(|(c, n)| (format!("{n}{}", if preview_match { " +match" } else { "" }), OpeningLook { curve: OpeningCurve::Standard(*c), saturation: 1.0, dng_preview_exposure: preview_match }))
         .collect()
 }
 
 /// One row of the numbers table.
 fn row(file: &str, case: &str, panels: &[Panel]) -> String {
     let cells: Vec<String> = panels.iter().map(|p| match p.ev {
-        Some(ev) => format!("{ev:+.2} / {:.3} / {:.2} %", p.median, p.white * 100.0),
+        Some(ev) => format!("{ev:+.2} / {:.3} / {:.2} %{}", p.median, p.white * 100.0, p.chroma.map_or(String::new(), |c| format!(" / ×{c:.2}"))),
         None => format!("{:.3} / {:.2} %", p.median, p.white * 100.0),
     }).collect();
     format!("| {file} | {case} | {} |", cells.join(" | "))
@@ -415,6 +362,100 @@ fn contact_sheets_of_the_standard_candidates() {
         }
     }
     std::fs::write(out.join("numbers.md"), table.join("\n") + "\n").unwrap();
+}
+
+/// The Standard look at saturation `s`, as a DNG or ARW opens with it.
+fn standard_at(s: f32) -> OpeningLook {
+    OpeningLook { saturation: s, ..OpeningLook::default() }
+}
+
+/// The saturation levels the sheets show beside the delivered A (1.00).
+const LEVELS: [f32; 3] = [1.10, lopsy_core::raw::STANDARD_SATURATION, 1.25];
+
+fn level_label(s: f32) -> String {
+    let chosen = if s == lopsy_core::raw::STANDARD_SATURATION { " (chosen)" } else { "" };
+    format!("Standard sat {s:.2}{chosen}")
+}
+
+/// A DNG or ARW: preview | A as delivered (saturation 1) | the Standard
+/// look at each of [`LEVELS`].
+fn saturation_sheet(path: &Path, preview_label: &str, out: &Path, table: &mut Vec<String>) {
+    let name = path.file_name().unwrap().to_string_lossy().to_string();
+    let stem = name.rsplit_once('.').map_or(name.clone(), |(s, _)| s.to_string());
+    let data = std::fs::read(path).unwrap();
+    let delivered = raw::prepare_with(&data, &standard_at(1.0)).unwrap();
+    let mut panels = vec![render_panel("A as delivered (sat 1.00)", &delivered, &delivered.description.develop_defaults)];
+    let width = panels[0].pic.w;
+    panels.insert(0, preview_panel(&format!("preview: {preview_label}"), &data, &delivered, width).expect("an embedded preview"));
+    for s in LEVELS {
+        let prep = raw::prepare_with(&data, &standard_at(s)).unwrap();
+        panels.push(render_panel(&level_label(s), &prep, &prep.description.develop_defaults));
+    }
+    common_stats(&mut panels);
+    let title = format!("{name}: Standard look by saturation. EV is the opening exposure. Chroma is Oklab, 48-cell grid, against the preview");
+    write_sheet(&out.join(format!("{stem}-saturation.jpg")), &title, &panels);
+    table.push(row(&name, "Standard by saturation", &panels));
+    println!("{}", table.last().unwrap());
+}
+
+/// A RAF: preview | its film look | Standard as a profile (curve and
+/// saturation in place of the film's, its usual exposure) at 1.00 and two
+/// of [`LEVELS`].
+fn raf_saturation_sheet(path: &Path, out: &Path, table: &mut Vec<String>) {
+    let name = path.file_name().unwrap().to_string_lossy().to_string();
+    let stem = name.trim_end_matches(".RAF").to_string();
+    let data = std::fs::read(path).unwrap();
+    let prep = raw::prepare(&data).unwrap();
+    let film = &prep.description.develop_defaults;
+    let film_name = prep.description.profiles.first().map_or("film look".to_string(), |p| p.name.clone());
+    let mut panels = vec![render_panel(&format!("today: {film_name}"), &prep, film)];
+    let width = panels[0].pic.w;
+    panels.insert(0, preview_panel("preview: camera (Fujifilm)", &data, &prep, width).expect("an embedded JPEG"));
+    let curve = OpeningLook::default().curve.lut();
+    for s in [1.0, LEVELS[1], LEVELS[2]] {
+        let settings = RawDevelopSettings { base_curve: Some(curve.clone()), saturation: s, ..film.clone() };
+        panels.push(render_panel(&format!("Standard sat {s:.2} (profile)"), &prep, &settings));
+    }
+    common_stats(&mut panels);
+    let title = format!("{name}: Standard as a profile by saturation, its usual exposure. A picture only: RAF defaults are the film look");
+    write_sheet(&out.join(format!("{stem}-saturation.jpg")), &title, &panels);
+    table.push(row(&name, "film look vs Standard as a profile", &panels));
+    println!("{}", table.last().unwrap());
+}
+
+/// The saturation sheets (`<stem>-saturation.jpg`) and their table
+/// (`numbers-saturation.md`), when `LOPSY_STANDARD_LOOK_DIR` is set.
+#[test]
+fn contact_sheets_of_the_standard_saturation() {
+    let Some(out) = env_dir("LOPSY_STANDARD_LOOK_DIR") else {
+        println!("Set LOPSY_STANDARD_LOOK_DIR (and the sample variables) to write the saturation contact sheets.");
+        return;
+    };
+    let mut table = vec![
+        "| File | Case | Preview median / white | A as delivered: EV / median / white / chroma | 2nd | 3rd | 4th |".to_string(),
+        "|---|---|---|---|---|---|---|".to_string(),
+    ];
+    for f in ["ILCE-7M3_DSC0009.ARW", "ILCE-7M4_DSC06677_FullFrame-Raw-Compressed.ARW", "ILCE-6000_DSC01542.ARW", "DSC-RX100M3_DSC00734.ARW"] {
+        if let Some(p) = sample("LOPSY_ARW_SAMPLES", f) {
+            saturation_sheet(&p, "camera (Sony)", &out, &mut table);
+        }
+    }
+    for f in ["sample_dng_00.dng", "sample_dng_01.dng"] {
+        if let Some(p) = sample("LOPSY_DNG_SAMPLES", f) {
+            saturation_sheet(&p, "Apple", &out, &mut table);
+        }
+    }
+    for f in ["5D3-adobe-lossless.dng", "5D3-adobe-lossless-rgb.dng"] {
+        if let Some(p) = sample("LOPSY_DNG_ADOBE_SAMPLES", f) {
+            saturation_sheet(&p, "Adobe converter", &out, &mut table);
+        }
+    }
+    for f in ["DSCF8005.RAF", "DSCF7912.RAF"] {
+        if let Some(p) = sample("LOPSY_RAF_SAMPLES", f) {
+            raf_saturation_sheet(&p, &out, &mut table);
+        }
+    }
+    std::fs::write(out.join("numbers-saturation.md"), table.join("\n") + "\n").unwrap();
 }
 
 // ── Checks ───────────────────────────────────────────────────────────

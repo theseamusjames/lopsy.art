@@ -111,3 +111,69 @@ pub fn preview_picture(data: &[u8], prep: &PreparedRaw) -> Option<Picture> {
     let (rw, rh, turned) = lopsy_core::orientation::apply_exif_orientation(w, h, &rgba, orientation(prep));
     Some(Picture { w: rw as usize, h: rh as usize, rgb: turned.chunks_exact(4).flat_map(|c| [c[0], c[1], c[2]]).collect() })
 }
+
+/// The primaries a preview's values are in: Display P3 when its ICC
+/// profile names P3, else sRGB. Both use the sRGB curve.
+pub fn preview_gamut(jpeg: &[u8]) -> lopsy_core::working_space::Gamut {
+    use lopsy_core::working_space::Gamut;
+    if icc_description(jpeg).is_some_and(|d| d.contains("P3")) { Gamut::DisplayP3 } else { Gamut::Srgb }
+}
+
+/// [`preview_picture`] and the primaries its linear values are in.
+pub fn preview_with_gamut(data: &[u8], prep: &PreparedRaw) -> Option<(Picture, lopsy_core::working_space::Gamut)> {
+    let gamut = preview_gamut(&preview_jpeg(data, prep)?);
+    Some((preview_picture(data, prep)?, gamut))
+}
+
+/// A picture in linear `gamut` as linear sRGB, for showing beside an sRGB
+/// render: colours outside sRGB are clipped (a P3 preview's most saturated
+/// colours lose a little).
+pub fn to_srgb(p: &Picture, gamut: lopsy_core::working_space::Gamut) -> Picture {
+    use lopsy_core::working_space::{apply, conversion, Gamut};
+    if gamut == Gamut::Srgb {
+        return Picture { w: p.w, h: p.h, rgb: p.rgb.clone() };
+    }
+    let m = conversion(gamut, Gamut::Srgb);
+    let rgb = p.rgb.chunks_exact(3).flat_map(|c| apply(&m, [c[0], c[1], c[2]]).map(|v| v.clamp(0.0, 1.0))).collect();
+    Picture { w: p.w, h: p.h, rgb }
+}
+
+/// Cells across the chroma grid.
+pub const CHROMA_GRID: usize = 48;
+
+/// Each cell's Oklab, the picture (linear `gamut`) box-averaged in linear
+/// light to [`CHROMA_GRID`] cells across.
+pub fn oklab_grid(p: &Picture, gamut: lopsy_core::working_space::Gamut) -> Vec<[f32; 3]> {
+    use lopsy_core::working_space::{apply, conversion, Gamut};
+    let m = lopsy_core::look::oklab_matrices();
+    let to_2020 = conversion(gamut, Gamut::Rec2020);
+    let gw = CHROMA_GRID;
+    let gh = ((p.h as f64 * gw as f64 / p.w as f64).round() as usize).max(1);
+    let mut sum = vec![[0f64; 3]; gw * gh];
+    let mut n = vec![0f64; gw * gh];
+    for y in 0..p.h {
+        let gy = (y * gh / p.h).min(gh - 1);
+        for x in 0..p.w {
+            let g = gy * gw + (x * gw / p.w).min(gw - 1);
+            for c in 0..3 {
+                sum[g][c] += f64::from(p.rgb[(y * p.w + x) * 3 + c]);
+            }
+            n[g] += 1.0;
+        }
+    }
+    sum.iter().zip(&n).map(|(s, n)| lopsy_core::look::to_oklab(&m, apply(&to_2020, s.map(|v| (v / n.max(1.0)) as f32)))).collect()
+}
+
+/// Ours against a preview on the Oklab grid: Σ chroma ours / Σ chroma
+/// preview over the cells where the preview's chroma is at least 0.03.
+pub fn chroma_ratio(ours: &[[f32; 3]], preview: &[[f32; 3]]) -> f32 {
+    let c = |l: &[f32; 3]| l[1].hypot(l[2]);
+    let (mut a, mut b) = (0f64, 0f64);
+    for (o, p) in ours.iter().zip(preview) {
+        if c(p) >= 0.03 {
+            a += f64::from(c(o));
+            b += f64::from(c(p));
+        }
+    }
+    (a / b) as f32
+}
