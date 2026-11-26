@@ -32,6 +32,8 @@ engine/
       raf/            # RAF decode: the baked import, and linear camera RGB for the develop chain
       dng/            # DNG decode: the baked import (mod.rs), linear camera RGB (linear.rs),
                       # and camera colour by the DNG specification's method (camera_color.rs)
+      arw/            # Sony ARW decode (lossy, uncompressed, lossless; the SR2 block) onto
+                      # the DNG decode's plane, renders and baked finish; colour is approximate
       tone.rs         # The develop tone step (scene to rendered) and its curve's shoulder
       scene_tone.rs   # Tone on scene data: the tone sliders and masks, a monotone map in stops
       look.rs         # Colour in OkLab, colour grading and curves on rendered linear data
@@ -180,7 +182,12 @@ JS API, and the deviations from `docs/photonamous-spec.md` 6.10. Rules:
   to D50) and is recomputed on the CPU for each white balance, and Kelvin
   and tint are real (`cct`); the app sends `wbRatio` and `camToRgb`
   together. The tests on real DNGs read `LOPSY_DNG_SAMPLES`
-  (`core/tests/dng_develop.rs`, `--release`).
+  (`core/tests/dng_develop.rs`, `--release`), and `dng_baked_hash.rs`
+  pins both DNG decodes bit for bit. A Sony ARW follows the RAF model:
+  one fixed matrix (Sony's `ColorMatrix` from the file's SR2 block, which
+  is only part of the camera's colour, so the decode says its colour is
+  approximate) and `wbRatio` as gains. The tests on real ARWs read
+  `LOPSY_ARW_SAMPLES` (`core/tests/arw_decode.rs`, `--release`).
 - Develop shaders compile lazily through `ShaderPrograms::<name>()`, never
   in `compile_all`.
 - Screen-only views (overlays, clipping warning, mask view) run only in the
