@@ -70,7 +70,7 @@ use super::{get_rational_array, get_rational_array_either, get_tag_u16, get_tag_
 use crate::black_level::BlackLevels;
 use crate::raf::develop::RawDevelopSettings;
 use crate::raf::highlights::ChromaGrid;
-use crate::raf::{base_curves, RafBand, RafBandPixels};
+use crate::raf::{RafBand, RafBandPixels};
 
 /// What a DNG's samples are.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -716,8 +716,15 @@ pub fn render_binned_linear_for<P: PlaneParams + ?Sized>(plane: &[f32], params: 
 /// The develop settings a DNG opens with: the as-shot white balance
 /// (`wbRatio` 1), the DNG method's matrix for it, the file's baseline
 /// exposure, no extra saturation, and the engine's neutral base curve (a
-/// DNG has no film simulation; its `ProfileToneCurve` is not used).
+/// DNG has no film simulation; its `ProfileToneCurve` is not used): the
+/// base curve of today's opening look (`raw::OpeningLook::default`).
 pub fn develop_defaults(params: &DngRenderParams) -> Result<RawDevelopSettings, String> {
+    develop_defaults_with(params, crate::raw::OpeningLook::default().curve.lut())
+}
+
+/// [`develop_defaults`] with the base curve `base_curve` (a table on scene
+/// luminance 0..1, as `RawDevelopSettings::base_curve`).
+pub fn develop_defaults_with(params: &DngRenderParams, base_curve: Vec<f32>) -> Result<RawDevelopSettings, String> {
     let wb = white_balance_for_ratio(params, [1.0, 1.0, 1.0])?;
     Ok(RawDevelopSettings {
         wb_ratio: wb.wb_ratio,
@@ -725,7 +732,7 @@ pub fn develop_defaults(params: &DngRenderParams) -> Result<RawDevelopSettings, 
         exposure_ev: params.calibration.baseline_exposure as f32,
         saturation: 1.0,
         highlight_desaturation: true,
-        base_curve: Some(base_curves::curve_lut(&base_curves::NEUTRAL).to_vec()),
+        base_curve: Some(base_curve),
         clip_levels: params.clip_levels,
     })
 }

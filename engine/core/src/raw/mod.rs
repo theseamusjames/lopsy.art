@@ -25,6 +25,7 @@
 
 pub mod arw;
 pub mod dng;
+pub mod look;
 pub mod raf;
 pub mod white_balance;
 
@@ -32,6 +33,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::raf::develop::{DevelopProfile, ProfileSettings, RawDevelopSettings};
+pub use look::{OpeningCurve, OpeningLook};
 use crate::raf::wb_presets::RecipeWbPreset;
 use crate::raf::{RafBand, RafBandPixels};
 
@@ -180,10 +182,12 @@ pub trait RawFormat {
     const ID: RawFormatId;
     type Params: Serialize + DeserializeOwned;
 
-    fn prepare(data: &[u8]) -> Result<RawPlane<Self::Params>, String>;
+    /// `look` is what a format without film looks opens with (RAF ignores
+    /// it); [`OpeningLook::default`] is today's.
+    fn prepare(data: &[u8], look: &OpeningLook) -> Result<RawPlane<Self::Params>, String>;
     /// Needs the bytes: RAF's presets and Kelvin scale come from its
-    /// makernote.
-    fn describe(data: &[u8], prep: &RawPlane<Self::Params>) -> Result<RawDescription, String>;
+    /// makernote. `look` as for `prepare`.
+    fn describe(data: &[u8], prep: &RawPlane<Self::Params>, look: &OpeningLook) -> Result<RawDescription, String>;
     /// The plane's height, which bands are planned over.
     fn plane_height(p: &Self::Params) -> u32;
     fn plan_bands(p: &Self::Params, max_bands: u32) -> Vec<RafBand> {
@@ -293,8 +297,9 @@ impl PreparedRaw {
     }
 }
 
-fn finish<F: RawFormat>(data: &[u8], prep: RawPlane<F::Params>, wrap: fn(RawPlane<F::Params>) -> Prepared) -> Result<PreparedRaw, String> {
-    let description = F::describe(data, &prep)?;
+fn finish<F: RawFormat>(data: &[u8], look: &OpeningLook, wrap: fn(RawPlane<F::Params>) -> Prepared) -> Result<PreparedRaw, String> {
+    let prep = F::prepare(data, look)?;
+    let description = F::describe(data, &prep, look)?;
     let params_json = serde_json::to_string(&prep.params).map_err(|e| format!("JSON serialize: {e}"))?;
     Ok(PreparedRaw { format: F::ID, description, params_json, prepared: wrap(prep) })
 }
@@ -303,10 +308,16 @@ fn finish<F: RawFormat>(data: &[u8], prep: RawPlane<F::Params>, wrap: fn(RawPlan
 /// sentence; a DNG's starts "DNG cannot open as RAW:" (the host then uses
 /// the baked decode).
 pub fn prepare(data: &[u8]) -> Result<PreparedRaw, String> {
+    prepare_with(data, &OpeningLook::default())
+}
+
+/// [`prepare`] with an opening look other than today's (`look`), for
+/// comparing the Standard candidates.
+pub fn prepare_with(data: &[u8], look: &OpeningLook) -> Result<PreparedRaw, String> {
     match sniff(data).ok_or("This file is not a RAW format this app reads")? {
-        RawFormatId::Raf => finish::<raf::Raf>(data, raf::Raf::prepare(data)?, Prepared::Raf),
-        RawFormatId::Dng => finish::<dng::Dng>(data, dng::Dng::prepare(data)?, Prepared::Dng),
-        RawFormatId::Arw => finish::<arw::Arw>(data, arw::Arw::prepare(data)?, Prepared::Arw),
+        RawFormatId::Raf => finish::<raf::Raf>(data, look, Prepared::Raf),
+        RawFormatId::Dng => finish::<dng::Dng>(data, look, Prepared::Dng),
+        RawFormatId::Arw => finish::<arw::Arw>(data, look, Prepared::Arw),
     }
 }
 

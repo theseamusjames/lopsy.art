@@ -2,7 +2,7 @@
 //! The parameters are `RafRenderParams` exactly as `rafPrepare` writes
 //! them, and every render is the function the `raf…` exports call.
 
-use super::{KelvinModel, MatrixModel, PresetSource, RawDescription, RawFormat, RawFormatId, RawPlane, RawWhite, WhiteBalanceModel};
+use super::{KelvinModel, MatrixModel, OpeningLook, PresetSource, RawDescription, RawFormat, RawFormatId, RawPlane, RawWhite, WhiteBalanceModel};
 use crate::raf::{self, develop, wb_presets, RafBand, RafBandPixels, RafDecodeOpts, RafRenderParams};
 
 pub struct Raf;
@@ -11,12 +11,12 @@ impl RawFormat for Raf {
     const ID: RawFormatId = RawFormatId::Raf;
     type Params = RafRenderParams;
 
-    fn prepare(data: &[u8]) -> Result<RawPlane<RafRenderParams>, String> {
+    fn prepare(data: &[u8], _look: &OpeningLook) -> Result<RawPlane<RafRenderParams>, String> {
         let prep = raf::prepare_raf(data, RafDecodeOpts::default()).map_err(|e| format!("RAF decode failed: {e}"))?;
         Ok(RawPlane { params: prep.params, plane: prep.mosaic, not_applied: Vec::new(), debug_log: prep.debug_log })
     }
 
-    fn describe(data: &[u8], prep: &RawPlane<RafRenderParams>) -> Result<RawDescription, String> {
+    fn describe(data: &[u8], prep: &RawPlane<RafRenderParams>, _look: &OpeningLook) -> Result<RawDescription, String> {
         let p = &prep.params;
         let (model, as_shot) = raf::read_wb_info(data)?;
         let (width, height) = p.oriented_size();

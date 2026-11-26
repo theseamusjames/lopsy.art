@@ -4,7 +4,7 @@
 //! and no presets.
 
 use super::white_balance::{fixed_white, illuminant_presets, measured_white, temperature_for_kelvin};
-use super::{camera_and_monochrome, KelvinModel, MatrixModel, PresetSource, RawDescription, RawFormat, RawFormatId, RawPlane, RawWhite, WhiteBalanceModel};
+use super::{camera_and_monochrome, KelvinModel, MatrixModel, OpeningLook, PresetSource, RawDescription, RawFormat, RawFormatId, RawPlane, RawWhite, WhiteBalanceModel};
 use crate::arw::linear::{self, ArwRenderParams};
 use crate::dng::linear::{render_binned_linear_for, render_linear_band, PlaneParams};
 use crate::raf::{RafBand, RafBandPixels};
@@ -15,21 +15,23 @@ impl RawFormat for Arw {
     const ID: RawFormatId = RawFormatId::Arw;
     type Params = ArwRenderParams;
 
-    fn prepare(data: &[u8]) -> Result<RawPlane<ArwRenderParams>, String> {
+    fn prepare(data: &[u8], look: &OpeningLook) -> Result<RawPlane<ArwRenderParams>, String> {
         let mut prep = linear::prepare_arw(data)?;
         // Clipped channels are reconstructed, as a RAF's.
         prep.params.highlight_chroma = crate::dng::linear::measure_highlight_chroma(&prep.plane, &prep.params.layout(), prep.params.clip_levels);
-        // The develop chain opens as bright as the camera's own preview.
-        if let Some(ev) = crate::arw::exposure::match_develop_exposure(data, &prep.params, &prep.plane) {
+        // The develop chain opens as bright as the camera's own preview,
+        // through the curve it opens with.
+        let settings = linear::develop_defaults_with(&prep.params, look.curve.lut());
+        if let Some(ev) = crate::arw::exposure::match_develop_exposure_with(data, &prep.params, &prep.plane, &settings) {
             prep.params.default_exposure_ev = ev;
             prep.debug_log.push(format!("[ARW] develop exposure {ev:+.3} EV, matched to the camera's preview"));
         }
         Ok(RawPlane { params: prep.params, plane: prep.plane, not_applied: prep.unhandled, debug_log: prep.debug_log })
     }
 
-    fn describe(_data: &[u8], prep: &RawPlane<ArwRenderParams>) -> Result<RawDescription, String> {
+    fn describe(_data: &[u8], prep: &RawPlane<ArwRenderParams>, look: &OpeningLook) -> Result<RawDescription, String> {
         let p = &prep.params;
-        let defaults = linear::develop_defaults(p);
+        let defaults = linear::develop_defaults_with(p, look.curve.lut());
         let (width, height) = p.oriented_size();
         let white_balance = match &p.calibration {
             Some(cal) => {
