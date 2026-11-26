@@ -1089,35 +1089,43 @@ fn build_tone_lut(curve: &[(f64, f64)]) -> Vec<f32> {
     lut
 }
 
+/// The main image: the largest IFD, IFD0 or a SubIFD, that holds raw data
+/// (CFA or LinearRaw) and is not marked as a preview or other secondary
+/// image (`NewSubFileType` 0, which is also what an IFD without the tag
+/// is). Most writers put it in a SubIFD behind a preview in IFD0; Leica's
+/// M10 bodies put it in IFD0 with their previews in the SubIFDs, one of
+/// them nearly the size of the picture. A file with no such IFD keeps the
+/// older rule: its largest SubIFD, or IFD0.
 fn find_main_image_ifd(reader: &TiffReader) -> Result<Vec<IfdEntry>, String> {
     let ifd0 = reader.read_ifd(0)?;
+    let subs: Vec<Vec<IfdEntry>> = get_tag_u32_vec(&ifd0, TagId::SubIFDs).unwrap_or_default().iter().filter_map(|&offset| reader.read_ifd_at(offset).ok()).collect();
+    let pixels = |ifd: &[IfdEntry]| u64::from(get_tag_u32(ifd, TagId::ImageWidth).unwrap_or(0)) * u64::from(get_tag_u32(ifd, TagId::ImageLength).unwrap_or(0));
+    let is_main_raw = |ifd: &[IfdEntry]| {
+        get_tag_u32(ifd, TagId::NewSubFileType).unwrap_or(0) == 0 && matches!(get_tag_u16(ifd, TagId::PhotometricInterpretation), Ok(32803 | 34892))
+    };
 
-    if let Ok(sub_offsets) = get_tag_u32_vec(&ifd0, TagId::SubIFDs) {
-        let mut best_ifd = None;
-        let mut best_pixels = 0u64;
-
-        for &offset in &sub_offsets {
-            if let Ok(sub_ifd) = reader.read_ifd_at(offset) {
-                let w = get_tag_u32(&sub_ifd, TagId::ImageWidth).unwrap_or(0) as u64;
-                let h = get_tag_u32(&sub_ifd, TagId::ImageLength).unwrap_or(0) as u64;
-                if w * h > best_pixels {
-                    best_pixels = w * h;
-                    best_ifd = Some(sub_ifd);
-                }
-            }
-        }
-
-        if let Some(ifd) = best_ifd {
-            return Ok(ifd);
+    let mut best: Option<&Vec<IfdEntry>> = None;
+    for ifd in std::iter::once(&ifd0).chain(&subs).filter(|ifd| is_main_raw(ifd)) {
+        if best.is_none_or(|b| pixels(ifd) > pixels(b)) {
+            best = Some(ifd);
         }
     }
-
-    Ok(ifd0)
+    if best.is_none() {
+        for ifd in &subs {
+            if pixels(ifd) > best.map_or(0, |b| pixels(b)) {
+                best = Some(ifd);
+            }
+        }
+    }
+    Ok(best.cloned().unwrap_or(ifd0))
 }
 
-fn decode_uncompressed(data: &[u8], bits: u32) -> Result<Vec<u16>, String> {
+/// Uncompressed samples as the file stores them. `row_samples` is how many
+/// one row holds, which only the packed depths need.
+fn decode_uncompressed(data: &[u8], bits: u32, row_samples: usize) -> Result<Vec<u16>, String> {
     match bits {
         8 => Ok(data.iter().map(|&b| (b as u16) << 8).collect()),
+        9..=15 => unpack_bits(data, bits, row_samples),
         16 => {
             if data.len() % 2 != 0 {
                 return Err("Odd byte count for 16-bit data".into());
