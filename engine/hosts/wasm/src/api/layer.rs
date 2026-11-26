@@ -76,6 +76,11 @@ pub fn decode_and_upload_dng(engine: &mut Engine, layer_id: &str, data: &[u8]) -
     lopsy_engine::commands::layer::decode_and_upload_dng(&mut engine.inner, layer_id, data).map_err(|e| JsError::new(&e))
 }
 
+#[wasm_bindgen(js_name = "decodeAndUploadArw")]
+pub fn decode_and_upload_arw(engine: &mut Engine, layer_id: &str, data: &[u8]) -> Result<String, JsError> {
+    lopsy_engine::commands::layer::decode_and_upload_arw(&mut engine.inner, layer_id, data).map_err(|e| JsError::new(&e))
+}
+
 #[wasm_bindgen(js_name = "uploadLayerPixelsF32Rect")]
 #[allow(clippy::too_many_arguments)]
 pub fn upload_layer_pixels_f32_rect(
