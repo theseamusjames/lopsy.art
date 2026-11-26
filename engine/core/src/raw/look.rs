@@ -74,8 +74,9 @@ pub struct OpeningLook {
     /// The develop defaults' saturation: 1 adds none.
     pub saturation: f32,
     /// Match a DNG's opening exposure to its preview when the preview was
-    /// made by the camera and the file relies on a gain map the develop
-    /// chain does not apply (`dng::preview`); otherwise BaselineExposure.
+    /// made by the camera and the file carries a gain map (`dng::preview`
+    /// says why the match stays once the map is applied); otherwise
+    /// BaselineExposure.
     pub dng_preview_exposure: bool,
 }
 

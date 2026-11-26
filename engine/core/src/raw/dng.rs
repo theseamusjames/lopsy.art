@@ -12,14 +12,9 @@ pub struct Dng;
 /// The opening exposure matched to the camera's preview (`dng::preview`),
 /// or `None` when the file does not qualify or has no usable preview.
 fn preview_exposure(data: &[u8], params: &DngRenderParams, plane: &[f32], look: &OpeningLook) -> Option<f32> {
-    use crate::arw::exposure::{match_rendered_median, preview_sized_view};
-    use crate::dng::preview::{camera_preview_for_exposure, MAX_ABOVE_BASELINE, MIN_BELOW_BASELINE};
-    let (ow, oh) = params.oriented_size();
-    let preview = camera_preview_for_exposure(data, f64::from(ow) / f64::from(oh))?;
-    let (sw, sh, rgba) = preview_sized_view(plane, params, &preview)?;
+    use crate::dng::preview::{matched_exposure, MAX_ABOVE_BASELINE, MIN_BELOW_BASELINE};
     let settings = linear::develop_defaults_with(params, look).ok()?;
-    let base = params.calibration.baseline_exposure as f32;
-    Some(match_rendered_median(&rgba, sw, sh, &settings, preview.median, (base - MIN_BELOW_BASELINE, base + MAX_ABOVE_BASELINE)))
+    matched_exposure(data, params, plane, &settings, (MIN_BELOW_BASELINE, MAX_ABOVE_BASELINE))
 }
 
 impl RawFormat for Dng {
@@ -30,8 +25,9 @@ impl RawFormat for Dng {
         let mut prep = linear::prepare_dng(data).map_err(|e| format!("DNG cannot open as RAW: {e}"))?;
         // Clipped channels of a Bayer plane are reconstructed, as a RAF's.
         prep.params.highlight_chroma = linear::measure_highlight_chroma(&prep.plane, &prep.params.layout(), prep.params.clip_levels);
-        // A prototype, off by default: a file that relies on a gain map
-        // opens as bright as the camera's preview, through the curve.
+        // A file with a gain map (applied by `prepare_dng` to a LinearRaw
+        // plane) opens as bright as the camera's preview, through the
+        // curve (`dng::preview` says why).
         if look.dng_preview_exposure {
             if let Some(ev) = preview_exposure(data, &prep.params, &prep.plane, look) {
                 prep.params.default_exposure_ev = Some(ev);
