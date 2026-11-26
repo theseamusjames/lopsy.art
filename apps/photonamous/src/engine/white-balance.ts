@@ -6,6 +6,9 @@
  * is only how a format with Kelvin shows and takes them (`KelvinReadout`).
  */
 
+import { RAW_FORMATS } from '@lopsy/photos-core/import/pairs';
+import type { ImageFormat } from '@lopsy/photos-core/library/types';
+
 export interface WhiteBalancePresetValues {
   readonly id: string;
   readonly name: string;
@@ -140,10 +143,11 @@ export function kelvinDisplay(readout: KelvinReadout, tint: number): { format: (
 }
 
 /**
- * Whether White balance must wait before taking input: a RAF's Temperature
- * is typed in Kelvin, which means nothing until the photo is read and its
- * Kelvin scale known. Other photos' sliders are relative and never wait.
+ * Whether White balance must wait before taking input: a RAW photo's
+ * Temperature may be typed in Kelvin, and its presets and Auto come from
+ * the file, none of which is known until the photo is read. Other photos'
+ * sliders are relative and never wait.
  */
-export function isWhiteBalanceWaiting(format: string, isPhotoRead: boolean): boolean {
-  return format === 'raf' && !isPhotoRead;
+export function isWhiteBalanceWaiting(format: ImageFormat, isPhotoRead: boolean): boolean {
+  return RAW_FORMATS.has(format) && !isPhotoRead;
 }

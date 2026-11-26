@@ -2,14 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { fittedReadout, isWhiteBalanceWaiting, kelvinDisplay, kelvinFor, parseKelvinScale, parsePresets, temperatureForKelvin } from './white-balance';
 
 describe('isWhiteBalanceWaiting', () => {
-  it('holds a RAF until the photo is read, so Kelvin is never taken as units', () => {
-    expect(isWhiteBalanceWaiting('raf', false)).toBe(true);
-    expect(isWhiteBalanceWaiting('raf', true)).toBe(false);
+  it('holds every RAW photo until it is read, so Kelvin is never taken as units', () => {
+    for (const format of ['raf', 'dng', 'arw'] as const) {
+      expect(isWhiteBalanceWaiting(format, false)).toBe(true);
+      expect(isWhiteBalanceWaiting(format, true)).toBe(false);
+    }
   });
 
   it('never holds photos whose sliders are relative', () => {
     expect(isWhiteBalanceWaiting('jpeg', false)).toBe(false);
-    expect(isWhiteBalanceWaiting('dng', false)).toBe(false);
+    expect(isWhiteBalanceWaiting('png', false)).toBe(false);
   });
 });
 
