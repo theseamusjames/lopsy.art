@@ -406,8 +406,10 @@ export function EditView({
 
   const autoWhiteBalance = photoInfo?.autoWhiteBalance ?? null;
   const whiteBalancePresets = useMemo(() => photoInfo?.whiteBalancePresets ?? [], [photoInfo]);
-  const kelvinScale = photoInfo?.kelvin ?? null;
-  const temperatureDisplay = useMemo(() => (kelvinScale ? kelvinDisplay(kelvinScale) : null), [kelvinScale]);
+  const kelvinReadout = photoInfo?.kelvin ?? null;
+  // Kelvin may depend on Tint too (measured Kelvin): the readout is the shown recipe's.
+  const shownTint = shownRecipe.whiteBalance.tint;
+  const temperatureDisplay = useMemo(() => (kelvinReadout ? kelvinDisplay(kelvinReadout, shownTint) : null), [kelvinReadout, shownTint]);
   const temperatureDisplays = useMemo(
     () => (temperatureDisplay ? { 'whiteBalance.temperature': temperatureDisplay } : null),
     [temperatureDisplay],

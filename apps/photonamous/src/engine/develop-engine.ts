@@ -9,8 +9,8 @@
  * loads the full size on demand; exports load the full size.
  *
  * Pixels never come into TypeScript. Decoded images go straight to the
- * layer texture (RAF bands from the worker pool, DNG, Sony ARW and 16-bit
- * PNG through the engine's decoders, other formats from a canvas the
+ * layer texture (RAW bands from the worker pool, the baked DNG and Sony ARW
+ * and 16-bit PNG through the engine's decoders, other formats from a canvas the
  * browser decoded into). Previews and exports are drawn by the engine into its own canvas at
  * the output size and handed to `OffscreenCanvas.convertToBlob`; full-size
  * PNG uses the engine's 16-bit encoder.
@@ -86,8 +86,6 @@ import initWasm, {
   assembleGainMapJpeg,
   hdrHistogramWhiteBin,
   buildIccProfile,
-  rafWhiteBalanceKelvin,
-  rafWhiteBalancePresets,
   setDocumentSize,
   setImageBlacks,
   setImageColorGrading,
@@ -136,7 +134,7 @@ import { keepForOffline } from '../sw/register';
 import { webGpuTextureLimit } from '@lopsy/engine-wasm/renderer-choice';
 import type { ImageFormat } from '@lopsy/photos-core/library/types';
 import { DEFAULT_RECIPE, liveAreas, type Recipe } from '@lopsy/photos-core/library/recipe';
-import { parseKelvinScale, parsePresets, type KelvinScale, type WhiteBalancePresetValues } from './white-balance';
+import type { KelvinReadout, WhiteBalancePresetValues } from './white-balance';
 import {
   framedSize,
   effectiveFraming,
@@ -159,9 +157,11 @@ import { areaLayerKey, areaLayerValues, areaValues, linearAreaLayerKey, linearAr
 import { developPathFor, developStages, type DevelopPath, type LegacyStages, type LinearStages } from './develop-stages';
 import { treatsAsFloat, usesWorkingSpace } from './develop-override';
 import { NO_INSETS, clampZoom, fitView, limitSize, panBy, zoomAround, type Insets, type Size, type View } from './viewport';
-import { decodeRafInWorkers, DecodeAbortedError } from './raw/raw-decode';
-import { parseRawDevelopSettings, rawSettingsFor, rawSettingsJson, temperatureTintFor, type RawDevelopSettings } from './raw-develop';
-import { parseDevelopProfiles, profilesFor, type DevelopProfile } from './profiles';
+import { decodeRawInWorkers, DecodeAbortedError } from './raw/raw-decode';
+import { RAW_PATH_FORMATS, type RawDescription } from './raw/raw-format';
+import { rawWhiteBalanceFor, type RawWhiteBalance } from './raw/raw-white-balance';
+import { rawSettingsFor, rawSettingsJson, temperatureTintFor, type RawDevelopSettings } from './raw-develop';
+import { profilesFor, type DevelopProfile } from './profiles';
 
 export { DecodeAbortedError };
 
@@ -256,10 +256,10 @@ export interface PhotoInfo {
   readonly autoWhiteBalance: { readonly temperature: number; readonly tint: number } | null;
   /** The Profile menu. */
   readonly profiles: readonly DevelopProfile[];
-  /** The camera's white balance presets (RAW), in menu order; empty otherwise. */
+  /** The white balance presets (RAW), in menu order; empty otherwise. */
   readonly whiteBalancePresets: readonly WhiteBalancePresetValues[];
-  /** How the relative Temperature reads in Kelvin (RAW); null otherwise. */
-  readonly kelvin: KelvinScale | null;
+  /** How the relative Temperature reads in Kelvin (RAW with Kelvin); null otherwise. */
+  readonly kelvin: KelvinReadout | null;
   /**
    * The decoder's sentence when the photo's colour is only approximate (a
    * Sony ARW carries part of the camera's colour); null when it is the
@@ -387,7 +387,7 @@ export function lostEngineId(event: Event): number | null {
 /** Largest Lopsy layer the engine loads, at 8 bytes a pixel (the handoff's own limit too). */
 const MAX_LOPSY_LAYER_BYTES = 1024 * 1024 * 1024;
 
-/** Long edge of the binned first view of a RAF (`rafRenderBinnedLinear`). */
+/** Long edge of the binned first view of a RAW photo (`binnedLinear`) while its full size loads. */
 const QUICK_VIEW_LONG_EDGE = 2048;
 /** The working image's long edge: at least a screen preview's, at most spec 6.10's cap. */
 const MIN_WORKING_EDGE = 2048;
@@ -713,8 +713,8 @@ class PhotoEngine implements DevelopEngine {
   private pixelScale = 1;
   /** The document and layer placement last pushed, to skip unchanged layouts. */
   private layoutKey: string | null = null;
-  private wbPresets: WhiteBalancePresetValues[] = [];
-  private kelvinScale: KelvinScale | null = null;
+  /** The RAW photo on the develop path: its description, its render parameters and its white balance; null otherwise. */
+  private raw: { readonly description: RawDescription; readonly paramsJson: string; readonly whiteBalance: RawWhiteBalance } | null = null;
   /** The displayed (cropped) size. */
   private displaySize: Size | null = null;
   private autoWb: { temperature: number; tint: number } | null = null;
@@ -858,7 +858,7 @@ class PhotoEngine implements DevelopEngine {
       for (const listener of this.viewListeners) listener(this.view);
     };
     const upgrade = this.upgrade.start(async (signal) => {
-      if (format === 'raf') await this.decodeRaf(source, signal, () => undefined, 'upgrade');
+      if (RAW_PATH_FORMATS.has(format)) await this.decodeRaw(source, signal, () => undefined, 'upgrade');
       else await this.upgradeImage(source, signal, format);
     }, notify);
     notify();
@@ -879,7 +879,7 @@ class PhotoEngine implements DevelopEngine {
     if (source.type === LOPSY_LAYER_MIME) return this.showImage(await this.decodeLopsyLayer(source, signal, report));
     // Photos sit on opaque black; only a Lopsy layer keeps its transparency.
     setBackgroundColor(this.engine, 0, 0, 0, 1);
-    if (format === 'raf') return this.decodeRaf(source, signal, report, mode);
+    if (RAW_PATH_FORMATS.has(format)) return this.decodeRaw(source, signal, report, mode);
     if (format === 'dng' || format === 'arw') return this.decodeTiffRaw(source, format, signal, report);
     if (format === 'png' && mode === 'full') {
       const sized = await this.decodePng16(source, signal, report);
@@ -912,17 +912,18 @@ class PhotoEngine implements DevelopEngine {
   }
 
   /**
-   * RAF through the worker pool. Where the GPU renders to float targets the
-   * pixels are linear camera RGB for the RAW develop stage, and:
+   * A RAW photo through the worker pool and the engine's RAW interface.
+   * Where the GPU renders to float targets the pixels are linear camera
+   * RGB for the RAW develop stage, and:
    * - 'working' (the Edit view): only the binned frame, at the working
    *   size, is made; no full-size bands (spec 6.10);
    * - 'full' (exports): the binned frame shows first while the full-size
    *   bands fill a hidden layer that replaces it;
    * - 'upgrade': the full-size bands replace the working image (zoom to
    *   50 % or closer).
-   * Without float targets the bands carry the decoder's finished look.
+   * Without float targets the bands carry the format's finished look.
    */
-  private async decodeRaf(
+  private async decodeRaw(
     source: Blob,
     signal: AbortSignal,
     report: (stage: LoadProgress['stage'], fraction: number | null) => void,
@@ -931,15 +932,13 @@ class PhotoEngine implements DevelopEngine {
     const data = new Uint8Array(await source.arrayBuffer());
     this.checkLive(signal);
     report('decoding', null);
-    this.wbPresets = parsePresets(rafWhiteBalancePresets(data));
-    this.kelvinScale = parseKelvinScale(rafWhiteBalanceKelvin(data));
     const isLinear = this.hasFloat;
     const isUpgrade = mode === 'upgrade';
     const isWorkingOnly = mode === 'working' && isLinear;
     let quick: Size | null = isUpgrade ? this.sourceSize : null;
     let fullLayer: string | null = null;
     try {
-      const meta = await decodeRafInWorkers(
+      const description = await decodeRawInWorkers(
         data,
         (full, band) => {
           if (signal.aborted || this.isDisposed) return;
@@ -956,16 +955,19 @@ class PhotoEngine implements DevelopEngine {
           linear: isLinear,
           renderBands: !isWorkingOnly,
           ...(isUpgrade ? {} : { binnedLongEdge: isWorkingOnly ? this.workingLongEdge() : QUICK_VIEW_LONG_EDGE }),
-          onPrepared: (prepMeta, prepared) => {
+          onPrepared: (prepDescription, prepared) => {
             if (signal.aborted || this.isDisposed || !isLinear || isUpgrade) return;
-            this.setRawDefaults(parseRawDevelopSettings(prepared.developDefaultsJson));
+            const whiteBalance = rawWhiteBalanceFor(prepDescription);
+            this.setRawDefaults(prepDescription.developDefaults);
+            this.raw = { description: prepDescription, paramsJson: prepared.paramsJson, whiteBalance };
             this.autoWb = prepared.autoWbRatio ? temperatureTintFor(prepared.autoWbRatio) : null;
-            this.engineProfiles = prepared.profilesJson ? parseDevelopProfiles(prepared.profilesJson) : [];
-            this.fullSize = { width: prepMeta.width, height: prepMeta.height };
+            this.engineProfiles = [...prepDescription.profiles];
+            this.colorNote = prepDescription.colorNote;
+            this.fullSize = { width: prepDescription.width, height: prepDescription.height };
             const binned = prepared.binned;
             if (!binned) return;
             const layer = this.resetLayer(binned.width, binned.height);
-            this.pixelScale = prepMeta.width > 0 ? binned.width / prepMeta.width : 1;
+            this.pixelScale = prepDescription.width > 0 ? binned.width / prepDescription.width : 1;
             uploadLayerPixelsF32Rect(this.engine, layer, binned.width, binned.height, 0, 0, binned.width, binned.height, binned.pixels);
             quick = this.showImage({ width: binned.width, height: binned.height });
             if (!isWorkingOnly) report('refining', 0);
@@ -977,8 +979,7 @@ class PhotoEngine implements DevelopEngine {
         },
       );
       this.checkLive(signal);
-      if (meta.width === 0 || meta.height === 0) throw new Error('The RAW file decoded to an empty image');
-      const size = { width: meta.width, height: meta.height };
+      const size = { width: description.width, height: description.height };
       if (isWorkingOnly) {
         if (!quick) throw new Error('The RAW file decoded to an empty image');
         return quick;
@@ -1295,8 +1296,7 @@ class PhotoEngine implements DevelopEngine {
     if (!defaults) {
       this.autoWb = null;
       this.engineProfiles = [];
-      this.wbPresets = [];
-      this.kelvinScale = null;
+      this.raw = null;
       clearRawDevelop(this.engine);
     }
   }
@@ -1308,7 +1308,7 @@ class PhotoEngine implements DevelopEngine {
     this.applyDetail();
     this.applyFinish();
     if (this.rawDefaults) {
-      const json = rawSettingsJson(rawSettingsFor(this.rawDefaults, this.recipe, this.engineProfiles));
+      const json = rawSettingsJson(rawSettingsFor(this.rawDefaults, this.recipe, this.engineProfiles, this.raw?.whiteBalance));
       if (json !== this.appliedRawJson) {
         setRawDevelop(this.engine, json);
         this.appliedRawJson = json;
@@ -1577,8 +1577,8 @@ class PhotoEngine implements DevelopEngine {
       isRaw,
       autoWhiteBalance: this.autoWb,
       profiles: profilesFor(isRaw, this.engineProfiles),
-      whiteBalancePresets: isRaw ? this.wbPresets : [],
-      kelvin: isRaw ? this.kelvinScale : null,
+      whiteBalancePresets: isRaw ? (this.raw?.whiteBalance.presets ?? []) : [],
+      kelvin: isRaw ? (this.raw?.whiteBalance.kelvin ?? null) : null,
       colorNote: this.colorNote,
     };
   }

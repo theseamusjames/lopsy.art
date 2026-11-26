@@ -1,10 +1,10 @@
 /**
  * The recipe mapped onto the engine's RAW develop stage (engine/src/develop,
- * the proof of concept of spec E2/E3). A RAF's layer holds linear camera
- * RGB at the as-shot white balance; the stage applies white balance in
- * camera space, the camera matrix, exposure, saturation, highlight
- * desaturation and the film-simulation base curve, all in linear light,
- * before the document's image adjustments run on top.
+ * the proof of concept of spec E2/E3). A RAW photo's layer holds linear
+ * camera RGB at the as-shot white balance; the stage applies white balance
+ * in camera space, the camera matrix, exposure, saturation, highlight
+ * desaturation and the profile's base curve, all in linear light, before
+ * the document's image adjustments run on top.
  *
  * White balance is a POC mapping until Temperature and Tint read in kelvin
  * (spec E9): Temperature t ∈ [-200, 200] scales red by 2^(0.6·t/100) and
@@ -16,8 +16,9 @@
 
 import { WB_SLIDER_END, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { DevelopProfile, ProfileSettings } from './profiles';
+import type { RawWhiteBalance } from './raw/raw-white-balance';
 
-/** The JSON `setRawDevelop` takes and `rafDevelopDefaults` returns. */
+/** The JSON `setRawDevelop` takes, and a RAW description's `developDefaults`. */
 export interface RawDevelopSettings {
   /** Camera-space multipliers relative to as shot; [1, 1, 1] is as shot. */
   readonly wbRatio: readonly [number, number, number];
@@ -81,9 +82,13 @@ function isNumberArray(value: unknown, length?: number): value is number[] {
   );
 }
 
-/** Reads `rafDevelopDefaults`' JSON; throws when it is not the expected shape. */
+/** Reads develop settings in `setRawDevelop`'s JSON; throws when it is not the expected shape. */
 export function parseRawDevelopSettings(json: string): RawDevelopSettings {
-  const raw: unknown = JSON.parse(json);
+  return readRawDevelopSettings(JSON.parse(json));
+}
+
+/** `parseRawDevelopSettings` of a value already parsed (a RAW description's `developDefaults`). */
+export function readRawDevelopSettings(raw: unknown): RawDevelopSettings {
   if (typeof raw !== 'object' || raw === null) throw new Error('RAW develop settings are not an object');
   const v = raw as Record<string, unknown>;
   if (!isNumberArray(v.wbRatio, 3)) throw new Error('RAW develop settings have no wbRatio');
@@ -106,27 +111,34 @@ export function parseRawDevelopSettings(json: string): RawDevelopSettings {
 
 /**
  * The develop settings for `recipe` on a photo whose defaults (its camera's
- * look) are `defaults`. Profile 'neutral' drops the film-simulation curve
- * and saturation for a flat start; every other profile, 'standard'
- * included, is the camera's own film mode.
+ * look) are `defaults`. Profile 'neutral' drops the profile's curve and
+ * saturation for a flat start; every other profile, 'standard' included,
+ * is the camera's own look. `whiteBalance` is the format's white-balance
+ * model: where the matrix follows the white, its gains and matrix replace
+ * the profile's; where it is fixed (or not given), the gains are
+ * `wbRatioFor` and the profile keeps its matrix.
  */
 export function rawSettingsFor(
   defaults: RawDevelopSettings,
   recipe: Recipe,
   profiles: readonly DevelopProfile[] = [],
+  whiteBalance?: Pick<RawWhiteBalance, 'settingsFor'>,
 ): RawDevelopSettings {
   const look = { ...defaults, ...profileLook(defaults, recipe.profile.id, profiles) };
-  return {
+  const { temperature, tint } = recipe.whiteBalance;
+  const base = {
     ...look,
-    wbRatio: wbRatioFor(recipe.whiteBalance.temperature, recipe.whiteBalance.tint),
+    wbRatio: wbRatioFor(temperature, tint),
     exposureEv: look.exposureEv + recipe.tone.exposure,
   };
+  const white = whiteBalance?.settingsFor(temperature, tint);
+  return white?.camToRgb ? { ...base, wbRatio: white.wbRatio, camToRgb: white.camToRgb } : base;
 }
 
 /**
- * A profile's settings. The engine's own profiles (`rafDevelopProfiles`)
- * win; without them 'neutral' is flat, 'monochrome' is the camera's curve
- * with no colour, and anything else is the camera's own film mode.
+ * A profile's settings. The engine's own profiles (the RAW description's
+ * `profiles`) win; without them 'neutral' is flat, 'monochrome' is the
+ * camera's curve with no colour, and anything else is the camera's own look.
  */
 function profileLook(defaults: RawDevelopSettings, id: string, profiles: readonly DevelopProfile[]): ProfileSettings {
   const engineProfile = profiles.find((p) => p.id === id);

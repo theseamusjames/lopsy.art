@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isWhiteBalanceWaiting, kelvinDisplay, kelvinFor, parseKelvinScale, parsePresets, temperatureForKelvin } from './white-balance';
+import { fittedReadout, isWhiteBalanceWaiting, kelvinDisplay, kelvinFor, parseKelvinScale, parsePresets, temperatureForKelvin } from './white-balance';
 
 describe('isWhiteBalanceWaiting', () => {
   it('holds a RAF until the photo is read, so Kelvin is never taken as units', () => {
@@ -57,7 +57,7 @@ describe('Kelvin', () => {
   });
 
   it('shows the readout in Kelvin and reads typed Kelvin', () => {
-    const display = kelvinDisplay(scale);
+    const display = kelvinDisplay(fittedReadout(scale), 0);
     expect(display.format(0)).toBe('5250 K');
     const value = display.parse('6500 K');
     expect(value).not.toBeNull();
@@ -70,5 +70,21 @@ describe('Kelvin', () => {
     // Out of range clamps: 60 K reads as the lowest Kelvin there is.
     expect(display.parse('60')).toBe(display.parse('2000'));
     expect(display.parse('900000')).toBe(display.parse('50000'));
+  });
+
+  it('a fitted readout is the scale, whatever the tint', () => {
+    const readout = fittedReadout(scale);
+    expect(readout.kind).toBe('fitted');
+    expect(readout.asShotKelvin).toBe(5263);
+    expect(readout.kelvinFor(37, -50)).toBe(kelvinFor(scale, 37));
+    expect(readout.temperatureFor(6500, 80)).toBe(temperatureForKelvin(scale, 6500));
+    expect(kelvinDisplay(readout, 60).format(25)).toBe(kelvinDisplay(readout, 0).format(25));
+  });
+
+  it('shows the readout at the given tint, for a readout whose Kelvin follows it', () => {
+    const readout = { kind: 'measured' as const, asShotKelvin: 5000, kelvinFor: (t: number, m: number) => 5000 + 10 * t + m, temperatureFor: (k: number, m: number) => (k - 5000 - m) / 10 };
+    expect(kelvinDisplay(readout, 0).format(10)).toBe('5100 K');
+    expect(kelvinDisplay(readout, 50).format(10)).toBe('5150 K');
+    expect(kelvinDisplay(readout, 50).parse('5550')).toBe(50);
   });
 });

@@ -1,7 +1,9 @@
 /**
- * White balance for RAW files (spec 5.4): the camera's presets and the
- * Kelvin scale of the recipe's relative temperature, both from the engine
- * (`rafWhiteBalancePresets`, `rafWhiteBalanceKelvin`), read once per file.
+ * White balance for RAW files (spec 5.4): the presets and the Kelvin
+ * readout of the recipe's relative temperature, both from the RAW
+ * description the engine gives once per file (`whiteBalance`). The recipe's
+ * Temperature and Tint stay relative to as shot for every format; Kelvin
+ * is only how a format with Kelvin shows and takes them (`KelvinReadout`).
  */
 
 export interface WhiteBalancePresetValues {
@@ -28,8 +30,8 @@ function isFiniteNumber(v: unknown): v is number {
  * preset whose slider values are those of one already listed. A preset is
  * stored as its two slider values and the menu names the first preset
  * that matches them, so the second of two equal ones could never be
- * shown as chosen. They do occur: on many Fujifilm bodies the camera's
- * Underwater multipliers are its Daylight ones.
+ * shown as chosen. They do occur: on many bodies the camera's Underwater
+ * multipliers are its Daylight ones.
  */
 export function parsePresets(json: string): WhiteBalancePresetValues[] {
   let raw: unknown;
@@ -38,6 +40,11 @@ export function parsePresets(json: string): WhiteBalancePresetValues[] {
   } catch {
     return [];
   }
+  return readPresets(raw);
+}
+
+/** `parsePresets` of a value already parsed (a RAW description's `whiteBalance.presets`). */
+export function readPresets(raw: unknown): WhiteBalancePresetValues[] {
   if (!Array.isArray(raw)) return [];
   const out: WhiteBalancePresetValues[] = [];
   for (const entry of raw) {
@@ -59,6 +66,11 @@ export function parseKelvinScale(json: string): KelvinScale | null {
   } catch {
     return null;
   }
+  return readKelvinScale(raw);
+}
+
+/** `parseKelvinScale` of a value already parsed (a fitted Kelvin model's fields). */
+export function readKelvinScale(raw: unknown): KelvinScale | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const { miredAtZero, miredPerUnit, asShotKelvin } = raw as Record<string, unknown>;
   if (!isFiniteNumber(miredAtZero) || !isFiniteNumber(miredPerUnit) || !isFiniteNumber(asShotKelvin)) return null;
@@ -81,14 +93,39 @@ export function temperatureForKelvin(scale: KelvinScale, kelvin: number): number
 export const KELVIN_RANGE = { min: 2000, max: 50000 } as const;
 
 /**
- * The Temperature readout in Kelvin, rounded to 50 K; typed Kelvin back to
- * recipe units. Text that is not a positive number gives null, and the
- * field shows the current value again.
+ * How a format with Kelvin shows the recipe's relative Temperature and
+ * takes typed Kelvin back. 'fitted': a line fitted to the body's presets,
+ * which ignores Tint; 'measured': the colour temperature of the white the
+ * file's calibration gives for both sliders.
  */
-export function kelvinDisplay(scale: KelvinScale): { format: (value: number) => string; parse: (text: string) => number | null } {
+export interface KelvinReadout {
+  readonly kind: 'fitted' | 'measured';
+  readonly asShotKelvin: number;
+  /** The Kelvin the recipe's Temperature and Tint mean; null when there is none. */
+  kelvinFor(temperature: number, tint: number): number | null;
+  /** The recipe Temperature (unrounded) whose white reads `kelvin` at the recipe's Tint. */
+  temperatureFor(kelvin: number, tint: number): number;
+}
+
+/** The readout of a fitted Kelvin scale. */
+export function fittedReadout(scale: KelvinScale): KelvinReadout {
+  return {
+    kind: 'fitted',
+    asShotKelvin: scale.asShotKelvin,
+    kelvinFor: (temperature) => kelvinFor(scale, temperature),
+    temperatureFor: (kelvin) => temperatureForKelvin(scale, kelvin),
+  };
+}
+
+/**
+ * The Temperature readout in Kelvin, rounded to 50 K, at the recipe's
+ * `tint`; typed Kelvin back to recipe units. Text that is not a positive
+ * number gives null, and the field shows the current value again.
+ */
+export function kelvinDisplay(readout: KelvinReadout, tint: number): { format: (value: number) => string; parse: (text: string) => number | null } {
   return {
     format: (value) => {
-      const k = kelvinFor(scale, value);
+      const k = readout.kelvinFor(value, tint);
       return k === null ? '—' : `${Math.round(k / 50) * 50} K`;
     },
     parse: (text) => {
@@ -97,7 +134,7 @@ export function kelvinDisplay(scale: KelvinScale): { format: (value: number) => 
       const typed = Number(cleaned);
       if (!(typed > 0)) return null;
       const kelvin = Math.min(KELVIN_RANGE.max, Math.max(KELVIN_RANGE.min, typed));
-      return Math.round(temperatureForKelvin(scale, kelvin));
+      return Math.round(readout.temperatureFor(kelvin, tint));
     },
   };
 }

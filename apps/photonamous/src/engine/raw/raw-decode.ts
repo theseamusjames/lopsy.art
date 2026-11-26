@@ -1,23 +1,24 @@
 /**
- * Parallel RAF decode, ported from lopsy-web's io/raf-decode.ts. One worker
- * runs the whole-frame stage (parse, decompress, white balance); then the
- * frame is cut into row bands that every worker renders (demosaic,
- * denoise, tone, sharpen) concurrently. Bands carry enough overlapping
- * context rows that stitching them is exact (`BAND_HALO_ROWS` in
- * engine/core/src/raf/mod.rs).
+ * Parallel decode of a RAW file of any format, through the engine's RAW
+ * interface. One worker runs the whole-frame stage (`rawPrepare`: parse,
+ * decompress, describe); then the plane is cut into row bands, planned by
+ * the format (`rawPlanBands`), that every worker renders concurrently.
+ * Bands carry enough overlapping context rows that stitching them is
+ * exact, which the engine's tests prove for every format.
  *
  * Workers are spawned per decode and terminated afterwards, which also
  * hands their never-shrinking WASM memory back to the browser. Aborting
  * terminates them at once.
  */
 
-import { rafPlanBands } from '@lopsy/engine-pkg/lopsy_wasm';
+import { rawPlanBands } from '@lopsy/engine-pkg/lopsy_wasm';
 import { wasmUrlFor } from '../engine-files';
 import { rendererName } from '../wasm';
-import { RAF_BANDS_PER_WORKER, rafWorkerCount } from './raw-decode-plan';
-import type { RafBandPixels, RafPrepareMeta, RafWorkerRequest, RafWorkerResponse } from './raw-worker-protocol';
+import { RAW_BANDS_PER_WORKER, rawWorkerCount } from './raw-decode-plan';
+import { parseRawDescription, type RawDescription } from './raw-format';
+import type { RawBandPixels, RawWorkerRequest, RawWorkerResponse } from './raw-worker-protocol';
 
-export interface RafDecodeProgress {
+export interface RawDecodeProgress {
   readonly stage: 'preparing' | 'rendering';
   /** Bands delivered so far, of `bandCount`. */
   readonly bandsDone: number;
@@ -42,9 +43,9 @@ let moduleRenderer: 'webgl' | 'wgpu' = 'webgl';
 /**
  * Compiles the engine module once; workers instantiate it without
  * recompiling. It is the build the page runs (the page's engine has
- * started by the time a RAF is decoded), so the browser fetches one wasm,
- * not both. The workers call only its pure decode functions, which are the
- * same on either build.
+ * started by the time a RAW file is decoded), so the browser fetches one
+ * wasm, not both. The workers call only its pure decode functions, which
+ * are the same on either build.
  */
 function compileWasmModule(): Promise<CompiledEngine> {
   const renderer = rendererName();
@@ -69,17 +70,17 @@ function compileWasmModule(): Promise<CompiledEngine> {
 
 function spawnWorker({ module, renderer }: CompiledEngine): Worker {
   const worker = new Worker(new URL('./raw-worker.ts', import.meta.url), { type: 'module' });
-  const init: RafWorkerRequest = { kind: 'init', module, renderer };
+  const init: RawWorkerRequest = { kind: 'init', module, renderer };
   worker.postMessage(init);
   return worker;
 }
 
 function call(
   worker: Worker,
-  req: RafWorkerRequest,
+  req: RawWorkerRequest,
   transfer: Transferable[],
   signal: AbortSignal | undefined,
-): Promise<RafWorkerResponse> {
+): Promise<RawWorkerResponse> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
       reject(new DecodeAbortedError());
@@ -88,7 +89,7 @@ function call(
     const onAbort = () => reject(new DecodeAbortedError());
     signal?.addEventListener('abort', onAbort, { once: true });
     const done = () => signal?.removeEventListener('abort', onAbort);
-    worker.onmessage = (e: MessageEvent<RafWorkerResponse>) => {
+    worker.onmessage = (e: MessageEvent<RawWorkerResponse>) => {
       done();
       if (e.data.kind === 'error') reject(new Error(e.data.message));
       else resolve(e.data);
@@ -96,28 +97,35 @@ function call(
     worker.onerror = (e) => {
       e.preventDefault();
       done();
-      reject(new Error(e.message || 'RAF decode worker failed'));
+      reject(new Error(e.message || 'RAW decode worker failed'));
     };
     worker.onmessageerror = () => {
       done();
-      reject(new Error('RAF decode worker message could not be read'));
+      reject(new Error('RAW decode worker message could not be read'));
     };
     worker.postMessage(req, transfer);
   });
 }
 
+interface PreparedPlane {
+  readonly format: string;
+  readonly description: RawDescription;
+  readonly paramsJson: string;
+  readonly plane: Float32Array;
+}
+
 async function renderBands(
   workers: Worker[],
-  mosaic: Float32Array,
-  meta: RafPrepareMeta,
-  paramsJson: string,
+  prepared: PreparedPlane,
   linear: boolean,
-  onBand: (band: RafBandPixels, done: number, count: number) => void,
+  onBand: (band: RawBandPixels, done: number, count: number) => void,
   signal: AbortSignal | undefined,
 ): Promise<void> {
-  const plan = rafPlanBands(meta.mosaicHeight, workers.length * RAF_BANDS_PER_WORKER);
+  const { format, description, paramsJson, plane } = prepared;
+  const plan = rawPlanBands(format, paramsJson, workers.length * RAW_BANDS_PER_WORKER);
   const bandCount = plan.length / 4;
-  const w = meta.mosaicWidth;
+  // A plane row holds every sample of each pixel: one for a mosaic, three for linear RGB.
+  const rowLength = description.planeWidth * description.samplesPerPixel;
   let next = 0;
   let done = 0;
 
@@ -125,9 +133,9 @@ async function renderBands(
     while (next < bandCount) {
       const index = next++;
       const [y0 = 0, y1 = 0, srcY0 = 0, srcY1 = 0] = plan.subarray(index * 4, index * 4 + 4);
-      const src = mosaic.slice(srcY0 * w, srcY1 * w);
-      const res = await call(worker, { kind: 'band', index, src, paramsJson, y0, y1, srcY0, srcY1, linear }, [src.buffer], signal);
-      if (res.kind !== 'band') throw new Error(`RAF worker sent ${res.kind} for band ${index}`);
+      const src = plane.slice(srcY0 * rowLength, srcY1 * rowLength);
+      const res = await call(worker, { kind: 'band', index, format, src, paramsJson, y0, y1, srcY0, srcY1, linear }, [src.buffer], signal);
+      if (res.kind !== 'band') throw new Error(`RAW worker sent ${res.kind} for band ${index}`);
       done++;
       onBand(res, done, bandCount);
     }
@@ -136,70 +144,66 @@ async function renderBands(
   await Promise.all(workers.map(drain));
 }
 
-export interface RafPrepared {
-  readonly binned: RafBandPixels | null;
-  readonly developDefaultsJson: string;
+export interface RawPrepared {
+  /** The format's own render parameters, as the engine wrote them. */
+  readonly paramsJson: string;
+  readonly binned: RawBandPixels | null;
   readonly autoWbRatio: [number, number, number] | null;
-  readonly profilesJson: string | null;
 }
 
-export interface RafDecodeOptions {
+export interface RawDecodeOptions {
   readonly signal?: AbortSignal;
-  readonly onProgress?: (progress: RafDecodeProgress) => void;
+  readonly onProgress?: (progress: RawDecodeProgress) => void;
   /** Linear camera RGB for the develop stage rather than the finished look. */
   readonly linear?: boolean;
   /** With `linear`: also bin the whole frame to at least this long edge for a first view. */
   readonly binnedLongEdge?: number;
-  /** Once the frame is prepared, before any band: the binned first view (if asked for) and the develop defaults. */
-  readonly onPrepared?: (meta: RafPrepareMeta, prepared: RafPrepared) => void;
+  /** Once the frame is prepared, before any band: its description, the binned first view (if asked for) and Auto's answer. */
+  readonly onPrepared?: (description: RawDescription, prepared: RawPrepared) => void;
   /** False stops after the prepared frame (and its binned view): no full-size bands. */
   readonly renderBands?: boolean;
 }
 
 /**
- * Decodes a RAF file across a pool of workers. `onBand` receives each
+ * Decodes a RAW file across a pool of workers. `onBand` receives each
  * finished band (already oriented, positioned in the final image) as soon
- * as it is ready, in no particular order. Resolves with the image size
- * once every band has been delivered.
+ * as it is ready, in no particular order. Resolves with the file's
+ * description once every band has been delivered. Without `linear` the
+ * bands are the format's finished look, which only a format whose
+ * description has `finishedBands` renders.
  */
-export async function decodeRafInWorkers(
+export async function decodeRawInWorkers(
   data: Uint8Array,
-  onBand: (meta: RafPrepareMeta, band: RafBandPixels) => void,
-  options: RafDecodeOptions = {},
-): Promise<RafPrepareMeta> {
+  onBand: (description: RawDescription, band: RawBandPixels) => void,
+  options: RawDecodeOptions = {},
+): Promise<RawDescription> {
   const { signal, onProgress, onPrepared } = options;
   const linear = options.linear === true;
   const compiled = await compileWasmModule();
   if (signal?.aborted) throw new DecodeAbortedError();
-  const workers = Array.from({ length: rafWorkerCount(navigator.hardwareConcurrency) }, () => spawnWorker(compiled));
+  const workers = Array.from({ length: rawWorkerCount(navigator.hardwareConcurrency) }, () => spawnWorker(compiled));
   try {
     const [first] = workers;
-    if (!first) throw new Error('No RAF decode workers');
+    if (!first) throw new Error('No RAW decode workers');
     onProgress?.({ stage: 'preparing', bandsDone: 0, bandCount: 0 });
     const binnedLongEdge = linear && options.binnedLongEdge ? options.binnedLongEdge : null;
     const prepared = await call(first, { kind: 'prepare', data, binnedLongEdge }, [], signal);
-    if (prepared.kind !== 'prepared') throw new Error(`RAF worker sent ${prepared.kind} instead of the prepared frame`);
-    const meta = JSON.parse(prepared.metaJson) as RafPrepareMeta;
-    onPrepared?.(meta, {
-      binned: prepared.binned,
-      developDefaultsJson: prepared.developDefaultsJson,
-      autoWbRatio: prepared.autoWbRatio,
-      profilesJson: prepared.profilesJson,
-    });
-    if (options.renderBands === false) return meta;
+    if (prepared.kind !== 'prepared') throw new Error(`RAW worker sent ${prepared.kind} instead of the prepared frame`);
+    const description = parseRawDescription(prepared.describeJson);
+    onPrepared?.(description, { paramsJson: prepared.paramsJson, binned: prepared.binned, autoWbRatio: prepared.autoWbRatio });
+    if (options.renderBands === false) return description;
+    if (!linear && !description.finishedBands) throw new Error(`${prepared.format.toUpperCase()} has no finished look in bands`);
     await renderBands(
       workers,
-      prepared.mosaic,
-      meta,
-      prepared.paramsJson,
+      { format: prepared.format, description, paramsJson: prepared.paramsJson, plane: prepared.plane },
       linear,
       (band, done, count) => {
-        onBand(meta, band);
+        onBand(description, band);
         onProgress?.({ stage: 'rendering', bandsDone: done, bandCount: count });
       },
       signal,
     );
-    return meta;
+    return description;
   } finally {
     for (const worker of workers) worker.terminate();
   }

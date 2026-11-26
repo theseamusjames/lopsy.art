@@ -9,8 +9,8 @@
  * builds ignore it: there the GPU alone decides.
  *
  * `?develop=no-float` goes further: the app also treats the GPU as having
- * no float targets, so a RAF decodes to the finished look in bands and is
- * edited as an ordinary photo, as on such a GPU (the texture pool is still
+ * no float targets, so a RAW photo decodes to its finished look (in bands
+ * where its format has them) and is edited as an ordinary photo, as on such a GPU (the texture pool is still
  * the GPU's). Every GPU the browser tests run on has float targets; this
  * is how they reach that path (e2e/raw-parity.spec.ts).
  */

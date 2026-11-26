@@ -1,7 +1,8 @@
 /**
- * The Profile menu (spec 5.4). RAW files list the engine's profiles
- * (`rafDevelopProfiles`: the camera's look, the Fujifilm looks, Neutral,
- * Monochrome); without them, the camera's look, Neutral and Monochrome.
+ * The Profile menu (spec 5.4). RAW files list the engine's profiles (the
+ * RAW description's `profiles`: the camera's look, the format's own looks
+ * where it has some, Neutral, Monochrome); without them, the camera's
+ * look, Neutral and Monochrome.
  * JPEG, PNG and WebP offer Standard and Monochrome only (spec 5.4).
  *
  * The recipe's default profile id is 'standard'. On a RAW file that is the
@@ -81,6 +82,11 @@ export function parseDevelopProfiles(json: string): DevelopProfile[] {
   } catch {
     return [];
   }
+  return readDevelopProfiles(raw);
+}
+
+/** `parseDevelopProfiles` of a value already parsed (a RAW description's `profiles`). */
+export function readDevelopProfiles(raw: unknown): DevelopProfile[] {
   const list = Array.isArray(raw) ? raw : typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>).profiles : null;
   if (!Array.isArray(list)) return [];
   const seen = new Set<string>();
