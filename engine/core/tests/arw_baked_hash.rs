@@ -1,7 +1,7 @@
 //! ARW files from bodies without measured colour data must decode exactly
 //! as before the per-camera colour table: each one's baked decode and
 //! prepared linear plane (with its parameters and develop defaults) are
-//! hashed and compared with the hashes recorded at commit f69556963.
+//! hashed and compared with recorded hashes (see `EXPECTED`).
 //!
 //! Needs `LOPSY_ARW_SAMPLES`; without it the test notes that and passes.
 //! Slow in a debug build: run with `--release`. `LOPSY_ARW_HASH_PRINT=1`
@@ -53,10 +53,12 @@ fn linear_hash(data: &[u8]) -> u64 {
     h.0
 }
 
-/// (file, baked decode, linear plane and defaults) at commit f69556963.
+/// (file, baked decode, linear plane and defaults). The linear hashes are
+/// those of commit f69556963; the baked ones were re-recorded on purpose
+/// when the baked decode came to match the camera's preview exposure.
 const EXPECTED: [(&str, u64, u64); 2] = [
-    ("DSC-RX100M3_DSC00734.ARW", 0x3d7cf695a984029a, 0x96bae85696e4dd5c),
-    ("ILCE-6000_DSC01542.ARW", 0x93a49871d0422267, 0xad262ad041aec277),
+    ("DSC-RX100M3_DSC00734.ARW", 0x3d9c13851f1278b8, 0x96bae85696e4dd5c),
+    ("ILCE-6000_DSC01542.ARW", 0x97d76256e9440edd, 0xad262ad041aec277),
 ];
 
 #[test]

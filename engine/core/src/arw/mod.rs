@@ -102,10 +102,12 @@
 //!   `bake_colour` (the matrix) and `bake_finish` (the engine's neutral
 //!   base curve where a DNG's profile tone curve goes, as the RAW develop
 //!   defaults use it; sRGB, auto-levels, orientation), to the same sRGB f32
-//!   RGBA `DngImage` `read_dng` gives. The curve is close to the identity
-//!   (18 % grey to 19.5 %), so the picture stays darker than the camera's
-//!   JPEG, which also lifts the exposure: an ARW records no baseline
-//!   exposure.
+//!   RGBA `DngImage` `read_dng` gives. An ARW records no baseline
+//!   exposure, so with the camera's embedded preview in the file the baked
+//!   decode instead matches the preview's median brightness, rolls its
+//!   highlights off with the output step's roll-off and leaves auto-levels
+//!   out ([`exposure`], [`bake_matched`]); without a usable preview it is as
+//!   above ([`bake_prepared`]).
 //!
 //! ## What is not applied
 //!
@@ -121,6 +123,7 @@
 
 pub mod colour;
 pub mod colour_table;
+pub mod exposure;
 pub mod linear;
 pub mod lossless;
 pub mod lossy;
@@ -576,19 +579,74 @@ pub struct ArwImage {
     pub camera_model: String,
     /// Corrections the file records that the decode does not apply.
     pub not_applied: Vec<String>,
+    /// The exposure applied to match the camera's preview, in stops (0
+    /// when the file has no usable preview).
+    pub exposure_ev: f32,
 }
 
 /// The baked decode: a Sony raw to sRGB f32 RGBA, upright and cropped,
 /// through the DNG baked decode's steps (bilinear demosaic, the camera
 /// matrix, the sRGB transfer, auto-levels, orientation).
 pub fn read_arw(data: &[u8]) -> Result<ArwImage, String> {
-    bake_prepared(linear::prepare_arw(data)?, 0.0)
+    let prep = linear::prepare_arw(data)?;
+    let (ow, oh) = prep.params.oriented_size();
+    match exposure::whole_picture_preview(data, f64::from(ow) / f64::from(oh)) {
+        Some(preview) => bake_matched(prep, &preview),
+        None => bake_prepared(prep, 0.0),
+    }
 }
 
-/// [`read_arw`] of an already prepared ARW, with an exposure of
-/// `exposure_ev` stops added before the colour and tone steps (0 for the
-/// decode as it ships; other values are for experiments on the default
-/// exposure).
+/// The baked decode with its exposure matched to the camera's preview
+/// (`exposure`): the clip of every channel at the lowest clip level, the
+/// camera matrix, the exposure found on a small copy, the output step's
+/// highlight roll-off, the neutral base curve and the sRGB transfer, with
+/// no auto-levels.
+pub fn bake_matched(prep: linear::ArwPrepared, preview: &exposure::Preview) -> Result<ArwImage, String> {
+    let linear::ArwPrepared { params, mut plane, unhandled, mut debug_log } = prep;
+    for v in plane.iter_mut() {
+        *v = v.max(0.0);
+    }
+    let mut rgb = crate::dng::demosaic::bilinear(&plane, params.width, params.height, &params.cfa);
+    drop(plane);
+    // A clipped channel carries its white-balance gain; clipped at the
+    // lowest clip level, a clipped highlight is white before the matrix.
+    let clip = params.as_shot_gain.iter().copied().fold(1.0f32, f32::min);
+    for v in rgb.iter_mut() {
+        *v = v.min(clip);
+    }
+    let ci = crate::dng::centre_index(params.width, params.height);
+    crate::dng::bake_colour(&mut rgb, None, Some(&params.cam_to_rgb), None, &mut debug_log, ci);
+    let curve = crate::raf::base_curves::curve_lut(&crate::raf::base_curves::NEUTRAL);
+    let (sw, sh, small) = exposure::downscale(&rgb, params.width as usize, params.height as usize, (preview.width * preview.height) as usize);
+    let ev = exposure::match_exposure(&small, preview.median, &curve);
+    let gain = ev.exp2();
+    let roll = exposure::rolloff_for(gain, exposure::median_luminance(&small));
+    drop(small);
+    for px in rgb.chunks_exact_mut(3) {
+        let c = exposure::render_pixel([px[0], px[1], px[2]], gain, roll);
+        px.copy_from_slice(&c);
+    }
+    debug_log.push(format!(
+        "[ARW] exposure {ev:+.3} EV to the camera's {}×{} preview (median {:.3}, matched on {sw}×{sh}), roll-off (knee, peak) {roll:?}",
+        preview.width, preview.height, preview.median
+    ));
+    let last = (curve.len() - 1) as f64;
+    let tone_curve: Vec<(f64, f64)> = curve.iter().enumerate().map(|(i, &y)| (i as f64 / last, f64::from(y))).collect();
+    let (width, height, pixels) = crate::dng::bake_finish(rgb, params.width, params.height, &tone_curve, params.orientation, false, &mut debug_log)?;
+    Ok(ArwImage {
+        image: DngImage { width, height, pixels, baseline_exposure: 0.0, tone_curve: Vec::new(), debug_log },
+        colour: params.colour,
+        camera_model: params.camera_model,
+        not_applied: unhandled,
+        exposure_ev: ev,
+    })
+}
+
+/// The baked decode of an ARW without a usable preview: the decode as it
+/// was before exposure matching (the measured bodies' clip, the matrix,
+/// the neutral base curve, sRGB, auto-levels), with `exposure_ev` stops
+/// added before the colour steps (0 as shipped; other values are for
+/// experiments).
 pub fn bake_prepared(prep: linear::ArwPrepared, exposure_ev: f32) -> Result<ArwImage, String> {
     let linear::ArwPrepared { params, mut plane, unhandled, mut debug_log } = prep;
     // The baked decode starts from black, as `read_dng`'s normalization
@@ -624,11 +682,12 @@ pub fn bake_prepared(prep: linear::ArwPrepared, exposure_ev: f32) -> Result<ArwI
     let base = crate::raf::base_curves::curve_lut(&crate::raf::base_curves::NEUTRAL);
     let last = (base.len() - 1) as f64;
     let tone_curve: Vec<(f64, f64)> = base.iter().enumerate().map(|(i, &y)| (i as f64 / last, f64::from(y))).collect();
-    let (width, height, pixels) = crate::dng::bake_finish(rgb, params.width, params.height, &tone_curve, params.orientation, &mut debug_log)?;
+    let (width, height, pixels) = crate::dng::bake_finish(rgb, params.width, params.height, &tone_curve, params.orientation, true, &mut debug_log)?;
     Ok(ArwImage {
         image: DngImage { width, height, pixels, baseline_exposure: 0.0, tone_curve: Vec::new(), debug_log },
         colour: params.colour,
         camera_model: params.camera_model,
         not_applied: unhandled,
+        exposure_ev: 0.0,
     })
 }

@@ -626,7 +626,7 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     let orientation = get_tag_u16(&ifd0, TagId::Orientation)
         .or_else(|_| get_tag_u16(&main_ifd, TagId::Orientation))
         .unwrap_or(1);
-    let (out_w, out_h, rgba) = bake_finish(rgb_f32, width, height, &tone_curve, orientation, &mut debug_log)?;
+    let (out_w, out_h, rgba) = bake_finish(rgb_f32, width, height, &tone_curve, orientation, true, &mut debug_log)?;
 
     Ok(DngImage {
         width: out_w,
@@ -686,7 +686,8 @@ pub(crate) fn bake_colour(
 
 /// The baked decode's last steps on linear sRGB (interleaved, 3 values a
 /// pixel): the tone curve (when it has two points or more), the sRGB
-/// transfer, the auto-levels stretch, alpha, and the EXIF orientation so
+/// transfer, the auto-levels stretch (when `auto_levels`; else a clamp to
+/// 0..1), alpha, and the EXIF orientation so
 /// the image loads upright (orientations 5..=8 swap width and height).
 /// Returns the oriented `(width, height, RGBA f32)`. Shared by `read_dng`
 /// and `arw::read_arw`.
@@ -696,6 +697,7 @@ pub(crate) fn bake_finish(
     height: u32,
     tone_curve: &[(f64, f64)],
     orientation: u16,
+    auto_levels: bool,
     debug_log: &mut Vec<String>,
 ) -> Result<(u32, u32, Vec<f32>), String> {
     let ci = centre_index(width, height);
@@ -721,10 +723,19 @@ pub(crate) fn bake_finish(
     // black/white point from luminance percentiles and stretch all channels by
     // the same amount (preserving white balance, like a composite-RGB Levels
     // move). This is adaptive normalization, not a fixed creative curve.
-    let (bp, wp) = auto_levels_points(&rgb_f32, AUTO_LEVELS_BLACK_CLIP, AUTO_LEVELS_WHITE_CLIP);
-    debug_log.push(format!("[DNG step] auto-levels: black={:.4} white={:.4} (clip {:.2}%/{:.2}%)",
-        bp, wp, AUTO_LEVELS_BLACK_CLIP * 100.0, AUTO_LEVELS_WHITE_CLIP * 100.0));
-    if wp - bp > 0.05 {
+    // Without it (`auto_levels` false: a decode that has already set its
+    // brightness), values are only clamped to 0..1.
+    if !auto_levels {
+        for v in &mut rgb_f32 {
+            *v = v.clamp(0.0, 1.0);
+        }
+    }
+    let (bp, wp) = if auto_levels { auto_levels_points(&rgb_f32, AUTO_LEVELS_BLACK_CLIP, AUTO_LEVELS_WHITE_CLIP) } else { (0.0, 1.0) };
+    if auto_levels {
+        debug_log.push(format!("[DNG step] auto-levels: black={:.4} white={:.4} (clip {:.2}%/{:.2}%)",
+            bp, wp, AUTO_LEVELS_BLACK_CLIP * 100.0, AUTO_LEVELS_WHITE_CLIP * 100.0));
+    }
+    if auto_levels && wp - bp > 0.05 {
         let scale = 1.0 / (wp - bp);
         for v in &mut rgb_f32 {
             *v = (((*v as f64 - bp) * scale).clamp(0.0, 1.0)) as f32;

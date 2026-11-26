@@ -111,7 +111,9 @@ pub fn prepare_arw(data: &[u8]) -> Result<ArwPrepared, String> {
 
 /// The develop settings an ARW opens with: the as-shot white balance
 /// (`wbRatio` 1), the file's matrix, no baseline exposure (an ARW records
-/// none), no extra saturation, and the engine's neutral base curve.
+/// none), no extra saturation, and the engine's neutral base curve. The
+/// exposure stays 0 here for now: the baked decode matches the camera's
+/// preview (`arw::exposure`), this path does not yet.
 pub fn develop_defaults(params: &ArwRenderParams) -> RawDevelopSettings {
     RawDevelopSettings {
         wb_ratio: [1.0, 1.0, 1.0],
