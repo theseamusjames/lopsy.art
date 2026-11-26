@@ -478,7 +478,7 @@ fn apply_gain_table_map(
     calibration: &DngCalibration,
     clip: [f32; 3],
     debug_log: &mut Vec<String>,
-) -> Result<[f32; 3], String> {
+) -> Result<Option<[f32; 3]>, String> {
     let refused = |why: String| format!("ProfileGainTableMap (local tone map; refused: {why})");
     let map = super::gain_map::parse(raw, big_endian).map_err(refused)?;
     let to_rimm = super::gain_map::camera_to_rimm(calibration, calibration.baseline_exposure)
@@ -628,7 +628,7 @@ pub fn prepare_dng_with(data: &[u8], options: PrepareOptions) -> Result<DngPrepa
 
     // The gain table map, on the prepared plane in place, so every band
     // and the binned view see it alike (`dng::gain_map`).
-    let mut clip_levels = gain;
+    let mut clip_levels = Some(gain);
     let mut map_applied = false;
     let map_entry = main.iter().chain(ifd0.iter()).find(|e| e.tag == TagId::ProfileGainTableMap as u16);
     if let (Some(entry), true) = (map_entry, options.apply_gain_table_map) {
@@ -690,7 +690,7 @@ pub fn prepare_dng_with(data: &[u8], options: PrepareOptions) -> Result<DngPrepa
         orientation,
         white_level,
         as_shot_gain: gain,
-        clip_levels: Some(clip_levels),
+        clip_levels,
         calibration,
         camera_model,
         highlight_chroma: None,
