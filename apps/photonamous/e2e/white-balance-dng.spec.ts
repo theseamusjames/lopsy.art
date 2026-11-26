@@ -9,7 +9,8 @@ import { harnessSteps, openHarness, temperatureKelvin, waitForReady } from './ha
  * own calibration, read for both sliders; typed Kelvin back to the
  * recipe's relative units; the CIE illuminant presets; Auto and the
  * picker. Samples: LOPSY_DNG_ADOBE_SAMPLES (5D Mark III DNGs from
- * raw.pixls.us) and LOPSY_DNG_SAMPLES (iPhone ProRAW).
+ * raw.pixls.us, lossless and lossy JPEG) and LOPSY_DNG_SAMPLES (iPhone
+ * ProRAW).
  */
 const adobe = process.env.LOPSY_DNG_ADOBE_SAMPLES;
 const proraw = process.env.LOPSY_DNG_SAMPLES;
@@ -24,6 +25,9 @@ function sample(dir: string | undefined, name: string): string | null {
 const DNGS: readonly { readonly name: string; readonly path: string | null; readonly asShotKelvin: number }[] = [
   { name: '5D3 mosaic', path: sample(adobe, '5D3-adobe-lossless.dng'), asShotKelvin: 3753.69 },
   { name: '5D3 linear RGB', path: sample(adobe, '5D3-adobe-lossless-rgb.dng'), asShotKelvin: 3699.15 },
+  // The lossy JPEG conversions carry their lossless siblings' calibration and as-shot white.
+  { name: '5D3 lossy', path: sample(adobe, '5D3-adobe-lossy.dng'), asShotKelvin: 3753.69 },
+  { name: '5D3 lossy RGB', path: sample(adobe, '5D3-adobe-lossy-rgb.dng'), asShotKelvin: 3699.15 },
   { name: 'ProRAW 00', path: sample(proraw, 'sample_dng_00.dng'), asShotKelvin: 6164.8 },
   { name: 'ProRAW 01', path: sample(proraw, 'sample_dng_01.dng'), asShotKelvin: 2749.04 },
 ];

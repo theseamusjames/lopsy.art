@@ -5,7 +5,8 @@
  * image); `<stem>-edit-view.png`, the whole window; and
  * `<stem>-full-centre.png`, the canvas at 100 % (Full) on the middle of the
  * full-size picture, where the full-size bands meet. A file the app
- * refuses (the lossy DNGs) is captured with the Edit view saying why.
+ * refuses would be captured with the Edit view saying why (`isRefused`;
+ * none of today's samples is).
  * `<stem>-menus.txt` lists what the Profile and White balance menus offer
  * and what Temperature reads (a native menu cannot be captured open), and
  * a file with more than one look to open with (a ProRAW: Camera and
@@ -48,8 +49,8 @@ const SAMPLES: readonly Sample[] = [
   { dir: adobe, name: '5D3-adobe-uncompressed.dng' },
   { dir: adobe, name: '5D3-adobe-lossless-rgb.dng' },
   { dir: adobe, name: '5D3-adobe-uncompressed-rgb.dng' },
-  { dir: adobe, name: '5D3-adobe-lossy.dng', isRefused: true },
-  { dir: adobe, name: '5D3-adobe-lossy-rgb.dng', isRefused: true },
+  { dir: adobe, name: '5D3-adobe-lossy.dng' },
+  { dir: adobe, name: '5D3-adobe-lossy-rgb.dng' },
   { dir: proraw, name: 'sample_dng_00.dng' },
   { dir: proraw, name: 'sample_dng_01.dng' },
   { dir: raf, name: 'DSCF8078.RAF' },

@@ -10,8 +10,8 @@ import { lastExportSize, loadFullResolution, waitForReady } from './harness';
  * asked for, and the photo is edited as RAW (its profile list, Kelvin).
  * Samples, not in the repository: LOPSY_DNG_ADOBE_SAMPLES (raw.pixls.us,
  * Canon 5D Mark III converted by Adobe: a mosaic, a linear RGB one, and
- * lossy ones the RAW path refuses) and LOPSY_DNG_SAMPLES (sample_dng_00
- * and 01, iPhone ProRAW).
+ * the two lossy JPEG ones, which are linear RGB in 8-bit JPEG tiles) and
+ * LOPSY_DNG_SAMPLES (sample_dng_00 and 01, iPhone ProRAW).
  *
  * Brightness is not asserted: the default look of these formats is being
  * decided.
@@ -42,6 +42,8 @@ const DNGS: readonly {
 }[] = [
   { name: '5D3 mosaic', path: sample(adobe, '5D3-adobe-lossless.dng'), width: 5760, height: 3840, isWorkingSmaller: true, profiles: ['Standard', 'Neutral', 'Monochrome'] },
   { name: '5D3 linear RGB', path: sample(adobe, '5D3-adobe-lossless-rgb.dng'), width: 3960, height: 2640, isWorkingSmaller: false, profiles: ['Standard', 'Neutral', 'Monochrome'] },
+  { name: '5D3 lossy', path: sample(adobe, '5D3-adobe-lossy.dng'), width: 5760, height: 3840, isWorkingSmaller: true, profiles: ['Standard', 'Neutral', 'Monochrome'] },
+  { name: '5D3 lossy RGB', path: sample(adobe, '5D3-adobe-lossy-rgb.dng'), width: 3960, height: 2640, isWorkingSmaller: false, profiles: ['Standard', 'Neutral', 'Monochrome'] },
   { name: 'ProRAW 00', path: sample(proraw, 'sample_dng_00.dng'), width: 3024, height: 4032, isWorkingSmaller: false, profiles: ['Camera', 'Standard', 'Neutral', 'Monochrome'] },
   { name: 'ProRAW 01', path: sample(proraw, 'sample_dng_01.dng'), width: 4032, height: 3024, isWorkingSmaller: false, profiles: ['Camera', 'Standard', 'Neutral', 'Monochrome'] },
 ];
@@ -138,16 +140,6 @@ test.describe('DNG on the RAW path', () => {
       await expect.poll(() => sentExposure(page)).toBeCloseTo(proraw.standard + 0.5, 2);
     });
   }
-
-  test('a lossy DNG, which the RAW path cannot prepare, says why as it did before', async ({ page }) => {
-    const lossy = sample(adobe, '5D3-adobe-lossy.dng');
-    test.skip(!lossy, 'Set LOPSY_DNG_ADOBE_SAMPLES to the DNG samples to run this test');
-    await open(page, lossy ?? '');
-    // The baked decode is tried in its place, and its refusal is what the person reads.
-    const alert = page.getByRole('alert');
-    await expect(alert).toContainText('This photo could not be opened', { timeout: 120_000 });
-    await expect(alert).toContainText('This DNG uses lossy JPEG compression, which is not supported yet');
-  });
 
   test('without float targets a DNG opens with the baked decode and is edited as an ordinary photo, at the same size', async ({ page }) => {
     const [mosaic, , prorawFile] = DNGS;
