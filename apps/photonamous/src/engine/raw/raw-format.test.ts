@@ -159,17 +159,13 @@ describe('RAW_PATH_FORMATS and finished bands', () => {
     expect([...RAW_PATH_FORMATS].sort()).toEqual(['arw', 'dng', 'raf']);
   });
 
-  it('opens a RAW file through the RAW interface, or baked when the version says so or the GPU cannot', () => {
-    for (const format of ['raf', 'dng', 'arw'] as const) {
-      expect(rawLoadPath(format, { rawDevelop: true, hasFloat: true })).toBe('raw');
-      expect(rawLoadPath(format, { rawDevelop: false, hasFloat: true })).toBe('baked');
-      expect(rawLoadPath(format, { rawDevelop: false, hasFloat: false })).toBe('baked');
-    }
+  it('opens every RAW file through the RAW interface, or baked where the GPU cannot render it', () => {
+    for (const format of ['raf', 'dng', 'arw'] as const) expect(rawLoadPath(format, true)).toBe('raw');
     // Without float targets: RAF renders its finished look in bands; DNG and ARW take the baked decode.
-    expect(rawLoadPath('raf', { rawDevelop: true, hasFloat: false })).toBe('raw');
-    expect(rawLoadPath('dng', { rawDevelop: true, hasFloat: false })).toBe('baked');
-    expect(rawLoadPath('arw', { rawDevelop: true, hasFloat: false })).toBe('baked');
-    for (const format of ['jpeg', 'png', 'webp'] as const) expect(rawLoadPath(format, { rawDevelop: false, hasFloat: true })).toBe('image');
+    expect(rawLoadPath('raf', false)).toBe('raw');
+    expect(rawLoadPath('dng', false)).toBe('baked');
+    expect(rawLoadPath('arw', false)).toBe('baked');
+    for (const format of ['jpeg', 'png', 'webp'] as const) expect(rawLoadPath(format, true)).toBe('image');
   });
 
   it('knows before preparing which formats render their finished look in bands', () => {

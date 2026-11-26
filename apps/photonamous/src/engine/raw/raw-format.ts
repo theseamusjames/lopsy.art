@@ -36,14 +36,14 @@ export function formatHasFinishedBands(format: string): boolean {
 
 /**
  * How a photo in `format` opens: 'raw', through the RAW interface; 'baked',
- * as the finished picture the engine's baked decode makes (the version
- * says so with `rawDevelop` false, or the GPU has no float targets and the
- * format has no finished look in bands); 'image', any other photo.
+ * as the finished picture the engine's baked decode makes, where the GPU
+ * has no float targets and the format has no finished look in bands;
+ * 'image', any other photo. (A file the RAW interface cannot prepare also
+ * falls back to the baked decode, once it has tried.)
  */
-export function rawLoadPath(format: ImageFormat, options: { readonly rawDevelop: boolean; readonly hasFloat: boolean }): 'raw' | 'baked' | 'image' {
+export function rawLoadPath(format: ImageFormat, hasFloat: boolean): 'raw' | 'baked' | 'image' {
   if (!RAW_PATH_FORMATS.has(format)) return 'image';
-  if (!options.rawDevelop) return 'baked';
-  return options.hasFloat || formatHasFinishedBands(format) ? 'raw' : 'baked';
+  return hasFloat || formatHasFinishedBands(format) ? 'raw' : 'baked';
 }
 
 /** Where Kelvin comes from, if anywhere. */

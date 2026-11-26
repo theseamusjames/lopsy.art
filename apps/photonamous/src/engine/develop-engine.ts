@@ -215,13 +215,6 @@ export interface LoadOptions {
    * 'full': the full-size image straight away, as exports want.
    */
   readonly resolution?: 'working' | 'full';
-  /**
-   * False opens a RAW file as the finished picture the engine's baked
-   * decode makes of it, edited as an ordinary photo, in place of the RAW
-   * develop step. The caller takes it from the version being shown
-   * (photos-core's `developsAsRaw`). True when omitted.
-   */
-  readonly rawDevelop?: boolean;
 }
 
 export interface ExportOptions {
@@ -839,7 +832,7 @@ class PhotoEngine implements DevelopEngine {
       this.loaded = { source, format };
       this.fullSize = null;
       const mode = options.resolution === 'full' ? 'full' : 'working';
-      const size = await this.decode(source, format, abort.signal, report, mode, options.rawDevelop !== false);
+      const size = await this.decode(source, format, abort.signal, report, mode);
       if (abort.signal.aborted || this.isDisposed) throw new DecodeAbortedError();
       if (!this.fullSize) this.fullSize = size;
       return size;
@@ -887,13 +880,12 @@ class PhotoEngine implements DevelopEngine {
     signal: AbortSignal,
     report: (stage: LoadProgress['stage'], fraction: number | null) => void,
     mode: 'working' | 'full',
-    rawDevelop: boolean,
   ): Promise<Size> {
     if (source.type === LOPSY_LAYER_MIME) return this.showImage(await this.decodeLopsyLayer(source, signal, report));
     // Photos sit on opaque black; only a Lopsy layer keeps its transparency.
     setBackgroundColor(this.engine, 0, 0, 0, 1);
     // Decided before any worker starts: without float targets a format with no finished look in bands opens baked.
-    const path = rawLoadPath(format, { rawDevelop, hasFloat: this.hasFloat });
+    const path = rawLoadPath(format, this.hasFloat);
     if (path === 'baked') return this.decodeBaked(new Uint8Array(await source.arrayBuffer()), signal, report);
     if (path === 'raw') return this.decodeRaw(source, signal, report, mode);
     if (format === 'png' && mode === 'full') {
