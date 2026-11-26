@@ -12,18 +12,13 @@
  * (vite.config.ts) does not stand in for it.
  */
 
-import type { RafRenderedBand } from '@lopsy/engine-pkg/lopsy_wasm.js';
+import type { RawRenderedBand } from '@lopsy/engine-pkg/lopsy_wasm.js';
 import type { RawBandPixels, RawWorkerRequest, RawWorkerResponse } from './raw-worker-protocol';
 
-/**
- * What this worker calls: the same on both builds, unlike the glue's
- * engine exports. The grey-world white balance is the engine's one export
- * for it, `rafAutoWhiteBalanceClipped`, which measures linear camera RGB
- * of any format despite its name.
- */
+/** What this worker calls: the same on both builds, unlike the glue's engine exports. */
 type Glue = Pick<
   typeof import('@lopsy/engine-pkg/lopsy_wasm.js'),
-  'rafAutoWhiteBalanceClipped' | 'rawPrepare' | 'rawRenderFinishedBand' | 'rawRenderLinearBand'
+  'rawAutoWhiteBalance' | 'rawPrepare' | 'rawRenderFinishedBand' | 'rawRenderLinearBand'
 > & { initSync(module: { module: WebAssembly.Module }): unknown };
 
 let glue: Promise<Glue> | null = null;
@@ -40,7 +35,7 @@ function reply(message: RawWorkerResponse, transfer: Transferable[] = []): void 
   self.postMessage(message, transfer);
 }
 
-function takeBand(band: RafRenderedBand): RawBandPixels {
+function takeBand(band: RawRenderedBand): RawBandPixels {
   try {
     return { x: band.x, y: band.y, width: band.width, height: band.height, pixels: band.takePixels() };
   } finally {
@@ -63,7 +58,7 @@ function clipLevelsOf(describeJson: string): Float32Array {
  */
 function autoWbRatio(wasm: Glue, binned: RawBandPixels | null, describeJson: string): [number, number, number] | null {
   if (!binned) return null;
-  const [r = 1, g = 1, b = 1] = wasm.rafAutoWhiteBalanceClipped(binned.pixels, clipLevelsOf(describeJson));
+  const [r = 1, g = 1, b = 1] = wasm.rawAutoWhiteBalance(binned.pixels, clipLevelsOf(describeJson));
   return [r, g, b];
 }
 
