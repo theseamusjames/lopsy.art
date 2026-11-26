@@ -1,6 +1,7 @@
 //! White balance in recipe units (`lopsy_core::raw::white_balance`) on real
 //! calibrated files: the DNGs (`LOPSY_DNG_SAMPLES`,
-//! `LOPSY_DNG_ADOBE_SAMPLES`) and the Sony ARWs (`LOPSY_ARW_SAMPLES`).
+//! `LOPSY_DNG_ADOBE_SAMPLES`, `LOPSY_DNG_CAMERA_SAMPLES`) and the Sony
+//! ARWs (`LOPSY_ARW_SAMPLES`).
 //!
 //! - As shot, (0, 0), reads the description's as-shot Kelvin exactly.
 //! - A typed 3000, 5500 and 8000 K (at the recipe's Tint 0 and 25) reads
@@ -21,7 +22,7 @@ use lopsy_core::raw::{self, KelvinModel, MatrixModel, RawFormatId};
 
 fn files() -> Vec<PathBuf> {
     let mut out = Vec::new();
-    for (var, ext) in [("LOPSY_DNG_SAMPLES", "dng"), ("LOPSY_DNG_ADOBE_SAMPLES", "dng"), ("LOPSY_ARW_SAMPLES", "arw")] {
+    for (var, ext) in [("LOPSY_DNG_SAMPLES", "dng"), ("LOPSY_DNG_ADOBE_SAMPLES", "dng"), ("LOPSY_DNG_CAMERA_SAMPLES", "dng"), ("LOPSY_ARW_SAMPLES", "arw")] {
         let Some(dir) = std::env::var_os(var) else { continue };
         let mut v: Vec<PathBuf> = std::fs::read_dir(dir).map(|r| r.flatten().map(|e| e.path()).collect()).unwrap_or_default();
         v.retain(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case(ext)) && !p.to_string_lossy().contains("lossy"));

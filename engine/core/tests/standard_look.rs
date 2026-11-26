@@ -3,8 +3,9 @@
 //! `LOPSY_STANDARD_LOOK_DIR` is set, the contact sheets the owner chooses a
 //! default from. `--release`; the sample variables as the other real-file
 //! tests take them (`LOPSY_ARW_SAMPLES`, `LOPSY_DNG_SAMPLES`,
-//! `LOPSY_DNG_ADOBE_SAMPLES`, `LOPSY_RAF_SAMPLES`); a missing one skips its
-//! files.
+//! `LOPSY_DNG_ADOBE_SAMPLES`, `LOPSY_RAF_SAMPLES`, and
+//! `LOPSY_DNG_CAMERA_SAMPLES`, every DNG of which gets a sheet); a missing
+//! one skips its files.
 //!
 //! Every developed panel is the RAW interface's develop defaults
 //! (`raw::prepare_with` and the opening look) through the develop chain's
@@ -190,8 +191,12 @@ fn sheet_for(path: &Path, preview_label: &str, preview_match: bool, out: &Path, 
     let today = before(&data);
     let mut panels = vec![render_panel("before (neutral)", &today, &today.description.develop_defaults)];
     let width = panels[0].pic.w;
-    let preview = preview_panel(&format!("preview: {preview_label}"), &data, &today, width).expect("an embedded preview");
-    panels.insert(0, preview);
+    // A file with no JPEG preview (the Leica M9's is uncompressed RGB)
+    // gets a sheet of its renders alone.
+    match preview_panel(&format!("preview: {preview_label}"), &data, &today, width) {
+        Some(preview) => panels.insert(0, preview),
+        None => println!("{name}: no embedded JPEG preview"),
+    }
     for (label, look) in looks(preview_match) {
         let prep = raw::prepare_with(&data, &look).unwrap();
         panels.push(render_panel(&label, &prep, &prep.description.develop_defaults));
@@ -257,6 +262,10 @@ fn contact_sheets_of_the_standard_candidates() {
         if let Some(p) = sample("LOPSY_RAF_SAMPLES", f) {
             raf_sheet(&p, &out, &mut table);
         }
+    }
+    // Every DNG of a folder of camera-written ones (`LOPSY_DNG_CAMERA_SAMPLES`).
+    for p in files("LOPSY_DNG_CAMERA_SAMPLES", "dng") {
+        sheet_for(&p, "camera", false, &out, &mut table);
     }
     std::fs::write(out.join("numbers.md"), table.join("\n") + "\n").unwrap();
 }
