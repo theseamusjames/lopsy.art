@@ -162,6 +162,18 @@ fn real_arws_decode_and_match_the_cameras_rendering() {
             sips.as_ref().map_or("-".into(), |s| fmt(brightness(s))),
             fmt(brightness(&developed)),
         );
+        // The default develop's colour (no auto-levels stretch to move the
+        // dark cells' chromaticity) against both references.
+        let g_dev = developed.resample(2000).grid(gx, gy);
+        for (what, reference) in [("JPEG", Some(&jpeg2000)), ("sips", sips.as_ref())] {
+            if let Some(r) = reference {
+                let st = compare(&g_dev, &r.grid(gx, gy));
+                println!(
+                    "  {name}: linear develop vs {what}: hue {:.1}°, saturation ratio {:.2}, neutral cast {:+.4} {:+.4} over {} cells",
+                    st.hue_deg, st.saturation_ratio, st.neutral_cast[0], st.neutral_cast[1], st.neutral_cells
+                );
+            }
+        }
         let vs_sips = sips.as_ref().map(|s| {
             let (sh, z, c) = best_shift(&ours.resample(1000), &s.resample(1000), 4);
             assert!(sh == (0, 0) && c > 0.9, "{name}: best alignment with sips {sh:?} ×{z} at {c}");
