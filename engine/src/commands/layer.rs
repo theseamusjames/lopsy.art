@@ -163,8 +163,9 @@ pub fn decode_and_upload_dng(
 /// upright, cropped). Returns JSON: `{ width, height, baselineExposure,
 /// toneCurve, cameraModel, colorApproximate, colorNote, notApplied }`,
 /// the first four as for a DNG (`baselineExposure` 0, `toneCurve` empty),
-/// `colorApproximate` true and `colorNote` the sentence to show when the
-/// file carries no full colour matrix (every ARW today), `notApplied` the
+/// `colorApproximate` false for a body with measured colour
+/// (`lopsy_core::arw::colour`), else true with `colorNote` the sentence to
+/// show (absent when there is none), `notApplied` the
 /// corrections the file records that the decode does not apply. An error
 /// is a sentence a person can read (an unsupported Sony format or
 /// variant, a damaged file).
@@ -189,7 +190,8 @@ pub fn decode_and_upload_arw(
         tone_curve: Vec<[f64; 2]>,
         camera_model: &'a str,
         color_approximate: bool,
-        color_note: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        color_note: Option<&'a str>,
         not_applied: &'a [String],
     }
 
@@ -199,7 +201,7 @@ pub fn decode_and_upload_arw(
         baseline_exposure: img.baseline_exposure,
         tone_curve: img.tone_curve.iter().map(|&(x, y)| [x, y]).collect(),
         camera_model: &arw.camera_model,
-        color_approximate: true,
+        color_approximate: arw.colour.is_approximate(),
         color_note: arw.colour.note(),
         not_applied: &arw.not_applied,
     };

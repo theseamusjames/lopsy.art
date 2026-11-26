@@ -70,10 +70,21 @@
 //! grid of cells) but leaves the A7 IV's colour at about half the
 //! saturation of its JPEG and of `sips` (the older bodies' matrices are
 //! stronger: 0.7–0.9). The rest of the camera's transform is not in the
-//! file. So the decode uses it and says the colour is approximate
-//! ([`ArwColour`], whose note the host shows); a file without a readable
-//! matrix gets white balance only, and says so too. A per-camera matrix
-//! table would fix this and is the project owner's decision.
+//! file.
+//!
+//! So colour comes from measurement where there is one: the eleven Sony
+//! bodies with measured spectral sensitivities ([`colour`], from the
+//! Academy Software Foundation's `rawtoaces-data`) get a two-illuminant
+//! calibration and go through `dng::camera_color` as a DNG does: the
+//! as-shot neutral from Sony's white-balance multipliers, the white point
+//! and Kelvin from it, the matrices interpolated, Bradford to D50, linear
+//! sRGB. On the A7 IV and A7 III samples that lifts the default develop's
+//! saturation from 0.42 and 0.62 of `sips`' to 0.84 and 1.01, with hues
+//! within 2.6–4.8° and neutrals within 0.014 in chromaticity
+//! (`tests/arw_decode.rs`). Any other body keeps Sony's partial matrix and
+//! says its colour is approximate ([`ArwColour`], whose note the host
+//! shows); a file without a readable matrix gets white balance only, and
+//! says so too.
 //!
 //! ## The two decodes, on the DNG pipeline
 //!
@@ -108,6 +119,8 @@
 //! Written from the published descriptions of the formats and from what
 //! the real files show; no code of another raw decoder was read or used.
 
+pub mod colour;
+pub mod colour_table;
 pub mod linear;
 pub mod lossless;
 pub mod lossy;
@@ -133,8 +146,9 @@ const TAG_SONY_DISTORTION: u16 = 0x7037;
 /// the top of the 14-bit range its curve maps to (see `lossy`).
 const LOSSY_DEFAULT_WHITE: u32 = 16383;
 
-/// Where an ARW's colour came from. Either way it is approximate (see the
-/// module docs), and [`ArwColour::note`] says so for a person.
+/// Where an ARW's colour came from. Measured colour is a calibration; the
+/// other two are approximate (see the module docs), and [`ArwColour::note`]
+/// says so for a person.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ArwColour {
@@ -142,18 +156,27 @@ pub enum ArwColour {
     SonyColorMatrix,
     /// No usable matrix: the as-shot white balance only.
     WhiteBalanceOnly,
+    /// The body's calibration from measured spectral sensitivities
+    /// (`colour`), through the DNG colour method.
+    Measured,
 }
 
 impl ArwColour {
-    /// What a person should be told about the colour.
-    pub fn note(self) -> &'static str {
+    /// Whether the colour is an approximation a person should be told of.
+    pub fn is_approximate(self) -> bool {
+        self != ArwColour::Measured
+    }
+
+    /// What a person should be told about the colour, when anything.
+    pub fn note(self) -> Option<&'static str> {
         match self {
-            ArwColour::SonyColorMatrix => {
-                "Colour is approximate: this Sony RAW carries only part of the camera's colour matrix, so colours look less saturated than in the camera's own JPEG."
-            }
-            ArwColour::WhiteBalanceOnly => {
-                "Colour is approximate: this Sony RAW carries no colour matrix, so only its white balance is applied and colours look washed out."
-            }
+            ArwColour::SonyColorMatrix => Some(
+                "Colour is approximate: this Sony RAW carries only part of the camera's colour matrix, so colours look less saturated than in the camera's own JPEG.",
+            ),
+            ArwColour::WhiteBalanceOnly => Some(
+                "Colour is approximate: this Sony RAW carries no colour matrix, so only its white balance is applied and colours look washed out.",
+            ),
+            ArwColour::Measured => None,
         }
     }
 }
@@ -245,6 +268,8 @@ pub struct ArwInfo {
     /// White-balanced camera RGB → linear sRGB.
     pub cam_to_rgb: [f32; 9],
     pub colour: ArwColour,
+    /// The body's measured calibration (`colour`), when it has one.
+    pub calibration: Option<crate::dng::camera_color::DngCalibration>,
     /// `Make Model`.
     pub camera_model: String,
     pub sources: ArwSources,
@@ -405,16 +430,26 @@ pub fn read_info(data: &[u8]) -> Result<ArwInfo, String> {
     }
 
     let orientation = get_tag_u16(&ifd0, TagId::Orientation).ok().filter(|o| (1..=8).contains(o)).unwrap_or(1);
-    let (cam_to_rgb, colour) = match sr2.as_deref().and_then(sr2::color_matrix) {
-        Some(m) => {
+    // A body with measured colour takes the DNG colour method at the
+    // as-shot white balance; any other keeps Sony's partial matrix.
+    let model = ascii(&ifd0, TagId::Model as u16);
+    let calibration = colour::calibration_for(&model, as_shot_gain);
+    let measured = calibration.as_ref().and_then(|c| c.white_balance_for_ratio([1.0; 3], as_shot_gain));
+    let (cam_to_rgb, colour) = match (measured, sr2.as_deref().and_then(sr2::color_matrix)) {
+        (Some(wb), _) => {
+            sources.matrix = format!("measured spectral data ({model}), as shot {:.0} K, tint {:+.1}", wb.kelvin, wb.tint);
+            (wb.cam_to_rgb, ArwColour::Measured)
+        }
+        (None, Some(m)) => {
             sources.matrix = "SR2 0x7800".into();
             (m, ArwColour::SonyColorMatrix)
         }
-        None => {
+        (None, None) => {
             sources.matrix = "none".into();
             ([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0], ArwColour::WhiteBalanceOnly)
         }
     };
+    let calibration = calibration.filter(|_| colour == ArwColour::Measured);
     let camera_model = format!("{} {}", ascii(&ifd0, TagId::Make as u16), ascii(&ifd0, TagId::Model as u16)).trim().to_string();
     let has = |tag: u16| raw_ifd.iter().any(|e| e.tag == tag);
     let unhandled: Vec<String> = [
@@ -444,6 +479,7 @@ pub fn read_info(data: &[u8]) -> Result<ArwInfo, String> {
         orientation,
         cam_to_rgb,
         colour,
+        calibration,
         camera_model,
         sources,
         unhandled,

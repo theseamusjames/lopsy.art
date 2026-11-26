@@ -9,9 +9,13 @@
 //! Units are a Bayer DNG's (`dngRenderLinearBand`): linear camera RGB at
 //! the as-shot white balance, unclamped below 0, 1.0 the white level of
 //! the green channel, channel `c` clipping at `clipLevels[c]`. Unlike a
-//! DNG's, an ARW's camera matrix is fixed (as a RAF's): changing the white
-//! balance changes `wbRatio` only. Every error is a sentence a person can
-//! read.
+//! For a body with measured colour (`lopsy_core::arw::colour`) the camera
+//! matrix follows the white balance as a DNG's does: the app asks
+//! `arwWhiteBalance` or `arwWhiteBalanceKelvin` for the `camToRgb` that goes
+//! with a `wbRatio` or a temperature, as with `dngWhiteBalance`. For any
+//! other body the matrix is fixed (as a RAF's) and those two answer with an
+//! error: changing the white balance changes `wbRatio` only. Every error is
+//! a sentence a person can read.
 
 use wasm_bindgen::prelude::*;
 
@@ -46,12 +50,14 @@ struct SonyRawInfo {
     encoding: arw::ArwEncoding,
     bits: u16,
     color_approximate: bool,
-    color_note: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    color_note: Option<&'static str>,
 }
 
 /// An ARW's tags, without decoding its pixels (it reads the headers and
 /// deciphers Sony's small private block): `{ width, height, cameraModel,
-/// encoding, bits, colorApproximate, colorNote }`. `width` × `height` is
+/// encoding, bits, colorApproximate, colorNote }` (`colorNote` absent for
+/// a body with measured colour, whose `colorApproximate` is false). `width` × `height` is
 /// the size `decodeAndUploadArw` will give (the crop Sony intends, after
 /// orientation); `encoding` is "lossy", "uncompressed" or "lossless". An
 /// error means the decodes will refuse the file too, with the same
@@ -66,7 +72,7 @@ pub fn sony_raw_info(data: &[u8]) -> Result<String, JsError> {
         camera_model: info.camera_model,
         encoding: info.encoding,
         bits: info.bits,
-        color_approximate: true,
+        color_approximate: info.colour.is_approximate(),
         color_note: info.colour.note(),
     })
 }
@@ -85,9 +91,12 @@ pub struct ArwPrepared {
 impl ArwPrepared {
     /// `{ width, height, mosaicWidth, mosaicHeight, samplesPerPixel,
     /// clipLevels, kind, cameraModel, colorApproximate, colorNote,
-    /// notApplied }`, as `dngPrepare`'s where the names are the same
-    /// (`kind` is always "bayer", `samplesPerPixel` 1); there is no
-    /// Kelvin, tint or baseline exposure.
+    /// asShotKelvin, asShotTint, notApplied }`, as `dngPrepare`'s where the
+    /// names are the same (`kind` is always "bayer", `samplesPerPixel` 1;
+    /// no baseline exposure). A body with measured colour has
+    /// `colorApproximate` false, no `colorNote`, and the as-shot white
+    /// point's `asShotKelvin` and `asShotTint`; any other has no Kelvin or
+    /// tint.
     #[wasm_bindgen(getter, js_name = "metaJson")]
     pub fn meta_json(&self) -> String {
         self.meta_json.clone()
@@ -131,7 +140,12 @@ struct ArwPreparedMeta {
     kind: &'static str,
     camera_model: String,
     color_approximate: bool,
-    color_note: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    color_note: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    as_shot_kelvin: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    as_shot_tint: Option<f32>,
     not_applied: Vec<String>,
 }
 
@@ -144,6 +158,7 @@ pub fn arw_prepare(data: &[u8]) -> Result<ArwPrepared, JsError> {
         web_sys::console::log_1(&line.into());
     }
     let (width, height) = prep.params.oriented_size();
+    let as_shot = linear::white_balance_for_ratio(&prep.params, [1.0, 1.0, 1.0]).ok();
     let meta = ArwPreparedMeta {
         width,
         height,
@@ -153,8 +168,10 @@ pub fn arw_prepare(data: &[u8]) -> Result<ArwPrepared, JsError> {
         clip_levels: prep.params.clip_levels,
         kind: "bayer",
         camera_model: prep.params.camera_model.clone(),
-        color_approximate: true,
+        color_approximate: prep.params.colour.is_approximate(),
         color_note: prep.params.colour.note(),
+        as_shot_kelvin: as_shot.as_ref().map(|w| w.kelvin),
+        as_shot_tint: as_shot.as_ref().map(|w| w.tint),
         not_applied: prep.unhandled,
     };
     let meta_json = to_json(&meta)?;
@@ -188,4 +205,22 @@ pub fn arw_render_binned_linear(src: &[f32], params_json: &str, min_long_edge: u
 #[wasm_bindgen(js_name = "arwDevelopDefaults")]
 pub fn arw_develop_defaults(params_json: &str) -> Result<String, JsError> {
     to_json(&linear::develop_defaults(&params_from(params_json)?))
+}
+
+/// The white balance for a `wbRatio`, as `dngWhiteBalance`: JSON `{ wbRatio,
+/// camToRgb, kelvin, tint, whiteXy }`. An error for a body without measured
+/// colour (`colorApproximate` true), whose `camToRgb` does not change.
+#[wasm_bindgen(js_name = "arwWhiteBalance")]
+pub fn arw_white_balance(params_json: &str, wb_ratio: &[f32]) -> Result<String, JsError> {
+    let params = params_from(params_json)?;
+    let ratio: [f32; 3] = wb_ratio.try_into().map_err(|_| JsError::new("wbRatio must have three values"))?;
+    to_json(&linear::white_balance_for_ratio(&params, ratio).map_err(|e| JsError::new(&e))?)
+}
+
+/// The white balance for a colour temperature and tint, as
+/// `dngWhiteBalanceKelvin`. An error for a body without measured colour.
+#[wasm_bindgen(js_name = "arwWhiteBalanceKelvin")]
+pub fn arw_white_balance_kelvin(params_json: &str, kelvin: f32, tint: f32) -> Result<String, JsError> {
+    let params = params_from(params_json)?;
+    to_json(&linear::white_balance_for_temperature(&params, kelvin, tint).map_err(|e| JsError::new(&e))?)
 }
