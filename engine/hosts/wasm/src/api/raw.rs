@@ -4,7 +4,7 @@
 //! `rawRenderFinishedBand`, RAF's legacy look) from rows of the plane,
 //! planned with `rawPlanBands`; the main thread asks `rawWhiteBalance` and
 //! `rawTemperatureForKelvin` for the RAW step's white balance in recipe
-//! units. Every call after `rawPrepare` takes the format id (`"raf"`,
+//! units, and `rawAutoWhiteBalance` for Auto. Every call after `rawPrepare` takes the format id (`"raf"`,
 //! `"dng"`, `"arw"`) and that format's own params string, which for a RAF
 //! is byte for byte `rafPrepare`'s. None of these touch the GPU except
 //! `decodeAndUploadRawBaked`. The `raf…`, `dng…` and `arw…` exports stay.
@@ -150,4 +150,59 @@ pub fn raw_temperature_for_kelvin(format: &str, params_json: &str, kelvin: f32, 
 #[wasm_bindgen(js_name = "decodeAndUploadRawBaked")]
 pub fn decode_and_upload_raw_baked(engine: &mut Engine, layer_id: &str, data: &[u8]) -> Result<String, JsError> {
     lopsy_engine::commands::layer::decode_and_upload_raw_baked(&mut engine.inner, layer_id, data).map_err(|e| JsError::new(&e))
+}
+
+/// Auto white balance of linear camera RGB of any format (RGBA f32 from
+/// `binnedLinear` or `rawRenderLinearBand`): `[r, g, b]` wbRatio
+/// multipliers relative to as shot, green = 1. Pixels with a channel at or
+/// above 90 % of its clip level are left out (clipped and reconstructed
+/// highlights are not measurements of a neutral): `clipLevels` is the
+/// description's `clipLevels`, three floats; any other length (or `null`
+/// passed as an empty array) measures every pixel. Bit for bit what
+/// `rafAutoWhiteBalanceClipped` gives (`lopsy_core::develop_stats`).
+#[wasm_bindgen(js_name = "rawAutoWhiteBalance")]
+pub fn raw_auto_white_balance(linear_rgba: &[f32], clip_levels: &[f32]) -> Vec<f32> {
+    let clip = <[f32; 3]>::try_from(clip_levels).ok();
+    lopsy_core::develop_stats::auto_white_balance_clipped(linear_rgba, clip).to_vec()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A frame with a cast, near-neutral greys, saturated colours, noise
+    /// and a clipped highlight, all deterministic.
+    fn frame() -> Vec<f32> {
+        let mut seed = 0x2545_f491u32;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            (seed as f32) / (u32::MAX as f32)
+        };
+        (0..4096)
+            .flat_map(|i| {
+                let v = next();
+                let px = match i % 5 {
+                    0 => [0.30 * v + 0.05, 0.25 * v + 0.05, 0.18 * v + 0.04],
+                    1 => [0.9 * v, 0.2 * v, 0.1 * v],
+                    2 => [1.8, 1.95, 1.4],
+                    3 => [0.002 * v, 0.003 * v, 0.001 * v],
+                    _ => [0.2 + 0.01 * v, 0.17 + 0.01 * v, 0.12 + 0.01 * v],
+                };
+                [px[0], px[1], px[2], 1.0]
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_neutral_auto_white_balance_is_the_raf_one_bit_for_bit() {
+        let px = frame();
+        for clip in [&[1.9f32, 2.0, 1.5][..], &[], &[1.0, 1.0]] {
+            let ours = raw_auto_white_balance(&px, clip);
+            let raf = super::super::develop::raf_auto_white_balance_clipped(&px, clip);
+            assert_eq!(ours.iter().map(|v| v.to_bits()).collect::<Vec<_>>(), raf.iter().map(|v| v.to_bits()).collect::<Vec<_>>(), "{clip:?}");
+            assert_eq!(ours.len(), 3);
+        }
+    }
 }
