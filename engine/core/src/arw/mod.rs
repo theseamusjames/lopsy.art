@@ -88,8 +88,13 @@
 //!   model: a fixed matrix and channel-gain white balance.
 //! - [`read_arw`], the baked decode, takes that plane, demosaics it with
 //!   `dng::demosaic::bilinear` and finishes it with the DNG baked decode's
-//!   `bake_colour` (the matrix) and `bake_finish` (sRGB, auto-levels,
-//!   orientation), to the same sRGB f32 RGBA `DngImage` `read_dng` gives.
+//!   `bake_colour` (the matrix) and `bake_finish` (the engine's neutral
+//!   base curve where a DNG's profile tone curve goes, as the RAW develop
+//!   defaults use it; sRGB, auto-levels, orientation), to the same sRGB f32
+//!   RGBA `DngImage` `read_dng` gives. The curve is close to the identity
+//!   (18 % grey to 19.5 %), so the picture stays darker than the camera's
+//!   JPEG, which also lifts the exposure: an ARW records no baseline
+//!   exposure.
 //!
 //! ## What is not applied
 //!
@@ -552,7 +557,13 @@ pub fn read_arw(data: &[u8]) -> Result<ArwImage, String> {
     drop(plane);
     let ci = crate::dng::centre_index(params.width, params.height);
     crate::dng::bake_colour(&mut rgb, None, Some(&params.cam_to_rgb), None, &mut debug_log, ci);
-    let (width, height, pixels) = crate::dng::bake_finish(rgb, params.width, params.height, &[], params.orientation, &mut debug_log)?;
+    // An ARW has no profile tone curve: in its place, the engine's neutral
+    // base curve, which the RAW develop path's defaults use
+    // (`linear::develop_defaults`), sampled as the curve's own lookup table.
+    let base = crate::raf::base_curves::curve_lut(&crate::raf::base_curves::NEUTRAL);
+    let last = (base.len() - 1) as f64;
+    let tone_curve: Vec<(f64, f64)> = base.iter().enumerate().map(|(i, &y)| (i as f64 / last, f64::from(y))).collect();
+    let (width, height, pixels) = crate::dng::bake_finish(rgb, params.width, params.height, &tone_curve, params.orientation, &mut debug_log)?;
     Ok(ArwImage {
         image: DngImage { width, height, pixels, baseline_exposure: 0.0, tone_curve: Vec::new(), debug_log },
         colour: params.colour,
