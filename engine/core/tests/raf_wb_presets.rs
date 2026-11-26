@@ -14,7 +14,7 @@ use lopsy_core::scene_tone::WB_SLIDER_END;
 
 const NAMES: [&str; 6] = [
     "Daylight",
-    "Cloudy",
+    "Shade",
     "Tungsten",
     "Fluorescent (daylight)",
     "Fluorescent (day white)",

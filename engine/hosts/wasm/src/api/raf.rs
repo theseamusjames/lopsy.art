@@ -219,7 +219,7 @@ pub fn raf_develop_defaults(params_json: &str) -> Result<String, JsError> {
 /// The camera's white-balance presets, read from `data` (the RAF file), as
 /// JSON `[{ "name", "temperature", "tint" }]` in the recipe's units
 /// (relative to as shot, clamped to −200..200), in menu order: Daylight,
-/// Cloudy, Tungsten, the fluorescents (`raf::wb_presets`). `[]` for a file
+/// Shade, Tungsten, the fluorescents (`raf::wb_presets`). `[]` for a file
 /// without an as-shot balance or without the camera's preset table.
 #[wasm_bindgen(js_name = "rafWhiteBalancePresets")]
 pub fn raf_white_balance_presets(data: &[u8]) -> Result<String, JsError> {

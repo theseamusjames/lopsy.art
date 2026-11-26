@@ -22,13 +22,18 @@
 //!     cannot be told apart, so they are not offered either;
 //!   - slot 5 is exactly the camera's white for EXIF light source 17,
 //!     standard illuminant A, a tungsten lamp (the calibration record
-//!     below), on every body: **Tungsten**;
+//!     below), on every body: **Tungsten** (the camera's menu says
+//!     Incandescent; the app names the illuminant A preset Tungsten for
+//!     every format, `raw::white_balance::ILLUMINANT_PRESETS`, and the
+//!     menu and its history label show the name as given);
 //!   - slots 0 and 1 lie on the ladder (no more green or magenta than the
 //!     camera's locus where they cross it): natural light. Slot 0 is the
 //!     warmer, about 5000 K on the scale below, and is the one slots 6–8
-//!     copy: **Daylight**. Slot 1 is at about the colour temperature of the
-//!     camera's own D65 white (6150–6400 K): **Cloudy**, the D65 white, as
-//!     for a DNG (`raw::white_balance::ILLUMINANT_PRESETS`);
+//!     copy: **Daylight**. Slot 1 is the bluer natural light, at about the
+//!     colour temperature of the camera's own D65 white (6150–6400 K). The
+//!     file does not name it; these are the camera's presets, so it takes
+//!     the camera menu's name for its one natural light bluer than
+//!     Daylight (a Fujifilm menu has Shade and no Cloudy): **Shade**;
 //!   - slots 2, 3 and 4 are far greener than the ladder where they cross
 //!     it, the mark of a fluorescent lamp's mercury line, and order by
 //!     colour temperature into the EXIF fluorescent classes (EXIF
@@ -88,7 +93,7 @@ const TABLE: usize = SLOTS + LADDER;
 /// The slots offered, in menu order: (slot, name).
 const OFFERED: [(usize, &str); 6] = [
     (0, "Daylight"),
-    (1, "Cloudy"),
+    (1, "Shade"),
     (5, "Tungsten"),
     (2, "Fluorescent (daylight)"),
     (3, "Fluorescent (day white)"),
@@ -205,7 +210,7 @@ fn green_off_ladder(ladder: &[[f32; 3]], m: [f32; 3]) -> Option<f32> {
 
 /// Whether a table has the shape the slots were identified on: the ladder
 /// rises in red and falls in blue at every step; the offered slots order
-/// along it as their lights do (Tungsten, cool white, Daylight, Cloudy,
+/// along it as their lights do (Tungsten, cool white, Daylight, Shade,
 /// daylight fluorescent, with day white between cool white and daylight
 /// fluorescent); the natural lights sit on it and the fluorescents well
 /// above it; and Tungsten is the file's illuminant A white when it has one.
@@ -319,7 +324,7 @@ mod tests {
     fn shaped_table() -> Vec<[f32; 3]> {
         let mut t = vec![
             white(0.0, 0.8),   // 0 Daylight
-            white(0.3, 0.8),   // 1 Cloudy
+            white(0.3, 0.8),   // 1 Shade
             white(0.6, 0.95),  // 2 daylight fluorescent
             white(0.1, 0.95),  // 3 day white
             white(-0.4, 0.95), // 4 cool white
