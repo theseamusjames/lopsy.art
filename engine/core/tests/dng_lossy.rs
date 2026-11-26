@@ -200,10 +200,14 @@ fn a_lossy_dng_is_a_linear_dng_like_any_other() {
                 assert!(whole.pixels[dst..dst + n].iter().zip(&px.pixels[s..s + n]).all(|(a, b)| a.to_bits() == b.to_bits()), "{lossy}: band {band:?}");
             }
         }
-        // Linear reference values: 0..1 times the as-shot gain, the plane
-        // reaching white somewhere.
+        // Linear reference values: 0..1 times the as-shot gain, except a
+        // clipped pixel moved toward a neutral at the highest clip level
+        // (`dng::linear::neutral_clipped`), which stays within 0 and that.
         let gain = p.params.as_shot_gain;
-        assert!(p.plane.chunks_exact(3).all(|c| (0..3).all(|k| c[k] >= 0.0 && c[k] <= gain[k] * 1.000_001)), "{lossy}");
+        let top = gain.iter().copied().fold(0.0f32, f32::max);
+        let within = |c: &[f32]| (0..3).all(|k| c[k] >= 0.0 && c[k] <= gain[k] * 1.000_001);
+        let moved = |c: &[f32]| c.iter().all(|&v| v >= 0.0 && v <= top * 1.000_001);
+        assert!(p.plane.chunks_exact(3).all(|c| within(c) || moved(c)), "{lossy}");
         seen += 1;
     }
     if seen == 0 {
