@@ -1009,8 +1009,7 @@ was.
 
 - **RAF camera colour** (Phase 6, items 1 to 3 for Fujifilm): waits on
   where the per-camera data comes from (decision 4 of section 5).
-- **DNGs in the app**: the engine can develop a DNG as a RAW photo,
-  but the app still edits one as before (decisions 42 and 43).
+- **DNGs in the app**: done since, with Sony ARW (section 9).
 - **AVIF, 10-bit PQ** (Phase 7): needs an encoder the browser lacks.
 - **A Display P3 base for the gain-map JPEG**, and a resized gain-map
   JPEG whose base is exactly the engine's sized SDR picture (decision
@@ -1027,3 +1026,216 @@ was.
   compression does not hold hue there. Left for after launch (the
   owner's call); the review picture is the cocktail in
   `samples/linear-pipeline-review/sliders-150/`.
+
+---
+
+## 9. The universal RAW path
+
+Photonamous is a camera RAW editor, not a Fujifilm one. Section 8 left a
+DNG edited as before and no other format at all. This section records
+the work that put RAF, DNG and Sony ARW on one develop path, and the
+choices made without asking while it was built (numbered on from
+section 8's, for Seamus to review).
+
+### Done
+
+- **One interface over the formats** (`lopsy_core::raw`, the `raw…`
+  exports). A file is sniffed (`rawFormatOf`), prepared once in a worker
+  (`rawPrepare`: the sensor plane, the render parameters and a
+  description), planned into bands (`rawPlanBands`) and rendered band by
+  band to linear camera RGB (`rawRenderLinearBand`). The description says
+  what differs between formats, and the app reads only it: sizes, clip
+  levels, the profiles with their roles, the white-balance model (a fixed
+  matrix or one per white; Kelvin fitted, measured or absent; presets
+  from the camera or from illuminants), what the file carries that was
+  not applied, and whether the format renders finished bands for a GPU
+  without float targets. Nothing in the app's `src/engine` or `src/edit`
+  names a format. The old `raf…`, `dng…` and `arw…` exports stay for
+  Lopsy.
+- **RAF moved onto it with no change to any picture**: the parity
+  fingerprints of the eight sample RAFs (`apps/photonamous/e2e/raw-parity`)
+  were recorded before the move and matched bit for bit after it, on
+  WebGPU and WebGL, on the linear, 8-bit and no-float paths.
+- **DNG and Sony ARW develop as RAW photos** through the same path:
+  white balance on camera data, highlight reconstruction, the working
+  space, full size and export. The baked decode is now only a fallback:
+  a file `rawPrepare` refuses, and a format without finished bands on a
+  GPU without float targets.
+- **The Standard look**, for every file without a maker's look: a curve
+  of our own (`raf::standard_curve`), saturation 1.15, and the profiles
+  Standard, Neutral and Monochrome (decisions 60 and 61).
+- **Opening exposure matched to the camera's preview** for an ARW and
+  for a DNG whose preview the camera made (decision 62).
+- **A RAF's white-balance presets and Kelvin scale come from the file**
+  (decision 64).
+- **DNG's `ProfileGainTableMap`** (Apple ProRAW) is read and applied,
+  and such a file opens with its own tone curve (decision 65).
+- **Lossy JPEG DNGs open** (decision 66).
+
+### Decided
+
+60. **The Standard curve is our own, from first principles**: a
+    log-logistic curve in stops about middle grey,
+    `F(x) = g·u^p·((1+S^−k)/(1+(u/S)^k))^(p/k)` with `u = x/0.18` and
+    `k = 2`. Three candidates were rendered beside the cameras' previews;
+    Seamus chose the gentle one: grey at 0.22, contrast 1.10, white at
+    four stops above grey. It is applied to luminance with the channel
+    ratios kept. No other raw developer's curve or numbers were used.
+61. **Standard's saturation is 1.15, one value for every camera.** Seamus
+    saw that every file opened less colourful than its preview. Nothing
+    in the engine was losing colour (the curve keeps chroma, Sony's
+    matrix keeps 98 to 99 %, the gamut step costs 2 to 4 %): the look
+    simply had no saturation, where every camera adds some. Against the
+    camera-made previews of the samples with measured colour the result
+    is 1.10 (A7 III), 0.95 (A7 IV) and 0.98 (ProRAW rose) of the
+    preview's chroma. The A6000 and RX100 III stay near 0.70: their
+    colour is Sony's partial matrix, with no spectral data to do better.
+    The other course was a factor per camera, which would be tuning to
+    previews.
+62. **Which previews are matched.** An ARW's embedded JPEG is the
+    camera's, so it is matched (median luminance, through the opening
+    curve). A DNG's preview is matched only when the camera made it: the
+    file carries a gain map and neither `OriginalRawFileName` nor
+    `PreviewApplicationName`. A DNG written by a converter has a preview
+    rendered by that converter (Adobe's, in every sample we have), and we
+    do not tune to those: such a file opens at its BaselineExposure, and
+    is darker than its preview. **Open for Seamus**: whether that is the
+    right side of the line.
+63. **Edits of DNGs made before this keep no compatibility path.** They
+    render on the RAW path and look different. Seamus: hardly anyone
+    uses the app yet. `PIPELINE_VERSION` stays 1; the version-2 work
+    (the old decode kept for old versions, a notice, "Develop as RAW") was
+    built and is left unmerged on `worktree-agent-a0ad8c6af04ec4510`. The
+    spec's rule (keep every released version's code), which section 5's
+    decision 2 starts at launch, is set aside until the app has users.
+64. **A RAF's presets are the camera's own, read from the file**: the
+    record of 47 green, red, blue triples in the RAF's CFA header (ten
+    slots and a 37-step temperature ladder) and its two calibration
+    whites (illuminants A and D65 by their Exif codes). The per-camera
+    table they replace is deleted. The reader
+    checks the record's shape and gives no presets rather than wrong
+    ones. Consequences: the Kelvin readout is refitted through the file's
+    two whites, so a RAF's as-shot readout moves by about 100 to 450 K
+    and a typed Kelvin lands about 4 Temperature units from where it did
+    (the parity fingerprints of the two recipes that type 6500 K were
+    re-recorded; every other line was unchanged); preset values move by a
+    few units to about 16; the menu is Daylight, Shade, Tungsten and the
+    three Fluorescents. "Shade" is the camera's own word for the slot
+    (it has no Cloudy); "Tungsten" is kept over the camera's
+    "Incandescent" so one name serves every format.
+65. **`ProfileGainTableMap` is implemented from the published DNG 1.6
+    specification**, read as a document (from a mirror: Adobe's page
+    refused the request); no SDK, sample code or Adobe software was used.
+    **Flagged for Seamus** given his caution about Adobe: it is a
+    published file format, read to open files users bring. The map is
+    applied to the plane in `prepare_dng`. A mapped file with a usable
+    `ProfileToneCurve` of its own opens with that curve at its
+    BaselineExposure (the map and the curve are made as a pair), named
+    **Camera**; Standard (our curve, at the exposure that matches the
+    preview), Neutral and Monochrome follow. On the two samples: the
+    concert goes from 13.8 % of the picture at white to none through
+    Standard, and with the file's curve the medians are 0.427 against the
+    preview's 0.440 (rose) and 0.229 against 0.167 (concert, about half a
+    stop brighter than Apple's). The baked decode Lopsy imports with is
+    untouched. `ProfileGainTableMap2` is not read (its tag number is
+    unverified), and a little-endian map is untested.
+66. **Lossy JPEG DNGs open, on the RAW path and in the baked decode**:
+    8-bit LinearRaw JPEG tiles through the JPEG decoder already in the
+    build, with `OpcodeList2`'s `MapPolynomial` applied when it covers
+    the whole image. For Lopsy this is additive (the file was refused
+    before); every existing baked hash is unchanged. Verified on two
+    Adobe-converted Canon files against their lossless siblings; no
+    phone or drone file was available.
+67. **What a file carries that was not applied is not shown in the
+    app.** The description lists it (`notApplied`); where and how to say
+    it is left to Seamus.
+68. **A mapped file's Standard look has the engine id `standard-look`**,
+    because the app's recipes already use `standard` for the camera's
+    look.
+69. **Standard on a gain-mapped file is flat on a high-range scene**
+    (the concert: median matched, nothing at white, 0.71 of the
+    preview's chroma). The map has already compressed the scene, and a
+    curve that assumes scene light cannot stretch it back. Left as it
+    is. The other course is to leave Standard out of such a file's menu.
+
+70. **A pixel clipped at the sensor renders neutral on DNG and ARW.**
+    The linear plane is camera RGB times the as-shot gains, so a glint
+    that clips every channel sat at the gains' colour: magenta or pink
+    under tungsten light on every 5D3 sample (all of the clipped pixels
+    on the LinearRaw files, a third on the Bayer ones), and a blown sky
+    turned yellow-green when Exposure was pulled down. Such a pixel now
+    moves to the lowest neutral that every channel's lower bound allows
+    (the highest clip level), over a ramp from 90 % to 98 % of the clip.
+    Two stops of headroom above the clip were tried first, to keep a
+    glint white when the white balance moves, and dropped: a blown area
+    then stayed white while Exposure came down, with a harder edge. The
+    cost of dropping it: a white balance moved off the as-shot one tints
+    a clipped glint as it does any neutral. Doing that properly belongs
+    in the GPU's RAW step, after the white balance. RAF already rendered
+    clipped pixels neutral and is untouched, as are the baked decodes.
+    Review pictures: `samples/linear-pipeline-review/highlights/`.
+    Still wrong: on the lossy 5D3 file the glints keep a lavender halo
+    in the app (the converter's own demosaic leaves a ring with one
+    channel pulled down, which the rule for LinearRaw does not reach).
+71. **The new file readers were reviewed for hostile files, and four
+    defects fixed.** A lossy tile's JPEG header, and an embedded
+    preview's, each decided the JPEG decoder's allocation before
+    anything checked it, so a few hundred bytes claiming 40000 by 40000
+    pixels could abort the engine (the preview case predates this work
+    and covered ARW too). Both headers are now read and bounded first:
+    a tile must be baseline RGB no larger than a tile; a preview no
+    larger than the picture, and a progressive one within the decode
+    cap. A RAF whose as-shot white has a zero channel gave a Kelvin
+    scale of NaN, and gives none now. A gain map with gains of 0 gave
+    clip levels of 0, and gives none now (the specification allows a
+    gain of 0, so the map is not refused). No sample's rendering moved.
+
+### Verified at the end
+
+On the final tree (86ca279f4) and the engine built from it:
+
+- Engine: `cargo test --release` with the RAF, ARW, DNG and
+  converter-DNG sample folders set, 880 passed; the native GPU suite, 250
+  passed (62 render, 17 HDR and the 2 golden tests: no RAF golden render
+  moved through any of this); the baked decodes' hashes for RAF, DNG and
+  ARW unchanged. No shader changed. The bundle is 0.35 % over its
+  budget, inside the margin.
+- Parity fingerprints (`apps/photonamous/e2e/raw-parity`, 18 samples:
+  eight RAFs, four ARWs, four converter DNGs of which two are lossy, two
+  ProRAWs): all match on WebGPU and on WebGL. The RAFs' default-recipe
+  lines never moved from the recording made before any of this work.
+- Photonamous browser suite: on WebGPU 233 passed, 2 skipped (the two
+  real-GPU speed tests), none failed. On WebGL 231 passed, 3 skipped, 1
+  failed: `edit-in-app`, "opening a photo shows its stored preview with
+  Loading… before the engine render", which fails alone too and failed
+  before this work (the engine's render of the JPEG finishes before the
+  test looks for the preview).
+- Photonamous type-check and lint; unit tests: `@lopsy/ui` 72,
+  photos-core 603 with the sample folders set (569 without), the app
+  682. The production-site tests: 17 passed.
+- Lopsy: type-check, lint, 4252 unit tests, and its RAF and DNG import
+  browser tests, 10 passed with a sample RAF and ProRAW copied in for
+  the run.
+- By eye: the app's own render of every sample
+  (`samples/linear-pipeline-review/app-renders/raw-path/`), the ProRAW
+  profiles, the tap glints and the blown sky before and after
+  decision 70.
+- Seen once and not again: `import-arw` missed its "Imported 1 photo"
+  toast within 150 s in one whole-suite run on WebGPU, and has passed
+  in every run since, alone and in the suite.
+
+### Not done
+
+- **A clipped glint under a moved white balance** takes the tint, and
+  the lossy 5D3 file's glints keep a lavender halo (decision 70).
+- **Fujifilm's colour matrices** (`color_matrix_for_model`) are due to
+  be replaced.
+- **Standard as a profile on a RAF**: it would need its own opening
+  exposure. The film looks reach 0.81 to 0.83 of the camera JPEG's
+  chroma.
+- **Sony**: lens corrections are not applied, and bodies without
+  measured data use Sony's partial matrix.
+- **DNG**: JPEG XL tiles; a 48-megapixel ProRAW (untested);
+  `ProfileGainTableMap` in the baked decode; cameras that write DNG
+  natively (no sample: four Leica files were proposed, not downloaded).
+- **XMP export's Kelvin** still takes the RAF route only.
