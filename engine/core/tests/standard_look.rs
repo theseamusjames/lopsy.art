@@ -392,7 +392,7 @@ fn every_candidate_opens_an_arw_at_the_cameras_brightness_through_its_curve() {
         let data = std::fs::read(&path).unwrap();
         let today = before(&data);
         let (w, h) = (today.description.width, today.description.height);
-        let Some(preview) = lopsy_core::arw::exposure::whole_picture_preview(&data, f64::from(w) / f64::from(h)) else { continue };
+        let Some(preview) = lopsy_core::arw::exposure::whole_picture_preview(&data, w, h) else { continue };
         for (label, look) in looks(false) {
             let prep = raw::prepare_with(&data, &look).unwrap();
             let ev = prep.description.develop_defaults.exposure_ev;
@@ -436,7 +436,7 @@ fn the_dng_preview_match_takes_only_camera_previews_of_gain_mapped_files() {
         let baseline = p.params.calibration.baseline_exposure as f32;
         assert_eq!(today.description.develop_defaults.exposure_ev, baseline, "{name}");
         let (w, h) = (today.description.width, today.description.height);
-        let preview = camera_preview_for_exposure(&data, f64::from(w) / f64::from(h));
+        let preview = camera_preview_for_exposure(&data, w, h);
         let converted = lopsy_core::dng::preview::written_by_a_converter(&data);
         assert!(!(converted && preview.is_some()), "{name}: a converter's preview is not the camera's");
         for (label, look) in looks(true) {
