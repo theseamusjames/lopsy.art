@@ -77,7 +77,7 @@
 //! - Test with non-Apple DNG files (Adobe DNG Converter output, other cameras).
 
 pub mod tiff;
-mod ljpeg;
+pub(crate) mod ljpeg;
 pub mod demosaic;
 pub mod color;
 pub mod camera_color;
