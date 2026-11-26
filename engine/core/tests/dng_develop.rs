@@ -12,7 +12,7 @@
 
 use std::path::{Path, PathBuf};
 
-use lopsy_core::dng::linear::{develop_defaults, prepare_dng, render_linear_band, white_balance_for_ratio, DngKind};
+use lopsy_core::dng::linear::{develop_defaults, prepare_dng, prepare_dng_with, render_linear_band, white_balance_for_ratio, DngKind, PrepareOptions};
 use lopsy_core::output::{output_reference, OutputSettings, OutputTarget};
 use lopsy_core::raf::develop::{scene_reference, tone_settings};
 use lopsy_core::raf::{plan_bands, RafBand};
@@ -166,7 +166,12 @@ fn real_dngs_take_the_linear_path() {
         // The default develop, working space on, output for sRGB, without
         // the Standard look's saturation: the colour compared with the
         // baked decode below is the colorimetric one, which the look then
-        // deliberately makes more colourful.
+        // deliberately makes more colourful. The baked decode does not
+        // apply a ProfileGainTableMap and the linear path does: the
+        // comparison is of the plane without it (`dng_gain_map.rs` checks
+        // the map against the camera's preview).
+        let unmapped = prepare_dng_with(&data, PrepareOptions { apply_gain_table_map: false }).unwrap();
+        let whole = render_linear_band(&unmapped.plane, &unmapped.params, whole_band).unwrap();
         let settings = lopsy_core::raf::develop::RawDevelopSettings { saturation: 1.0, ..develop_defaults(p).unwrap() };
         let scene = scene_reference(&whole.pixels, &settings);
         let rendered = lopsy_core::tone::tone_reference(&scene, &tone_settings(&settings));
@@ -209,8 +214,8 @@ fn real_dngs_take_the_linear_path() {
         println!("  mean |cell difference| (of 255): R {:.1}, G {:.1}, B {:.1}", mad[0], mad[1], mad[2]);
         println!("  mean cell chromaticity r, b (linear): new {c_new:.4?}, baked {c_old:.4?}");
         // A large baseline exposure is Apple's lift for a dark scene, which
-        // its local tone map (ProfileGainTableMap, not applied by either
-        // decode) holds back in the highlights; the baked decode's
+        // its local tone map (ProfileGainTableMap, left out of both sides
+        // here) holds back in the highlights; the baked decode's
         // auto-levels pulls it back down and the new path does not, so
         // such a file is not expected to match.
         if cal.baseline_exposure.abs() <= 1.0 {
