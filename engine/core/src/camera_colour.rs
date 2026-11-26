@@ -22,6 +22,15 @@ const FUJIFILM_X_TRANS_5_HR: CamToSrgb = [1.7780, -0.7114, -0.0666, -0.1820, 1.7
 /// Fujifilm's 26-megapixel X-Trans sensor (X-Trans CMOS 4).
 const FUJIFILM_X_TRANS_4: CamToSrgb = [1.7639, -0.6466, -0.1173, -0.1798, 1.7223, -0.5425, 0.0580, -0.5447, 1.4867];
 
+/// Fujifilm's first 102-megapixel medium-format sensor (GFX 100, GFX100S).
+const FUJIFILM_GFX_102: CamToSrgb = [1.7679, -0.6563, -0.1116, -0.1532, 1.6569, -0.5037, 0.0778, -0.5779, 1.5001];
+/// Fujifilm's second 102-megapixel medium-format sensor (GFX100 II,
+/// GFX100S II, GFX100RF).
+const FUJIFILM_GFX_102_II: CamToSrgb = [1.7930, -0.7094, -0.0836, -0.1817, 1.7115, -0.5298, 0.0269, -0.4844, 1.4575];
+/// Fujifilm's 51-megapixel medium-format sensor (GFX 50S, GFX 50R,
+/// GFX50S II).
+const FUJIFILM_GFX_51: CamToSrgb = [1.7974, -0.6071, -0.1903, -0.1916, 1.7680, -0.5764, 0.0875, -0.6408, 1.5533];
+
 /// The matrix of a Sony body, or `None` for one with none here.
 pub fn sony(model: &str) -> Option<CamToSrgb> {
     SONY.iter().find(|(m, _)| *m == model).map(|(_, matrix)| *matrix)
@@ -29,11 +38,22 @@ pub fn sony(model: &str) -> Option<CamToSrgb> {
 
 /// The matrix of a Fujifilm body, by its sensor: the bodies that share a
 /// sensor share its colour filters. `None` for a sensor with none here
-/// (the X-H2S's stacked sensor, X-Trans 3 and earlier, Bayer bodies and
-/// GFX).
+/// (the X-H2S's stacked sensor, X-Trans 3 and earlier, and the X-A and
+/// other Bayer X bodies).
 pub fn fujifilm(model: &str) -> Option<CamToSrgb> {
     let m = model.to_uppercase();
     let has = |names: &[&str]| names.iter().any(|n| m.contains(n));
+    // GFX names are written with and without a space ("GFX 100",
+    // "GFX100RF"), and one is the start of another: matched whole, spaces out.
+    let gfx: String = m.chars().filter(|c| !c.is_whitespace()).collect();
+    if let Some(matrix) = match gfx.as_str() {
+        "GFX100" | "GFX100S" => Some(FUJIFILM_GFX_102),
+        "GFX100II" | "GFX100SII" | "GFX100RF" => Some(FUJIFILM_GFX_102_II),
+        "GFX50S" | "GFX50R" | "GFX50SII" => Some(FUJIFILM_GFX_51),
+        _ => None,
+    } {
+        return Some(matrix);
+    }
     if m.contains("X-H2S") {
         None
     } else if has(&["X100VI", "X-T5", "X-H2", "X-E5"]) {
@@ -53,7 +73,7 @@ mod tests {
 
     #[test]
     fn every_matrix_keeps_a_neutral_neutral() {
-        let all = SONY.iter().map(|(_, m)| *m).chain([FUJIFILM_X_TRANS_5_HR, FUJIFILM_X_TRANS_4]);
+        let all = SONY.iter().map(|(_, m)| *m).chain([FUJIFILM_X_TRANS_5_HR, FUJIFILM_X_TRANS_4, FUJIFILM_GFX_102, FUJIFILM_GFX_102_II, FUJIFILM_GFX_51]);
         for m in all {
             for row in m.chunks_exact(3) {
                 assert!((row.iter().sum::<f32>() - 1.0).abs() < 1e-5, "{m:?}");
@@ -70,7 +90,13 @@ mod tests {
         assert_eq!(fujifilm("X100V"), Some(FUJIFILM_X_TRANS_4));
         assert_eq!(fujifilm("X-T30 II"), Some(FUJIFILM_X_TRANS_4));
         assert_eq!(fujifilm("X-S20"), Some(FUJIFILM_X_TRANS_4));
-        for other in ["X-H2S", "X-T2", "X-T20", "X100F", "X-PRO2", "GFX 100", "X-A5", "unknown"] {
+        assert_eq!(fujifilm("GFX 100"), Some(FUJIFILM_GFX_102));
+        assert_eq!(fujifilm("GFX100S"), Some(FUJIFILM_GFX_102));
+        assert_eq!(fujifilm("GFX100RF"), Some(FUJIFILM_GFX_102_II));
+        assert_eq!(fujifilm("GFX100S II"), Some(FUJIFILM_GFX_102_II));
+        assert_eq!(fujifilm("GFX50S II"), Some(FUJIFILM_GFX_51));
+        assert_eq!(fujifilm("GFX 50R"), Some(FUJIFILM_GFX_51));
+        for other in ["X-H2S", "X-T2", "X-T20", "X100F", "X-PRO2", "GFX 80", "X-A5", "unknown"] {
             assert_eq!(fujifilm(other), None, "{other}");
         }
         assert!(sony("ILCE-6000").is_some());
