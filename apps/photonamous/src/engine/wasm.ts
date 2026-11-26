@@ -19,6 +19,7 @@ import {
   readHdrHistogram as rawReadHdrHistogram,
   readHdrOutputF32 as rawReadHdrOutputF32,
   readHdrOutputF32Sized as rawReadHdrOutputF32Sized,
+  readRenderedF32 as rawReadRenderedF32,
   readSceneStatistics as rawReadSceneStatistics,
   rendererName as rawRendererName,
   resumeTask,
@@ -88,6 +89,14 @@ export const readHdrOutputF32Sized = readbacks.asyncReadback(rawReadHdrOutputF32
 export const compositeForExportSized = readbacks.asyncReadback(rawCompositeForExportSized);
 /** The HDR histogram (4 × 256 bins up to a peak). It changes nothing in the document. */
 export const readHdrHistogram = readbacks.asyncReadback(rawReadHdrHistogram, 'any-time');
+/**
+ * The last live frame as rendered with the working space (linear Rec. 2020,
+ * unclamped f32 RGBA at the document's size), drawn first if stale. It
+ * changes nothing in the document (the engine's doc comment says to wrap
+ * it with 'any-time'). Development builds read it for the RAW parity
+ * fingerprints (e2e/raw-parity.spec.ts).
+ */
+export const readRenderedF32 = readbacks.asyncReadback(rawReadRenderedF32, 'any-time');
 export const exportTiff16 = readbacks.asyncReadback(rawExportTiff16);
 
 /** Readbacks out, as Lopsy's `parkedReadbackCount`: always 0 on WebGL. */

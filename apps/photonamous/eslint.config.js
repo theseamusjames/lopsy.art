@@ -18,6 +18,7 @@ const TWO_TYPED = [
   'readHdrHistogram',
   'readHdrOutputF32',
   'readHdrOutputF32Sized',
+  'readRenderedF32',
   'readSceneStatistics',
   'rendererName',
   'resumeTask',

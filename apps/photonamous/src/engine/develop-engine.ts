@@ -81,6 +81,7 @@ import initWasm, {
   screenIsHdr,
   encodePqPng,
   engineId,
+  getCompositeSize,
   computeGainMap,
   assembleGainMapJpeg,
   hdrHistogramWhiteBin,
@@ -119,6 +120,7 @@ import {
   readHdrHistogram,
   readHdrOutputF32,
   readHdrOutputF32Sized,
+  readRenderedF32,
   readSceneStatistics,
   rendererName,
   sampleColor,
@@ -175,8 +177,29 @@ declare global {
      * histogram read, for e2e tests that compare the histogram with the
      * view on and off.
      */
-    __photonamousScreenEngine?: { setDetailMaskView: (on: boolean) => void; readHistogram: () => Promise<number[] | null> };
+    __photonamousScreenEngine?: {
+      setDetailMaskView: (on: boolean) => void;
+      readHistogram: () => Promise<number[] | null>;
+      /** What the Edit view has rendered at its working size, for the RAW parity fingerprints (e2e/raw-parity.spec.ts). */
+      readRendered: () => Promise<RenderedForTest | null>;
+    };
   }
+}
+
+/**
+ * Development builds: the Edit view's rendered picture at the size it is
+ * edited at. On the linear path, `readRenderedF32` (linear Rec. 2020 f32
+ * RGBA, before the output step, so the screen's space and views do not
+ * touch it); on the legacy path, which has no such read, the sRGB picture
+ * from `compositeForExportSized`, reduced on the GPU to
+ * `QUICK_VIEW_LONG_EDGE` on its long edge at most.
+ */
+export interface RenderedForTest {
+  readonly path: DevelopPath;
+  readonly kind: 'linear-f32' | 'srgb8';
+  readonly width: number;
+  readonly height: number;
+  readonly pixels: Float32Array | Uint8Array;
 }
 
 export interface LoadProgress {
@@ -774,6 +797,7 @@ class PhotoEngine implements DevelopEngine {
           const bins = await this.readHistogram();
           return bins ? [...bins] : null;
         },
+        readRendered: () => this.readRenderedForTest(),
       };
     }
     this.resizeObserver = new ResizeObserver((entries) => this.handleResize(entries));
@@ -1602,6 +1626,28 @@ class PhotoEngine implements DevelopEngine {
       renderCounts.histogramReads += 1;
       const bins: unknown = await readDevelopHistogram(this.engine);
       return bins instanceof Uint32Array && bins.length === 1024 ? bins : null;
+    });
+  }
+
+  /** Development builds only (the screen engine's dev hook): see `RenderedForTest`. */
+  private readRenderedForTest(): Promise<RenderedForTest | null> {
+    if (!this.sourceSize || this.isDisposed) return Promise.resolve(null);
+    return this.withStatisticsViewsOff(async () => {
+      this.renderFrameNow();
+      const [width = 0, height = 0] = getCompositeSize(this.engine);
+      if (width === 0 || height === 0) return null;
+      if (this.path === 'linear') {
+        const pixels: unknown = await readRenderedF32(this.engine);
+        if (!(pixels instanceof Float32Array) || pixels.length !== width * height * 4) return null;
+        return { path: this.path, kind: 'linear-f32', width, height, pixels };
+      }
+      const scale = Math.min(1, QUICK_VIEW_LONG_EDGE / Math.max(width, height));
+      const w = Math.max(1, Math.round(width * scale));
+      const h = Math.max(1, Math.round(height * scale));
+      const pixels: unknown = await compositeForExportSized(this.engine, w, h);
+      this.invalidate();
+      if (!(pixels instanceof Uint8Array) || pixels.length !== w * h * 4) return null;
+      return { path: this.path, kind: 'srgb8', width: w, height: h, pixels };
     });
   }
 
