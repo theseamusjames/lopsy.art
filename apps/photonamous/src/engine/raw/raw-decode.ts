@@ -14,8 +14,8 @@
 import { rafPlanBands } from '@lopsy/engine-pkg/lopsy_wasm';
 import { wasmUrlFor } from '../engine-files';
 import { rendererName } from '../wasm';
-import { RAF_BANDS_PER_WORKER, rafWorkerCount } from './raf-decode-plan';
-import type { RafBandPixels, RafPrepareMeta, RafWorkerRequest, RafWorkerResponse } from './raf-worker-protocol';
+import { RAF_BANDS_PER_WORKER, rafWorkerCount } from './raw-decode-plan';
+import type { RafBandPixels, RafPrepareMeta, RafWorkerRequest, RafWorkerResponse } from './raw-worker-protocol';
 
 export interface RafDecodeProgress {
   readonly stage: 'preparing' | 'rendering';
@@ -68,7 +68,7 @@ function compileWasmModule(): Promise<CompiledEngine> {
 }
 
 function spawnWorker({ module, renderer }: CompiledEngine): Worker {
-  const worker = new Worker(new URL('./raf-worker.ts', import.meta.url), { type: 'module' });
+  const worker = new Worker(new URL('./raw-worker.ts', import.meta.url), { type: 'module' });
   const init: RafWorkerRequest = { kind: 'init', module, renderer };
   worker.postMessage(init);
   return worker;

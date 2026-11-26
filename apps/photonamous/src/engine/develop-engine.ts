@@ -159,7 +159,7 @@ import { areaLayerKey, areaLayerValues, areaValues, linearAreaLayerKey, linearAr
 import { developPathFor, developStages, type DevelopPath, type LegacyStages, type LinearStages } from './develop-stages';
 import { treatsAsFloat, usesWorkingSpace } from './develop-override';
 import { NO_INSETS, clampZoom, fitView, limitSize, panBy, zoomAround, type Insets, type Size, type View } from './viewport';
-import { decodeRafInWorkers, DecodeAbortedError } from './raf/raf-decode';
+import { decodeRafInWorkers, DecodeAbortedError } from './raw/raw-decode';
 import { parseRawDevelopSettings, rawSettingsFor, rawSettingsJson, temperatureTintFor, type RawDevelopSettings } from './raw-develop';
 import { parseDevelopProfiles, profilesFor, type DevelopProfile } from './profiles';
 

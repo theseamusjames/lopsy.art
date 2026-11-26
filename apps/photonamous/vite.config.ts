@@ -17,9 +17,9 @@ const ENGINE_IMPORTS = ['@lopsy/engine-pkg/lopsy_wasm', resolve(engineWasm, 'pkg
  * Which build of the engine a page load runs (src/engine/renderer-choice.ts):
  * `?renderer=`, else PHOTONAMOUS_RENDERER (`wgpu` or `webgl`) as the dev
  * server or build was started with, else WebGPU. Every import of the
- * engine's glue in the page goes through Lopsy's selector; the RAF workers
+ * engine's glue in the page goes through Lopsy's selector; the RAW workers
  * are built without it and load the build the page tells them to
- * (raf-decode.ts).
+ * (src/engine/raw/raw-decode.ts).
  */
 const renderer = rendererPlugin({
   root: engineWasm,

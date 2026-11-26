@@ -13,7 +13,7 @@
  */
 
 import type { RafRenderedBand } from '@lopsy/engine-pkg/lopsy_wasm.js';
-import type { RafBandPixels, RafWorkerRequest, RafWorkerResponse } from './raf-worker-protocol';
+import type { RafBandPixels, RafWorkerRequest, RafWorkerResponse } from './raw-worker-protocol';
 
 /** What this worker calls: the same on both builds, unlike the glue's engine exports. */
 type Glue = Pick<

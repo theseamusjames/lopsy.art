@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MAX_RAF_WORKERS, rafWorkerCount } from './raf-decode-plan';
+import { MAX_RAF_WORKERS, rafWorkerCount } from './raw-decode-plan';
 
 describe('rafWorkerCount', () => {
   it('uses one worker per core', () => {
