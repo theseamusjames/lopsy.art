@@ -9,7 +9,8 @@ import { gpuArgs, hardwareGpuArgs, isHardwareGpu, rendererEnv } from './gpu-args
  * at its defaults, for a person to look at. Not a test, and not in the
  * default run. From apps/photonamous:
  *
- *   LOPSY_ARW_SAMPLES=<dir> LOPSY_DNG_SAMPLES=<dir> LOPSY_DNG_ADOBE_SAMPLES=<dir> LOPSY_RAF_SAMPLES=<dir> \
+ *   LOPSY_ARW_SAMPLES=<dir> LOPSY_DNG_SAMPLES=<dir> LOPSY_DNG_ADOBE_SAMPLES=<dir> \
+ *     LOPSY_DNG_CAMERA_SAMPLES=<dir> LOPSY_RAF_SAMPLES=<dir> \
  *     VITE_PORT=5186 npx playwright test -c e2e/raw-review.config.ts
  *
  * raw-review.record.ts says what it saves and where. WebGPU unless

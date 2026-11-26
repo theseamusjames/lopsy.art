@@ -40,6 +40,7 @@ interface Sample {
 const arw = process.env.LOPSY_ARW_SAMPLES;
 const proraw = process.env.LOPSY_DNG_SAMPLES;
 const adobe = process.env.LOPSY_DNG_ADOBE_SAMPLES;
+const camera = process.env.LOPSY_DNG_CAMERA_SAMPLES;
 const raf = process.env.LOPSY_RAF_SAMPLES;
 
 const SAMPLES: readonly Sample[] = [
@@ -57,6 +58,10 @@ const SAMPLES: readonly Sample[] = [
   { dir: adobe, name: '5D3-adobe-lossy-rgb.dng' },
   { dir: proraw, name: 'sample_dng_00.dng' },
   { dir: proraw, name: 'sample_dng_01.dng' },
+  { dir: camera, name: 'Leica-Q2.dng' },
+  { dir: camera, name: 'Leica-M10-R-compressed.dng' },
+  { dir: camera, name: 'Leica-M-Typ240-compressed.dng' },
+  { dir: camera, name: 'Leica-M9-8bit-compressed.dng' },
   { dir: raf, name: 'DSCF8078.RAF' },
   { dir: raf, name: 'DSCF6952.RAF' },
 ];
