@@ -101,7 +101,10 @@ impl RawPrepared {
     /// planeHeight, samplesPerPixel, clipLevels, cameraModel, colorNote,
     /// notApplied, developDefaults, profiles, whiteBalance: { matrix,
     /// kelvin, presetSource, presets }, finishedBands }` (see
-    /// `lopsy_core::raw::RawDescription`).
+    /// `lopsy_core::raw::RawDescription`). Each profile is `{ id, name,
+    /// settings, role, menuName, listed, sameAs, makerStandard }`: a menu
+    /// lists the entries whose `listed` is true, in order, under `menuName`
+    /// (`lopsy_core::raf::develop::DevelopProfile`).
     #[wasm_bindgen(getter, js_name = "describeJson")]
     pub fn describe_json(&self) -> String {
         self.describe_json.clone()

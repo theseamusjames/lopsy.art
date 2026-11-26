@@ -32,7 +32,7 @@ pub mod white_balance;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-use crate::raf::develop::{DevelopProfile, ProfileSettings, RawDevelopSettings};
+use crate::raf::develop::{DevelopProfile, ProfileRole, ProfileSettings, RawDevelopSettings};
 pub use look::{OpeningCurve, OpeningLook, STANDARD_SATURATION};
 use crate::raf::wb_presets::RecipeWbPreset;
 use crate::raf::{RafBand, RafBandPixels};
@@ -215,7 +215,9 @@ pub trait RawFormat {
     fn temperature_for_kelvin(p: &Self::Params, kelvin: f32, tint: f32) -> Result<f32, String>;
 }
 
-/// The Profile control of a format without film looks (DNG, ARW):
+/// The Profile control of a format without film looks (DNG, ARW), with
+/// the same fields as RAF's (`raf::develop::DevelopProfile`): the camera
+/// entry is the maker-neutral standard look and stands for no other entry.
 /// - `camera`, "Standard": the develop defaults, the Standard look
 ///   (`look::OpeningLook::default`). The app reads the engine's `camera`
 ///   entry as its recipe's default profile, `standard`.
@@ -231,10 +233,20 @@ pub(crate) fn standard_profiles(defaults: &RawDevelopSettings) -> Vec<DevelopPro
         highlight_desaturation: defaults.highlight_desaturation,
         base_curve,
     };
+    let entry = |id: &str, name: &str, role: ProfileRole, settings: ProfileSettings| DevelopProfile {
+        id: id.into(),
+        name: name.into(),
+        settings,
+        role,
+        menu_name: name.into(),
+        listed: true,
+        same_as: None,
+        maker_standard: role == ProfileRole::Camera,
+    };
     vec![
-        DevelopProfile { id: "camera".into(), name: "Standard".into(), settings: settings(defaults.saturation, defaults.base_curve.clone()) },
-        DevelopProfile { id: "neutral".into(), name: "Neutral".into(), settings: settings(1.0, Some(OpeningCurve::Neutral.lut())) },
-        DevelopProfile { id: "monochrome".into(), name: "Monochrome".into(), settings: settings(0.0, defaults.base_curve.clone()) },
+        entry("camera", "Standard", ProfileRole::Camera, settings(defaults.saturation, defaults.base_curve.clone())),
+        entry("neutral", "Neutral", ProfileRole::Neutral, settings(1.0, Some(OpeningCurve::Neutral.lut()))),
+        entry("monochrome", "Monochrome", ProfileRole::Monochrome, settings(0.0, defaults.base_curve.clone())),
     ]
 }
 

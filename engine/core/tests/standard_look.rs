@@ -504,6 +504,15 @@ fn every_candidate_opens_an_arw_at_the_cameras_brightness_through_its_curve() {
             assert_eq!(curve("camera"), Some(look.curve.lut()));
             assert_eq!(curve("monochrome"), Some(look.curve.lut()));
             assert_eq!(curve("neutral"), Some(OpeningCurve::Neutral.lut()));
+            // The roles: the menu prints Standard, Neutral, Monochrome as
+            // given; Standard is the camera entry and the maker's standard,
+            // and stands for no other entry.
+            use lopsy_core::raf::develop::ProfileRole;
+            let p = &prep.description.profiles;
+            let menu: Vec<&str> = p.iter().filter(|e| e.listed).map(|e| e.menu_name.as_str()).collect();
+            assert_eq!(menu, ["Standard", "Neutral", "Monochrome"], "{name}");
+            assert_eq!(p.iter().map(|e| e.role).collect::<Vec<_>>(), [ProfileRole::Camera, ProfileRole::Neutral, ProfileRole::Monochrome]);
+            assert!(p[0].maker_standard && p[0].same_as.is_none() && !p[1].maker_standard && !p[2].maker_standard);
         }
     }
 }
