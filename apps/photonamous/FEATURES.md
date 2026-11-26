@@ -450,8 +450,9 @@ the newer version made.
   Standard and Monochrome. Each profile brings its own exposure, to which
   the Exposure slider adds. Eleven Sony bodies have colour computed from measured
   sensor data (RX100 IV, A6400, A7C II, A7 III, A7 IV, A7R II, A7R III,
-  A7R IV, A7S II, A7S III, A9). For any other body the colour is only
-  approximate (the file carries part of the camera's colour, so it is
+  A7R IV, A7S II, A7S III, A9), and three more have a colour matrix of
+  the engine's own (A6000, A6700, RX100 III). For any other body the
+  colour is only approximate (the file carries part of the camera's colour, so it is
   less saturated than the camera's JPEG): the decoder's sentence saying
   so sits in small text under the Profile menu, which a screen reader
   reads with the menu.

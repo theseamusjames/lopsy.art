@@ -1211,6 +1211,24 @@ section 8's, for Seamus to review).
     C-Lux compacts write RWL, which is Panasonic's RW2: a new decoder,
     not started. Renders: `samples/linear-pipeline-review/leica/` and
     `app-renders/raw-path/Leica-*`.
+73. **Camera colour for Fujifilm's X-Trans 4 and 5 sensors and for
+    three Sony bodies comes from matrices of our own**
+    (`engine/core/src/camera_colour.rs`), derived internally from
+    publicly available sources. They replace the Fujifilm table's entries
+    for those sensors and Sony's partial matrix on the A6000, A6700 and
+    RX100 III, which no longer carry the "colour is approximate" note.
+    Every RAF from those sensors renders with different colour, in
+    Lopsy's import too: the golden renders, the baked-decode hashes and
+    the parity fingerprints were recorded again. Against the camera's
+    own preview, chroma on ordinary photos goes from 0.70 to 1.02
+    (A6000), 0.68 to 1.01 (RX100 III) and, over seven X-E5 photos, from
+    a mean of 0.87 to 1.01. The matrices are stronger than the ones they
+    replace, so the binned working image differs more from the full
+    render on fine detail (about 30 % on an X100VI photo;
+    `engine/core/tests/raf_develop.rs` has the numbers). One matrix per
+    body: it does not follow the white balance. Other Fujifilm sensors
+    (X-Trans 3 and earlier, the X-H2S, GFX) keep the matrices they had.
+    Leica needed nothing: its DNGs carry their own calibration.
 
 ### Verified at the end
 
@@ -1250,11 +1268,12 @@ On the final tree (86ca279f4) and the engine built from it:
 
 - **A clipped glint under a moved white balance** takes the tint, and
   the lossy 5D3 file's glints keep a lavender halo (decision 70).
-- **Fujifilm's colour matrices** (`color_matrix_for_model`) are due to
-  be replaced.
+- **Fujifilm sensors other than X-Trans 4 and 5** (X-Trans 3 and
+  earlier, the X-H2S, GFX) keep the matrices they had (decision 73).
 - **Standard as a profile on a RAF**: it would need its own opening
-  exposure. The film looks reach 0.81 to 0.83 of the camera JPEG's
-  chroma.
+  exposure. With the matrices of decision 73 the film looks sit at
+  0.87 to 1.23 of the camera JPEG's chroma over the eight samples, 1.02
+  on average.
 - **Sony**: lens corrections are not applied, and bodies without
   measured data use Sony's partial matrix.
 - **DNG**: JPEG XL tiles; a 48-megapixel ProRAW (untested);
@@ -1271,4 +1290,11 @@ On the final tree (86ca279f4) and the engine built from it:
   asked for again on every view change, and "Loading full resolution…"
   never goes away; on the no-float way the photo does not open. Any
   format, found with the Q2. This Mac's GPU takes 16384 and shows it.
+- **Fujifilm GFX.** A GFX 100 RAF opens magenta with its highlights
+  blown to white, and GFX 50S II and GFX100RF files are refused for
+  their compression (`raw_type` 0x2001 and 0x6c03). No GFX file had been
+  tried before.
+- **A Leica DNG's Kelvin readout** is high: 10200 to 11300 K for two
+  files shot under daylight-balanced light, where a Sony A7 III reads
+  5900 K. Not looked into.
 - **XMP export's Kelvin** still takes the RAF route only.

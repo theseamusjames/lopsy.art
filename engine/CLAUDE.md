@@ -29,12 +29,13 @@ engine/
       color.rs        # Color space conversions
       working_space.rs # The develop working space: gamuts, matrices from primaries, the input step
       cct.rs          # Correlated colour temperature and tint of a white point, and back
+      camera_colour.rs # Camera matrices for bodies whose files carry none they can use
       raf/            # RAF decode: the baked import, and linear camera RGB for the develop chain
       dng/            # DNG decode: the baked import (mod.rs), linear camera RGB (linear.rs),
                       # and camera colour by the DNG specification's method (camera_color.rs)
       arw/            # Sony ARW decode (lossy, uncompressed, lossless; the SR2 block) onto
                       # the DNG decode's plane, renders and baked finish; measured colour for
-                      # the bodies with data, Sony's matrix (approximate) otherwise
+                      # the bodies with data, camera_colour's matrix or Sony's (approximate) otherwise
       raw/            # One RAW interface over raf/, dng/ and arw/: sniff, prepare and describe,
                       # bands, binned view, white balance in recipe units (the raw… exports)
       tone.rs         # The develop tone step (scene to rendered) and its curve's shoulder
@@ -177,7 +178,8 @@ JS API, and the deviations from `docs/photonamous-spec.md` 6.10. Rules:
 - **Camera colour.** The RAW step takes a white-balance gain (`wbRatio`)
   and a camera matrix (`camToRgb`, to linear sRGB, carried on to Rec.
   2020). For a RAF the matrix is one daylight matrix per sensor
-  generation and Kelvin is a readout fitted through the camera's
+  generation (`camera_colour` for X-Trans 4 and 5, a table in `raf` for
+  the rest) and Kelvin is a readout fitted through the camera's
   calibration whites for illuminants A and D65, which the file carries
   beside its own presets (`raf::wb_presets`); nothing about it follows
   the white balance. For a
@@ -188,10 +190,12 @@ JS API, and the deviations from `docs/photonamous-spec.md` 6.10. Rules:
   and tint are real (`cct`); the app sends `wbRatio` and `camToRgb`
   together. The tests on real DNGs read `LOPSY_DNG_SAMPLES`
   (`core/tests/dng_develop.rs`, `--release`), and `dng_baked_hash.rs`
-  pins both DNG decodes bit for bit. A Sony ARW follows the RAF model:
-  one fixed matrix (Sony's `ColorMatrix` from the file's SR2 block, which
-  is only part of the camera's colour, so the decode says its colour is
-  approximate) and `wbRatio` as gains. The tests on real ARWs read
+  pins both DNG decodes bit for bit. A Sony ARW from a body with measured
+  data (`arw::colour`) takes the DNG method. Any other follows the RAF
+  model, one fixed matrix and `wbRatio` as gains: the body's matrix in
+  `camera_colour` when it has one, otherwise Sony's `ColorMatrix` from
+  the file's SR2 block, which is only part of the camera's colour, so
+  the decode says its colour is approximate. The tests on real ARWs read
   `LOPSY_ARW_SAMPLES` (`core/tests/arw_decode.rs`, `--release`).
 - Develop shaders compile lazily through `ShaderPrograms::<name>()`, never
   in `compile_all`.
