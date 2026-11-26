@@ -227,8 +227,9 @@ pub(crate) fn read_stored_image(data: &[u8], debug_log: &mut Vec<String>) -> Res
         raw_bytes.extend_from_slice(&data[start..end]);
     }
 
+    let row_samples = width as usize * if is_linear { samples as usize } else { 1 };
     let pixel_data: Vec<u16> = match compression {
-        1 => decode_uncompressed(&raw_bytes, bits)?,
+        1 => decode_uncompressed(&raw_bytes, bits, row_samples)?,
         7 => {
             if let (Some(tw), Some(th)) = (tile_width, tile_height) {
                 decode_ljpeg_tiled(data, &strip_offsets, &strip_counts, width, height, tw, th, samples)?
@@ -236,7 +237,7 @@ pub(crate) fn read_stored_image(data: &[u8], debug_log: &mut Vec<String>) -> Res
                 ljpeg::decode_lossless_jpeg(&raw_bytes)?
             }
         }
-        8 | 32946 => decode_deflate(&raw_bytes, bits)?,
+        8 | 32946 => decode_deflate(&raw_bytes, bits, row_samples)?,
         // Baseline (lossy) JPEG tiles of LinearRaw data.
         34892 => {
             let lossy = |why: String| format!("{LOSSY_REFUSAL}: {why}");
@@ -1136,7 +1137,36 @@ fn decode_uncompressed(data: &[u8], bits: u32, row_samples: usize) -> Result<Vec
     }
 }
 
-fn decode_deflate(data: &[u8], bits: u32) -> Result<Vec<u16>, String> {
+/// Samples of 9 to 15 bits: packed most significant bit first, whatever
+/// the file's byte order, each row starting on a byte (the DNG
+/// specification on `BitsPerSample`: the TIFF default `FillOrder`). The
+/// Leica Q2 and SL2 store 14 bits this way. Bytes after the last whole
+/// row are left out, and the caller checks the count it gets.
+fn unpack_bits(data: &[u8], bits: u32, row_samples: usize) -> Result<Vec<u16>, String> {
+    let row_bytes = (row_samples * bits as usize).div_ceil(8);
+    if row_bytes == 0 {
+        return Err("No samples in a row of packed data".into());
+    }
+    let mut out: Vec<u16> = Vec::new();
+    out.try_reserve_exact((data.len() / row_bytes) * row_samples).map_err(|_| "Not enough memory for the DNG's samples".to_string())?;
+    let mask = (1u32 << bits) - 1;
+    for row in data.chunks_exact(row_bytes) {
+        let (mut window, mut held) = (0u32, 0u32);
+        let mut bytes = row.iter();
+        for _ in 0..row_samples {
+            while held < bits {
+                // `row_bytes` holds every bit of the row's samples.
+                window = (window << 8) | u32::from(bytes.next().copied().unwrap_or(0));
+                held += 8;
+            }
+            held -= bits;
+            out.push(((window >> held) & mask) as u16);
+        }
+    }
+    Ok(out)
+}
+
+fn decode_deflate(data: &[u8], bits: u32, row_samples: usize) -> Result<Vec<u16>, String> {
     use flate2::read::ZlibDecoder;
     use std::io::Read;
 
@@ -1145,7 +1175,7 @@ fn decode_deflate(data: &[u8], bits: u32) -> Result<Vec<u16>, String> {
     decoder.read_to_end(&mut decompressed)
         .map_err(|e| format!("Deflate decompression failed: {e}"))?;
 
-    decode_uncompressed(&decompressed, bits)
+    decode_uncompressed(&decompressed, bits, row_samples)
 }
 
 fn decode_ljpeg_tiled(
@@ -1272,6 +1302,22 @@ pub(crate) fn get_rational(entries: &[IfdEntry], tag: TagId) -> Option<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn packed_samples_are_read_high_bit_first_with_each_row_on_a_byte() {
+        // 14 bits: the first seven bytes of a Leica Q2's raw data, four
+        // samples near its black level of 512.
+        assert_eq!(unpack_bits(&[0x07, 0xe0, 0x20, 0x10, 0x7f, 0x02, 0x01], 14, 4).unwrap(), [504, 513, 508, 513]);
+        // 12 bits, three samples to a row: 36 bits in five bytes, the last
+        // four bits padding, and the next row starts on its own byte.
+        let row = [0xab, 0xc1, 0x23, 0x45, 0x6f];
+        let two_rows_and_a_bit: Vec<u8> = row.iter().chain(&row).chain(&[0xff, 0xff]).copied().collect();
+        assert_eq!(unpack_bits(&two_rows_and_a_bit, 12, 3).unwrap(), [0xabc, 0x123, 0x456, 0xabc, 0x123, 0x456]);
+        assert!(unpack_bits(&row, 12, 0).is_err());
+        // 8 and 16 bits keep the forms the decode has always given.
+        assert_eq!(decode_uncompressed(&[0x12, 0x34], 8, 2).unwrap(), [0x1200, 0x3400]);
+        assert_eq!(decode_uncompressed(&[0x12, 0x34], 16, 1).unwrap(), [0x3412]);
+    }
 
     /// Build a gray ramp of `n` pixels with luminance i/(n-1) (R=G=B).
     fn gray_ramp(n: usize) -> Vec<f32> {
