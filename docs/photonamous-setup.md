@@ -448,7 +448,12 @@ The old chain is `?develop=legacy` on a page of a development build
 ignore it): every engine keeps the working space off and the app sends
 the legacy calls, as on a GPU without float render targets, while the
 texture pool and the RAW decode stay float as the GPU has them. HDR files
-are not offered then, and the status bar reads 8-bit.
+are not offered then, and the status bar reads 8-bit. `?develop=no-float`
+goes further: the app also takes the GPU for one without float targets, so
+a RAF decodes to its finished look and is edited as an ordinary photo, as
+on such a GPU (the texture pool is still the GPU's). Every GPU the browser
+tests run on, WebGL included, has float targets: this is how they reach
+that path.
 
 **Colour.** Headless Chromium's display is sRGB. `e2e/display-p3.spec.ts`
 starts its browser with `--force-color-profile=display-p3-d65`, which gives
@@ -502,6 +507,18 @@ and lossless siblings), the A7 III, A6000 and RX100 III ARWs, and an SR2
 and an SRF that must be refused; and
 `arw.test.ts` checks that every `.dng` in `LOPSY_DNG_SAMPLES` is still
 taken for a DNG; each is skipped without its variable.
+
+**RAW parity.** `e2e/raw-parity.spec.ts` renders each RAF in
+`LOPSY_RAF_SAMPLES` in the Edit view at its working size under three
+recipes, on the page's own develop path (linear), with `?develop=legacy`
+and with `?develop=no-float`, and compares a fingerprint of the exact
+render (a 64-bit hash, with a 12 × 8 grid of cell means to say where a
+change is) with the one stored in `e2e/raw-parity/<name>.txt`, keyed by
+browser, renderer and way. It runs in Chromium only, in about four
+minutes with four workers. A change that is meant to move the RAW develop records new
+fingerprints for the renderer a run is on with
+`LOPSY_RAW_PARITY_UPDATE=1` (run it once per renderer); one that is not
+must leave them as they are.
 
 ## 6. What needs a real Google account to verify
 
