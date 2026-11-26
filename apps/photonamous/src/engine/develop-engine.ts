@@ -157,7 +157,7 @@ import { LOPSY_LAYER_MIME } from './lopsy-layer';
 export { LOPSY_LAYER_MIME };
 import { areaLayerKey, areaLayerValues, areaValues, linearAreaLayerKey, linearAreaLayerValues, type AreaFrame } from './areas';
 import { developPathFor, developStages, type DevelopPath, type LegacyStages, type LinearStages } from './develop-stages';
-import { usesWorkingSpace } from './develop-override';
+import { treatsAsFloat, usesWorkingSpace } from './develop-override';
 import { NO_INSETS, clampZoom, fitView, limitSize, panBy, zoomAround, type Insets, type Size, type View } from './viewport';
 import { decodeRafInWorkers, DecodeAbortedError } from './raf/raf-decode';
 import { parseRawDevelopSettings, rawSettingsFor, rawSettingsJson, temperatureTintFor, type RawDevelopSettings } from './raw-develop';
@@ -187,20 +187,18 @@ declare global {
 }
 
 /**
- * Development builds: the Edit view's rendered picture at the size it is
- * edited at. On the linear path, `readRenderedF32` (linear Rec. 2020 f32
- * RGBA, before the output step, so the screen's space and views do not
- * touch it); on the legacy path, which has no such read, the sRGB picture
- * from `compositeForExportSized`, reduced on the GPU to
- * `QUICK_VIEW_LONG_EDGE` on its long edge at most.
+ * Development builds: the Edit view's rendered picture. On the linear
+ * path, `readRenderedF32` at the size it is edited at (linear Rec. 2020
+ * f32 RGBA, before the output step, so the screen's space and views do
+ * not touch it). The legacy path has no such read, and there Lopsy's image
+ * adjustments are applied as the canvas is drawn, not in the engine's
+ * export composite: its picture is the one an 8-bit export draws
+ * (`drawAtSizes`, sRGB) at `QUICK_VIEW_LONG_EDGE` on its long edge at
+ * most, as a PNG, which the reader decodes.
  */
-export interface RenderedForTest {
-  readonly path: DevelopPath;
-  readonly kind: 'linear-f32' | 'srgb8';
-  readonly width: number;
-  readonly height: number;
-  readonly pixels: Float32Array | Uint8Array;
-}
+export type RenderedForTest =
+  | { readonly path: DevelopPath; readonly kind: 'linear-f32'; readonly width: number; readonly height: number; readonly pixels: Float32Array }
+  | { readonly path: DevelopPath; readonly kind: 'srgb8-png'; readonly width: number; readonly height: number; readonly png: Blob };
 
 export interface LoadProgress {
   /** 'refining': a first view is on screen while the full-size image is decoded. */
@@ -634,13 +632,14 @@ export async function createDevelopEngine(canvas: HTMLCanvasElement, options: De
   const engine = await startEngine(canvas);
   try {
     setBackgroundColor(engine, 0, 0, 0, 1);
-    const hasFloat = hasFloatTargets(canvas);
+    const hasFloat = treatsAsFloat(hasFloatTargets(canvas));
     // Set once for the engine's life, before the first render. Photos that are
     // not RAW reach the engine as sRGB: the browser's decode into an sRGB 2D
     // canvas converts them, and the engine's PNG and DNG decoders and a Lopsy
     // layer give sRGB-encoded values. On an 8-bit pool linear data would band,
     // so there the working space stays off (plan section 5, decision 9).
-    // `?develop=legacy` (develop-override.ts) keeps it off on a float GPU too, for measuring the old chain.
+    // `?develop=legacy` (develop-override.ts) keeps it off on a float GPU too, for measuring the old chain;
+    // `?develop=no-float` also takes the GPU for one without float targets.
     const isWorkingSpace = usesWorkingSpace(hasFloat);
     setDevelopWorkingSpace(engine, isWorkingSpace, SRGB);
     // The status says what the edit can do: without the working space there are no HDR files, as on an 8-bit GPU.
@@ -1641,13 +1640,13 @@ class PhotoEngine implements DevelopEngine {
         if (!(pixels instanceof Float32Array) || pixels.length !== width * height * 4) return null;
         return { path: this.path, kind: 'linear-f32', width, height, pixels };
       }
-      const scale = Math.min(1, QUICK_VIEW_LONG_EDGE / Math.max(width, height));
-      const w = Math.max(1, Math.round(width * scale));
-      const h = Math.max(1, Math.round(height * scale));
-      const pixels: unknown = await compositeForExportSized(this.engine, w, h);
-      this.invalidate();
-      if (!(pixels instanceof Uint8Array) || pixels.length !== w * h * 4) return null;
-      return { path: this.path, kind: 'srgb8', width: w, height: h, pixels };
+      const image = this.imageSize();
+      if (!image) return null;
+      const scale = Math.min(1, QUICK_VIEW_LONG_EDGE / Math.max(image.width, image.height));
+      const size = { width: Math.max(1, Math.round(image.width * scale)), height: Math.max(1, Math.round(image.height * scale)) };
+      const drawn = this.drawAtSizes([size], 'srgb')[0];
+      if (!drawn) return null;
+      return { path: this.path, kind: 'srgb8-png', ...size, png: await drawn.convertToBlob({ type: PNG_MIME }) };
     });
   }
 
