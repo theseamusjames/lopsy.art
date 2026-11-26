@@ -354,8 +354,10 @@ the newer version made.
 
 - **Loading and working size.** RAF, DNG and Sony ARW decode on a pool of
   workers into the engine's RAW develop stage; an iPhone ProRAW's local
-  tone map (its gain table map) is applied there. A DNG the RAW path cannot
-  read (a lossy one), and DNG and ARW on a GPU without float targets,
+  tone map (its gain table map) is applied there. A DNG's data may be
+  uncompressed, lossless JPEG, lossy JPEG (Adobe's lossy conversions,
+  8-bit linear tiles) or deflate; one in JPEG XL is not read. A file the
+  RAW path cannot read, and DNG and ARW on a GPU without float targets,
   open as the engine's finished picture and are edited as an ordinary
   photo; when that cannot be read either, the Edit view says why. 16-bit
   PNG at full depth; JPEG and WebP through the browser. Editing starts on
