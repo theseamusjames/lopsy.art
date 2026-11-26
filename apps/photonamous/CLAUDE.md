@@ -104,6 +104,23 @@ finish, the masks' built-in sliders and the RAW develop stage take the
 same calls on both. A RAW photo's exposure and white balance stay in
 `setRawDevelop`; `setDevelopTone` carries them only for other photos.
 
+**The RAW path.** RAF, DNG and Sony ARW open through the engine's
+format-neutral RAW interface (`raw…` exports), and nothing in
+`src/engine` or `src/edit` names a format: what differs comes from the
+file's description (`src/engine/raw/raw-format.ts`, `RawDescription`).
+`rawPrepare` runs in a worker (`raw/raw-worker.ts`), bands are planned
+with `rawPlanBands` and rendered by every worker (`raw/raw-decode.ts`; a
+plane row is `planeWidth × samplesPerPixel` values). The white balance
+follows the description's model (`raw/raw-white-balance.ts`): a fixed
+matrix takes `wbRatioFor` and the profile's matrix; one that follows the
+white asks `rawWhiteBalance` for each white's gains and matrix; Kelvin is
+fitted, measured or absent. The Profile menu is the description's
+profiles by their roles (`profiles.ts`; the camera's entry is the
+recipe's `standard`). The baked decode (`decodeAndUploadRawBaked`) is
+only a fallback: a file `rawPrepare` refuses, and a format that renders
+no finished bands (`rawRendersFinishedBands`) on a GPU without float
+targets. `e2e/raw-parity.spec.ts` pins every format's render exactly.
+
 The UI this app shares with Lopsy is `packages/ui` (`@lopsy/ui`, see its
 `README.md`): the design tokens, reset and fonts (`src/styles/index.css`
 imports them), the Slider, the Menu, the StatusBar, and the keyboard and focus helpers
