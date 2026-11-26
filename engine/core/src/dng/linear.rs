@@ -119,6 +119,12 @@ pub struct DngRenderParams {
     /// `prepare_dng` alone.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub highlight_chroma: Option<ChromaGrid>,
+    /// The exposure the develop chain opens with, in stops, when it is
+    /// matched to the camera's preview rather than the file's
+    /// BaselineExposure (`dng::preview`, an opening look's
+    /// `dng_preview_exposure`). `None` (and not written): the baseline.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_exposure_ev: Option<f32>,
 }
 
 impl DngRenderParams {
@@ -472,6 +478,7 @@ pub fn prepare_dng(data: &[u8]) -> Result<DngPrepared, String> {
         calibration,
         camera_model,
         highlight_chroma: None,
+        default_exposure_ev: None,
     };
     Ok(DngPrepared { params, plane, unhandled, debug_log })
 }
@@ -715,7 +722,7 @@ pub fn render_binned_linear_for<P: PlaneParams + ?Sized>(plane: &[f32], params: 
 
 /// The develop settings a DNG opens with: the as-shot white balance
 /// (`wbRatio` 1), the DNG method's matrix for it, the file's baseline
-/// exposure, no extra saturation, and the engine's neutral base curve (a
+/// exposure (or `default_exposure_ev` when the RAW interface matched one), no extra saturation, and the engine's neutral base curve (a
 /// DNG has no film simulation; its `ProfileToneCurve` is not used): the
 /// base curve of today's opening look (`raw::OpeningLook::default`).
 pub fn develop_defaults(params: &DngRenderParams) -> Result<RawDevelopSettings, String> {
@@ -729,7 +736,7 @@ pub fn develop_defaults_with(params: &DngRenderParams, base_curve: Vec<f32>) -> 
     Ok(RawDevelopSettings {
         wb_ratio: wb.wb_ratio,
         cam_to_rgb: wb.cam_to_rgb,
-        exposure_ev: params.calibration.baseline_exposure as f32,
+        exposure_ev: params.default_exposure_ev.unwrap_or(params.calibration.baseline_exposure as f32),
         saturation: 1.0,
         highlight_desaturation: true,
         base_curve: Some(base_curve),
@@ -798,6 +805,7 @@ mod tests {
             calibration: cal,
             camera_model: "Test".into(),
             highlight_chroma: None,
+            default_exposure_ev: None,
         }
     }
 

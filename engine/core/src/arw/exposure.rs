@@ -112,16 +112,25 @@ fn jpeg_ranges(data: &[u8]) -> Vec<(usize, usize)> {
 /// after orientation), its luminance median, or `None` (see the module
 /// notes). Never fails: a JPEG that does not decode is skipped.
 pub fn whole_picture_preview(data: &[u8], aspect: f64) -> Option<Preview> {
+    preview_of(data, &jpeg_ranges(data), &[aspect])
+}
+
+/// [`whole_picture_preview`] over the JPEGs at `ranges` (offset, length,
+/// inside `data`), any of whose aspect is within 1 % of one of `aspects`.
+pub fn preview_of(data: &[u8], ranges: &[(usize, usize)], aspects: &[f64]) -> Option<Preview> {
     // Headers first, to choose without decoding every candidate.
     let mut candidates: Vec<(usize, usize, u32, u32)> = Vec::new();
-    for (o, n) in jpeg_ranges(data) {
+    for &(o, n) in ranges {
+        if n == 0 || n > MAX_PREVIEW_BYTES || o.checked_add(n).is_none_or(|end| end > data.len()) {
+            continue;
+        }
         let mut dec = jpeg_decoder::Decoder::new(&data[o..o + n]);
         if dec.read_info().is_err() {
             continue;
         }
         let Some(info) = dec.info() else { continue };
         let (w, h) = (u32::from(info.width), u32::from(info.height));
-        if w == 0 || h == 0 || (f64::from(w) / f64::from(h) / aspect - 1.0).abs() > 0.01 {
+        if w == 0 || h == 0 || !aspects.iter().any(|a| (f64::from(w) / f64::from(h) / a - 1.0).abs() <= 0.01) {
             continue;
         }
         candidates.push((o, n, w, h));

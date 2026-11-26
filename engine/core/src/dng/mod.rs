@@ -94,6 +94,7 @@ pub mod demosaic;
 pub mod color;
 pub mod camera_color;
 pub mod linear;
+pub mod preview;
 
 use tiff::{TiffReader, IfdEntry, TagId};
 use crate::black_level::BlackLevels;
