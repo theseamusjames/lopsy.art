@@ -582,14 +582,39 @@ pub struct ArwImage {
 /// through the DNG baked decode's steps (bilinear demosaic, the camera
 /// matrix, the sRGB transfer, auto-levels, orientation).
 pub fn read_arw(data: &[u8]) -> Result<ArwImage, String> {
-    let prep = linear::prepare_arw(data)?;
+    bake_prepared(linear::prepare_arw(data)?, 0.0)
+}
+
+/// [`read_arw`] of an already prepared ARW, with an exposure of
+/// `exposure_ev` stops added before the colour and tone steps (0 for the
+/// decode as it ships; other values are for experiments on the default
+/// exposure).
+pub fn bake_prepared(prep: linear::ArwPrepared, exposure_ev: f32) -> Result<ArwImage, String> {
     let linear::ArwPrepared { params, mut plane, unhandled, mut debug_log } = prep;
     // The baked decode starts from black, as `read_dng`'s normalization
     // does; the plane already carries the as-shot white balance.
     for v in plane.iter_mut() {
         *v = v.max(0.0);
     }
+    if exposure_ev != 0.0 {
+        let gain = exposure_ev.exp2();
+        for v in plane.iter_mut() {
+            *v *= gain;
+        }
+    }
     let mut rgb = crate::dng::demosaic::bilinear(&plane, params.width, params.height, &params.cfa);
+    // A clipped channel carries its white-balance gain (R and B clip at
+    // their gains, above green's 1), which a calibrated matrix turns into
+    // magenta highlights. With measured colour, every channel is clipped at
+    // the lowest clip level first, so clipped highlights stay white. (Sony's
+    // partial matrix is close to the identity and the final clamp hides
+    // it; those bodies decode as before.)
+    if params.colour == ArwColour::Measured {
+        let clip = params.as_shot_gain.iter().copied().fold(1.0f32, f32::min);
+        for v in rgb.iter_mut() {
+            *v = v.min(clip);
+        }
+    }
     drop(plane);
     let ci = crate::dng::centre_index(params.width, params.height);
     crate::dng::bake_colour(&mut rgb, None, Some(&params.cam_to_rgb), None, &mut debug_log, ci);
