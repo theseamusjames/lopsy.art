@@ -129,8 +129,8 @@ pub fn prepare_arw(data: &[u8]) -> Result<ArwPrepared, String> {
 /// (`wbRatio` 1), the file's matrix, `default_exposure_ev` (an ARW records
 /// no baseline exposure: the RAW interface matches it to the camera's
 /// preview, `exposure::match_develop_exposure`; 0 from `prepare_arw` alone),
-/// no extra saturation, and the base curve of today's opening look
-/// (`raw::OpeningLook::default`, the engine's neutral curve).
+/// no extra saturation, and the Standard look's base curve
+/// (`raw::OpeningLook::default`).
 pub fn develop_defaults(params: &ArwRenderParams) -> RawDevelopSettings {
     develop_defaults_with(params, crate::raw::OpeningLook::default().curve.lut())
 }

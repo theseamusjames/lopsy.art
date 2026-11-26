@@ -48,7 +48,7 @@
 //! and vignette corrections, bad pixels), `ProfileGainTableMap` (Apple's
 //! local tone map), `ProfileHueSatMap` and `ProfileLookTable` (the
 //! profile's hue and saturation twists), `ProfileToneCurve` (the engine's
-//! neutral base curve is used instead), a `DefaultCrop` that is not whole
+//! Standard curve is used instead), a `DefaultCrop` that is not whole
 //! pixels or comes with a `DefaultScale` (the whole active area is kept
 //! then), semantic masks, a third calibration, and highlight
 //! reconstruction on a LinearRaw plane (its clipped channels stay
@@ -225,7 +225,7 @@ pub fn unhandled_features(ifd0: &[IfdEntry], main: &[IfdEntry]) -> Vec<String> {
         (TagId::ProfileGainTableMap, "ProfileGainTableMap (local tone map)"),
         (TagId::ProfileHueSatMapData1, "ProfileHueSatMap (the profile's hue and saturation corrections)"),
         (TagId::ProfileLookTableData, "ProfileLookTable (the profile's look)"),
-        (TagId::ProfileToneCurve, "ProfileToneCurve (the neutral base curve is used instead)"),
+        (TagId::ProfileToneCurve, "ProfileToneCurve (the Standard curve is used instead)"),
         (TagId::DefaultCropOrigin, "DefaultCrop (not whole pixels at scale 1, so the whole active area is kept)"),
         (TagId::SemanticName, "semantic masks"),
         (TagId::ColorMatrix3, "a third calibration (ColorMatrix3)"),
@@ -722,9 +722,10 @@ pub fn render_binned_linear_for<P: PlaneParams + ?Sized>(plane: &[f32], params: 
 
 /// The develop settings a DNG opens with: the as-shot white balance
 /// (`wbRatio` 1), the DNG method's matrix for it, the file's baseline
-/// exposure (or `default_exposure_ev` when the RAW interface matched one), no extra saturation, and the engine's neutral base curve (a
-/// DNG has no film simulation; its `ProfileToneCurve` is not used): the
-/// base curve of today's opening look (`raw::OpeningLook::default`).
+/// exposure (or `default_exposure_ev` when the RAW interface matched one
+/// to the camera's preview), no extra saturation, and the Standard look's
+/// base curve (`raw::OpeningLook::default`; a DNG has no film simulation,
+/// and its `ProfileToneCurve` is not used).
 pub fn develop_defaults(params: &DngRenderParams) -> Result<RawDevelopSettings, String> {
     develop_defaults_with(params, crate::raw::OpeningLook::default().curve.lut())
 }

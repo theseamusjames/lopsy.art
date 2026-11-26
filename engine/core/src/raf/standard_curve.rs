@@ -1,9 +1,9 @@
 //! **Standard**: one tone curve of our own for every camera that is not
 //! rendered with a maker's film look, built from a small parametric form
-//! rather than typed points. A prototype: three candidates
-//! ([`STANDARD_GENTLE`], [`STANDARD_MEDIUM`], [`STANDARD_PUNCHY`]) for the
-//! owner to choose between; no format opens with any of them yet
-//! (`raw::look::OpeningLook`'s default is today's `NEUTRAL`).
+//! rather than typed points. DNG and ARW open with [`STANDARD`], the
+//! gentle candidate (`raw::look::OpeningLook::default`); the other two
+//! ([`STANDARD_MEDIUM`], [`STANDARD_PUNCHY`]) are kept for comparison
+//! pictures only (they are three constants).
 //!
 //! **The form.** With `u = x / 0.18` (scene luminance in units of middle
 //! grey, the convention the develop chain's scene stages use):
@@ -93,6 +93,10 @@ pub const STANDARD_GENTLE: StandardCurve = StandardCurve { name: "Standard A (ge
 pub const STANDARD_MEDIUM: StandardCurve = StandardCurve { name: "Standard B (medium)", grey: 0.22, contrast: 1.20, white_stops: 3.5 };
 /// C: more contrast, a short shoulder (white 3 stops above grey).
 pub const STANDARD_PUNCHY: StandardCurve = StandardCurve { name: "Standard C (punchy)", grey: 0.22, contrast: 1.30, white_stops: 3.0 };
+
+/// The Standard curve DNG and ARW open with: the gentle candidate, which
+/// the owner chose from `samples/linear-pipeline-review/standard-look`.
+pub const STANDARD: StandardCurve = STANDARD_GENTLE;
 
 /// The three candidates, A, B, C.
 pub const CANDIDATES: [StandardCurve; 3] = [STANDARD_GENTLE, STANDARD_MEDIUM, STANDARD_PUNCHY];

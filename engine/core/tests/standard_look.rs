@@ -332,13 +332,19 @@ fn row(file: &str, case: &str, panels: &[Panel]) -> String {
     format!("| {file} | {case} | {} |", cells.join(" | "))
 }
 
-/// A DNG or ARW: preview, today, A, B, C.
+/// The look DNG and ARW opened with before Standard: the neutral curve,
+/// every DNG at its BaselineExposure.
+fn before(data: &[u8]) -> PreparedRaw {
+    raw::prepare_with(data, &OpeningLook::parse("neutral").unwrap()).unwrap()
+}
+
+/// A DNG or ARW: preview, before, A, B, C.
 fn sheet_for(path: &Path, preview_label: &str, preview_match: bool, out: &Path, table: &mut Vec<String>) {
     let name = path.file_name().unwrap().to_string_lossy().to_string();
     let stem = name.rsplit_once('.').map_or(name.clone(), |(s, _)| s.to_string());
     let data = std::fs::read(path).unwrap();
-    let today = raw::prepare(&data).unwrap();
-    let mut panels = vec![render_panel("today (neutral)", &today, &today.description.develop_defaults)];
+    let today = before(&data);
+    let mut panels = vec![render_panel("before (neutral)", &today, &today.description.develop_defaults)];
     let width = panels[0].pic.w;
     let preview = preview_panel(&format!("preview: {preview_label}"), &data, &today, width).expect("an embedded preview");
     panels.insert(0, preview);
@@ -441,7 +447,7 @@ fn every_candidate_opens_an_arw_at_the_cameras_brightness_through_its_curve() {
     for path in files("LOPSY_ARW_SAMPLES", "arw") {
         let name = path.file_name().unwrap().to_string_lossy().to_string();
         let data = std::fs::read(&path).unwrap();
-        let today = raw::prepare(&data).unwrap();
+        let today = before(&data);
         let (w, h) = (today.description.width, today.description.height);
         let Some(preview) = lopsy_core::arw::exposure::whole_picture_preview(&data, f64::from(w) / f64::from(h)) else { continue };
         for (label, look) in looks(false) {
@@ -467,7 +473,7 @@ fn the_dng_preview_match_takes_only_camera_previews_of_gain_mapped_files() {
     for path in paths {
         let name = path.file_name().unwrap().to_string_lossy().to_string();
         let data = std::fs::read(&path).unwrap();
-        let Ok(today) = raw::prepare(&data) else { continue };
+        let Ok(today) = raw::prepare_with(&data, &OpeningLook::parse("neutral").unwrap()) else { continue };
         let Prepared::Dng(p) = &today.prepared else { continue };
         let baseline = p.params.calibration.baseline_exposure as f32;
         assert_eq!(today.description.develop_defaults.exposure_ev, baseline, "{name}");
