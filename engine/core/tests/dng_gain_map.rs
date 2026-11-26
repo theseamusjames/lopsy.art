@@ -294,9 +294,19 @@ fn after_panel(prep: &PreparedRaw, label: &str) -> Panel {
     render_panel(label, &p.plane, &p.params, &prep.description.develop_defaults)
 }
 
+/// The Standard entry of a camera-curve file's profiles, as develop
+/// settings: the map with the Standard curve, matched to the preview.
+fn standard_profile_settings(prep: &PreparedRaw) -> RawDevelopSettings {
+    let d = &prep.description.develop_defaults;
+    let s = &prep.description.profiles.iter().find(|p| p.id == "standard").expect("a Standard entry").settings;
+    RawDevelopSettings { cam_to_rgb: s.cam_to_rgb, exposure_ev: s.exposure_ev, saturation: s.saturation, highlight_desaturation: s.highlight_desaturation, base_curve: s.base_curve.clone(), ..d.clone() }
+}
+
 fn panels_for(data: &[u8]) -> (PreparedRaw, Vec<Panel>) {
     let prep = raw::prepare(data).unwrap();
-    let mut panels = vec![preview_panel(data, &prep), before_panel(data), after_panel(&prep, "after: map applied")];
+    let Prepared::Dng(p) = &prep.prepared else { panic!("not a DNG") };
+    let standard = render_panel("map, Standard, preview match", &p.plane, &p.params, &standard_profile_settings(&prep));
+    let mut panels = vec![preview_panel(data, &prep), before_panel(data), standard, after_panel(&prep, "map, file curve (default)")];
     measure(&mut panels);
     (prep, panels)
 }
@@ -330,38 +340,55 @@ fn write_sheet(path: &Path, title: &str, panels: &[Panel]) {
     sheet.write_jpeg(path);
 }
 
-/// With the map, both samples open at the preview's brightness (the
-/// exposure match still runs: through the Standard curve, the map's output
-/// at the BaselineExposure is brighter than the preview) with their lights
-/// held: the concert's share of pixels at white falls from 14 % to under
-/// 1 % (the preview's is 0.3 %). Chroma is not better: the map's lifted
-/// shadows pull the matched exposure down, and the concert's blues stay
-/// as thin as before (0.71 of the preview's against 0.75), the rose's
-/// within 0.05 of before. With `LOPSY_GAIN_MAP_DIR`, the sheets.
+/// The default for these files is the pair the format describes: the map
+/// and the file's own `ProfileToneCurve`, at the BaselineExposure and the
+/// Standard saturation, with no preview match. Measured against the
+/// camera's previews (median, share at white, chroma):
+/// - rose: 0.427 against 0.440, 0.43 % against 0.09 %, chroma 0.92 (before
+///   the map 0.440, 0.13 %, 0.98);
+/// - concert: 0.229 against 0.167 (half a stop brighter), 1.74 % against
+///   0.27 %, chroma 0.89 (before the map 0.161, 13.8 %, 0.75).
+///
+/// The map with the Standard curve matched to the preview (the Standard
+/// entry) has the exact median but chroma 0.94 and 0.71: flat, and the
+/// concert hazy. (The rose's overall chroma is the one figure where the
+/// Standard entry is nearer, 0.94 against 0.92; by lightness the file's
+/// curve is nearer in its bright petals, 0.99 against 0.91.)
+/// The bounds below are those numbers with a little room. With
+/// `LOPSY_GAIN_MAP_DIR`, the sheets.
 #[test]
-fn the_map_holds_the_lights_at_the_previews_brightness() {
+fn the_map_and_the_files_curve_open_near_the_preview() {
     let out = std::env::var_os("LOPSY_GAIN_MAP_DIR").map(PathBuf::from).filter(|p| p.is_dir());
     let mut table: Vec<String> = TABLE_HEAD.iter().map(|s| s.to_string()).collect();
     let mut seen = 0;
     for name in [ROSE, CONCERT] {
         let Some((_, data)) = sample(name) else { continue };
-        let (_, panels) = panels_for(&data);
+        let (prep, panels) = panels_for(&data);
         for p in &panels {
             table.push(row(name, p));
             println!("{}", table.last().unwrap());
         }
-        let (preview, before, after) = (&panels[0], &panels[1], &panels[2]);
-        assert!((after.median - preview.median).abs() < 0.015, "{name}: median {} against {}", after.median, preview.median);
+        let (preview, before, standard, after) = (&panels[0], &panels[1], &panels[2], &panels[3]);
+        let Prepared::Dng(p) = &prep.prepared else { unreachable!() };
+        assert_eq!(after.ev, Some(p.params.calibration.baseline_exposure as f32), "{name}: opens at the BaselineExposure");
+        assert!((standard.median - preview.median).abs() < 0.015, "{name}: the Standard entry's median {} against {}", standard.median, preview.median);
         let chroma = |p: &Panel| p.chroma.unwrap()[0].unwrap();
-        assert!(chroma(after) > chroma(before) - 0.06 && chroma(after) > 0.65, "{name}: chroma {} (before {})", chroma(after), chroma(before));
+        assert!(chroma(after) > 0.85 && chroma(after) < 1.0, "{name}: chroma {}", chroma(after));
+        // The concert's blues come back; the rose's overall chroma is a
+        // little under the Standard entry's (0.92 against 0.94) while its
+        // bright petals are nearer the preview (0.99 against 0.91).
+        let near = if name == CONCERT { chroma(after) > chroma(standard) + 0.1 } else { chroma(after) > chroma(standard) - 0.03 };
+        assert!(near, "{name}: chroma {} against the Standard entry's {}", chroma(after), chroma(standard));
         if name == CONCERT {
-            assert!(before.white > 0.10 && after.white < 0.01, "{name}: {} at white (before {})", after.white, before.white);
+            assert!((after.median - preview.median).abs() < 0.08, "{name}: median {} against {}", after.median, preview.median);
+            assert!(before.white > 0.10 && after.white < 0.025, "{name}: {} at white (before {})", after.white, before.white);
         } else {
-            assert!(after.white <= before.white + 0.002, "{name}: {} at white (before {})", after.white, before.white);
+            assert!((after.median - preview.median).abs() < 0.03, "{name}: median {} against {}", after.median, preview.median);
+            assert!(after.white < 0.006, "{name}: {} at white", after.white);
         }
-    if let Some(dir) = &out {
+        if let Some(dir) = &out {
             let stem = name.trim_end_matches(".dng");
-            let title = format!("{name}: preview | before (Standard, preview match, no map) | after (ProfileGainTableMap applied)");
+            let title = format!("{name}: preview | before (no map) | map, Standard, preview match | map, file curve (the default)");
             write_sheet(&dir.join(format!("{stem}-gain-map.jpg")), &title, &panels);
         }
         seen += 1;
@@ -410,7 +437,9 @@ fn exposure_candidates_with_the_map() {
         let mut panels = vec![preview_panel(&data, &opened), before_panel(&data)];
         let prep = linear::prepare_dng(&data).unwrap();
         let look = OpeningLook::default();
-        let base = linear::develop_defaults_with(&prep.params, &look).unwrap();
+        // The Standard look on the mapped plane (the defaults would be the
+        // file's own curve).
+        let base = RawDevelopSettings { base_curve: Some(look.curve.lut()), saturation: look.saturation, ..linear::develop_defaults_with(&prep.params, &look).unwrap() };
         let mut at = |label: &str, ev: f32| {
             let s = RawDevelopSettings { exposure_ev: ev, ..base.clone() };
             panels.push(render_panel(label, &prep.plane, &prep.params, &s));
@@ -450,4 +479,84 @@ fn exposure_candidates_with_the_map() {
         }
     }
     println!("{}", table.join("\n"));
+}
+
+/// Both samples' `ProfileToneCurve` is used: 257 points, an S-curve
+/// (scene 0.18 to about 0.128). Its table ends at 1.0 with a slope of
+/// about 0.76, and the tone step's shoulder continues from there with the
+/// same value and slope, so the map's output above 1 (the concert's clipped
+/// white lands near 1.13) rises smoothly toward the shoulder's ceiling and
+/// the output step rolls it to white: no step at 1, nothing falls. The map
+/// itself, gain × input, never falls on the concert's tables and falls by
+/// at most 0.1 % (relative) on a few of the rose's, which cannot be seen.
+#[test]
+fn the_files_curve_meets_the_shoulder_without_a_step_or_a_fall() {
+    use lopsy_core::tone::{curve_at, curve_top};
+    let mut seen = 0;
+    for name in [ROSE, CONCERT] {
+        let Some((_, data)) = sample(name) else { continue };
+        let prep = linear::prepare_dng(&data).unwrap();
+        assert!(!prep.unhandled.iter().any(|u| u.starts_with("ProfileToneCurve")), "{name}: {:?}", prep.unhandled);
+        let pts = prep.params.camera_curve.clone().expect("the file's curve in use");
+        assert_eq!(pts.len(), 257, "{name}");
+        let lut = linear::camera_curve_lut(&pts);
+        assert!(lut.windows(2).all(|w| w[1] >= w[0]), "{name}: the table falls");
+        assert!((curve_at(&lut, 0.18) - 0.128).abs() < 0.003, "{name}: {}", curve_at(&lut, 0.18));
+        let (top, slope) = curve_top(&lut);
+        assert!(top == 1.0 && (slope - 0.76).abs() < 0.02, "{name}: top {top}, slope {slope}");
+        let mut last = curve_at(&lut, 0.0);
+        let mut x = 0.0005f32;
+        while x < 4.0 {
+            let y = curve_at(&lut, x);
+            assert!(y >= last, "{name}: falls at {x}");
+            assert!(y - last < 0.01, "{name}: steps at {x}: {last} to {y}");
+            last = y;
+            x += 0.0005;
+        }
+        let (raw, big) = map_bytes(&data).unwrap();
+        let m = lopsy_core::dng::gain_map::parse(&raw, big).unwrap();
+        let mut worst = 0f32;
+        for t in m.gains.chunks_exact(257) {
+            for k in 0..256 {
+                let (a, b) = (t[k] * k as f32, t[k + 1] * (k + 1) as f32);
+                worst = worst.max((a - b) / a.max(1e-6));
+            }
+        }
+        assert!(worst < 0.001, "{name}: the map's output falls by {worst} relative");
+        seen += 1;
+    }
+    if seen == 0 {
+        skip("the file curve checks");
+    }
+}
+
+/// The profiles a ProRAW shows: the camera look (the file's curve), the
+/// Standard look matched to the preview, Neutral, and Monochrome as the
+/// camera look without colour; ProfileToneCurve is not in `notApplied`.
+#[test]
+fn a_prorav_lists_its_camera_look_first() {
+    let mut seen = 0;
+    for name in [ROSE, CONCERT] {
+        let Some((_, data)) = sample(name) else { continue };
+        let prep = raw::prepare(&data).unwrap();
+        let d = &prep.description;
+        assert!(!d.not_applied.iter().any(|u| u.starts_with("ProfileToneCurve") || u.starts_with("ProfileGainTableMap ")), "{name}: {:?}", d.not_applied);
+        let ids: Vec<&str> = d.profiles.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(ids, ["camera", "standard", "neutral", "monochrome"], "{name}");
+        let camera = &d.profiles[0];
+        assert_eq!((camera.name.as_str(), camera.menu_name.as_str(), camera.maker_standard, camera.listed), ("Camera", "Camera", true, true));
+        assert_eq!(camera.role, lopsy_core::raf::develop::ProfileRole::Camera);
+        assert_eq!(camera.settings.base_curve, d.develop_defaults.base_curve);
+        assert_eq!(camera.settings.saturation, lopsy_core::raw::STANDARD_SATURATION);
+        let standard = &d.profiles[1];
+        assert_eq!((standard.role, standard.maker_standard), (lopsy_core::raf::develop::ProfileRole::Look, false));
+        assert_eq!(standard.settings.base_curve, Some(OpeningLook::default().curve.lut()));
+        assert_ne!(standard.settings.exposure_ev, camera.settings.exposure_ev);
+        let mono = &d.profiles[3];
+        assert_eq!((mono.settings.saturation, &mono.settings.base_curve), (0.0, &d.develop_defaults.base_curve));
+        seen += 1;
+    }
+    if seen == 0 {
+        skip("the profile list");
+    }
 }

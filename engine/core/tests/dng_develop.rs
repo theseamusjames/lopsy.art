@@ -172,7 +172,7 @@ fn real_dngs_take_the_linear_path() {
         // the map against the camera's preview).
         let unmapped = prepare_dng_with(&data, PrepareOptions { apply_gain_table_map: false }).unwrap();
         let whole = render_linear_band(&unmapped.plane, &unmapped.params, whole_band).unwrap();
-        let settings = lopsy_core::raf::develop::RawDevelopSettings { saturation: 1.0, ..develop_defaults(p).unwrap() };
+        let settings = lopsy_core::raf::develop::RawDevelopSettings { saturation: 1.0, ..develop_defaults(&unmapped.params).unwrap() };
         let scene = scene_reference(&whole.pixels, &settings);
         let rendered = lopsy_core::tone::tone_reference(&scene, &tone_settings(&settings));
         let new = output_reference(&rendered, ow, &OutputSettings::sdr(OutputTarget::Srgb, Gamut::Rec2020, false));

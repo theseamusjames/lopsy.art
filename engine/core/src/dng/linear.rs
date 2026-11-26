@@ -50,12 +50,16 @@
 //! specification). The plane's clip levels are then a lower bound on where
 //! a clipped channel ended up. A Bayer DNG's map, a malformed one and the
 //! DNG 1.7 `ProfileGainTableMap2` are listed as not applied, with why.
+//! With the map applied, the file's own `ProfileToneCurve`, the map's pair
+//! in the format, is the camera look the develop defaults open with
+//! (`camera_curve`, [`develop_defaults_with`]), when it is usable
+//! ([`camera_curve_points`]).
 //!
 //! **What is not applied**, each a fallback-free omission the picture
 //! shows: opcode lists (`OpcodeList1–3`: lens shading `GainMap`, distortion
 //! and vignette corrections, bad pixels), `ProfileHueSatMap` and `ProfileLookTable` (the
 //! profile's hue and saturation twists), `ProfileToneCurve` (the engine's
-//! Standard curve is used instead), a `DefaultCrop` that is not whole
+//! Standard curve is used instead, except as above), a `DefaultCrop` that is not whole
 //! pixels or comes with a `DefaultScale` (the whole active area is kept
 //! then), semantic masks, a third calibration, and highlight
 //! reconstruction on a LinearRaw plane (its clipped channels stay
@@ -132,6 +136,19 @@ pub struct DngRenderParams {
     /// `dng_preview_exposure`). `None` (and not written): the baseline.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_exposure_ev: Option<f32>,
+    /// The file's own `ProfileToneCurve`, (input, output) points in linear
+    /// light, when its `ProfileGainTableMap` was applied and the curve is
+    /// usable ([`camera_curve_points`]): the camera look, the pair the
+    /// format describes, which the develop defaults then open with
+    /// ([`develop_defaults_with`]). `None` (and not written) otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub camera_curve: Option<Vec<[f32; 2]>>,
+    /// For a file with a `camera_curve`: the exposure at which the
+    /// Standard look matches the camera's preview (`dng::preview`), for
+    /// the Standard entry the profile list offers beside the camera look.
+    /// `None` (and not written) otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub standard_exposure_ev: Option<f32>,
 }
 
 impl DngRenderParams {
@@ -222,6 +239,52 @@ pub fn calibration_from_tags(ifd0: &[IfdEntry], main: &[IfdEntry]) -> Result<Dng
     Ok(cal)
 }
 
+/// How [`unhandled_features`] names a `ProfileToneCurve`.
+const TONE_CURVE_NOTE: &str = "ProfileToneCurve (the Standard curve is used instead)";
+
+/// The most points a `ProfileToneCurve` may have to be used.
+pub const MAX_TONE_CURVE_POINTS: usize = 4096;
+
+/// A file's `ProfileToneCurve` (IFD0, else the raw IFD) as points, when it
+/// is one the develop chain can use: 2 to [`MAX_TONE_CURVE_POINTS`]
+/// finite (input, output) pairs, inputs strictly increasing and outputs
+/// never falling, from (0, 0) to (1, 1) (within 1e-4) as the
+/// specification requires. `Ok(None)` when the file has none; an error says
+/// why one is not used.
+pub fn camera_curve_points(ifd0: &[IfdEntry], main: &[IfdEntry]) -> Result<Option<Vec<[f32; 2]>>, String> {
+    let entry = ifd0.iter().find(|e| e.tag == TagId::ProfileToneCurve as u16).or_else(|| main.iter().find(|e| e.tag == TagId::ProfileToneCurve as u16));
+    let Some(entry) = entry else { return Ok(None) };
+    if entry.typ != 11 {
+        return Err(format!("it is TIFF type {}, not FLOAT", entry.typ));
+    }
+    let v = entry.as_rational_vec();
+    if v.len() % 2 != 0 || v.len() < 4 || v.len() / 2 > MAX_TONE_CURVE_POINTS {
+        return Err(format!("{} values are not 2 to {MAX_TONE_CURVE_POINTS} pairs", v.len()));
+    }
+    let pts: Vec<[f32; 2]> = v.chunks_exact(2).map(|p| [p[0] as f32, p[1] as f32]).collect();
+    if !pts.iter().flatten().all(|x| x.is_finite() && (0.0..=1.0).contains(x)) {
+        return Err("a point is outside 0..1".into());
+    }
+    if !pts.windows(2).all(|w| w[1][0] > w[0][0] && w[1][1] >= w[0][1]) {
+        return Err("it is not increasing".into());
+    }
+    let (first, last) = (pts[0], pts[pts.len() - 1]);
+    let near = |a: f32, b: f32| (a - b).abs() <= 1e-4;
+    if !(near(first[0], 0.0) && near(first[1], 0.0) && near(last[0], 1.0) && near(last[1], 1.0)) {
+        return Err(format!("it runs from {first:?} to {last:?}, not (0, 0) to (1, 1)"));
+    }
+    Ok(Some(pts))
+}
+
+/// The table the develop settings carry for a camera curve: monotone cubic
+/// through its points (`raf::base_curves::curve_lut_from_points`), the way
+/// the built-in curves are sampled. The specification asks for a cubic
+/// spline; a monotone one cannot overshoot between dense points.
+pub fn camera_curve_lut(points: &[[f32; 2]]) -> Vec<f32> {
+    let pts: Vec<(f32, f32)> = points.iter().map(|p| (p[0], p[1])).collect();
+    crate::raf::base_curves::curve_lut_from_points(&pts)
+}
+
 /// How [`unhandled_features`] names a `ProfileGainTableMap`. A prepare that
 /// applies the map takes this out; one that cannot says why instead.
 const GAIN_MAP_NOTE: &str = "ProfileGainTableMap (local tone map)";
@@ -239,7 +302,7 @@ pub fn unhandled_features(ifd0: &[IfdEntry], main: &[IfdEntry]) -> Vec<String> {
         (TagId::ProfileGainTableMap2, "ProfileGainTableMap2 (the DNG 1.7 local tone map; not read)"),
         (TagId::ProfileHueSatMapData1, "ProfileHueSatMap (the profile's hue and saturation corrections)"),
         (TagId::ProfileLookTableData, "ProfileLookTable (the profile's look)"),
-        (TagId::ProfileToneCurve, "ProfileToneCurve (the Standard curve is used instead)"),
+        (TagId::ProfileToneCurve, TONE_CURVE_NOTE),
         (TagId::DefaultCropOrigin, "DefaultCrop (not whole pixels at scale 1, so the whole active area is kept)"),
         (TagId::SemanticName, "semantic masks"),
         (TagId::ColorMatrix3, "a third calibration (ColorMatrix3)"),
@@ -523,6 +586,7 @@ pub fn prepare_dng_with(data: &[u8], options: PrepareOptions) -> Result<DngPrepa
     // The gain table map, on the prepared plane in place, so every band
     // and the binned view see it alike (`dng::gain_map`).
     let mut clip_levels = gain;
+    let mut map_applied = false;
     let map_entry = main.iter().chain(ifd0.iter()).find(|e| e.tag == TagId::ProfileGainTableMap as u16);
     if let (Some(entry), true) = (map_entry, options.apply_gain_table_map) {
         let note = if kind == DngKind::Bayer {
@@ -534,12 +598,28 @@ pub fn prepare_dng_with(data: &[u8], options: PrepareOptions) -> Result<DngPrepa
         let at = unhandled.iter().position(|u| u == GAIN_MAP_NOTE);
         match (note, at) {
             (Ok(levels), Some(i)) => {
-                clip_levels = levels;
+                (clip_levels, map_applied) = (levels, true);
                 unhandled.remove(i);
             }
-            (Ok(levels), None) => clip_levels = levels,
+            (Ok(levels), None) => (clip_levels, map_applied) = (levels, true),
             (Err(why), Some(i)) => unhandled[i] = why,
             (Err(why), None) => unhandled.push(why),
+        }
+    }
+    // With the map applied, the file's own tone curve is its pair: the
+    // camera look the develop defaults open with. A curve that cannot be
+    // used says why, and the Standard look stays.
+    let mut camera_curve = None;
+    if map_applied {
+        let at = unhandled.iter().position(|u| u == TONE_CURVE_NOTE);
+        match (camera_curve_points(ifd0, main), at) {
+            (Ok(Some(points)), Some(i)) => {
+                debug_log.push(format!("[DNG linear] the camera look: the file's ProfileToneCurve, {} points, with its gain table map", points.len()));
+                camera_curve = Some(points);
+                unhandled.remove(i);
+            }
+            (Err(why), Some(i)) => unhandled[i] = format!("ProfileToneCurve (refused: {why}; the Standard curve is used instead)"),
+            _ => {}
         }
     }
 
@@ -572,6 +652,8 @@ pub fn prepare_dng_with(data: &[u8], options: PrepareOptions) -> Result<DngPrepa
         camera_model,
         highlight_chroma: None,
         default_exposure_ev: None,
+        camera_curve,
+        standard_exposure_ev: None,
     };
     Ok(DngPrepared { params, plane, unhandled, debug_log })
 }
@@ -837,15 +919,25 @@ pub fn develop_defaults(params: &DngRenderParams) -> Result<RawDevelopSettings, 
 }
 
 /// [`develop_defaults`] with the base curve and saturation of `look`.
+///
+/// A file with a `camera_curve` (its gain table map applied, its own
+/// `ProfileToneCurve` usable) opens with that curve instead, at the
+/// Standard saturation, whatever `look` says: like a RAF's film look, the
+/// camera's own rendering is the opening, and the look's curve is one of
+/// the profiles to choose (`raw::dng`).
 pub fn develop_defaults_with(params: &DngRenderParams, look: &crate::raw::OpeningLook) -> Result<RawDevelopSettings, String> {
     let wb = white_balance_for_ratio(params, [1.0, 1.0, 1.0])?;
+    let (curve, saturation) = match &params.camera_curve {
+        Some(points) => (camera_curve_lut(points), crate::raw::STANDARD_SATURATION),
+        None => (look.curve.lut(), look.saturation),
+    };
     Ok(RawDevelopSettings {
         wb_ratio: wb.wb_ratio,
         cam_to_rgb: wb.cam_to_rgb,
         exposure_ev: params.default_exposure_ev.unwrap_or(params.calibration.baseline_exposure as f32),
-        saturation: look.saturation,
+        saturation,
         highlight_desaturation: true,
-        base_curve: Some(look.curve.lut()),
+        base_curve: Some(curve),
         clip_levels: params.clip_levels,
     })
 }
@@ -912,6 +1004,8 @@ mod tests {
             camera_model: "Test".into(),
             highlight_chroma: None,
             default_exposure_ev: None,
+            camera_curve: None,
+            standard_exposure_ev: None,
         }
     }
 
@@ -1034,6 +1128,39 @@ mod tests {
         }
         // The map is not constant over the crop, so placement mattered.
         assert!(kept.chunks_exact(3).any(|p| p[0] != kept[0]));
+    }
+
+    fn float_entry(tag: TagId, values: &[f32]) -> IfdEntry {
+        IfdEntry { tag: tag as u16, typ: 11, count: values.len() as u32, raw_bytes: values.iter().flat_map(|v| v.to_ne_bytes()).collect() }
+    }
+
+    /// A `ProfileToneCurve` is used only when it is a curve the tone step
+    /// can take; anything else is refused with a sentence.
+    #[test]
+    fn a_tone_curve_is_checked_before_it_is_used() {
+        let curve = |v: &[f32]| camera_curve_points(&[float_entry(TagId::ProfileToneCurve, v)], &[]);
+        let good = curve(&[0.0, 0.0, 0.25, 0.1, 0.5, 0.45, 1.0, 1.0]).unwrap().unwrap();
+        assert_eq!(good, vec![[0.0, 0.0], [0.25, 0.1], [0.5, 0.45], [1.0, 1.0]]);
+        let lut = camera_curve_lut(&good);
+        assert!(lut.windows(2).all(|w| w[1] >= w[0]) && lut[0] == 0.0 && lut[lut.len() - 1] == 1.0);
+        assert_eq!(camera_curve_points(&[], &[]), Ok(None));
+        for bad in [
+            &[0.0, 0.0, 1.0][..],                      // not pairs
+            &[0.0, 0.0][..],                           // one point
+            &[0.0, 0.0, 0.5, 0.6, 0.4, 0.7, 1.0, 1.0][..], // inputs go back
+            &[0.0, 0.0, 0.5, 0.6, 0.7, 0.5, 1.0, 1.0][..], // outputs fall
+            &[0.0, 0.0, 0.5, f32::NAN, 1.0, 1.0][..],  // not a number
+            &[0.0, 0.0, 0.5, 1.5, 1.0, 1.0][..],       // outside 0..1
+            &[0.0, 0.1, 1.0, 1.0][..],                 // does not start at black
+            &[0.0, 0.0, 1.0, 0.8][..],                 // does not end at white
+        ] {
+            assert!(curve(bad).is_err(), "{bad:?}");
+        }
+        let long = vec![0.5f32; 2 * (MAX_TONE_CURVE_POINTS + 1)];
+        assert!(curve(&long).unwrap_err().contains("pairs"));
+        // A curve stored as another type is refused, not misread.
+        let wrong = IfdEntry { tag: TagId::ProfileToneCurve as u16, typ: 4, count: 4, raw_bytes: vec![0; 16] };
+        assert!(camera_curve_points(&[wrong], &[]).is_err());
     }
 
     /// The map is applied in the stored orientation, before the renders

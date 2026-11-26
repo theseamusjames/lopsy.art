@@ -3,26 +3,24 @@
 //! default (`raw::OpeningLook::dng_preview_exposure`); otherwise a DNG
 //! opens at its BaselineExposure.
 //!
-//! **Why, now that the map is applied.** Apple's ProRAW records a large
-//! BaselineExposure for a dark scene (+4.1 stops on the concert sample)
-//! and a `ProfileGainTableMap` that holds the lights back again; the linear
-//! path applies the map (`dng::gain_map`). The map's output is already
-//! rendered (white at about 1, shadows lifted up to threefold), meant for
-//! the file's near-linear `ProfileToneCurve`. Through the Standard curve,
-//! which assumes scene-referred light, the map at the BaselineExposure
-//! opens a stop or more too bright: measured against the camera's previews
-//! (`tests/dng_gain_map.rs`), median encoded luminance 0.537 against 0.440
-//! on the rose and 0.340 against 0.167 on the concert, with 14.6 % of the
-//! concert at white (the preview has 0.3 %). Matched to the preview (the
-//! rose 0.61 stops below its baseline, the concert 1.91), both medians
-//! agree and nothing is at white, at chroma 0.94 and 0.71 of the
-//! previews'. Tighter bounds (±1, ±0.5 stops) leave the concert 0.9 and
-//! 1.5 stops too bright for more chroma (0.89, 1.00). So the match stays,
-//! with its bounds: brightness is what an opening exposure is for. Without
-//! the map (before it was applied) the same match left 13.8 % of the
-//! concert at white. (Through the file's own `ProfileToneCurve` instead,
-//! which the Standard look does not use, the map at the BaselineExposure
-//! comes nearer the previews unmatched: medians 0.427 and 0.229.)
+//! **Why.** Apple's ProRAW records a large BaselineExposure for a dark
+//! scene (+4.1 stops on the concert sample) and a `ProfileGainTableMap`
+//! that holds the lights back again (`dng::gain_map`). The map's output is
+//! already rendered (white at about 1, shadows lifted up to threefold),
+//! meant for the file's own `ProfileToneCurve`. A file whose map is
+//! applied and whose curve is usable opens with that pair at its
+//! BaselineExposure and no match (`dng::linear::develop_defaults_with`):
+//! measured against the camera's previews (`tests/dng_gain_map.rs`), median
+//! 0.427 against 0.440 on the rose and 0.229 against 0.167 on the concert,
+//! at chroma 0.92 and 0.89. The match is for the rest, which open through
+//! the Standard curve: a file whose map is refused, a Bayer file, a mapped
+//! file without its own curve, and a camera-curve file's Standard profile
+//! entry. Through the Standard curve, which assumes scene light, the map
+//! at the BaselineExposure opens a stop or more too bright (median 0.537
+//! and 0.340, 14.6 % of the concert at white); matched to the preview both
+//! medians agree and nothing is at white, at chroma 0.94 and 0.71 (flat,
+//! and the concert hazy). Without the map the same match left 13.8 % of
+//! the concert at white.
 //!
 //! **When** ([`camera_preview_for_exposure`]), all of:
 //! - the file carries `ProfileGainTableMap` (in IFD0 or any SubIFD);

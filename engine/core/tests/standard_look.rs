@@ -367,13 +367,18 @@ fn files(var: &str, ext: &str) -> Vec<PathBuf> {
 /// The median the exposure match measures: the develop chain on the
 /// binned view at the preview's size, against the preview's own median.
 fn matched_median(data: &[u8], prep: &PreparedRaw, preview: &lopsy_core::arw::exposure::Preview) -> f32 {
+    matched_median_with(data, prep, preview, &prep.description.develop_defaults)
+}
+
+/// [`matched_median`] for other settings (a profile entry's).
+fn matched_median_with(data: &[u8], prep: &PreparedRaw, preview: &lopsy_core::arw::exposure::Preview, settings: &RawDevelopSettings) -> f32 {
     let view = match &prep.prepared {
         Prepared::Arw(p) => lopsy_core::arw::exposure::preview_sized_view(&p.plane, &p.params, preview),
         Prepared::Dng(p) => lopsy_core::arw::exposure::preview_sized_view(&p.plane, &p.params, preview),
         Prepared::Raf(_) => None,
     };
     let (w, h, rgba) = view.unwrap_or_else(|| panic!("a view of {} bytes", data.len()));
-    let (m, _) = stats(&develop_rgba(&rgba, w as u32, h as u32, &prep.description.develop_defaults));
+    let (m, _) = stats(&develop_rgba(&rgba, w as u32, h as u32, settings));
     m
 }
 
@@ -436,11 +441,23 @@ fn the_dng_preview_match_takes_only_camera_previews_of_gain_mapped_files() {
         assert!(!(converted && preview.is_some()), "{name}: a converter's preview is not the camera's");
         for (label, look) in looks(true) {
             let prep = raw::prepare_with(&data, &look).unwrap();
-            let ev = prep.description.develop_defaults.exposure_ev;
+            let mut ev = prep.description.develop_defaults.exposure_ev;
+            // A file that opens with its own curve (its gain map applied)
+            // keeps its baseline; the match is its Standard entry's.
+            let mut settings = prep.description.develop_defaults.clone();
+            if let Prepared::Dng(d) = &prep.prepared {
+                if d.params.camera_curve.is_some() {
+                    assert_eq!(ev, baseline, "{name} {label}: a camera-curve file opens at its baseline");
+                    if let Some(s) = prep.description.profiles.iter().find(|p| p.id == "standard").map(|p| &p.settings) {
+                        settings = RawDevelopSettings { cam_to_rgb: s.cam_to_rgb, exposure_ev: s.exposure_ev, saturation: s.saturation, highlight_desaturation: s.highlight_desaturation, base_curve: s.base_curve.clone(), ..settings };
+                        ev = s.exposure_ev;
+                    }
+                }
+            }
             match &preview {
                 Some(pv) => {
                     assert!((baseline - MIN_BELOW_BASELINE..=baseline + MAX_ABOVE_BASELINE).contains(&ev), "{name} {label}: {ev}");
-                    let m = matched_median(&data, &prep, pv);
+                    let m = matched_median_with(&data, &prep, pv, &settings);
                     println!("{name} {label}: {ev:+.3} EV (baseline {baseline:+.3}), median {m:.3} against {:.3}", pv.median);
                     let at_bound = ev == baseline - MIN_BELOW_BASELINE || ev == baseline + MAX_ABOVE_BASELINE;
                     assert!((m - pv.median).abs() < 0.01 || at_bound, "{name} {label}: {m} against {}", pv.median);

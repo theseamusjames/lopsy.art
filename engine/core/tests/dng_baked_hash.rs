@@ -65,10 +65,13 @@ fn linear_hash(data: &[u8], apply_gain_table_map: bool) -> u64 {
 /// the old wording. The plane without the map is the one before
 /// `ProfileGainTableMap` was applied (`PrepareOptions`), and hashes as it
 /// did; the last column is the plane with the map applied, its clip levels
-/// and its shorter not-applied list, recorded when the map was.
+/// and its shorter not-applied list, recorded when the map was, and again
+/// when its parameters began to carry the file's own tone curve (the camera
+/// look, `camera_curve`) and ProfileToneCurve left the not-applied list:
+/// the plane itself did not change then.
 const EXPECTED: [(&str, u64, u64, u64); 2] = [
-    ("sample_dng_00.dng", 0x3e370f9742a8521a, 0x362fbac48dda4a8f, 0xb1052bf9624db47c),
-    ("sample_dng_01.dng", 0x9bc594c8f822e0b5, 0xf8319c3b76fb6480, 0x5faa34803409f07f),
+    ("sample_dng_00.dng", 0x3e370f9742a8521a, 0x362fbac48dda4a8f, 0xcc34e68de4ff5fcc),
+    ("sample_dng_01.dng", 0x9bc594c8f822e0b5, 0xf8319c3b76fb6480, 0x925740f22a2e626b),
 ];
 
 #[test]

@@ -3,7 +3,11 @@
 //! exposure is matched to the camera's own preview. The default
 //! ([`OpeningLook::default`]) is the Standard look: the gentle Standard
 //! curve (`raf::standard_curve::STANDARD`), [`STANDARD_SATURATION`], and a
-//! ProRAW's exposure matched to its preview (`dng::preview`).
+//! gain-mapped DNG's exposure matched to its preview (`dng::preview`). A DNG
+//! whose gain map is applied and which has its own `ProfileToneCurve`
+//! opens with that curve instead, at the BaselineExposure
+//! (`dng::linear::develop_defaults_with`); the Standard look is then one of
+//! its profiles.
 //!
 //! **Saturation.** The tone step mixes each channel away from luminance by
 //! this factor (`tone::tone_reference`, as a RAF film look does with its
@@ -75,8 +79,9 @@ pub struct OpeningLook {
     pub saturation: f32,
     /// Match a DNG's opening exposure to its preview when the preview was
     /// made by the camera and the file carries a gain map (`dng::preview`
-    /// says why the match stays once the map is applied); otherwise
-    /// BaselineExposure.
+    /// says why); otherwise BaselineExposure. A file that opens with its
+    /// own curve keeps its BaselineExposure, and the match goes to its
+    /// Standard profile entry.
     pub dng_preview_exposure: bool,
 }
 
