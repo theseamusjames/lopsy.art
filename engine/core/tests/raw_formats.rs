@@ -232,3 +232,26 @@ fn reconstruction_holds_highlight_hue() {
         }
     }
 }
+
+/// The format alone says whether it renders finished bands, and every
+/// prepared file of that format says the same in its description; RAF is
+/// the one that does.
+#[test]
+fn the_format_answers_finished_bands_as_its_descriptions_do() {
+    assert!(raw::renders_finished_bands(RawFormatId::Raf));
+    assert!(!raw::renders_finished_bands(RawFormatId::Dng));
+    assert!(!raw::renders_finished_bands(RawFormatId::Arw));
+    let mut paths = files("LOPSY_RAF_SAMPLES", "raf");
+    paths.extend(files("LOPSY_DNG_SAMPLES", "dng"));
+    paths.extend(files("LOPSY_DNG_ADOBE_SAMPLES", "dng"));
+    paths.extend(files("LOPSY_ARW_SAMPLES", "arw"));
+    let mut seen = 0;
+    for path in paths {
+        let data = std::fs::read(&path).unwrap();
+        let Ok(prep) = raw::prepare(&data) else { continue };
+        let name = path.file_name().unwrap().to_string_lossy();
+        assert_eq!(prep.description.finished_bands, raw::renders_finished_bands(prep.format), "{name}");
+        seen += 1;
+    }
+    println!("{seen} files: finished bands as their format says");
+}

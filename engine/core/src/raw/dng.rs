@@ -65,7 +65,7 @@ impl RawFormat for Dng {
                 preset_source: PresetSource::Illuminants,
                 presets: illuminant_presets(&p.calibration, p.as_shot_gain),
             },
-            finished_bands: false,
+            finished_bands: Self::FINISHED_BANDS,
         })
     }
 

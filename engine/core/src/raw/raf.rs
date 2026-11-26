@@ -9,6 +9,7 @@ pub struct Raf;
 
 impl RawFormat for Raf {
     const ID: RawFormatId = RawFormatId::Raf;
+    const FINISHED_BANDS: bool = true;
     type Params = RafRenderParams;
 
     fn prepare(data: &[u8], _look: &OpeningLook) -> Result<RawPlane<RafRenderParams>, String> {
@@ -44,7 +45,7 @@ impl RawFormat for Raf {
                 preset_source: if presets.is_empty() { PresetSource::None } else { PresetSource::Camera },
                 presets,
             },
-            finished_bands: true,
+            finished_bands: Self::FINISHED_BANDS,
         })
     }
 

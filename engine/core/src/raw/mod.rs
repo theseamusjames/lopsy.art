@@ -171,7 +171,9 @@ pub struct RawDescription {
     pub profiles: Vec<DevelopProfile>,
     pub white_balance: WhiteBalanceModel,
     /// Whether `render_finished_band` renders the finished look (RAF's
-    /// legacy path); for the others the host uses the baked decode.
+    /// legacy path); for the others the host uses the baked decode. Always
+    /// the format's [`RawFormat::FINISHED_BANDS`], which
+    /// [`renders_finished_bands`] answers before a file is prepared.
     pub finished_bands: bool,
 }
 
@@ -190,6 +192,10 @@ pub struct RawWhite {
 /// One format on the RAW interface.
 pub trait RawFormat {
     const ID: RawFormatId;
+    /// Whether the format renders finished bands
+    /// ([`RawFormat::render_finished_band`] gives `Some`), which its
+    /// description's `finished_bands` repeats.
+    const FINISHED_BANDS: bool = false;
     type Params: Serialize + DeserializeOwned;
 
     /// `look` is what a format without film looks opens with (RAF ignores
@@ -364,6 +370,13 @@ pub fn render_linear_band(format: RawFormatId, src: &[f32], params_json: &str, b
 /// The binned first view of a whole plane.
 pub fn render_binned_linear(format: RawFormatId, plane: &[f32], params_json: &str, min_long_edge: u32) -> Result<(u32, u32, Vec<f32>), String> {
     dispatch!(format, F => F::render_binned_linear(plane, &params_from::<<F as RawFormat>::Params>(format, params_json)?, min_long_edge))
+}
+
+/// Whether `format` renders finished bands (RAF's legacy look), from the
+/// format alone, before any file is prepared: what every description of
+/// that format says in `finished_bands`.
+pub fn renders_finished_bands(format: RawFormatId) -> bool {
+    dispatch!(format, F => F::FINISHED_BANDS)
 }
 
 /// The finished look of a band (RAF); an error for a format without one.

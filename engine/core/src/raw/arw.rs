@@ -59,7 +59,7 @@ impl RawFormat for Arw {
             profiles: standard_profiles(&defaults),
             develop_defaults: defaults,
             white_balance,
-            finished_bands: false,
+            finished_bands: Self::FINISHED_BANDS,
         })
     }
 

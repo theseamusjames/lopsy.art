@@ -166,6 +166,15 @@ pub fn raw_render_linear_band(format: &str, src: &[f32], params_json: &str, y0: 
     Ok(out.into())
 }
 
+/// Whether a format renders finished bands (`rawRenderFinishedBand`, RAF's
+/// legacy look), from its id alone, before a file is prepared: what that
+/// format's description says in `finishedBands`. An error for an id that
+/// is not `"raf"`, `"dng"` or `"arw"`.
+#[wasm_bindgen(js_name = "rawRendersFinishedBands")]
+pub fn raw_renders_finished_bands(format: &str) -> Result<bool, JsError> {
+    Ok(raw::renders_finished_bands(format_of(format)?))
+}
+
 /// The finished look of a band, for a format whose description has
 /// `finishedBands` (RAF); an error for the others, which use
 /// `decodeAndUploadRawBaked`.
@@ -256,6 +265,14 @@ mod tests {
             assert_eq!(ours.iter().map(|v| v.to_bits()).collect::<Vec<_>>(), raf.iter().map(|v| v.to_bits()).collect::<Vec<_>>(), "{clip:?}");
             assert_eq!(ours.len(), 3);
         }
+    }
+
+    #[test]
+    fn only_raf_renders_finished_bands() {
+        // (An unknown id is an error, which only a wasm target can build.)
+        assert!(raw_renders_finished_bands("raf").ok() == Some(true));
+        assert!(raw_renders_finished_bands("dng").ok() == Some(false));
+        assert!(raw_renders_finished_bands("arw").ok() == Some(false));
     }
 
     #[test]
