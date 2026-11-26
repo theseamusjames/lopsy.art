@@ -5,7 +5,11 @@
  * image); `<stem>-edit-view.png`, the whole window; and
  * `<stem>-full-centre.png`, the canvas at 100 % (Full) on the middle of the
  * full-size picture, where the full-size bands meet. A file the app
- * refuses (the lossy DNGs) is captured with the Edit view saying why. See
+ * refuses (the lossy DNGs) is captured with the Edit view saying why.
+ * `<stem>-menus.txt` lists what the Profile and White balance menus offer
+ * and what Temperature reads (a native menu cannot be captured open), and
+ * a file with more than one look to open with (a ProRAW: Camera and
+ * Standard) also gets `<stem>-<profile>-picture.png` for each. See
  * raw-review.config.ts for how to run it.
  *
  * Output: RAW_REVIEW_OUT, by default
@@ -13,7 +17,7 @@
  * checkout (git-ignored, as all of samples/ is).
  */
 import { expect, test } from '@playwright/test';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { settledPreview, waitForPreview } from './harness';
@@ -49,7 +53,11 @@ const SAMPLES: readonly Sample[] = [
   { dir: proraw, name: 'sample_dng_00.dng' },
   { dir: proraw, name: 'sample_dng_01.dng' },
   { dir: raf, name: 'DSCF8078.RAF' },
+  { dir: raf, name: 'DSCF6952.RAF' },
 ];
+
+/** Profiles a file can open with, rendered each: the camera's own look and Standard where both are offered. */
+const OPENING_LOOKS = ['Camera', 'Standard'];
 
 for (const sample of SAMPLES) {
   test(sample.name, async ({ page }) => {
@@ -72,6 +80,24 @@ for (const sample of SAMPLES) {
     await page.mouse.move(0, 0);
     await page.getByTestId('edit-canvas').screenshot({ path: join(outDir, `${stem}-picture.png`) });
     await page.screenshot({ path: join(outDir, `${stem}-edit-view.png`) });
+    const profile = page.getByRole('combobox', { name: 'Profile' });
+    const profiles = await profile.locator('option').allTextContents();
+    const modes = await page.getByLabel('White balance mode').locator('option').allTextContents();
+    const temperature = await page.getByLabel('Temperature value').inputValue();
+    writeFileSync(
+      join(outDir, `${stem}-menus.txt`),
+      [`Profile: ${profiles.join(' · ')} (shown: ${await profile.locator('option:checked').textContent()})`, `White balance: ${modes.join(' · ')}`, `Temperature: ${temperature}`, ''].join('\n'),
+    );
+    if (OPENING_LOOKS.every((look) => profiles.includes(look))) {
+      for (const look of [...OPENING_LOOKS].reverse()) {
+        const from = await page.evaluate(() => window.__photosHarness?.previews.length ?? 0);
+        await profile.selectOption({ label: look });
+        await waitForPreview(page, from, 3 * 60_000);
+        await settledPreview(page, from);
+        await page.mouse.move(0, 0);
+        await page.getByTestId('edit-canvas').screenshot({ path: join(outDir, `${stem}-${look.toLowerCase()}-picture.png`) });
+      }
+    }
     // Full: the full-size picture, at 100 % on its middle.
     await page.getByRole('button', { name: 'Full', exact: true }).click();
     await expect(page.getByTestId('zoom-readout')).toHaveValue('100%');
