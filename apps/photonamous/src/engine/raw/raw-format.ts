@@ -15,11 +15,36 @@ import { readKelvinScale, readPresets, type KelvinScale, type WhiteBalancePreset
 export type RawFormatId = 'raf' | 'dng' | 'arw' | (string & {});
 
 /**
- * The formats the Edit view develops through the RAW interface. DNG and
- * Sony ARW still open through the engine's baked decode, as finished
- * pictures, until their steps move them onto it.
+ * The formats the Edit view develops through the RAW interface (unless the
+ * version being shown says to open the baked decode instead).
  */
-export const RAW_PATH_FORMATS: ReadonlySet<ImageFormat> = new Set<ImageFormat>(['raf']);
+export const RAW_PATH_FORMATS: ReadonlySet<ImageFormat> = new Set<ImageFormat>(['raf', 'dng', 'arw']);
+
+/**
+ * The formats whose description has `finishedBands`: their finished look
+ * renders in bands, so a GPU without float targets takes them through the
+ * workers too; the others open with the baked decode there. Known before
+ * the file is prepared, so the choice is made before any worker starts;
+ * the engine has no call that says it from the format alone, and the
+ * decode checks the description agrees.
+ */
+const FINISHED_BAND_FORMATS: ReadonlySet<string> = new Set(['raf']);
+
+export function formatHasFinishedBands(format: string): boolean {
+  return FINISHED_BAND_FORMATS.has(format);
+}
+
+/**
+ * How a photo in `format` opens: 'raw', through the RAW interface; 'baked',
+ * as the finished picture the engine's baked decode makes (the version
+ * says so with `rawDevelop` false, or the GPU has no float targets and the
+ * format has no finished look in bands); 'image', any other photo.
+ */
+export function rawLoadPath(format: ImageFormat, options: { readonly rawDevelop: boolean; readonly hasFloat: boolean }): 'raw' | 'baked' | 'image' {
+  if (!RAW_PATH_FORMATS.has(format)) return 'image';
+  if (!options.rawDevelop) return 'baked';
+  return options.hasFloat || formatHasFinishedBands(format) ? 'raw' : 'baked';
+}
 
 /** Where Kelvin comes from, if anywhere. */
 export type KelvinModel =

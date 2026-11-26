@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseRawDescription, RAW_PATH_FORMATS } from './raw-format';
+import { formatHasFinishedBands, parseRawDescription, RAW_PATH_FORMATS, rawLoadPath } from './raw-format';
 import { rawWhiteBalanceFor } from './raw-white-balance';
 import { wbRatioFor } from '../raw-develop';
 
@@ -87,30 +87,94 @@ describe('parseRawDescription', () => {
   });
 });
 
+/** An engine that answers as the real one is shaped, and counts its calls. */
+function fakeEngine() {
+  const calls: string[] = [];
+  return {
+    calls,
+    whiteBalance(format: string, paramsJson: string, temperature: number, tint: number): string {
+      calls.push(`wb ${format} ${paramsJson} ${temperature} ${tint}`);
+      return JSON.stringify({ wbRatio: [1 + temperature / 1000, 1, 1 - temperature / 1000], camToRgb: [1, 0, 0, 0, 1, 0, 0, 0, 1 + tint / 1000], kelvin: 5000 + 20 * temperature + tint, tint: tint / 10 });
+    },
+    temperatureForKelvin(format: string, paramsJson: string, kelvin: number, tint: number): number {
+      calls.push(`k ${format} ${paramsJson} ${kelvin} ${tint}`);
+      return Math.max(-200, Math.min(200, (kelvin - 5000 - tint) / 20));
+    },
+  };
+}
+
+const MEASURED = { matrix: 'perWhite', kelvin: { kind: 'measured', asShotKelvin: 5003.25, asShotTint: 4 }, presetSource: 'illuminants', presets: [{ name: 'Daylight', temperature: 25, tint: -6 }] };
+const UNMEASURED = { matrix: 'fixed', kelvin: { kind: 'none' }, presetSource: 'none', presets: [] };
+
 describe('rawWhiteBalanceFor', () => {
   it('keeps the profile matrix and the relative gains for a fixed matrix, with the fitted readout', () => {
-    const wb = rawWhiteBalanceFor(parseRawDescription(described()));
+    const engine = fakeEngine();
+    const wb = rawWhiteBalanceFor(parseRawDescription(described()), '{}', engine);
     expect(wb.settingsFor(40, -10)).toEqual({ wbRatio: wbRatioFor(40, -10), camToRgb: null });
     expect(wb.kelvin?.kind).toBe('fitted');
     expect(wb.kelvin?.kelvinFor(0, 0)).toBeCloseTo(1e6 / 190, 6);
     expect(wb.presets.map((p) => p.name)).toEqual(['Daylight', 'Shade']);
+    expect(engine.calls).toEqual([]);
   });
 
-  it('has no readout where the format has no Kelvin', () => {
-    const none = { ...FITTED.whiteBalance, kelvin: { kind: 'none' }, presetSource: 'none', presets: [] };
-    const wb = rawWhiteBalanceFor(parseRawDescription(described({ whiteBalance: none })));
+  it('has no readout and no presets where the format has no Kelvin, and keeps the relative gains', () => {
+    const engine = fakeEngine();
+    const wb = rawWhiteBalanceFor(parseRawDescription(described({ format: 'arw', whiteBalance: UNMEASURED })), '{}', engine);
     expect(wb.kelvin).toBeNull();
     expect(wb.presets).toEqual([]);
+    expect(wb.settingsFor(-30, 12)).toEqual({ wbRatio: wbRatioFor(-30, 12), camToRgb: null });
+    expect(engine.calls).toEqual([]);
   });
 
-  it('refuses the models no format on the RAW path uses yet', () => {
-    const perWhite = { matrix: 'perWhite', kelvin: { kind: 'measured', asShotKelvin: 5200, asShotTint: 4 }, presetSource: 'illuminants', presets: [] };
-    expect(() => rawWhiteBalanceFor(parseRawDescription(described({ format: 'dng', whiteBalance: perWhite })))).toThrow(/DNG/);
+  it("asks the engine for a white's gains and matrix where the matrix follows the white, once per rounded value", () => {
+    const engine = fakeEngine();
+    const wb = rawWhiteBalanceFor(parseRawDescription(described({ format: 'dng', whiteBalance: MEASURED })), 'P', engine);
+    const settings = wb.settingsFor(50.4, -9.6);
+    expect(settings.wbRatio).toEqual([1.05, 1, 0.95]);
+    expect(settings.camToRgb).toEqual([1, 0, 0, 0, 1, 0, 0, 0, 0.99]);
+    wb.settingsFor(50, -10);
+    expect(engine.calls).toEqual(['wb dng P 50 -10']);
+    expect(wb.presets.map((p) => p.name)).toEqual(['Daylight']);
+  });
+
+  it('reads measured Kelvin from the white of both sliders, as shot exactly at zero, and types Kelvin at the tint', () => {
+    const engine = fakeEngine();
+    const wb = rawWhiteBalanceFor(parseRawDescription(described({ format: 'dng', whiteBalance: MEASURED })), 'P', engine);
+    const kelvin = wb.kelvin;
+    if (!kelvin) throw new Error('no readout');
+    expect(kelvin.kind).toBe('measured');
+    expect(kelvin.kelvinFor(0, 0)).toBe(5003.25);
+    expect(kelvin.kelvinFor(10, 0)).toBe(5200);
+    expect(kelvin.kelvinFor(10, 30)).toBe(5230);
+    expect(kelvin.temperatureFor(5500, 20)).toBe(24);
+    expect(engine.calls).toContain('k dng P 5500 20');
+    // Out of reach: the engine keeps within the sliders, and the readout shows the Kelvin reached.
+    expect(kelvin.temperatureFor(50000, 0)).toBe(200);
+    expect(kelvin.kelvinFor(200, 0)).toBe(9000);
   });
 });
 
-describe('RAW_PATH_FORMATS', () => {
-  it('holds the formats the Edit view develops through the RAW interface', () => {
-    expect([...RAW_PATH_FORMATS]).toEqual(['raf']);
+describe('RAW_PATH_FORMATS and finished bands', () => {
+  it('develops every RAW format through the RAW interface', () => {
+    expect([...RAW_PATH_FORMATS].sort()).toEqual(['arw', 'dng', 'raf']);
+  });
+
+  it('opens a RAW file through the RAW interface, or baked when the version says so or the GPU cannot', () => {
+    for (const format of ['raf', 'dng', 'arw'] as const) {
+      expect(rawLoadPath(format, { rawDevelop: true, hasFloat: true })).toBe('raw');
+      expect(rawLoadPath(format, { rawDevelop: false, hasFloat: true })).toBe('baked');
+      expect(rawLoadPath(format, { rawDevelop: false, hasFloat: false })).toBe('baked');
+    }
+    // Without float targets: RAF renders its finished look in bands; DNG and ARW take the baked decode.
+    expect(rawLoadPath('raf', { rawDevelop: true, hasFloat: false })).toBe('raw');
+    expect(rawLoadPath('dng', { rawDevelop: true, hasFloat: false })).toBe('baked');
+    expect(rawLoadPath('arw', { rawDevelop: true, hasFloat: false })).toBe('baked');
+    for (const format of ['jpeg', 'png', 'webp'] as const) expect(rawLoadPath(format, { rawDevelop: false, hasFloat: true })).toBe('image');
+  });
+
+  it('knows before preparing which formats render their finished look in bands', () => {
+    expect(formatHasFinishedBands('raf')).toBe(true);
+    expect(formatHasFinishedBands('dng')).toBe(false);
+    expect(formatHasFinishedBands('arw')).toBe(false);
   });
 });

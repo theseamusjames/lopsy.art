@@ -32,6 +32,14 @@ export class DecodeAbortedError extends Error {
   }
 }
 
+/** `rawPrepare` refused the file: its message is the engine's sentence. */
+export class RawPrepareError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RawPrepareError';
+  }
+}
+
 interface CompiledEngine {
   readonly module: WebAssembly.Module;
   readonly renderer: 'webgl' | 'wgpu';
@@ -187,7 +195,13 @@ export async function decodeRawInWorkers(
     if (!first) throw new Error('No RAW decode workers');
     onProgress?.({ stage: 'preparing', bandsDone: 0, bandCount: 0 });
     const binnedLongEdge = linear && options.binnedLongEdge ? options.binnedLongEdge : null;
-    const prepared = await call(first, { kind: 'prepare', data, binnedLongEdge }, [], signal);
+    let prepared: RawWorkerResponse;
+    try {
+      prepared = await call(first, { kind: 'prepare', data, binnedLongEdge }, [], signal);
+    } catch (err) {
+      if (err instanceof DecodeAbortedError) throw err;
+      throw new RawPrepareError(err instanceof Error ? err.message : String(err));
+    }
     if (prepared.kind !== 'prepared') throw new Error(`RAW worker sent ${prepared.kind} instead of the prepared frame`);
     const description = parseRawDescription(prepared.describeJson);
     onPrepared?.(description, { paramsJson: prepared.paramsJson, binned: prepared.binned, autoWbRatio: prepared.autoWbRatio });

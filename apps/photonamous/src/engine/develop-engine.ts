@@ -67,8 +67,9 @@ import initWasm, {
   clearImageColorMixer,
   clearImageCurves,
   clearRawDevelop,
-  decodeAndUploadArw,
-  decodeAndUploadDng,
+  decodeAndUploadRawBaked,
+  rawTemperatureForKelvin,
+  rawWhiteBalance,
   decodeAndUploadImage,
   flipLayer,
   removeLayer,
@@ -157,9 +158,9 @@ import { areaLayerKey, areaLayerValues, areaValues, linearAreaLayerKey, linearAr
 import { developPathFor, developStages, type DevelopPath, type LegacyStages, type LinearStages } from './develop-stages';
 import { treatsAsFloat, usesWorkingSpace } from './develop-override';
 import { NO_INSETS, clampZoom, fitView, limitSize, panBy, zoomAround, type Insets, type Size, type View } from './viewport';
-import { decodeRawInWorkers, DecodeAbortedError } from './raw/raw-decode';
-import { RAW_PATH_FORMATS, type RawDescription } from './raw/raw-format';
-import { rawWhiteBalanceFor, type RawWhiteBalance } from './raw/raw-white-balance';
+import { decodeRawInWorkers, DecodeAbortedError, RawPrepareError } from './raw/raw-decode';
+import { rawLoadPath, type RawDescription } from './raw/raw-format';
+import { rawWhiteBalanceFor, type RawWhiteBalance, type RawWhiteEngine } from './raw/raw-white-balance';
 import { rawSettingsFor, rawSettingsJson, temperatureTintFor, type RawDevelopSettings } from './raw-develop';
 import { profilesFor, type DevelopProfile } from './profiles';
 
@@ -531,14 +532,18 @@ function pushAdjustments(engine: Engine, adj: EngineAdjustments): void {
   setImagePhotoFilter(engine, pf.r, pf.g, pf.b, pf.density, true);
 }
 
-/** The browser's decode, drawn at most `maxLongEdge` on its long edge (the browser resamples). */
-/** The parts of `decodeAndUploadDng`'s and `decodeAndUploadArw`'s JSON the app reads. */
-interface TiffRawMeta {
+/** The engine's white-balance calls for a RAW file, on this thread (each is a small solve). */
+const RAW_WHITE_ENGINE: RawWhiteEngine = { whiteBalance: rawWhiteBalance, temperatureForKelvin: rawTemperatureForKelvin };
+
+/** The parts of `decodeAndUploadRawBaked`'s JSON the app reads. */
+interface BakedRawMeta {
   readonly width: number;
   readonly height: number;
   readonly colorApproximate?: boolean;
   readonly colorNote?: string;
 }
+
+/** The browser's decode, drawn at most `maxLongEdge` on its long edge (the browser resamples). */
 
 async function decodeToCanvas(source: Blob, maxLongEdge: number | undefined): Promise<{ canvas: HTMLCanvasElement; fullWidth: number; fullHeight: number }> {
   const bitmap = await createImageBitmap(source);
@@ -834,7 +839,7 @@ class PhotoEngine implements DevelopEngine {
       this.loaded = { source, format };
       this.fullSize = null;
       const mode = options.resolution === 'full' ? 'full' : 'working';
-      const size = await this.decode(source, format, abort.signal, report, mode);
+      const size = await this.decode(source, format, abort.signal, report, mode, options.rawDevelop !== false);
       if (abort.signal.aborted || this.isDisposed) throw new DecodeAbortedError();
       if (!this.fullSize) this.fullSize = size;
       return size;
@@ -865,7 +870,7 @@ class PhotoEngine implements DevelopEngine {
       for (const listener of this.viewListeners) listener(this.view);
     };
     const upgrade = this.upgrade.start(async (signal) => {
-      if (RAW_PATH_FORMATS.has(format)) await this.decodeRaw(source, signal, () => undefined, 'upgrade');
+      if (this.raw) await this.decodeRaw(source, signal, () => undefined, 'upgrade');
       else await this.upgradeImage(source, signal, format);
     }, notify);
     notify();
@@ -882,12 +887,15 @@ class PhotoEngine implements DevelopEngine {
     signal: AbortSignal,
     report: (stage: LoadProgress['stage'], fraction: number | null) => void,
     mode: 'working' | 'full',
+    rawDevelop: boolean,
   ): Promise<Size> {
     if (source.type === LOPSY_LAYER_MIME) return this.showImage(await this.decodeLopsyLayer(source, signal, report));
     // Photos sit on opaque black; only a Lopsy layer keeps its transparency.
     setBackgroundColor(this.engine, 0, 0, 0, 1);
-    if (RAW_PATH_FORMATS.has(format)) return this.decodeRaw(source, signal, report, mode);
-    if (format === 'dng' || format === 'arw') return this.decodeTiffRaw(source, format, signal, report);
+    // Decided before any worker starts: without float targets a format with no finished look in bands opens baked.
+    const path = rawLoadPath(format, { rawDevelop, hasFloat: this.hasFloat });
+    if (path === 'baked') return this.decodeBaked(new Uint8Array(await source.arrayBuffer()), signal, report);
+    if (path === 'raw') return this.decodeRaw(source, signal, report, mode);
     if (format === 'png' && mode === 'full') {
       const sized = await this.decodePng16(source, signal, report);
       if (sized) return this.showImage(sized);
@@ -964,7 +972,7 @@ class PhotoEngine implements DevelopEngine {
           ...(isUpgrade ? {} : { binnedLongEdge: isWorkingOnly ? this.workingLongEdge() : QUICK_VIEW_LONG_EDGE }),
           onPrepared: (prepDescription, prepared) => {
             if (signal.aborted || this.isDisposed || !isLinear || isUpgrade) return;
-            const whiteBalance = rawWhiteBalanceFor(prepDescription);
+            const whiteBalance = rawWhiteBalanceFor(prepDescription, prepared.paramsJson, RAW_WHITE_ENGINE);
             this.setRawDefaults(prepDescription.developDefaults);
             this.raw = { description: prepDescription, paramsJson: prepared.paramsJson, whiteBalance };
             this.autoWb = prepared.autoWbRatio ? temperatureTintFor(prepared.autoWbRatio) : null;
@@ -1001,22 +1009,26 @@ class PhotoEngine implements DevelopEngine {
       // A full-size layer filled beside the working image and never swapped in.
       const hidden: string | null = fullLayer;
       if (hidden !== null && hidden !== this.layerId && !this.isDisposed) removeLayer(this.engine, hidden);
+      // A file the RAW interface cannot prepare (a DNG it does not develop, a damaged file) opens as the
+      // baked decode's finished picture; if that refuses it too, its own sentence is what the person reads.
+      if (err instanceof RawPrepareError && !isUpgrade) return this.decodeBaked(data, signal, report);
       throw err;
     }
   }
 
   /**
-   * A DNG or a Sony ARW, decoded by the engine at full size into the
-   * layer, upright and cropped. The engine's errors are sentences meant to
-   * be shown as they are.
+   * A RAW file as the finished picture the engine's baked decode makes of
+   * it (`decodeAndUploadRawBaked`), at full size into the layer, upright and
+   * cropped, edited as an ordinary photo: a version made before its format
+   * took the RAW path, a GPU without float targets for a format with no
+   * finished look in bands, and a file the RAW interface cannot prepare.
+   * The engine's errors are sentences meant to be shown as they are.
    */
-  private async decodeTiffRaw(
-    source: Blob,
-    format: 'dng' | 'arw',
+  private async decodeBaked(
+    data: Uint8Array,
     signal: AbortSignal,
     report: (stage: LoadProgress['stage'], fraction: number | null) => void,
   ): Promise<Size> {
-    const data = new Uint8Array(await source.arrayBuffer());
     this.checkLive(signal);
     report('decoding', null);
     // The decode blocks this thread: let the progress paint first.
@@ -1024,9 +1036,8 @@ class PhotoEngine implements DevelopEngine {
     await nextFrame();
     this.checkLive(signal);
     this.resetLayer(1, 1);
-    const decodeAndUpload = format === 'arw' ? decodeAndUploadArw : decodeAndUploadDng;
-    const meta = JSON.parse(decodeAndUpload(this.engine, this.layerId, data)) as TiffRawMeta;
-    if (!meta.width || !meta.height) throw new Error(`The ${format.toUpperCase()} file decoded to an empty image`);
+    const meta = JSON.parse(decodeAndUploadRawBaked(this.engine, this.layerId, data)) as BakedRawMeta;
+    if (!meta.width || !meta.height) throw new Error('The RAW file decoded to an empty image');
     this.colorNote = meta.colorApproximate === true && typeof meta.colorNote === 'string' && meta.colorNote !== '' ? meta.colorNote : null;
     this.sizeDocument(meta.width, meta.height);
     return this.showImage({ width: meta.width, height: meta.height });
