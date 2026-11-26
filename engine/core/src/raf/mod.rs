@@ -1749,7 +1749,10 @@ fn parse_cfa_tiff(cfa_section: &[u8]) -> Result<CfaMeta, String> {
             let g = vals[0] as f32;
             let r = vals[1] as f32;
             let b = vals[2] as f32;
-            if g < 1.0 { return None; }
+            // A channel of 0 is no white balance (it would make the
+            // multipliers 0 and every temperature fitted from them NaN):
+            // the frame is then read as having none.
+            if g < 1.0 || r < 1.0 || b < 1.0 { return None; }
             Some([r / g, 1.0f32, b / g])
         });
 
