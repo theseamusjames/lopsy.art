@@ -231,8 +231,8 @@ is `docs/photonamous-spec.md`; running and setup are in
   **Show fewer** folds it again.
 - **Find photos**, one row under the toolbar: a text search over file
   names, titles, captions and keywords, then filters for rating, label (including *No label*), edits
-  (*Edited*, *Not edited*), file type (RAW (Fujifilm), RAW (DNG), JPEG,
-  PNG, WebP, Lopsy document), camera and lens, and at the right end the
+  (*Edited*, *Not edited*), file type (RAW (Fujifilm), RAW (DNG), RAW
+  (Sony), JPEG, PNG, WebP, Lopsy document), camera and lens, and at the right end the
   order. Where the row has not the room for all of that on one line (a
   small window, the details panel open, or filters whose buttons have
   grown with what they are set to), the filters are one **Filters** menu, opened by the button beside the search
@@ -277,9 +277,13 @@ is `docs/photonamous-spec.md`; running and setup are in
   (everything in it, including folders inside, where the browser can pick
   folders) or, in a Drive library, *Add from Google Drive…*; or drop files
   or folders on the window.
-- Reads **RAF, DNG, JPEG, PNG and WebP**. The sheet counts what it found,
-  says what it cannot read, and shows RAW+JPEG pairs as one photo (or
-  imports the RAW only).
+- Reads **RAF, DNG, ARW (Sony), JPEG, PNG and WebP**, each known by its
+  bytes, not its name. The sheet counts what it found, says what it cannot
+  read, and shows RAW+JPEG pairs as one photo (or imports the RAW only).
+  An ARW shows in the library with the camera's full-size embedded JPEG
+  as its preview and the picture's size (the camera's crop, not the
+  sensor's); it does not open in the Edit view yet, which says it could
+  not be opened.
 - **Photos already in the library are skipped** (by SHA-256), and the
   picked files are never changed. Before importing, the sheet names the
   ones that look like photos already there (same name and size) and
