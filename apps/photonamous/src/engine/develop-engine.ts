@@ -214,6 +214,13 @@ export interface LoadOptions {
    * 'full': the full-size image straight away, as exports want.
    */
   readonly resolution?: 'working' | 'full';
+  /**
+   * False opens a RAW file as the finished picture the engine's baked
+   * decode makes of it, edited as an ordinary photo, in place of the RAW
+   * develop step. The caller takes it from the version being shown
+   * (photos-core's `developsAsRaw`). True when omitted.
+   */
+  readonly rawDevelop?: boolean;
 }
 
 export interface ExportOptions {

@@ -8,7 +8,7 @@
  */
 
 import { PIPELINE_VERSION, recipeHash, type Recipe } from './recipe';
-import type { PreviewRef, Version } from './types';
+import type { ImageFormat, PreviewRef, Version } from './types';
 
 /**
  * Whether the recipe was edited with a pipeline newer than this build's
@@ -53,4 +53,16 @@ export function isPreviewCurrent(preview: PreviewRef | null, version: Version, h
     preview.pipeline === PIPELINE_VERSION &&
     version.recipe.pipeline <= PIPELINE_VERSION
   );
+}
+
+/**
+ * Whether a version of a photo in `format` is developed from the file's
+ * RAW data (the RAW develop step, with the camera's white balance and
+ * profiles) or opened as the finished picture the engine's baked decode
+ * makes of it. Every caller that loads a photo into an engine asks this
+ * and passes the answer as the load's `rawDevelop`, so the Edit view, the
+ * exports and the stored previews of one version all read it the same way.
+ */
+export function developsAsRaw(_format: ImageFormat, _recipe: Pick<Recipe, 'pipeline'>): boolean {
+  return true;
 }
