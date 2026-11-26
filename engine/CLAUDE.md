@@ -177,8 +177,10 @@ JS API, and the deviations from `docs/photonamous-spec.md` 6.10. Rules:
 - **Camera colour.** The RAW step takes a white-balance gain (`wbRatio`)
   and a camera matrix (`camToRgb`, to linear sRGB, carried on to Rec.
   2020). For a RAF the matrix is one daylight matrix per sensor
-  generation and Kelvin is a readout fitted to the body's presets
-  (`raf::wb_presets`); nothing about it follows the white balance. For a
+  generation and Kelvin is a readout fitted through the camera's
+  calibration whites for illuminants A and D65, which the file carries
+  beside its own presets (`raf::wb_presets`); nothing about it follows
+  the white balance. For a
   DNG the matrix comes from the file's own calibration by the DNG
   specification's method (`dng::camera_color`: two illuminants
   interpolated by inverse colour temperature, forward matrices or Bradford

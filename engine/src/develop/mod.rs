@@ -164,7 +164,7 @@
 //! White balance and statistics:
 //! - `rafAutoWhiteBalance(linearRgba)`: near-neutral-pixel white balance, as `wbRatio`.
 //! - `rafAutoWhiteBalanceClipped(linearRgba, clipLevels)`: the same, leaving out clipped and reconstructed pixels; `rawAutoWhiteBalance` is the same call for any format.
-//! - `rafWhiteBalancePresets(rafBytes)`, `rafWhiteBalanceKelvin(rafBytes)`: the body's presets in recipe units (clamped to Temperature and Tint's ±200), and the Kelvin scale, a line fitted through the presets (a RAF has no calibration data, so its Kelvin is a readout, not a colour temperature). A DNG's Kelvin is real: `dngWhiteBalance` and `dngWhiteBalanceKelvin`.
+//! - `rafWhiteBalancePresets(rafBytes)`, `rafWhiteBalanceKelvin(rafBytes)`: the camera's presets read from the file, in recipe units (clamped to Temperature and Tint's ±200), and the Kelvin scale, a line fitted through the camera's whites for illuminants A and D65, which the file also carries (a RAF's one matrix does not follow the white, so its Kelvin is a readout, not a measured colour temperature). A DNG's Kelvin is real: `dngWhiteBalance` and `dngWhiteBalanceKelvin`.
 //! - `sampleNeutralWhiteBalance(engine, x, y, radius)` (readback): the picker; leaves out clipped and reconstructed pixels when `setRawDevelop`'s JSON has `clipLevels`.
 //! - `readDevelopHistogram(engine)` (readback): 4 × 256 bins of the displayed result; with the working space, of the sRGB output.
 //! - `readHdrHistogram(engine, peak)` (readback, working space only): 4 × 256 bins of the HDR rendering for the HDR canvas in sRGB primaries, encoded values from black (bin 0) to the peak (bin 255); `hdrHistogramWhiteBin(peak)` is where white falls (139.7 for 4).
@@ -288,7 +288,7 @@
 //!   perceptual mapping.
 //! - For a RAF the camera matrix does not follow the white balance (one
 //!   daylight matrix per sensor generation, no true Kelvin; the Kelvin
-//!   readout is a fit to the body's presets). For a DNG it does: the DNG
+//!   readout is a fit through the camera's A and D65 whites). For a DNG it does: the DNG
 //!   specification's method (two calibrations interpolated by inverse
 //!   colour temperature, forward matrices or Bradford to D50) in
 //!   `lopsy_core::dng::camera_color`, with Kelvin and tint from

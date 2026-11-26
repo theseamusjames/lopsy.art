@@ -21,8 +21,9 @@ impl RawFormat for Raf {
         let p = &prep.params;
         let (model, as_shot) = raf::read_wb_info(data)?;
         let (width, height) = p.oriented_size();
-        let presets = as_shot.map(|a| wb_presets::recipe_presets(&model, a)).unwrap_or_default();
-        let kelvin = match as_shot.and_then(|a| wb_presets::kelvin_scale(&model, a)) {
+        let camera_wb = wb_presets::read_camera_white_balance(data);
+        let presets = as_shot.map(|a| wb_presets::recipe_presets(&camera_wb, a)).unwrap_or_default();
+        let kelvin = match as_shot.and_then(|a| wb_presets::kelvin_scale(&camera_wb, a)) {
             Some(k) => KelvinModel::Fitted { mired_at_zero: k.mired_at_zero, mired_per_unit: k.mired_per_unit, as_shot_kelvin: k.as_shot_kelvin },
             None => KelvinModel::None,
         };

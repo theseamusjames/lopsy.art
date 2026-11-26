@@ -113,7 +113,7 @@ pub enum MatrixModel {
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum KelvinModel {
-    /// A line fitted to the body's presets (RAF):
+    /// A line fitted through the camera's calibration whites (RAF):
     /// `kelvin = 1e6 / (miredAtZero + miredPerUnit · temperature)`.
     Fitted { mired_at_zero: f32, mired_per_unit: f32, as_shot_kelvin: f32 },
     /// From the file's calibration (DNG, measured ARW): the correlated
