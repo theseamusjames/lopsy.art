@@ -1250,6 +1250,7 @@ export function EditView({
               profileId={shownRecipe.profile.id}
               isDisabled={!canEdit || isBefore}
               onSelect={handleProfile}
+              note={photoInfo.colorNote}
             />
           )}
           {FRAMING_GROUP && (
