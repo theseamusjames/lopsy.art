@@ -17,9 +17,10 @@
 }
 
 /* Longhands: the right padding and background image are the arrow (styles/index.css). */
+/* Takes the row's room after the title: the longest names ("Camera (Classic Chrome look)") need more than 180px. */
 .select {
   flex: 1;
-  max-width: 180px;
+  min-width: 0;
   height: 26px;
   padding-left: var(--space-2);
   background-color: var(--color-input-bg);
