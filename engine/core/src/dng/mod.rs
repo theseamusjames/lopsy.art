@@ -26,8 +26,10 @@
 //! level, a default crop), and its LinearRaw variants, uncompressed and
 //! lossless. Each lines up with its own preview and macOS's decode, with
 //! hues within 2° of them; the uncompressed and lossless files decode bit
-//! for bit the same. Lossy JPEG DNGs (`Compression` 34892) are refused: the
-//! engine has no baseline JPEG decoder.
+//! for bit the same. Lossy JPEG DNGs (`Compression` 34892) are read as
+//! tiles of 8-bit LinearRaw RGB (`decode_lossy_tiled`) for the linear path,
+//! whose `OpcodeList2` makes them linear (`opcodes`); this baked decode
+//! refuses them.
 //!
 //! (This baked decode leaves the gain map off by default — see the
 //! ProfileGainTableMap note below. The linear path, `linear::prepare_dng`,
@@ -85,9 +87,8 @@
 //! - ProfileLookTable (tag 50981): 3D LUT for profile "look".
 //! - Move gain table map processing to a background thread/worker — it's
 //!   O(width × height) with 8 gain lookups per pixel, ~2-3s for 24MP.
-//! - Support additional compression formats (lossy JPEG, JPEG XL). Lossy
-//!   JPEG needs a baseline JPEG decoder and the `MapPolynomial` opcodes
-//!   (OpcodeList2) Adobe stores to make its 8-bit samples linear.
+//! - Support additional compression formats (JPEG XL), and lossy JPEG in
+//!   this baked decode (the linear path reads it).
 //! - Test with DNGs from other converters and cameras.
 
 pub mod tiff;
@@ -97,6 +98,7 @@ pub mod color;
 pub mod camera_color;
 pub mod linear;
 pub mod gain_map;
+pub mod opcodes;
 pub mod preview;
 
 use tiff::{TiffReader, IfdEntry, TagId};
@@ -147,6 +149,10 @@ pub(crate) struct StoredImage {
     /// little-endian (uncompressed and deflate data), so `swap_bytes`
     /// gives what the file stores.
     pub byte_swapped: bool,
+    /// The samples are lossy JPEG tiles' (compression 34892): 8-bit values
+    /// stored through a curve that the file's `OpcodeList2` maps back to
+    /// linear ([`decode_lossy_tiled`]).
+    pub lossy: bool,
 }
 
 impl StoredImage {
@@ -232,8 +238,17 @@ pub(crate) fn read_stored_image(data: &[u8], debug_log: &mut Vec<String>) -> Res
             }
         }
         8 | 32946 => decode_deflate(&raw_bytes, bits)?,
-        // Baseline (lossy) JPEG tiles: the engine has no lossy JPEG decoder.
-        34892 => return Err("This DNG uses lossy JPEG compression, which is not supported yet".into()),
+        // Baseline (lossy) JPEG tiles of LinearRaw data.
+        34892 => {
+            let lossy = |why: String| format!("{LOSSY_REFUSAL}: {why}");
+            if !is_linear || bits != 8 || samples != 3 {
+                return Err(lossy(format!("only 8-bit LinearRaw RGB is read (this is {bits}-bit, {samples} samples, PhotometricInterpretation {photo_interp})")));
+            }
+            let (Some(tw), Some(th)) = (tile_width, tile_height) else {
+                return Err(lossy("only tiled data is read, and this is in strips".into()));
+            };
+            decode_lossy_tiled(data, &strip_offsets, &strip_counts, width, height, tw, th).map_err(lossy)?
+        }
         _ => return Err(format!("Unsupported DNG compression: {compression}")),
     };
 
@@ -247,7 +262,56 @@ pub(crate) fn read_stored_image(data: &[u8], debug_log: &mut Vec<String>) -> Res
     }
     let eight_bit_shifted = bits == 8 && matches!(compression, 1 | 8 | 32946);
     let byte_swapped = bits == 16 && matches!(compression, 1 | 8 | 32946) && !reader.is_little_endian();
-    Ok(StoredImage { ifd0, main_ifd, width, height, bits, samples, photo_interp, pixel_data, expected_pixels, eight_bit_shifted, byte_swapped })
+    Ok(StoredImage { ifd0, main_ifd, width, height, bits, samples, photo_interp, pixel_data, expected_pixels, eight_bit_shifted, byte_swapped, lossy: compression == 34892 })
+}
+
+/// What a DNG that uses lossy JPEG compression and cannot be read is
+/// refused with, followed by the reason.
+pub const LOSSY_REFUSAL: &str = "This DNG uses lossy JPEG compression, which is not supported yet";
+
+/// Lossy JPEG tiles (compression 34892) of an 8-bit, three-sample
+/// LinearRaw image, decoded with the baseline JPEG decoder the engine
+/// already uses for previews (`jpeg-decoder`; the Adobe colour transform
+/// the converter writes is undone there) into `width × height × 3` values
+/// 0..255. Every tile must decode to RGB at least the size of its part of
+/// the image and no larger than a tile; a tile that does not refuses the
+/// file rather than leaving a hole.
+fn decode_lossy_tiled(file_data: &[u8], offsets: &[u32], byte_counts: &[u32], image_w: u32, image_h: u32, tile_w: u32, tile_h: u32) -> Result<Vec<u16>, String> {
+    if tile_w == 0 || tile_h == 0 || tile_w > 65_536 || tile_h > 65_536 {
+        return Err(format!("a {tile_w}×{tile_h} tile"));
+    }
+    let across = image_w.div_ceil(tile_w) as usize;
+    let down = image_h.div_ceil(tile_h) as usize;
+    let tiles = across * down;
+    if offsets.len() != tiles || byte_counts.len() != tiles {
+        return Err(format!("{} tile offsets and {} byte counts for {tiles} tiles", offsets.len(), byte_counts.len()));
+    }
+    let (w, h) = (image_w as usize, image_h as usize);
+    let mut image: Vec<u16> = Vec::new();
+    image.try_reserve_exact(w * h * 3).map_err(|_| "not enough memory for the DNG's pixels".to_string())?;
+    image.resize(w * h * 3, 0);
+    for t in 0..tiles {
+        let (tx, ty) = (t % across, t / across);
+        let start = offsets[t] as usize;
+        let bytes = start.checked_add(byte_counts[t] as usize).and_then(|end| file_data.get(start..end)).ok_or_else(|| format!("tile {t} lies outside the file"))?;
+        let mut decoder = jpeg_decoder::Decoder::new(bytes);
+        let px = decoder.decode().map_err(|e| format!("tile {t} does not decode ({e})"))?;
+        let info = decoder.info().ok_or_else(|| format!("tile {t} has no frame"))?;
+        let (fw, fh) = (usize::from(info.width), usize::from(info.height));
+        let (x0, y0) = (tx * tile_w as usize, ty * tile_h as usize);
+        let (cw, ch) = ((w - x0).min(tile_w as usize), (h - y0).min(tile_h as usize));
+        if info.pixel_format != jpeg_decoder::PixelFormat::RGB24 || fw < cw || fh < ch || fw > tile_w as usize || fh > tile_h as usize || px.len() != fw * fh * 3 {
+            return Err(format!("tile {t} decodes to {fw}×{fh} {:?}, not {cw}×{ch} RGB", info.pixel_format));
+        }
+        for row in 0..ch {
+            let src = &px[row * fw * 3..(row * fw + cw) * 3];
+            let dst = ((y0 + row) * w + x0) * 3;
+            for (d, &v) in image[dst..dst + cw * 3].iter_mut().zip(src) {
+                *d = u16::from(v);
+            }
+        }
+    }
+    Ok(image)
 }
 
 /// The part of the stored image that is the picture: the `ActiveArea`
@@ -326,6 +390,9 @@ pub(crate) fn shift_cfa(pattern: [u8; 4], (dy, dx): (usize, usize)) -> [u8; 4] {
 pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     let mut debug_log: Vec<String> = Vec::new();
     let stored = read_stored_image(data, &mut debug_log)?;
+    if stored.lossy {
+        return Err(format!("{LOSSY_REFUSAL}: the baked decode does not read it"));
+    }
     macro_rules! dng_log {
         ($($arg:tt)*) => { debug_log.push(format!($($arg)*)); };
     }
@@ -1200,5 +1267,51 @@ mod tests {
         let (black, white) = auto_levels_points(&pixels, 0.0001, 0.0001);
         // Luminance ≈ 0.0722 → both points collapse near that value.
         assert!(black < 0.1 && white < 0.1, "black={black} white={white}");
+    }
+
+    /// A baseline JPEG of `w` × `h` RGB, one flat colour (an encoder's
+    /// output, not a camera file).
+    fn tile(w: u16, h: u16, rgb: [u8; 3]) -> Vec<u8> {
+        let px: Vec<u8> = (0..usize::from(w) * usize::from(h)).flat_map(|_| rgb).collect();
+        let mut out = Vec::new();
+        jpeg_encoder::Encoder::new(&mut out, 100).encode(&px, w, h, jpeg_encoder::ColorType::Rgb).unwrap();
+        out
+    }
+
+    #[test]
+    fn lossy_tiles_land_in_place_and_a_bad_tile_refuses_the_image() {
+        // A 20 × 12 image in 16 × 8 tiles: 2 × 2, the right and bottom
+        // ones cut by the image's edge.
+        let colours = [[200u8, 40, 40], [40, 200, 40], [40, 40, 200], [120, 120, 120]];
+        let mut file = Vec::new();
+        let (mut offsets, mut counts) = (Vec::new(), Vec::new());
+        for c in colours {
+            let t = tile(16, 8, c);
+            offsets.push(file.len() as u32);
+            counts.push(t.len() as u32);
+            file.extend(t);
+        }
+        let img = decode_lossy_tiled(&file, &offsets, &counts, 20, 12, 16, 8).unwrap();
+        assert_eq!(img.len(), 20 * 12 * 3);
+        let at = |x: usize, y: usize| -> [u16; 3] { std::array::from_fn(|c| img[(y * 20 + x) * 3 + c]) };
+        let near = |a: [u16; 3], b: [u8; 3]| a.iter().zip(b).all(|(&x, y)| x.abs_diff(u16::from(y)) <= 3);
+        assert!(near(at(0, 0), colours[0]) && near(at(19, 0), colours[1]) && near(at(0, 11), colours[2]) && near(at(19, 11), colours[3]));
+        // Refused, with a sentence: too few tiles, a tile outside the file,
+        // a tile that is not JPEG, and a tile too small for its place.
+        assert!(decode_lossy_tiled(&file, &offsets[..3], &counts[..3], 20, 12, 16, 8).is_err());
+        let mut far = offsets.clone();
+        far[1] = file.len() as u32;
+        assert!(decode_lossy_tiled(&file, &far, &counts, 20, 12, 16, 8).unwrap_err().contains("outside"));
+        let mut garbage = file.clone();
+        garbage[offsets[2] as usize..offsets[2] as usize + 4].copy_from_slice(b"junk");
+        assert!(decode_lossy_tiled(&garbage, &offsets, &counts, 20, 12, 16, 8).unwrap_err().contains("tile 2"));
+        let small = tile(8, 8, [1, 2, 3]);
+        let mut short_file = file.clone();
+        let (mut so, mut sc) = (offsets.clone(), counts.clone());
+        so[0] = short_file.len() as u32;
+        sc[0] = small.len() as u32;
+        short_file.extend(small);
+        assert!(decode_lossy_tiled(&short_file, &so, &sc, 20, 12, 16, 8).unwrap_err().contains("tile 0"));
+        assert!(decode_lossy_tiled(&file, &offsets, &counts, 20, 12, 0, 8).is_err());
     }
 }

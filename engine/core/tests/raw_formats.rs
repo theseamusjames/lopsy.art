@@ -111,20 +111,18 @@ fn dng_and_arw_through_the_interface() {
         let data = std::fs::read(&path).unwrap();
         assert_eq!(raw::sniff(&data), Some(format), "{name}");
         let t0 = std::time::Instant::now();
-        let prep = match raw::prepare(&data) {
-            Ok(p) => p,
-            Err(e) if name.contains("lossy") => {
-                assert_eq!(e, "DNG cannot open as RAW: This DNG uses lossy JPEG compression, which is not supported yet", "{name}");
-                println!("{name}: refused: {e}");
-                continue;
-            }
-            Err(e) => panic!("{name}: {e}"),
-        };
+        let prep = raw::prepare(&data).unwrap_or_else(|e| panic!("{name}: {e}"));
         let prepare_ms = t0.elapsed().as_millis();
         let d = &prep.description;
         assert_eq!(d.format, format);
         bands_equal_whole(&name, &prep);
         let baked = match format {
+            // The baked decode does not read a lossy DNG.
+            RawFormatId::Dng if name.contains("lossy") => {
+                let e = lopsy_core::dng::read_dng(&data).err().unwrap_or_default();
+                assert!(e.starts_with(lopsy_core::dng::LOSSY_REFUSAL), "{name}: {e}");
+                (d.width, d.height)
+            }
             RawFormatId::Dng => {
                 let b = lopsy_core::dng::read_dng(&data).unwrap();
                 (b.width, b.height)

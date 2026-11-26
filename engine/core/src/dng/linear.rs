@@ -41,7 +41,13 @@
 //! masks a border, a 2 × 2 black level, a white level of 15000 and a
 //! default crop to 5760 × 3840; and its LinearRaw variants. Each lines up
 //! with the file's own preview and macOS's decode at no shift, with hues
-//! within 1° of them. The lossy JPEG variants are refused (`read_dng`).
+//! within 1° of them. The lossy JPEG variants (compression 34892: 8-bit
+//! LinearRaw RGB in baseline JPEG tiles, stored through a curve) are read
+//! too: their `OpcodeList2` `MapPolynomial` opcodes, applied to the linear
+//! reference values (0..1) before the as-shot gain as the specification
+//! orders (`dng::opcodes`), make them linear, and they open like their
+//! lossless siblings (`tests/dng_lossy.rs`). A lossy file whose
+//! `OpcodeList2` cannot be applied whole is refused with the reason.
 //!
 //! **The gain table map.** A LinearRaw file's `ProfileGainTableMap`
 //! (Apple's local tone map) is applied to the prepared plane in place,
@@ -345,6 +351,9 @@ pub(crate) struct PlaneMapping<'a> {
     pub black_origin: (usize, usize),
     pub scales: &'a [f64],
     pub gain: [f32; 3],
+    /// The file's `OpcodeList2` polynomials, applied to each linear
+    /// reference value (0..1) before the as-shot gain (`dng::opcodes`).
+    pub maps: Option<&'a super::opcodes::LinearMaps>,
 }
 
 /// Each sample plane's scale, `1 / (white level − the plane's largest
@@ -424,7 +433,10 @@ pub(crate) fn fill_plane(src: &StoredPlane, raw_of: impl Fn(u16) -> u16, m: &Pla
                     Some(t) if !t.is_empty() => t[(raw as usize).min(last)],
                     _ => raw,
                 };
-                let v = ((f64::from(lin) - m.black.at(row + m.black_origin.0, col + m.black_origin.1, s)) * m.scales[s]).min(1.0);
+                let mut v = ((f64::from(lin) - m.black.at(row + m.black_origin.0, col + m.black_origin.1, s)) * m.scales[s]).min(1.0);
+                if let Some(maps) = m.maps {
+                    v = maps.apply(s, v);
+                }
                 plane.push(v as f32 * m.gain[colour_of(row, col, s)]);
             }
         }
@@ -579,7 +591,25 @@ pub fn prepare_dng_with(data: &[u8], options: PrepareOptions) -> Result<DngPrepa
         }
     };
     let source = StoredPlane { values: &pixel_data, width: sw, samples: stored.samples as usize, top, left, width_out: w, height_out: h };
-    let mapping = PlaneMapping { kind, cfa, table: table.as_deref(), black: &black, black_origin: area.from_active, scales: &scales, gain };
+    // OpcodeList2, when it can be applied whole (`dng::opcodes`): lossy
+    // data needs it to be linear, so a lossy file whose list cannot be
+    // applied is refused; a lossless one leaves it unapplied, as before.
+    let opcode_list2 = main.iter().find(|e| e.tag == TagId::OpcodeList2 as u16).or_else(|| ifd0.iter().find(|e| e.tag == TagId::OpcodeList2 as u16));
+    let maps = match opcode_list2.map(|e| super::opcodes::read_opcode_list2(&e.raw_bytes, stored.width, stored.height, spp)) {
+        Some(Ok(maps)) => {
+            unhandled.retain(|u| !u.starts_with("OpcodeList2"));
+            debug_log.push(format!("[DNG linear] OpcodeList2 applied: {} MapPolynomial", maps.polynomials.len()));
+            Some(maps)
+        }
+        Some(Err(why)) if stored.lossy => return Err(format!("{}: its OpcodeList2 cannot be applied ({why})", super::LOSSY_REFUSAL)),
+        Some(Err(why)) => {
+            debug_log.push(format!("[DNG linear] OpcodeList2 not applied: {why}"));
+            None
+        }
+        None if stored.lossy => return Err(format!("{}: it has no OpcodeList2 to make its samples linear", super::LOSSY_REFUSAL)),
+        None => None,
+    };
+    let mapping = PlaneMapping { kind, cfa, table: table.as_deref(), black: &black, black_origin: area.from_active, scales: &scales, gain, maps: maps.as_ref() };
     let mut plane = fill_plane(&source, raw_of, &mapping)?;
     drop(pixel_data);
 
