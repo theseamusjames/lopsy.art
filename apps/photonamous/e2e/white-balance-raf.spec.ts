@@ -8,7 +8,8 @@ import { openHarness, waitForReady } from './harness';
  * menu, a preset setting Temperature and Tint, and the Kelvin readout.
  * The samples are not in the repository: point LOPSY_RAF_SAMPLES at a
  * directory of them (github.com/theseamusjames/sample-raf-images).
- * DSCF6952 is an X100VI frame shot at about 4970 K.
+ * DSCF6952 is an X100VI frame shot at about 5090 K (on the scale through
+ * the camera's illuminant A and D65 whites, core/tests/raf_wb_presets.rs).
  */
 const samples = process.env.LOPSY_RAF_SAMPLES;
 const SAMPLE = 'DSCF6952.RAF';
@@ -77,21 +78,25 @@ test.describe('White balance on a RAF', () => {
     // The menu: As shot, Auto, then the body's presets in the engine's order, then Custom.
     const mode = page.getByLabel('White balance mode');
     await expect(mode).toHaveValue('asShot');
-    // Each distinct setting once: this body's Underwater has Daylight's slider values, and the menu, which names
-    // a preset by its values, could never show it as chosen.
+    // Each distinct setting once (the menu names a preset by its values); on this body every preset has its own.
     const listed = expected.presets.filter(
       (p, i, all) => !all.slice(0, i).some((q) => Math.round(q.temperature) === Math.round(p.temperature) && Math.round(q.tint) === Math.round(p.tint)),
     );
-    expect(listed.length).toBeLessThan(expected.presets.length);
+    expect(listed.map((p) => p.name)).toEqual([
+      'Daylight',
+      'Cloudy',
+      'Tungsten',
+      'Fluorescent (daylight)',
+      'Fluorescent (day white)',
+      'Fluorescent (cool white)',
+    ]);
     const options = await mode.locator('option').allTextContents();
     expect(options).toEqual(['As shot', 'Auto', ...listed.map((p) => p.name), 'Custom']);
-    expect(options).not.toContain('Underwater');
-    expect(options.indexOf('Daylight')).toBeLessThan(options.indexOf('Cloudy'));
 
     // As shot reads as the camera's Kelvin.
     const temperature = page.getByLabel('Temperature value');
     const asShot = Number((await temperature.inputValue()).replace(' K', ''));
-    expect(Math.abs(asShot - 4970)).toBeLessThanOrEqual(100);
+    expect(Math.abs(asShot - 5090)).toBeLessThanOrEqual(100);
     expect(Math.abs(asShot - expected.kelvin!.asShotKelvin)).toBeLessThanOrEqual(25);
 
     // Daylight sets the preset's Temperature and Tint as one step.

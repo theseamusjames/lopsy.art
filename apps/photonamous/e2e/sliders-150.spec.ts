@@ -239,7 +239,7 @@ test.describe('Sliders past 100', () => {
 
 const samples = process.env.LOPSY_RAF_SAMPLES;
 /**
- * An X-E5 frame whose camera Tungsten preset is Temperature −124 from as
+ * An X-E5 frame whose camera Tungsten preset is Temperature −128 from as
  * shot (measured with core/tests/raf_wb_presets.rs): ±100 cut it to −100.
  */
 const TUNGSTEN_SAMPLE = 'DSCF8078.RAF';
@@ -275,7 +275,7 @@ test.describe('White balance presets past 100 on a RAF', () => {
 
   /**
    * A frame shot under warm light, whose Cloudy and Daylight Fluorescent
-   * presets are Temperature +173 and +191 from as shot: ±150 cut both off.
+   * presets are Temperature +170 and +191 from as shot: ±150 cut both off.
    */
   test('presets past 150 apply the camera’s own Temperature, short of the end', async ({ page }) => {
     const warm = join(samples ?? '', WARM_SAMPLE);
