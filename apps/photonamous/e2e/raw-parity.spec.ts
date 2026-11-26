@@ -35,10 +35,29 @@ import { previewCount, settledPreview, waitForPreview, waitForReady } from './ha
  * elsewhere), a tint, an exposure and a profile other than the default;
  * then tone, colour, local contrast, sharpening and noise reduction on top.
  *
- * Needs LOPSY_RAF_SAMPLES; LOPSY_RAW_PARITY_UPDATE=1 records the current
- * renders for the key the run is on (other keys are kept).
+ * DNG and Sony ARW samples are fingerprinted the same way, on the linear
+ * and no-float ways (the second opens them with the baked decode): the
+ * four Sony bodies from LOPSY_ARW_SAMPLES and the two Canon DNGs from
+ * LOPSY_DNG_ADOBE_SAMPLES. In recipe 2 a DNG or ARW takes Neutral, having
+ * no film looks.
+ *
+ * Needs LOPSY_RAF_SAMPLES (and the others for their files); each set is
+ * skipped without its variable. LOPSY_RAW_PARITY_UPDATE=1 records the
+ * current renders for the key the run is on (other keys are kept): run it
+ * with -g to record only the samples meant to change.
  */
 const samples = process.env.LOPSY_RAF_SAMPLES;
+const arwSamples = process.env.LOPSY_ARW_SAMPLES;
+const dngSamples = process.env.LOPSY_DNG_ADOBE_SAMPLES;
+/** The DNG and ARW samples fingerprinted: four Sony bodies (two with measured colour, two without) and a mosaic and a linear DNG. */
+const OTHER_RAW: readonly { readonly dir: string | undefined; readonly name: string }[] = [
+  { dir: arwSamples, name: 'ILCE-7M3_DSC0009.ARW' },
+  { dir: arwSamples, name: 'ILCE-7M4_DSC06677_FullFrame-Raw-Compressed.ARW' },
+  { dir: arwSamples, name: 'ILCE-6000_DSC01542.ARW' },
+  { dir: arwSamples, name: 'DSC-RX100M3_DSC00734.ARW' },
+  { dir: dngSamples, name: '5D3-adobe-lossless.dng' },
+  { dir: dngSamples, name: '5D3-adobe-lossless-rgb.dng' },
+];
 const isUpdate = process.env.LOPSY_RAW_PARITY_UPDATE === '1';
 const STORE = join(dirname(fileURLToPath(import.meta.url)), 'raw-parity');
 const GRID_COLUMNS = 12;
@@ -151,19 +170,34 @@ async function edit(page: Page, steps: () => Promise<void>): Promise<void> {
   await settledPreview(page, from);
 }
 
-/** The profile the second recipe picks: a film look where there is one, else Neutral, else Monochrome. */
-async function otherProfile(page: Page): Promise<string> {
+/**
+ * The profile the second recipe picks: the one its stored line names, so a
+ * change to the menu's order or wording cannot change which profile is
+ * rendered; for a new recording, a film look where there is one, else
+ * Neutral, else Monochrome.
+ */
+async function otherProfile(page: Page, stored: string | null): Promise<string> {
+  if (stored) return stored;
   const values = await page.getByRole('combobox', { name: 'Profile' }).locator('option').evaluateAll((options) => options.map((o) => (o as HTMLOptionElement).value));
   const film = values.find((v) => !['standard', 'camera', 'neutral', 'monochrome'].includes(v));
   return film ?? (values.includes('neutral') ? 'neutral' : 'monochrome');
 }
 
-const RECIPES: readonly { readonly name: string; readonly apply: (page: Page) => Promise<string> }[] = [
+/** The key of the way this page renders (as `fingerprint` gives it), before anything is read. */
+async function pageKey(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const engine = window.__photonamousEngine;
+    const override = new URLSearchParams(location.search).get('develop');
+    return `chromium-${engine?.rendererName() ?? 'unknown'}-${override ?? (engine?.isWorkingSpace ? 'linear' : 'legacy')}`;
+  });
+}
+
+const RECIPES: readonly { readonly name: string; readonly apply: (page: Page, storedProfile: string | null) => Promise<string> }[] = [
   { name: 'defaults', apply: async () => 'standard' },
   {
     name: 'white-balance-exposure-profile',
-    apply: async (page) => {
-      const profile = await otherProfile(page);
+    apply: async (page, storedProfile) => {
+      const profile = await otherProfile(page, storedProfile);
       await edit(page, async () => {
         const temperature = page.getByLabel('Temperature value', { exact: true });
         const isKelvin = (await temperature.inputValue()).endsWith(' K');
@@ -194,7 +228,7 @@ const RECIPES: readonly { readonly name: string; readonly apply: (page: Page) =>
 ];
 
 function storePath(name: string): string {
-  return join(STORE, `${name.replace(/\.raf$/i, '')}.txt`);
+  return join(STORE, `${name.replace(/\.(raf|dng|arw)$/i, '')}.txt`);
 }
 
 /** Stored lines by `<key> <recipe>`: the header line, then the grid lines. */
@@ -240,46 +274,65 @@ function gridMovement(expected: readonly string[], got: readonly string[]): stri
   return `largest cell-mean change ${worst}`;
 }
 
+/** Renders `path` each way and compares (or records) its fingerprints. */
+async function checkSample(page: Page, name: string, path: string, queries: readonly string[]): Promise<void> {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const stored = readStore(name);
+  const problems: string[] = [];
+  for (const query of queries) {
+    await page.goto(`/edit-harness.html${query}`);
+    await expect(page.getByTestId('harness-file')).toBeAttached();
+    await page.getByTestId('harness-file').setInputFiles(path);
+    await waitForReady(page, 150_000);
+    // The first preview: the load has rendered.
+    await waitForPreview(page, 0, 3 * 60_000);
+    await settledPreview(page, 0);
+    const key = await pageKey(page);
+    const storedProfile = / profile (\S+)$/.exec(stored.get(`${key} white-balance-exposure-profile`)?.[0] ?? '')?.[1] ?? null;
+    for (const recipe of RECIPES) {
+      const profile = await recipe.apply(page, storedProfile);
+      const print = await settledFingerprint(page);
+      const lines = linesFor(recipe.name, print, profile);
+      const id = `${print.key} ${recipe.name}`;
+      console.log(`${name} ${id}: ${print.hash} ${print.width}x${print.height}`);
+      if (isUpdate) {
+        stored.set(id, lines);
+        continue;
+      }
+      const expected = stored.get(id);
+      if (!expected) {
+        problems.push(`${id}: nothing stored (record with LOPSY_RAW_PARITY_UPDATE=1)`);
+      } else if (expected[0] !== lines[0]) {
+        problems.push(`${id}: expected "${expected[0]}", got "${lines[0]}"; ${gridMovement(expected, lines)}`);
+      }
+    }
+  }
+  if (isUpdate) writeStore(name, stored);
+  expect(problems, name).toEqual([]);
+}
+
 test.describe('RAW parity: each RAF renders as recorded', () => {
   test.skip(files.length === 0, 'Set LOPSY_RAF_SAMPLES to the directory of sample RAFs to run this test');
   test.skip(!isChromium, 'The fingerprints are recorded in Chromium; other browsers render on other GPU stacks');
   test.setTimeout(12 * 60_000);
 
   for (const name of files) {
+    // The page's own develop path (linear: every GPU the tests run on has float targets), the legacy
+    // calls on the float RAW decode, and the path of a GPU without float targets (develop-override.ts).
+    test(name, ({ page }) => checkSample(page, name, join(samples ?? '', name), ['', '?develop=legacy', '?develop=no-float']));
+  }
+});
+
+test.describe('RAW parity: each DNG and ARW renders as recorded', () => {
+  test.skip(!isChromium, 'The fingerprints are recorded in Chromium; other browsers render on other GPU stacks');
+  test.setTimeout(12 * 60_000);
+
+  for (const { dir, name } of OTHER_RAW) {
     test(name, async ({ page }) => {
-      await page.setViewportSize({ width: 1280, height: 800 });
-      const stored = readStore(name);
-      const problems: string[] = [];
-      // The page's own develop path (linear: every GPU the tests run on has float targets), the legacy
-      // calls on the float RAW decode, and the path of a GPU without float targets (develop-override.ts).
-      for (const query of ['', '?develop=legacy', '?develop=no-float']) {
-        await page.goto(`/edit-harness.html${query}`);
-        await expect(page.getByTestId('harness-file')).toBeAttached();
-        await page.getByTestId('harness-file').setInputFiles(join(samples ?? '', name));
-        await waitForReady(page, 150_000);
-        // The first preview: the load has rendered.
-        await waitForPreview(page, 0, 3 * 60_000);
-        await settledPreview(page, 0);
-        for (const recipe of RECIPES) {
-          const profile = await recipe.apply(page);
-          const print = await settledFingerprint(page);
-          const lines = linesFor(recipe.name, print, profile);
-          const id = `${print.key} ${recipe.name}`;
-          console.log(`${name} ${id}: ${print.hash} ${print.width}x${print.height}`);
-          if (isUpdate) {
-            stored.set(id, lines);
-            continue;
-          }
-          const expected = stored.get(id);
-          if (!expected) {
-            problems.push(`${id}: nothing stored (record with LOPSY_RAW_PARITY_UPDATE=1)`);
-          } else if (expected[0] !== lines[0]) {
-            problems.push(`${id}: expected "${expected[0]}", got "${lines[0]}"; ${gridMovement(expected, lines)}`);
-          }
-        }
-      }
-      if (isUpdate) writeStore(name, stored);
-      expect(problems, name).toEqual([]);
+      const path = dir ? join(dir, name) : '';
+      test.skip(!dir || !existsSync(path), `needs ${name} (LOPSY_ARW_SAMPLES, LOPSY_DNG_ADOBE_SAMPLES)`);
+      // The RAW path, and the baked decode a GPU without float targets opens these formats with.
+      await checkSample(page, name, path, ['', '?develop=no-float']);
     });
   }
 });
