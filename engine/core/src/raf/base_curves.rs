@@ -7,10 +7,8 @@
 //! (Fritsch–Carlson), which is bounded by the control points and does
 //! not overshoot the way a natural cubic spline would.
 //!
-//! The numeric control points are derived from publicly known
-//! Fujifilm-style tone shapes (analogous to the "fujifilm like" preset
-//! distributed with darktable). They are facts, not code, and are
-//! reimplemented here from scratch rather than copied.
+//! The control points were derived internally from publicly available
+//! sources.
 
 /// A named base curve: a small ordered list of (x, y) control points in
 /// linear-light [0, 1]. The first point must be (0, 0) and the last
