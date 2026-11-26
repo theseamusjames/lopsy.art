@@ -275,9 +275,33 @@ pub const LOSSY_REFUSAL: &str = "This DNG uses lossy JPEG compression, which is 
 /// 0..255. Every tile must decode to RGB at least the size of its part of
 /// the image and no larger than a tile; a tile that does not refuses the
 /// file rather than leaving a hole.
+/// Whether a lossy tile's JPEG frame header (from `read_info`, before any
+/// pixel buffer is made) is one to decode: a baseline (sequential DCT)
+/// frame, as the specification requires of lossy DNG data, of RGB (three
+/// components, as the IFD's three samples), at least the size of its part
+/// of the image (`part`) and no larger than a tile. jpeg-decoder sizes its
+/// buffers from this header, so a header that claims more than the tile
+/// is refused here rather than allocated.
+fn lossy_tile_header(width: u16, height: u16, format: jpeg_decoder::PixelFormat, process: jpeg_decoder::CodingProcess, tile: (u32, u32), part: (usize, usize)) -> Result<(), String> {
+    let (fw, fh) = (usize::from(width), usize::from(height));
+    if process != jpeg_decoder::CodingProcess::DctSequential {
+        return Err(format!("is {process:?} JPEG, not baseline"));
+    }
+    if format != jpeg_decoder::PixelFormat::RGB24 {
+        return Err(format!("is {format:?}, not three-component RGB"));
+    }
+    if fw < part.0 || fh < part.1 || fw > tile.0 as usize || fh > tile.1 as usize {
+        return Err(format!("is {fw}×{fh}, not between its {}×{} part of the image and the {}×{} tile", part.0, part.1, tile.0, tile.1));
+    }
+    Ok(())
+}
+
 fn decode_lossy_tiled(file_data: &[u8], offsets: &[u32], byte_counts: &[u32], image_w: u32, image_h: u32, tile_w: u32, tile_h: u32) -> Result<Vec<u16>, String> {
-    if tile_w == 0 || tile_h == 0 || tile_w > 65_536 || tile_h > 65_536 {
-        return Err(format!("a {tile_w}×{tile_h} tile"));
+    // TIFF tiles are multiples of 16; one larger than the image rounded up
+    // to 16 holds nothing more, and would let a tile's header claim more.
+    let (max_w, max_h) = (image_w.max(1).next_multiple_of(16), image_h.max(1).next_multiple_of(16));
+    if tile_w == 0 || tile_h == 0 || tile_w > max_w || tile_h > max_h {
+        return Err(format!("a {tile_w}×{tile_h} tile for a {image_w}×{image_h} image"));
     }
     let across = image_w.div_ceil(tile_w) as usize;
     let down = image_h.div_ceil(tile_h) as usize;
@@ -293,12 +317,17 @@ fn decode_lossy_tiled(file_data: &[u8], offsets: &[u32], byte_counts: &[u32], im
         let (tx, ty) = (t % across, t / across);
         let start = offsets[t] as usize;
         let bytes = start.checked_add(byte_counts[t] as usize).and_then(|end| file_data.get(start..end)).ok_or_else(|| format!("tile {t} lies outside the file"))?;
+        let (x0, y0) = (tx * tile_w as usize, ty * tile_h as usize);
+        let (cw, ch) = ((w - x0).min(tile_w as usize), (h - y0).min(tile_h as usize));
+        // The header first: nothing is allocated from it until it passes.
         let mut decoder = jpeg_decoder::Decoder::new(bytes);
+        decoder.read_info().map_err(|e| format!("tile {t} has no readable JPEG header ({e})"))?;
+        let header = decoder.info().ok_or_else(|| format!("tile {t} has no frame"))?;
+        lossy_tile_header(header.width, header.height, header.pixel_format, header.coding_process, (tile_w, tile_h), (cw, ch)).map_err(|why| format!("tile {t} {why}"))?;
+        decoder.set_max_decoding_buffer_size(tile_w as usize * tile_h as usize * 3);
         let px = decoder.decode().map_err(|e| format!("tile {t} does not decode ({e})"))?;
         let info = decoder.info().ok_or_else(|| format!("tile {t} has no frame"))?;
         let (fw, fh) = (usize::from(info.width), usize::from(info.height));
-        let (x0, y0) = (tx * tile_w as usize, ty * tile_h as usize);
-        let (cw, ch) = ((w - x0).min(tile_w as usize), (h - y0).min(tile_h as usize));
         if info.pixel_format != jpeg_decoder::PixelFormat::RGB24 || fw < cw || fh < ch || fw > tile_w as usize || fh > tile_h as usize || px.len() != fw * fh * 3 {
             return Err(format!("tile {t} decodes to {fw}×{fh} {:?}, not {cw}×{ch} RGB", info.pixel_format));
         }
@@ -1288,6 +1317,39 @@ mod tests {
         let mut out = Vec::new();
         jpeg_encoder::Encoder::new(&mut out, 100).encode(&px, w, h, jpeg_encoder::ColorType::Rgb).unwrap();
         out
+    }
+
+    #[test]
+    fn a_lossy_tile_header_is_checked_before_anything_is_allocated() {
+        use jpeg_decoder::{CodingProcess::*, PixelFormat::*};
+        let ok = |w, h, f, p| lossy_tile_header(w, h, f, p, (480, 480), (480, 400));
+        assert!(ok(480, 480, RGB24, DctSequential).is_ok());
+        assert!(ok(480, 400, RGB24, DctSequential).is_ok(), "a cut edge tile may be stored at its own size");
+        assert!(ok(40000, 40000, RGB24, DctSequential).unwrap_err().contains("40000"), "larger than the tile");
+        assert!(ok(481, 480, RGB24, DctSequential).is_err());
+        assert!(ok(479, 480, RGB24, DctSequential).is_err(), "smaller than its part");
+        assert!(ok(0, 0, RGB24, DctSequential).is_err());
+        assert!(ok(480, 480, RGB24, DctProgressive).unwrap_err().contains("baseline"));
+        assert!(ok(480, 480, RGB24, Lossless).is_err());
+        assert!(ok(480, 480, L8, DctSequential).is_err());
+        assert!(ok(480, 480, CMYK32, DctSequential).is_err());
+    }
+
+    /// A JPEG frame header claiming 40000 × 40000, a few hundred bytes: the
+    /// tile is refused from its header, with no buffer made from the claim.
+    #[test]
+    fn a_tile_whose_header_claims_a_huge_frame_is_refused_before_decoding() {
+        // SOI, a baseline SOF0 of 40000 × 40000 with three components, EOI.
+        let mut jpeg = vec![0xFF, 0xD8, 0xFF, 0xC0, 0x00, 17, 8, 0x9C, 0x40, 0x9C, 0x40, 3];
+        for id in 1..=3u8 {
+            jpeg.extend([id, 0x11, 0]);
+        }
+        jpeg.extend([0xFF, 0xD9]);
+        let n = jpeg.len() as u32;
+        let err = decode_lossy_tiled(&jpeg, &[0], &[n], 16, 16, 16, 16).unwrap_err();
+        assert!(err.starts_with("tile 0"), "{err}");
+        // And a tile size from the IFD past the image is refused outright.
+        assert!(decode_lossy_tiled(&jpeg, &[0], &[n], 16, 16, 65_536, 16).is_err());
     }
 
     #[test]
