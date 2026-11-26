@@ -197,7 +197,18 @@ fn sample_lut(lut: &[f32; LUT_SIZE], x: f32) -> f32 {
 }
 
 fn build_lut(curve: &BaseCurve) -> [f32; LUT_SIZE] {
-    let pts = curve.points;
+    build_lut_from(curve.points)
+}
+
+/// The same table for control points that are not one of the built-in
+/// curves (a DNG's own `ProfileToneCurve`): monotone cubic Hermite
+/// through `points`, which the caller has checked are increasing in x,
+/// non-decreasing in y, from (0, 0) to (1, 1).
+pub fn curve_lut_from_points(points: &[(f32, f32)]) -> Vec<f32> {
+    build_lut_from(points).to_vec()
+}
+
+fn build_lut_from(pts: &[(f32, f32)]) -> [f32; LUT_SIZE] {
     // Defensive: if a curve is malformed, fall back to identity.
     if pts.len() < 2 {
         let mut id = [0.0f32; LUT_SIZE];
