@@ -62,7 +62,7 @@ test.describe('DNG on the RAW path', () => {
 
       // A RAW photo: the RAW profiles, and Temperature in Kelvin (the file's calibration measures it).
       const profiles = await page.getByRole('combobox', { name: 'Profile' }).locator('option').allTextContents();
-      expect(profiles).toEqual(['Standard', 'Monochrome', 'Neutral']);
+      expect(profiles).toEqual(['Standard', 'Neutral', 'Monochrome']);
       await expect(page.getByLabel('Temperature value')).toHaveValue(/^\d+ K$/);
       await expect(page.getByTestId('color-note')).toHaveCount(0);
 

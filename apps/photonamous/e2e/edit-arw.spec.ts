@@ -100,7 +100,7 @@ test.describe('Edit view on a Sony ARW', () => {
     // The A7 IV's colour is measured, so the decoder sends no note and the Profile menu has none.
     await expect(page.getByTestId('color-note')).toHaveCount(0);
     await expect(page.getByRole('combobox', { name: 'Profile' })).toHaveAccessibleDescription('');
-    await expect(page.getByRole('combobox', { name: 'Profile' }).locator('option')).toHaveText(['Standard', 'Monochrome', 'Neutral']);
+    await expect(page.getByRole('combobox', { name: 'Profile' }).locator('option')).toHaveText(['Standard', 'Neutral', 'Monochrome']);
     await page.screenshot({ path: test.info().outputPath('arw-harness.png') });
 
     // The working image first; the full size is decoded when asked for.
