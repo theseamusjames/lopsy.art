@@ -141,7 +141,8 @@ pub struct WhiteBalanceModel {
     pub matrix: MatrixModel,
     pub kelvin: KelvinModel,
     pub preset_source: PresetSource,
-    /// In the recipe's units, in menu order, as `rafWhiteBalancePresets`.
+    /// In the recipe's units, in menu order (for a RAF, what
+    /// `rafWhiteBalancePresets` gives).
     pub presets: Vec<RecipeWbPreset>,
 }
 

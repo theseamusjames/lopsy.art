@@ -127,7 +127,17 @@
 //!
 //! # The JS API (wasm exports)
 //!
-//! RAW develop (`hosts/wasm/src/api/raf.rs`, `develop.rs`):
+//! Any RAW format (`hosts/wasm/src/api/raw.rs`, `lopsy_core::raw`), what the
+//! app's RAW path uses: `rawFormatOf(bytes)`; `rawPrepare(bytes)` (its
+//! `describeJson`, `paramsJson`, `binnedLinear(minLongEdge)`, `takePlane()`);
+//! `rawPlanBands`, `rawRenderLinearBand`, `rawRenderFinishedBand` (rows come
+//! back as a `RawRenderedBand`); `rawWhiteBalance`,
+//! `rawTemperatureForKelvin`; `rawAutoWhiteBalance(linearRgba, clipLevels)`.
+//! The description's `profiles` carry each entry's `role`, `menuName`,
+//! `listed`, `sameAs` and `makerStandard` (`lopsy_core::raf::develop::DevelopProfile`).
+//! The format calls below stay for Lopsy and older paths.
+//!
+//! RAF (`hosts/wasm/src/api/raf.rs`, `develop.rs`):
 //! - `rafRenderLinearBand(src, paramsJson, y0, y1, srcY0, srcY1)`: a band in linear camera RGB, unclamped, clipped channels reconstructed.
 //! - `rafRenderBinnedLinear(src, paramsJson, minLongEdge)` and `RafPrepared.binnedLinear(minLongEdge)`: the binned first view, no demosaic, reconstructed the same way.
 //! - `rafPrepare(bytes)`: its `paramsJson` and `metaJson` carry `clipLevels`, each channel's clip level `[r, g, b]` in those renders' units (linear camera RGB at the as-shot balance); `paramsJson` also carries `whiteLevel` (raw units) and `highlightChroma` (what the renders reconstruct with; `lopsy_core::raf::highlights`).
@@ -153,7 +163,7 @@
 //!
 //! White balance and statistics:
 //! - `rafAutoWhiteBalance(linearRgba)`: near-neutral-pixel white balance, as `wbRatio`.
-//! - `rafAutoWhiteBalanceClipped(linearRgba, clipLevels)`: the same, leaving out clipped and reconstructed pixels.
+//! - `rafAutoWhiteBalanceClipped(linearRgba, clipLevels)`: the same, leaving out clipped and reconstructed pixels; `rawAutoWhiteBalance` is the same call for any format.
 //! - `rafWhiteBalancePresets(rafBytes)`, `rafWhiteBalanceKelvin(rafBytes)`: the body's presets in recipe units (clamped to Temperature and Tint's ±200), and the Kelvin scale, a line fitted through the presets (a RAF has no calibration data, so its Kelvin is a readout, not a colour temperature). A DNG's Kelvin is real: `dngWhiteBalance` and `dngWhiteBalanceKelvin`.
 //! - `sampleNeutralWhiteBalance(engine, x, y, radius)` (readback): the picker; leaves out clipped and reconstructed pixels when `setRawDevelop`'s JSON has `clipLevels`.
 //! - `readDevelopHistogram(engine)` (readback): 4 × 256 bins of the displayed result; with the working space, of the sRGB output.

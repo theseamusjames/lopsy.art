@@ -2,7 +2,8 @@
 //! develop stage. The settings JSON is
 //! `{ "wbRatio": [r,g,b], "camToRgb": [9 floats, row-major], "exposureEv": f32,
 //!    "saturation": f32, "highlightDesaturation": bool, "baseCurve": [N floats] | null }`,
-//! the shape `rafDevelopDefaults` returns.
+//! the shape of a RAW description's `developDefaults` (`rawPrepare`), and of
+//! `rafDevelopDefaults`.
 
 use wasm_bindgen::prelude::*;
 
