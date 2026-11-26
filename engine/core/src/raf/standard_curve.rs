@@ -52,14 +52,18 @@
 //!   gamma of about 1.2 that the reference SDR chain (a BT.709 camera
 //!   curve shown on a BT.1886 gamma-2.4 display) gives for dim viewing, the
 //!   Bartleson–Breneman surround effect; 1.1 and 1.3 either side;
-//! - white about three stops above grey for the medium candidate: the
-//!   ISO 12232 saturation-based speed places sensor saturation at 7.8 times
-//!   the grey exposure, 2.96 stops; 3.5 and 2.7 either side for a long and
-//!   a short shoulder;
-//! - grey a little above 0.18 (0.20 to 0.22, sRGB 124 to 130): ISO 12232's
-//!   standard output sensitivity renders grey at sRGB 118 (0.18); the lift
-//!   is the "midtone lift" the proposal asks for, so that pulling the
+//! - white three to four stops above grey: the ISO 12232 saturation-based
+//!   speed places sensor saturation at 7.8 times the grey exposure (2.96
+//!   stops) for a metered frame; an opening exposure matched to a
+//!   preview's median, which sits below grey in most scenes, puts the
+//!   sensor's white further above grey than that. 3 (short), 3.5 and 4
+//!   (long). A first set (white 2.7 to 3.5) clipped skies more the shorter
+//!   its shoulder, on every exposure-matched sample;
+//! - grey at 0.22 for all three (sRGB 130): ISO 12232's standard output
+//!   sensitivity renders grey at sRGB 118 (0.18); the lift of a third of a
+//!   stop is the "midtone lift" the proposal asks for, so that pulling the
 //!   highlights down into a shoulder does not leave the picture dimmer.
+//!   The same for all three, so they differ only in contrast and shoulder.
 
 use super::base_curves::LUT_SIZE;
 use crate::tone::SHOULDER_HEADROOM;
@@ -83,12 +87,12 @@ pub struct StandardCurve {
     pub white_stops: f64,
 }
 
-/// A: low contrast, a long shoulder (white 3.5 stops above grey).
-pub const STANDARD_GENTLE: StandardCurve = StandardCurve { name: "Standard A (gentle)", grey: 0.20, contrast: 1.10, white_stops: 3.5 };
-/// B: the reference system gamma, white three stops above grey.
-pub const STANDARD_MEDIUM: StandardCurve = StandardCurve { name: "Standard B (medium)", grey: 0.21, contrast: 1.20, white_stops: 3.0 };
-/// C: more contrast, a short shoulder (white 2.7 stops above grey).
-pub const STANDARD_PUNCHY: StandardCurve = StandardCurve { name: "Standard C (punchy)", grey: 0.22, contrast: 1.30, white_stops: 2.7 };
+/// A: low contrast, a long shoulder (white 4 stops above grey).
+pub const STANDARD_GENTLE: StandardCurve = StandardCurve { name: "Standard A (gentle)", grey: 0.22, contrast: 1.10, white_stops: 4.0 };
+/// B: the reference system gamma, white 3.5 stops above grey.
+pub const STANDARD_MEDIUM: StandardCurve = StandardCurve { name: "Standard B (medium)", grey: 0.22, contrast: 1.20, white_stops: 3.5 };
+/// C: more contrast, a short shoulder (white 3 stops above grey).
+pub const STANDARD_PUNCHY: StandardCurve = StandardCurve { name: "Standard C (punchy)", grey: 0.22, contrast: 1.30, white_stops: 3.0 };
 
 /// The three candidates, A, B, C.
 pub const CANDIDATES: [StandardCurve; 3] = [STANDARD_GENTLE, STANDARD_MEDIUM, STANDARD_PUNCHY];
@@ -220,11 +224,11 @@ mod tests {
                 let s = ll(i);
                 assert!(s > 0.0 && s <= c.contrast + 1e-2, "{}: log-log slope {s} at {}", c.name, stops(i as f32 / n));
             }
-            // At grey, p / (1 + S^−k), and above 1 for every candidate:
-            // each adds contrast where a straight line adds none.
+            // At grey, p / (1 + S^−k): about 1 for the gentle candidate,
+            // more for the others.
             let gi = (GREY_IN as f32 * n) as usize;
             let want = c.contrast_at_grey();
-            assert!((ll(gi) - want).abs() < 0.01 && want > 1.0, "{}: {} against {want}", c.name, ll(gi));
+            assert!((ll(gi) - want).abs() < 0.01 && (0.95..=c.contrast).contains(&want), "{}: {} against {want}", c.name, ll(gi));
             // The log-log slope only falls across the table: one shoulder,
             // no second bump. Over 16 entries, so f32 steps do not count.
             let wide = |i: usize| (f64::from(lut[i + 16]).ln() - f64::from(lut[i]).ln()) / (((i + 16) as f64).ln() - (i as f64).ln());
