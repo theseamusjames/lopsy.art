@@ -512,6 +512,12 @@ taken for a DNG. The DNG tests (`e2e/edit-dng.spec.ts`,
 the Canon 5D Mark III DNGs from raw.pixls.us (`5D3-adobe-lossless.dng`,
 `5D3-adobe-lossless-rgb.dng`, `5D3-adobe-lossy.dng`,
 `5D3-adobe-lossy-rgb.dng`) from `LOPSY_DNG_ADOBE_SAMPLES`. Each is skipped without its variable.
+`LOPSY_DNG_CAMERA_SAMPLES` names a folder of DNGs a camera wrote: the
+engine's real-file tests (`engine/core/tests/raw_formats.rs`,
+`raw_white_balance.rs`) take every `.dng` in it, and the parity spec and
+the review recorder take the Leica files from raw.pixls.us (CC0) by
+these names: `Leica-Q2.dng`, `Leica-M10-R-compressed.dng`,
+`Leica-M-Typ240-compressed.dng` and `Leica-M9-8bit-compressed.dng`.
 
 **RAW parity.** `e2e/raw-parity.spec.ts` renders each RAF in
 `LOPSY_RAF_SAMPLES` in the Edit view at its working size under three
@@ -521,7 +527,8 @@ render (a 64-bit hash, with a 12 × 8 grid of cell means to say where a
 change is) with the one stored in `e2e/raw-parity/<name>.txt`, keyed by
 browser, renderer and way. Four Sony ARWs (`LOPSY_ARW_SAMPLES`), four
 Canon DNGs, lossless and lossy JPEG (`LOPSY_DNG_ADOBE_SAMPLES`), and the
-two ProRAW files (`LOPSY_DNG_SAMPLES`) are fingerprinted the same way on
+two ProRAW files (`LOPSY_DNG_SAMPLES`) and the Leica M10-R
+(`LOPSY_DNG_CAMERA_SAMPLES`) are fingerprinted the same way on
 the linear and no-float ways. It runs in Chromium only, in about
 thirteen minutes with four workers. A change that
 is meant to move the RAW develop records new fingerprints for the
@@ -534,7 +541,7 @@ suite) opens every DNG and ARW sample, and one RAF, in the Edit view at
 its defaults and saves the picture at Fit, the whole Edit view and the
 picture at 100 % to `samples/linear-pipeline-review/app-renders/raw-path/`:
 `LOPSY_ARW_SAMPLES=… LOPSY_DNG_SAMPLES=… LOPSY_DNG_ADOBE_SAMPLES=…
-LOPSY_RAF_SAMPLES=… VITE_PORT=5186 npx playwright test -c
+LOPSY_DNG_CAMERA_SAMPLES=… LOPSY_RAF_SAMPLES=… VITE_PORT=5186 npx playwright test -c
 e2e/raw-review.config.ts` from `apps/photonamous`.
 
 ## 6. What needs a real Google account to verify

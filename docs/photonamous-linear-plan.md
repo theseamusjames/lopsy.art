@@ -1189,6 +1189,28 @@ section 8's, for Seamus to review).
     scale of NaN, and gives none now. A gain map with gains of 0 gave
     clip levels of 0, and gives none now (the specification allows a
     gain of 0, so the map is not refused). No sample's rendering moved.
+72. **Leica needed no new format, and showed what the DNG reader
+    assumed.** Seamus asked for Leica's RAW as the test of this path.
+    Leica's M, Q, SL and CL bodies write DNG, so nothing was added to
+    `raw/`; four camera-written files from raw.pixls.us (CC0: Q2, M10-R,
+    M Typ 240, M9) went through the DNG reader as it was, and two of the
+    four were refused. The M10-R keeps its raw image in the file's first
+    directory with its previews in the SubIFDs, where the reader took
+    the largest SubIFD (a JPEG preview) for the picture: the main image
+    is now the largest directory that holds raw data and is not marked
+    as a preview. The Q2 stores 14 bits packed, where only 8 and 16 were
+    read: 9 to 15 bits are now unpacked, high bit first, each row on a
+    byte, as the DNG specification says. Both decodes take both fixes;
+    no existing sample's render moved. All four now open with their own
+    matrices, measured Kelvin and presets. They open at their
+    BaselineExposure, a third of a stop or so darker than the camera's
+    preview (medians 0.38 against 0.45 on the M10-R, 0.40 against 0.48
+    on the Q2): decision 62 matches a DNG's preview only when the file
+    has a gain map. **Open for Seamus**: whether a camera-written DNG
+    without one should be matched as an ARW is. Leica's D-Lux, V-Lux and
+    C-Lux compacts write RWL, which is Panasonic's RW2: a new decoder,
+    not started. Renders: `samples/linear-pipeline-review/leica/` and
+    `app-renders/raw-path/Leica-*`.
 
 ### Verified at the end
 
@@ -1236,6 +1258,17 @@ On the final tree (86ca279f4) and the engine built from it:
 - **Sony**: lens corrections are not applied, and bodies without
   measured data use Sony's partial matrix.
 - **DNG**: JPEG XL tiles; a 48-megapixel ProRAW (untested);
-  `ProfileGainTableMap` in the baked decode; cameras that write DNG
-  natively (no sample: four Leica files were proposed, not downloaded).
+  `ProfileGainTableMap` in the baked decode.
+- **Lens corrections a DNG carries** (`OpcodeList3`). A Leica Q2's
+  file holds a `WarpRectilinear` for each colour plane, and without it
+  the picture is wider than the camera's with dark rounded corners
+  (the lens's image circle). The same step would serve Sony's and
+  Fujifilm's lens data. `OpcodeList1`'s bad-pixel repair is not applied
+  either. The M Monochroms (no colour filter) are untested.
+- **A picture wider or taller than the GPU's largest texture** (8368
+  pixels on the Q2, where SwiftShader and some integrated GPUs stop at
+  8192): the working image opens, but the full-size view fails, is
+  asked for again on every view change, and "Loading full resolution…"
+  never goes away; on the no-float way the photo does not open. Any
+  format, found with the Q2. This Mac's GPU takes 16384 and shows it.
 - **XMP export's Kelvin** still takes the RAF route only.
