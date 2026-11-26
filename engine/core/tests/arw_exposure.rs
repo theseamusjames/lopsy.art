@@ -157,6 +157,43 @@ fn baked_arws_match_the_cameras_preview() {
     }
 }
 
+/// The RAW interface's develop defaults for an ARW open at the camera's
+/// brightness too: rendered through the develop chain's CPU references
+/// (binned view, scene tone at 0, tone, SDR output for sRGB), the median
+/// is within 0.01 of the camera preview's, the exposure lies within the
+/// bounds, and the baked decode does not read it.
+#[test]
+fn develop_defaults_match_the_cameras_preview() {
+    use lopsy_core::output::{output_reference, OutputSettings, OutputTarget};
+    use lopsy_core::raf::develop::{scene_reference, tone_settings};
+    let pct = |f: f32| format!("{:.2} %", f * 100.0);
+    for path in files() {
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        let data = std::fs::read(&path).unwrap();
+        let t0 = std::time::Instant::now();
+        let prep = lopsy_core::raw::prepare(&data).unwrap();
+        let ms = t0.elapsed().as_millis();
+        let d = &prep.description;
+        let ev = d.develop_defaults.exposure_ev;
+        assert!((lopsy_core::arw::exposure::MIN_EV..=lopsy_core::arw::exposure::MAX_EV).contains(&ev), "{name}: {ev}");
+        assert!(d.profiles.iter().all(|p| p.settings.exposure_ev == ev), "{name}: every profile opens at the matched exposure");
+        let (_, _, jpeg) = preview(&data, f64::from(d.width) / f64::from(d.height));
+        let (bw, bh, binned) = prep.binned_linear(jpeg.w.max(jpeg.h) as u32).unwrap();
+        let scene = scene_reference(&binned, &d.develop_defaults);
+        let toned = lopsy_core::scene_tone::scene_tone_reference(&scene, bw as usize, bh as usize, &Default::default(), &[], &[]);
+        let rendered = lopsy_core::tone::tone_reference(&toned, &tone_settings(&d.develop_defaults));
+        let out = output_reference(&rendered, bw, &OutputSettings::sdr(OutputTarget::Srgb, lopsy_core::working_space::Gamut::Rec2020, false));
+        let developed = Picture::from_rgba_encoded(bw, bh, &out).resample(jpeg.w);
+        let ((med, white), (j_med, j_white)) = (stats(&developed), stats(&jpeg));
+        println!("| {name} | {ev:+.2} EV | {med:.3} / {j_med:.3} | {} / {} | prepare {ms} ms |", pct(white), pct(j_white));
+        assert!((med - j_med).abs() < 0.01, "{name}: developed median {med} against the preview's {j_med}");
+        // The baked decode is the one it was: it never reads the field.
+        let baked = arw::read_arw(&data).unwrap();
+        let again = arw::read_arw(&data).unwrap();
+        assert_eq!(baked.exposure_ev, again.exposure_ev);
+    }
+}
+
 /// A damaged or cut preview costs the match, never the decode: bytes inside
 /// the preview changed in many places, its second half zeroed, its header
 /// broken; every time the file still decodes, and never panics.

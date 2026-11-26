@@ -16,7 +16,12 @@ impl RawFormat for Arw {
     type Params = ArwRenderParams;
 
     fn prepare(data: &[u8]) -> Result<RawPlane<ArwRenderParams>, String> {
-        let prep = linear::prepare_arw(data)?;
+        let mut prep = linear::prepare_arw(data)?;
+        // The develop chain opens as bright as the camera's own preview.
+        if let Some(ev) = crate::arw::exposure::match_develop_exposure(data, &prep.params, &prep.plane) {
+            prep.params.default_exposure_ev = ev;
+            prep.debug_log.push(format!("[ARW] develop exposure {ev:+.3} EV, matched to the camera's preview"));
+        }
         Ok(RawPlane { params: prep.params, plane: prep.plane, not_applied: prep.unhandled, debug_log: prep.debug_log })
     }
 
