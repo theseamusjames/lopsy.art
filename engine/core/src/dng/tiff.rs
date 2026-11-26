@@ -43,6 +43,7 @@ pub enum TagId {
     CfaLayout = 50711,
     DefaultCropOrigin = 50719,
     DefaultCropSize = 50720,
+    DefaultScale = 50718,
     CameraCalibration1 = 50723,
     CameraCalibration2 = 50724,
     AnalogBalance = 50727,

@@ -86,7 +86,7 @@ pub fn prepare_arw(data: &[u8]) -> Result<ArwPrepared, String> {
     let (scales, _) = plane_scales(&black, &[], &[], &[stored.white], w, h, 1)?;
     let source = StoredPlane { values: &mosaic.values, width: stored.width as usize, samples: 1, top, left, width_out: w, height_out: h };
     let table = mosaic.table.as_deref();
-    let mapping = PlaneMapping { kind: DngKind::Bayer, cfa, table, black: &black, scales: &scales, gain: stored.as_shot_gain };
+    let mapping = PlaneMapping { kind: DngKind::Bayer, cfa, table, black: &black, black_origin: (0, 0), scales: &scales, gain: stored.as_shot_gain };
     let plane = fill_plane(&source, |v| v, &mapping)?;
     let params = ArwRenderParams {
         width: c.width,
