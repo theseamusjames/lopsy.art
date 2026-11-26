@@ -319,7 +319,7 @@ fn looks(preview_match: bool) -> Vec<(String, OpeningLook)> {
     CANDIDATES
         .iter()
         .zip(names)
-        .map(|(c, n)| (format!("{n}{}", if preview_match { " +match" } else { "" }), OpeningLook { curve: OpeningCurve::Standard(*c), dng_preview_exposure: preview_match }))
+        .map(|(c, n)| (format!("{n}{}", if preview_match { " +match" } else { "" }), OpeningLook { curve: OpeningCurve::Standard(*c), saturation: lopsy_core::raw::STANDARD_SATURATION, dng_preview_exposure: preview_match }))
         .collect()
 }
 

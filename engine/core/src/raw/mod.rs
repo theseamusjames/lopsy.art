@@ -33,7 +33,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::raf::develop::{DevelopProfile, ProfileSettings, RawDevelopSettings};
-pub use look::{OpeningCurve, OpeningLook};
+pub use look::{OpeningCurve, OpeningLook, STANDARD_SATURATION};
 use crate::raf::wb_presets::RecipeWbPreset;
 use crate::raf::{RafBand, RafBandPixels};
 

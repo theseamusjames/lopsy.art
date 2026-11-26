@@ -723,24 +723,23 @@ pub fn render_binned_linear_for<P: PlaneParams + ?Sized>(plane: &[f32], params: 
 /// The develop settings a DNG opens with: the as-shot white balance
 /// (`wbRatio` 1), the DNG method's matrix for it, the file's baseline
 /// exposure (or `default_exposure_ev` when the RAW interface matched one
-/// to the camera's preview), no extra saturation, and the Standard look's
-/// base curve (`raw::OpeningLook::default`; a DNG has no film simulation,
+/// to the camera's preview), and the Standard look's base curve and
+/// saturation (`raw::OpeningLook::default`; a DNG has no film simulation,
 /// and its `ProfileToneCurve` is not used).
 pub fn develop_defaults(params: &DngRenderParams) -> Result<RawDevelopSettings, String> {
-    develop_defaults_with(params, crate::raw::OpeningLook::default().curve.lut())
+    develop_defaults_with(params, &crate::raw::OpeningLook::default())
 }
 
-/// [`develop_defaults`] with the base curve `base_curve` (a table on scene
-/// luminance 0..1, as `RawDevelopSettings::base_curve`).
-pub fn develop_defaults_with(params: &DngRenderParams, base_curve: Vec<f32>) -> Result<RawDevelopSettings, String> {
+/// [`develop_defaults`] with the base curve and saturation of `look`.
+pub fn develop_defaults_with(params: &DngRenderParams, look: &crate::raw::OpeningLook) -> Result<RawDevelopSettings, String> {
     let wb = white_balance_for_ratio(params, [1.0, 1.0, 1.0])?;
     Ok(RawDevelopSettings {
         wb_ratio: wb.wb_ratio,
         cam_to_rgb: wb.cam_to_rgb,
         exposure_ev: params.default_exposure_ev.unwrap_or(params.calibration.baseline_exposure as f32),
-        saturation: 1.0,
+        saturation: look.saturation,
         highlight_desaturation: true,
-        base_curve: Some(base_curve),
+        base_curve: Some(look.curve.lut()),
         clip_levels: params.clip_levels,
     })
 }

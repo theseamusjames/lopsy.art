@@ -21,7 +21,7 @@ impl RawFormat for Arw {
         prep.params.highlight_chroma = crate::dng::linear::measure_highlight_chroma(&prep.plane, &prep.params.layout(), prep.params.clip_levels);
         // The develop chain opens as bright as the camera's own preview,
         // through the curve it opens with.
-        let settings = linear::develop_defaults_with(&prep.params, look.curve.lut());
+        let settings = linear::develop_defaults_with(&prep.params, look);
         if let Some(ev) = crate::arw::exposure::match_develop_exposure_with(data, &prep.params, &prep.plane, &settings) {
             prep.params.default_exposure_ev = ev;
             prep.debug_log.push(format!("[ARW] develop exposure {ev:+.3} EV, matched to the camera's preview"));
@@ -31,7 +31,7 @@ impl RawFormat for Arw {
 
     fn describe(_data: &[u8], prep: &RawPlane<ArwRenderParams>, look: &OpeningLook) -> Result<RawDescription, String> {
         let p = &prep.params;
-        let defaults = linear::develop_defaults_with(p, look.curve.lut());
+        let defaults = linear::develop_defaults_with(p, look);
         let (width, height) = p.oriented_size();
         let white_balance = match &p.calibration {
             Some(cal) => {

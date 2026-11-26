@@ -17,7 +17,7 @@ fn preview_exposure(data: &[u8], params: &DngRenderParams, plane: &[f32], look: 
     let (ow, oh) = params.oriented_size();
     let preview = camera_preview_for_exposure(data, f64::from(ow) / f64::from(oh))?;
     let (sw, sh, rgba) = preview_sized_view(plane, params, &preview)?;
-    let settings = linear::develop_defaults_with(params, look.curve.lut()).ok()?;
+    let settings = linear::develop_defaults_with(params, look).ok()?;
     let base = params.calibration.baseline_exposure as f32;
     Some(match_rendered_median(&rgba, sw, sh, &settings, preview.median, (base - MIN_BELOW_BASELINE, base + MAX_ABOVE_BASELINE)))
 }
@@ -43,7 +43,7 @@ impl RawFormat for Dng {
 
     fn describe(_data: &[u8], prep: &RawPlane<DngRenderParams>, look: &OpeningLook) -> Result<RawDescription, String> {
         let p = &prep.params;
-        let defaults = linear::develop_defaults_with(p, look.curve.lut()).map_err(|e| format!("DNG cannot open as RAW: {e}"))?;
+        let defaults = linear::develop_defaults_with(p, look).map_err(|e| format!("DNG cannot open as RAW: {e}"))?;
         let as_shot = measured_white(&p.calibration, p.as_shot_gain, 0.0, 0.0).map_err(|e| format!("DNG cannot open as RAW: {e}"))?;
         let (width, height) = p.oriented_size();
         Ok(RawDescription {
