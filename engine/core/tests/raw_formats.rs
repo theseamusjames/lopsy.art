@@ -151,3 +151,84 @@ fn not_a_raw_is_named_as_such() {
     assert_eq!(RawFormatId::parse("dng"), Ok(RawFormatId::Dng));
     assert!(RawFormatId::parse("cr3").is_err());
 }
+
+/// A prepared Bayer DNG's or ARW's params, which the shared renders take.
+enum Bayer {
+    Dng(lopsy_core::dng::linear::DngRenderParams),
+    Arw(lopsy_core::arw::linear::ArwRenderParams),
+}
+
+impl lopsy_core::dng::linear::PlaneParams for Bayer {
+    fn layout(&self) -> lopsy_core::dng::linear::PlaneLayout {
+        match self {
+            Bayer::Dng(p) => p.layout(),
+            Bayer::Arw(p) => p.layout(),
+        }
+    }
+    fn highlight_chroma(&self) -> Option<&lopsy_core::raf::highlights::ChromaGrid> {
+        match self {
+            Bayer::Dng(p) => p.highlight_chroma.as_ref(),
+            Bayer::Arw(p) => p.highlight_chroma.as_ref(),
+        }
+    }
+}
+
+/// Highlight reconstruction on Bayer DNG and ARW planes: where the prepare
+/// measured a chroma grid, a binned pixel whose green clipped while red and
+/// blue did not comes out closer, in log chroma, to the colour measured
+/// around it than without reconstruction. (Bands with reconstruction stay
+/// bit-identical to the whole frame: `dng_and_arw_through_the_interface`.)
+#[test]
+fn reconstruction_holds_highlight_hue() {
+    use lopsy_core::dng::linear::{render_binned_linear, PlaneParams};
+    let mut all: Vec<PathBuf> = files("LOPSY_DNG_ADOBE_SAMPLES", "dng");
+    all.extend(files("LOPSY_ARW_SAMPLES", "arw"));
+    for path in all {
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        let data = std::fs::read(&path).unwrap();
+        let Ok(prep) = raw::prepare(&data) else { continue };
+        let params = match &prep.prepared {
+            raw::Prepared::Dng(p) => Bayer::Dng(p.params.clone()),
+            raw::Prepared::Arw(p) => Bayer::Arw(p.params.clone()),
+            raw::Prepared::Raf(_) => continue,
+        };
+        let layout = params.layout();
+        let Some(grid) = params.highlight_chroma() else {
+            println!("{name}: nothing near its clip level (or LinearRaw): no reconstruction");
+            continue;
+        };
+        let clip = prep.description.clip_levels.unwrap();
+        let factor = 4;
+        let with = render_binned_linear(prep.plane(), &params, factor).unwrap();
+        let plain = render_binned_linear(prep.plane(), &layout, factor).unwrap();
+        let chi = |c: [f32; 3]| {
+            let l = c.map(|v| v.max(1e-6).ln());
+            let m = (l[0] + l[1] + l[2]) / 3.0;
+            l.map(|v| v - m)
+        };
+        let dist = |a: [f32; 3], b: [f32; 3]| ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt();
+        let (mut before, mut after, mut n, mut above) = (0f64, 0f64, 0usize, 0usize);
+        for by in 0..plain.1 as usize {
+            for bx in 0..plain.0 as usize {
+                let i = (by * plain.0 as usize + bx) * 4;
+                let p: [f32; 3] = [plain.2[i], plain.2[i + 1], plain.2[i + 2]];
+                let r: [f32; 3] = [with.2[i], with.2[i + 1], with.2[i + 2]];
+                above += usize::from((0..3).any(|k| r[k] > clip[k] * 1.001));
+                if layout.orientation == 1 && p[1] >= 0.98 * clip[1] && p[0] < 0.9 * clip[0] && p[2] < 0.9 * clip[2] {
+                    let f = factor as usize;
+                    let target = grid.chroma_at(bx * f + f / 2, by * f + f / 2);
+                    before += f64::from(dist(chi(p), target));
+                    after += f64::from(dist(chi(r), target));
+                    n += 1;
+                }
+            }
+        }
+        if n > 0 {
+            let (b, a) = (before / n as f64, after / n as f64);
+            println!("{name}: {n} binned pixels with green alone clipped: log-chroma distance to the measured surround {b:.3} without, {a:.3} with; {above} binned pixels rise above the clip level");
+            assert!(a < b, "{name}: reconstruction moved clipped highlights away from their surround's colour");
+        } else {
+            println!("{name}: no binned pixel with green alone clipped; {above} rise above the clip level");
+        }
+    }
+}

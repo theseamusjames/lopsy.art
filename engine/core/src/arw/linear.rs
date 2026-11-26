@@ -57,6 +57,11 @@ pub struct ArwRenderParams {
     /// every worker and mode gets the same; the baked decode never reads it.
     #[serde(default)]
     pub default_exposure_ev: f32,
+    /// What the renders need to reconstruct clipped channels, measured by
+    /// the RAW interface's prepare (`dng::linear::measure_highlight_chroma`);
+    /// `None` (and not written) otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub highlight_chroma: Option<crate::raf::highlights::ChromaGrid>,
 }
 
 impl ArwRenderParams {
@@ -69,6 +74,10 @@ impl ArwRenderParams {
 impl PlaneParams for ArwRenderParams {
     fn layout(&self) -> PlaneLayout {
         PlaneLayout { width: self.width, height: self.height, kind: DngKind::Bayer, samples_per_pixel: 1, cfa: self.cfa, orientation: self.orientation }
+    }
+
+    fn highlight_chroma(&self) -> Option<&crate::raf::highlights::ChromaGrid> {
+        self.highlight_chroma.as_ref()
     }
 }
 
@@ -112,6 +121,7 @@ pub fn prepare_arw(data: &[u8]) -> Result<ArwPrepared, String> {
         calibration: stored.calibration,
         camera_model: stored.camera_model,
         default_exposure_ev: 0.0,
+        highlight_chroma: None,
     };
     Ok(ArwPrepared { params, plane, unhandled: stored.unhandled, debug_log: stored.debug_log })
 }

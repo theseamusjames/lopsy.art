@@ -4,7 +4,7 @@
 
 use super::white_balance::{illuminant_presets, measured_white, temperature_for_kelvin};
 use super::{camera_and_monochrome, KelvinModel, MatrixModel, PresetSource, RawDescription, RawFormat, RawFormatId, RawPlane, RawWhite, WhiteBalanceModel};
-use crate::dng::linear::{self, DngRenderParams};
+use crate::dng::linear::{self, DngRenderParams, PlaneParams};
 use crate::raf::{RafBand, RafBandPixels};
 
 pub struct Dng;
@@ -14,7 +14,9 @@ impl RawFormat for Dng {
     type Params = DngRenderParams;
 
     fn prepare(data: &[u8]) -> Result<RawPlane<DngRenderParams>, String> {
-        let prep = linear::prepare_dng(data).map_err(|e| format!("DNG cannot open as RAW: {e}"))?;
+        let mut prep = linear::prepare_dng(data).map_err(|e| format!("DNG cannot open as RAW: {e}"))?;
+        // Clipped channels of a Bayer plane are reconstructed, as a RAF's.
+        prep.params.highlight_chroma = linear::measure_highlight_chroma(&prep.plane, &prep.params.layout(), prep.params.clip_levels);
         Ok(RawPlane { params: prep.params, plane: prep.plane, not_applied: prep.unhandled, debug_log: prep.debug_log })
     }
 
