@@ -212,6 +212,34 @@ pub fn decode_and_upload_arw(
     serde_json::to_string(&meta).map_err(|e| format!("JSON serialize: {e}"))
 }
 
+/// Decode any RAW the RAW interface knows (`lopsy_core::raw::sniff`) to its
+/// finished look, whole-frame, into a layer: a DNG as
+/// `decode_and_upload_dng`, an ARW as `decode_and_upload_arw`, a RAF with
+/// `raf::read_raf`. Returns that decode's JSON with `format` added (a RAF's
+/// is `{ format, width, height }`). For the hosts' legacy path and for DNG
+/// versions edited before DNG took the RAW develop path.
+pub fn decode_and_upload_raw_baked(engine: &mut EngineInner, layer_id: &str, data: &[u8]) -> Result<String, String> {
+    use lopsy_core::raw::RawFormatId;
+    let format = lopsy_core::raw::sniff(data).ok_or("This file is not a RAW format this app reads")?;
+    let json = match format {
+        RawFormatId::Dng => decode_and_upload_dng(engine, layer_id, data)?,
+        RawFormatId::Arw => decode_and_upload_arw(engine, layer_id, data)?,
+        RawFormatId::Raf => {
+            let img = lopsy_core::raf::read_raf(data).map_err(|e| format!("RAF decode failed: {e}"))?;
+            layer_manager::upload_pixels_f32(&mut *engine, layer_id, &img.pixels, img.width, img.height)?;
+            for line in &img.debug_log {
+                crate::host::log(crate::host::LogLevel::Info, line);
+            }
+            serde_json::json!({ "width": img.width, "height": img.height }).to_string()
+        }
+    };
+    let mut meta: serde_json::Value = serde_json::from_str(&json).map_err(|e| format!("JSON: {e}"))?;
+    if let Some(obj) = meta.as_object_mut() {
+        obj.insert("format".into(), serde_json::Value::String(format.as_str().into()));
+    }
+    Ok(meta.to_string())
+}
+
 /// Upload an RGBA f32 rectangle into a layer whose texture is (re)allocated
 /// at `texture_width`×`texture_height` if it isn't already that size. The
 /// rest of the texture is left as is, so a large image can be filled in
