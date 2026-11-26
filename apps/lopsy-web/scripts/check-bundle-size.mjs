@@ -96,9 +96,18 @@ const MARGIN = 0.03;
 // reads the camera's embedded preview so an ARW opens as bright as the
 // camera rendered it (jpeg-decoder 0.3.2 without threads, with the exposure
 // match: +88.9 KB raw, +38.6 KB gzip).
+//
+// Re-based for the format-neutral RAW interface (lopsy_core::raw and the
+// raw… exports: rawFormatOf, rawPrepare and its RawPrepared, rawPlanBands,
+// rawRenderLinearBand, rawRenderFinishedBand, rawWhiteBalance,
+// rawTemperatureForKelvin, decodeAndUploadRawBaked), to what a local
+// release build measures with them in: +93.7 KB of wasm raw (+1.9 %) and
+// +24.1 KB gzip, +12.8 KB of glue raw and +1.5 KB gzip (+4.6 % and +4.3 %,
+// past the margin on their own: wasm-bindgen spends glue on every export).
+// The old raf…, dng… and arw… exports stay for Lopsy.
 const BUDGET = {
-  'lopsy_wasm_bg.wasm': { raw: 5_005_552, gzip: 2_089_277 },
-  'lopsy_wasm.js': { raw: 278_698, gzip: 36_044 },
+  'lopsy_wasm_bg.wasm': { raw: 5_099_214, gzip: 2_113_350 },
+  'lopsy_wasm.js': { raw: 291_545, gzip: 37_578 },
 };
 
 function format(bytes) {
