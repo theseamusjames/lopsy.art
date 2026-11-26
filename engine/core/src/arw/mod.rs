@@ -81,7 +81,10 @@
 //! sRGB. On the A7 IV and A7 III samples that lifts the default develop's
 //! saturation from 0.42 and 0.62 of `sips`' to 0.84 and 1.01, with hues
 //! within 2.6–4.8° and neutrals within 0.014 in chromaticity
-//! (`tests/arw_decode.rs`). Any other body keeps Sony's partial matrix and
+//! (`tests/arw_decode.rs`). A body without measured data that has a
+//! matrix in `camera_colour` (the A6000, A6700 and RX100 III) takes that
+//! one matrix, with gains for its white balance and no Kelvin. Any other
+//! body keeps Sony's partial matrix and
 //! says its colour is approximate ([`ArwColour`], whose note the host
 //! shows); a file without a readable matrix gets white balance only, and
 //! says so too.
@@ -162,12 +165,21 @@ pub enum ArwColour {
     /// The body's calibration from measured spectral sensitivities
     /// (`colour`), through the DNG colour method.
     Measured,
+    /// The body's matrix from the engine's table (`camera_colour`): one
+    /// matrix, which does not follow the white balance.
+    CameraTable,
 }
 
 impl ArwColour {
     /// Whether the colour is an approximation a person should be told of.
     pub fn is_approximate(self) -> bool {
-        self != ArwColour::Measured
+        matches!(self, ArwColour::SonyColorMatrix | ArwColour::WhiteBalanceOnly)
+    }
+
+    /// Whether the matrix is a calibrated one, with the large off-diagonal
+    /// terms that turn a channel clipped above the others into a colour.
+    pub fn is_calibrated(self) -> bool {
+        !self.is_approximate()
     }
 
     /// What a person should be told about the colour, when anything.
@@ -179,7 +191,7 @@ impl ArwColour {
             ArwColour::WhiteBalanceOnly => Some(
                 "Colour is approximate: this Sony RAW carries no colour matrix, so only its white balance is applied and colours look washed out.",
             ),
-            ArwColour::Measured => None,
+            ArwColour::Measured | ArwColour::CameraTable => None,
         }
     }
 }
@@ -434,14 +446,20 @@ pub fn read_info(data: &[u8]) -> Result<ArwInfo, String> {
 
     let orientation = get_tag_u16(&ifd0, TagId::Orientation).ok().filter(|o| (1..=8).contains(o)).unwrap_or(1);
     // A body with measured colour takes the DNG colour method at the
-    // as-shot white balance; any other keeps Sony's partial matrix.
+    // as-shot white balance; one in the engine's table, that matrix; any
+    // other keeps Sony's partial matrix.
     let model = ascii(&ifd0, TagId::Model as u16);
     let calibration = colour::calibration_for(&model, as_shot_gain);
     let measured = calibration.as_ref().and_then(|c| c.white_balance_for_ratio([1.0; 3], as_shot_gain));
+    let tabled = crate::camera_colour::sony(&model);
     let (cam_to_rgb, colour) = match (measured, sr2.as_deref().and_then(sr2::color_matrix)) {
         (Some(wb), _) => {
             sources.matrix = format!("measured spectral data ({model}), as shot {:.0} K, tint {:+.1}", wb.kelvin, wb.tint);
             (wb.cam_to_rgb, ArwColour::Measured)
+        }
+        (None, _) if tabled.is_some() => {
+            sources.matrix = format!("the engine's table ({model})");
+            (tabled.unwrap_or([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]), ArwColour::CameraTable)
         }
         (None, Some(m)) => {
             sources.matrix = "SR2 0x7800".into();
@@ -663,11 +681,11 @@ pub fn bake_prepared(prep: linear::ArwPrepared, exposure_ev: f32) -> Result<ArwI
     let mut rgb = crate::dng::demosaic::bilinear(&plane, params.width, params.height, &params.cfa);
     // A clipped channel carries its white-balance gain (R and B clip at
     // their gains, above green's 1), which a calibrated matrix turns into
-    // magenta highlights. With measured colour, every channel is clipped at
-    // the lowest clip level first, so clipped highlights stay white. (Sony's
-    // partial matrix is close to the identity and the final clamp hides
-    // it; those bodies decode as before.)
-    if params.colour == ArwColour::Measured {
+    // magenta highlights. With measured colour or the engine's table,
+    // every channel is clipped at the lowest clip level first, so clipped
+    // highlights stay white. (Sony's partial matrix is close to the identity and the final
+    // clamp hides it; those bodies decode as before.)
+    if params.colour.is_calibrated() {
         let clip = params.as_shot_gain.iter().copied().fold(1.0f32, f32::min);
         for v in rgb.iter_mut() {
             *v = v.min(clip);

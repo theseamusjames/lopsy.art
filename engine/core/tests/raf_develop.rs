@@ -286,7 +286,13 @@ fn binned_preview_matches_a_box_downscaled_linear_render() {
     for (name, mosaic, params, f) in cases {
         let (mean, p99, max) = binned_vs_box(mosaic, params, f);
         println!("{name} /{f}: binned vs box-downscaled, 8-bit steps: mean {mean:.2}, p99 {p99:.2}, max {max:.2}");
-        assert!(mean < 2.0 && p99 < 14.0, "{name} /{f}: mean {mean}, p99 {p99}");
+        // The limits follow the camera matrix: the binned view takes each
+        // colour from a different place in its block, and the matrix turns
+        // that into colour. With the sensor's matrix in `camera_colour`
+        // (red row 1.78, −0.71, −0.07) the worst case measures mean 1.96
+        // and p99 21.5; with the matrix it replaced (red row 1.26, 0.03,
+        // −0.29) it measured 1.28 and 11.2.
+        assert!(mean < 2.4 && p99 < 25.0, "{name} /{f}: mean {mean}, p99 {p99}");
     }
 }
 
@@ -346,7 +352,10 @@ fn binned_preview_on_a_real_sample() {
         let (mean, p99, max) = binned_vs_box(&crop, &params, f);
         println!("real /{f}: binned vs box-downscaled, 8-bit steps: mean {mean:.2}, p99 {p99:.2}, max {max:.2}");
         // Real detail aliases more than the synthetic frame (see the module notes).
-        let (mean_max, p99_max) = if f == 3 { (6.0, 45.0) } else { (3.0, 25.0) };
+        // With the sensor's matrix in `camera_colour`: 5.74 and 45.4 at /3,
+        // 2.77 and 24.1 at /6 (4.46 and 35.4, 2.13 and 18.7 with the matrix
+        // it replaced).
+        let (mean_max, p99_max) = if f == 3 { (6.6, 52.0) } else { (3.2, 28.0) };
         assert!(mean < mean_max && p99 < p99_max, "/{f}: mean {mean}, p99 {p99}");
     }
 }

@@ -1,7 +1,8 @@
-//! ARW files from bodies without measured colour data must decode exactly
-//! as before the per-camera colour table: each one's baked decode and
-//! prepared linear plane (with its parameters and develop defaults) are
-//! hashed and compared with recorded hashes (see `EXPECTED`).
+//! ARW files from bodies without measured colour data must decode as
+//! recorded: each one's baked decode and prepared linear plane (with its
+//! parameters and develop defaults) are hashed and compared with recorded
+//! hashes (see `EXPECTED`). Both bodies here take their matrix from
+//! `lopsy_core::camera_colour`.
 //!
 //! Needs `LOPSY_ARW_SAMPLES`; without it the test notes that and passes.
 //! Slow in a debug build: run with `--release`. `LOPSY_ARW_HASH_PRINT=1`
@@ -53,16 +54,16 @@ fn linear_hash(data: &[u8]) -> u64 {
     h.0
 }
 
-/// (file, baked decode, linear plane and defaults). The linear hashes are
-/// those of commit f69556963; the baked ones were re-recorded on purpose
-/// when the baked decode came to match the camera's preview exposure.
+/// (file, baked decode, linear plane and defaults), recorded when these
+/// bodies' colour came to be their matrix in `camera_colour` in place of
+/// Sony's partial one.
 const EXPECTED: [(&str, u64, u64); 2] = [
-    ("DSC-RX100M3_DSC00734.ARW", 0x3d9c13851f1278b8, 0x96bae85696e4dd5c),
-    ("ILCE-6000_DSC01542.ARW", 0x97d76256e9440edd, 0xad262ad041aec277),
+    ("DSC-RX100M3_DSC00734.ARW", 0x052362f37c4cec63, 0xead44ca94be9cc89),
+    ("ILCE-6000_DSC01542.ARW", 0xb749ce843e006fbd, 0xf025762ea5388316),
 ];
 
 #[test]
-fn arws_without_colour_data_are_unchanged() {
+fn arws_without_measured_colour_decode_as_recorded() {
     let Some(dir) = std::env::var_os("LOPSY_ARW_SAMPLES").map(PathBuf::from) else {
         eprintln!("LOPSY_ARW_SAMPLES is not set: skipping the ARW decode hashes");
         return;

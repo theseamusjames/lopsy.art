@@ -554,8 +554,9 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
         }
     }
 
-    // Real per-camera camera→sRGB matrix derived from the DNG ColorMatrix1
-    // values in `color_matrix_for_model`. Column-scaled (neutralized) so
+    // The camera → sRGB matrix of `color_matrix_for_model`: the sensor's
+    // own from `camera_colour`, or one derived from an XYZ → camera
+    // matrix. Column-scaled (neutralized) so
     // that a neutral input (R=G=B, as produced by the as-shot WB) maps to
     // a neutral output — this preserves off-diagonal saturation structure
     // unlike per-row normalization, which scales each row independently and
@@ -1774,20 +1775,16 @@ fn camera_model_is_xtrans(model: &str) -> bool {
 // ── Color matrices ──────────────────────────────────────────────
 
 fn color_matrix_for_model(model: &str) -> [f32; 9] {
+    // A sensor with a matrix in `camera_colour` takes it. Its rows sum to
+    // 1, so the neutralizing and row-normalizing callers leave it as it is.
+    if let Some(matrix) = crate::camera_colour::fujifilm(model) {
+        return matrix;
+    }
+    // The other bodies: an XYZ → camera matrix each, inverted below.
     let m = model.to_uppercase();
 
-    let cm: [f64; 9] = if m.contains("X100VI") {
+    let cm: [f64; 9] = if m.contains("X-H2S") {
         [12662.0, -5961.0, -1025.0, -4129.0, 12025.0, 2399.0, -752.0, 1455.0, 6531.0]
-    } else if m.contains("X-T5") || m.contains("X-H2") || m.contains("X-S20") {
-        [12662.0, -5961.0, -1025.0, -4129.0, 12025.0, 2399.0, -752.0, 1455.0, 6531.0]
-    } else if m.contains("X-T4") || m.contains("X-T30") || m.contains("X-S10")
-        || m.contains("X-E4") || m.contains("X-PRO3") || m.contains("X100V")
-    {
-        [11434.0, -4948.0, -1210.0, -3746.0, 12042.0, 1903.0, -666.0, 1479.0, 6365.0]
-    } else if m.contains("X-T3") || m.contains("X-T20") || m.contains("X-E3")
-        || m.contains("X-H1") || m.contains("X-PRO2") || m.contains("X100F")
-    {
-        [11434.0, -4948.0, -1210.0, -3746.0, 12042.0, 1903.0, -666.0, 1479.0, 6365.0]
     } else if m.contains("X-T2") || m.contains("X-T1") || m.contains("X-T10")
         || m.contains("X-E2") || m.contains("X-PRO1") || m.contains("X100S")
         || m.contains("X100T")
@@ -1796,6 +1793,7 @@ fn color_matrix_for_model(model: &str) -> [f32; 9] {
     } else if m.contains("GFX") {
         [11771.0, -4689.0, -1322.0, -3625.0, 11999.0, 1830.0, -612.0, 1412.0, 6466.0]
     } else {
+        // X-Trans 3 (X-T20, X-E3, X-H1, X-Pro2, X100F) and anything unknown.
         [11434.0, -4948.0, -1210.0, -3746.0, 12042.0, 1903.0, -666.0, 1479.0, 6365.0]
     };
 
@@ -2078,11 +2076,13 @@ mod tests {
     fn color_matrix_is_finite_and_sane() {
         // Diagonal-dominant, finite coefficients — a real cam→sRGB matrix,
         // not the degenerate identity returned on inversion failure.
-        let m = color_matrix_for_model("X-T5");
+        for model in ["X-T5", "X-T2"] {
+        let m = color_matrix_for_model(model);
         for v in m {
             assert!(v.is_finite());
         }
         assert!(m[0] > 0.0 && m[4] > 0.0 && m[8] > 0.0, "diagonal must be positive: {m:?}");
         assert_ne!(m, [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0], "matrix inversion failed");
+        }
     }
 }
