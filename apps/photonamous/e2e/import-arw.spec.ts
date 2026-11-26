@@ -14,8 +14,8 @@ const samples = process.env.LOPSY_ARW_SAMPLES;
 
 function a7ivSample(): string | null {
   if (!samples || !existsSync(samples)) return null;
-  const name = readdirSync(samples).find((f) => f.startsWith('ILCE-7M4_') && f.toLowerCase().endsWith('.arw'));
-  return name ? join(samples, name) : null;
+  const name = 'ILCE-7M4_DSC06677_FullFrame-Raw-Compressed.ARW';
+  return readdirSync(samples).includes(name) ? join(samples, name) : null;
 }
 
 const sample = a7ivSample();
@@ -75,4 +75,18 @@ test('a Sony ARW imports and shows its preview, camera, size and file type', asy
   else await filters.getByRole('button', { name: 'Filters', exact: true }).click();
   await expect(page.getByRole('checkbox', { name: /RAW \(Sony\)/ })).toBeVisible();
   await page.screenshot({ path: test.info().outputPath('import-arw.png') });
+});
+
+test("Sony's older SR2 and SRF files are not photos the sheet offers to import", async ({ page }) => {
+  const older = samples ? readdirSync(samples).filter((f) => /\.(sr2|srf)$/i.test(f)) : [];
+  test.skip(older.length === 0, 'needs the SR2 and SRF samples in LOPSY_ARW_SAMPLES');
+  await page.goto('/');
+  await page.getByRole('button', { name: /This browser/ }).click();
+  await expect(page.getByText('Your library is empty')).toBeVisible();
+  await page.getByRole('button', { name: /Import photos/ }).first().click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('menuitem', { name: /Choose photos/ }).click();
+  await (await chooser).setFiles(older.map((f) => join(samples ?? '', f)));
+  await expect(page.getByText('None of these files are photos this app can read (RAF, DNG, ARW, JPEG, PNG or WebP).')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Import 0 photos' })).toBeDisabled();
 });
