@@ -486,8 +486,10 @@ the newer version made.
   a range of screen values. Highlights pulled down brings back detail
   in highlights the default rendering shows as white, a RAW file's
   clipped highlights included (the decoder rebuilds those from the
-  channels that did not clip). Auto measures the photo's light the same
-  way.
+  channels that did not clip). On a DNG or a Sony ARW a highlight clipped
+  in every channel at the sensor renders neutral white, and grey when
+  Exposure is pulled down, not tinted by the white balance. Auto measures
+  the photo's light the same way.
 - **Color**: Vibrance, Saturation. Colour (these, Color by hue and Color
   Grading) is adjusted in a perceptual colour space (OkLab), so a change
   of saturation or hue keeps a colour's brightness.
