@@ -124,12 +124,14 @@ pub(crate) fn camera_model(ifd0: &[IfdEntry]) -> String {
 /// The file offset of a tag's value in the little-endian IFD at
 /// `ifd_offset` (the value itself when it fits in four bytes is not an
 /// offset; only tags whose values are longer are looked up here).
+/// The offsets come from the file, so every sum is checked: on a 32-bit
+/// target one near the top of the range would wrap.
 fn value_offset(data: &[u8], ifd_offset: u32, tag: u16) -> Option<u32> {
-    let at = |o: usize, n: usize| data.get(o..o + n);
+    let at = |o: usize, n: usize| data.get(o..o.checked_add(n)?);
     let pos = ifd_offset as usize;
     let count = u16::from_le_bytes(at(pos, 2)?.try_into().ok()?) as usize;
     (0..count).find_map(|i| {
-        let e = at(pos + 2 + i * 12, 12)?;
+        let e = at(pos.checked_add(2 + i * 12)?, 12)?;
         (u16::from_le_bytes([e[0], e[1]]) == tag).then(|| u32::from_le_bytes([e[8], e[9], e[10], e[11]]))
     })
 }
@@ -515,6 +517,18 @@ mod tests {
         d.extend_from_slice(&0u32.to_le_bytes());
         d.extend_from_slice(&jpeg);
         d
+    }
+
+    #[test]
+    fn an_ifd_offset_at_the_top_of_the_range_is_none() {
+        let mut d = b"II*\0\x08\0\0\0".to_vec();
+        d.extend_from_slice(&1u16.to_le_bytes());
+        d.extend_from_slice(&[0x7C, 0x92, 7, 0, 4, 0, 0, 0, 0x20, 0, 0, 0]);
+        d.extend_from_slice(&[0; 8]);
+        assert_eq!(value_offset(&d, 8, TAG_MAKER_NOTE), Some(0x20));
+        for offset in [u32::MAX, u32::MAX - 1, u32::MAX - 13, d.len() as u32] {
+            assert_eq!(value_offset(&d, offset, TAG_MAKER_NOTE), None, "{offset}");
+        }
     }
 
     #[test]
