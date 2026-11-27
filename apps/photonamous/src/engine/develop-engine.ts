@@ -574,6 +574,11 @@ function layerDesc(id: string, width: number, height: number, isVisible: boolean
   });
 }
 
+/** The next task of the page's event loop, after the events waiting for it. */
+function nextTask(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 function nextFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
@@ -2464,6 +2469,9 @@ class PhotoEngine implements DevelopEngine {
       layer = this.nextLayerId();
       addLayer(this.engine, layerDesc(layer, 1, 1, true));
       for (const [index, tile] of plan.tiles.entries()) {
+        // A task of its own for each tile: on WebGL every read answers at once, and without this the run would
+        // hold the page until it ended, a cancel included.
+        await nextTask();
         checkAbort();
         if (record?.failAt === index) throw new Error(`tile ${index} failed (a development build's failAt)`);
         setDocumentSize(this.engine, tile.rect.width, tile.rect.height);
