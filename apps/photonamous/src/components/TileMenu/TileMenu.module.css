@@ -44,6 +44,18 @@
   cursor: default;
 }
 
+.text {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Why the item is off, under its label, wrapped to the menu's width. */
+.hint {
+  max-width: 200px;
+  color: var(--ph-text-muted);
+  font-size: var(--font-size-sm);
+}
+
 .rule {
   border: none;
   border-top: 1px solid var(--color-border-subtle);

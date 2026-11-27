@@ -106,6 +106,8 @@ export interface EditViewProps {
    * as a 16-bit PNG. The button is hidden without it.
    */
   readonly onEditInLopsy?: (renderPng16: () => Promise<ArrayBuffer>) => void;
+  /** Why Edit in Lopsy cannot take this photo (the app's `lopsyRefusal`): the button is then shown as unavailable, with this as its tooltip. */
+  readonly editInLopsyUnavailable?: string | null;
   /** The version's history, oldest first (`LibrarySession.history`). Shows the History list. */
   readonly history?: readonly HistoryStep[];
   /** The photo's versions. Shows the Versions list. */
@@ -185,6 +187,7 @@ export function EditView({
   onPreviewRendered,
   onExport,
   onEditInLopsy,
+  editInLopsyUnavailable = null,
   history,
   versions,
   onSelectVersion,
@@ -807,7 +810,7 @@ export function EditView({
   };
 
   const handleEditInLopsy = () => {
-    if (engine && onEditInLopsy && !isBusy) onEditInLopsy(fullPng16(savedRecipe));
+    if (engine && onEditInLopsy && !isBusy && !editInLopsyUnavailable) onEditInLopsy(fullPng16(savedRecipe));
   };
 
   // ---- left column ---------------------------------------------------
@@ -888,8 +891,10 @@ export function EditView({
           label: 'Edit in Lopsy',
           title: 'Edit in Lopsy, with layers, painting and text',
           icon: <Paintbrush size={16} aria-hidden />,
-          isDisabled: !isReady,
+          // Unavailable for this photo: focusable from the start, so the reason can be read while the photo loads.
+          isDisabled: !isReady && !editInLopsyUnavailable,
           isBusy,
+          ...(editInLopsyUnavailable ? { unavailable: editInLopsyUnavailable } : {}),
           onClick: handleEditInLopsy,
         },
       ]

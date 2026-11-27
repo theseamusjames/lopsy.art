@@ -3,6 +3,7 @@ import { ClipboardCopy, ClipboardPaste, CopyPlus, Info, Layers, Paintbrush, Rota
 import type { AssetId } from '@lopsy/photos-core/library/types';
 import { useUi } from '../../app/store';
 import { newVersion, openFocusedInLopsy, resetEdits, runCommand } from '../../app/commands';
+import { useLopsyRefusal } from '../../app/hooks';
 import { PresetMenu } from '../PresetMenu/PresetMenu';
 import { itemAssets } from '../../library/items';
 import { plural } from '../../import/import-summary';
@@ -30,6 +31,7 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
   const infoOpen = useUi((s) => s.infoOpen);
   const toggleInfo = useUi((s) => s.toggleInfo);
   const askDelete = useUi((s) => s.askDelete);
+  const lopsyRefusal = useLopsyRefusal();
 
   // Photos, not tiles: an open stack's version tiles are versions of photos already counted.
   const photoCount = useMemo(() => itemAssets(orderedIds).length, [orderedIds]);
@@ -105,9 +107,9 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
               },
               {
                 label: 'Edit in Lopsy',
-                hint: single ? 'With layers, painting and text' : 'Select one photo first',
+                hint: !single ? 'Select one photo first' : (lopsyRefusal ?? 'With layers, painting and text'),
                 icon: <Paintbrush size={14} />,
-                disabled: !single,
+                disabled: !single || lopsyRefusal !== null,
                 run: openFocusedInLopsy,
               },
               {
