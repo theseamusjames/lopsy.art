@@ -104,6 +104,19 @@ pub fn clear_document_region(engine: &mut EngineInner) {
     engine.needs_recomposite = true;
 }
 
+/// Whether the screen shows the document's region as part of the whole
+/// picture: on, while a region is set, the viewport (`set_viewport`) is the
+/// whole picture's (its zoom, and its pan from the whole's centre) and the
+/// final blit draws the document where that whole would show those
+/// pixels, dithered by canvas pixel as the whole is; the whole's
+/// arithmetic and one exact subtraction of the region's origin. Off (the
+/// default), a region is an export's tile, drawn at its own size. Without a
+/// region it changes nothing.
+pub fn set_screen_region(engine: &mut EngineInner, on: bool) {
+    engine.screen_region = on;
+    engine.needs_present = true;
+}
+
 /// The apron, in pixels, a tile needs on each side that is not an edge of
 /// the picture for its exports with the current settings to equal the
 /// whole picture's there: see `develop::tile::apron`.

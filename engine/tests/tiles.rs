@@ -721,3 +721,21 @@ fn a_kept_part_outside_the_tile_or_the_picture_is_refused() {
     commands::develop::clear_export_assembly(&mut engine);
     assert!(assemble(&mut engine, 0, 0).is_err(), "nothing being assembled");
 }
+
+#[test]
+fn showing_a_region_on_the_screen_changes_no_export() {
+    // The flag only moves the final blit, which no export reads.
+    let (w, h) = (160, 120);
+    let Some((mut engine, _)) = small_document(w, h) else { return };
+    commands::develop::set_document_region(&mut engine, 30, 20, 400, 300).expect("region");
+    let as_tile = all_exports(&mut engine);
+    commands::develop::set_screen_region(&mut engine, true);
+    assert_eq!(all_exports(&mut engine), as_tile);
+    commands::develop::set_screen_region(&mut engine, false);
+    commands::develop::clear_document_region(&mut engine);
+    commands::develop::set_screen_region(&mut engine, true);
+    let unset = all_exports(&mut engine);
+    commands::develop::set_screen_region(&mut engine, false);
+    assert_eq!(all_exports(&mut engine), unset, "without a region the flag changes nothing");
+    assert_no_gpu_errors();
+}

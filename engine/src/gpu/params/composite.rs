@@ -21,6 +21,7 @@ uniforms! {
         pub doc_color_mode: i32,
         pub dither: f32,
         pub dither_region: [f32; 4],
+        pub screen_region: [f32; 4],
     }
 }
 

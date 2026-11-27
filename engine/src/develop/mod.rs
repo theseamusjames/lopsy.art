@@ -123,7 +123,10 @@
 //! `developApron`), and ends exactly at a picture edge. The final blit
 //! dithers a tile drawn at its own size (an 8-bit export's draw) at its
 //! pixels' places in the whole too (`final_blit.wgsl`'s
-//! `u_ditherRegion`). The encoders that take whole pictures run on one
+//! `u_ditherRegion`); a tile on the screen (`setScreenRegion`) is drawn
+//! where the whole picture's viewport shows it, the pixel found in the
+//! whole and moved by the region's origin, and dithered by canvas pixel
+//! as the whole is (`u_screenRegion`). The encoders that take whole pictures run on one
 //! assembled in the engine from the tiles' kept parts
 //! (`develop::assembly`). With no region every shader takes the branch
 //! that is the arithmetic it always had.
@@ -211,6 +214,10 @@
 //!   (0 the 16-bit PNG, 1 the TIFF, 2 the PQ PNG) and
 //!   `assembledGainMap(engine, sdrSpace, scale)`, each freeing what it
 //!   encodes; `clearExportAssembly(engine)`.
+//! - `setScreenRegion(engine, on)`: while a region is set, the viewport
+//!   (`setViewport`) is the whole picture's and the screen shows the
+//!   region where the whole would be (the Edit view's detail at 100 %);
+//!   off, a region is an export's tile. Nothing without a region.
 //! - `rawPlanWindowBands(format, paramsJson, x, y, width, height,
 //!   maxBands)`: the bands that render a window of the oriented frame at
 //!   its own size (`lopsy_core::raw::window`).

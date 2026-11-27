@@ -229,6 +229,11 @@ pub struct EngineInner {
     /// Whole pictures being put together from tiles' exports for the
     /// encoders (`develop::assembly`); empty unless an export is assembling.
     pub export_assembly: crate::develop::assembly::ExportAssembly,
+    /// The screen shows the document as its region of the whole picture
+    /// (`commands::develop::set_screen_region`): the viewport is the whole
+    /// picture's, and the final blit shifts it to the region. Off (the
+    /// default), a region is an export's tile.
+    pub screen_region: bool,
     pub bg_color: [f32; 4],
     /// Document color mode: 0 = RGB (also grayscale/indexed, which are
     /// RGBA-constrained), 1 = Lab, 2 = CMYK. Drives the display-decode branch
@@ -419,6 +424,7 @@ impl EngineInner {
             doc_height: doc_h,
             document_region: None,
             export_assembly: Default::default(),
+            screen_region: false,
             bg_color: [1.0, 1.0, 1.0, 1.0],
             doc_color_mode: 0,
             needs_recomposite: true,

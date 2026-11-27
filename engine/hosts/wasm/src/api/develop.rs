@@ -33,6 +33,12 @@ pub fn clear_document_region(engine: &mut Engine) {
     lopsy_engine::commands::develop::clear_document_region(&mut engine.inner)
 }
 
+/// The screen shows the region as part of the whole: `commands::develop::set_screen_region`.
+#[wasm_bindgen(js_name = "setScreenRegion")]
+pub fn set_screen_region(engine: &mut Engine, on: bool) {
+    lopsy_engine::commands::develop::set_screen_region(&mut engine.inner, on)
+}
+
 /// The apron in pixels a tile needs: `develop::tile::apron`.
 #[wasm_bindgen(js_name = "developApron")]
 pub fn develop_apron(engine: &Engine) -> u32 {
