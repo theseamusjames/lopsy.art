@@ -9,8 +9,8 @@
  * loads the full size on demand; exports load the full size.
  *
  * Pixels never come into TypeScript. Decoded images go straight to the
- * layer texture (RAW bands from the worker pool, the baked DNG and Sony ARW
- * and 16-bit PNG through the engine's decoders, other formats from a canvas the
+ * layer texture (RAW bands from the worker pool, the baked RAW decodes and
+ * 16-bit PNG through the engine's decoders, other formats from a canvas the
  * browser decoded into). Previews and exports are drawn by the engine into its own canvas at
  * the output size and handed to `OffscreenCanvas.convertToBlob`; full-size
  * PNG uses the engine's 16-bit encoder.
@@ -332,8 +332,8 @@ export interface PhotoInfo {
   readonly kelvin: KelvinReadout | null;
   /**
    * The decoder's sentence when the photo's colour is only approximate (a
-   * Sony ARW carries part of the camera's colour); null when it is the
-   * camera's.
+   * Sony ARW carries part of the camera's colour, a CR2 or NEF from a body
+   * without a matrix none); null when it is the camera's.
    */
   readonly colorNote: string | null;
 }

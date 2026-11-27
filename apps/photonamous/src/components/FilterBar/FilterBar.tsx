@@ -26,6 +26,8 @@ const FORMAT_WORDS: Readonly<Record<string, string>> = {
   raf: 'RAW (Fujifilm)',
   dng: 'RAW (DNG)',
   arw: 'RAW (Sony)',
+  cr2: 'RAW (Canon)',
+  nef: 'RAW (Nikon)',
   jpeg: 'JPEG',
   png: 'PNG',
   webp: 'WebP',

@@ -60,9 +60,9 @@ test("Google Drive: a photo picked in Google's Picker, in the page, is added", a
   // The way out is offered while the Picker is open, and the page with it on is accessible.
   await expect(page.getByRole('complementary', { name: PROMPT })).toBeVisible();
   expect(await axeViolations(page)).toEqual([]);
-  // The Picker is asked for every kind of photo the app reads, Fujifilm and Sony RAW by the names Drive knows them by.
+  // The Picker is asked for every kind of photo the app reads, Fujifilm, Sony, Canon and Nikon RAW by the names Drive knows them by.
   const offered = (await stub<string>(page, 'stub.mimeTypes')).split(',');
-  for (const type of ['image/x-fuji-raf', 'image/x-adobe-dng', 'image/x-sony-arw', 'image/jpeg', 'image/png', 'image/webp']) {
+  for (const type of ['image/x-fuji-raf', 'image/x-adobe-dng', 'image/x-sony-arw', 'image/x-canon-cr2', 'image/x-nikon-nef', 'image/jpeg', 'image/png', 'image/webp']) {
     expect(offered, type).toContain(type);
   }
 

@@ -9,8 +9,8 @@ export interface FileLike {
   readonly size: number;
 }
 
-const PHOTO_EXTENSIONS = new Set(['raf', 'dng', 'arw', 'jpg', 'jpeg', 'png', 'webp']);
-const RAW_EXTENSIONS = new Set(['raf', 'dng', 'arw']);
+const PHOTO_EXTENSIONS = new Set(['raf', 'dng', 'arw', 'cr2', 'nef', 'jpg', 'jpeg', 'png', 'webp']);
+const RAW_EXTENSIONS = new Set(['raf', 'dng', 'arw', 'cr2', 'nef']);
 const JPEG_EXTENSIONS = new Set(['jpg', 'jpeg']);
 
 export function extensionOf(name: string): string {

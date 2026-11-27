@@ -51,7 +51,7 @@ export interface RawScaledBand {
 export type RawWorkerResponse =
   | {
       kind: 'prepared';
-      /** The format id: `"raf"`, `"dng"`, `"arw"`. */
+      /** The format id: `"raf"`, `"dng"`, `"arw"`, `"cr2"`, `"nef"`. */
       format: string;
       /** The engine's `RawDescription`, as JSON (`parseRawDescription`). */
       describeJson: string;

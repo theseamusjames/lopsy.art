@@ -12,10 +12,10 @@ import { readRawDevelopSettings, type RawDevelopSettings } from '../raw-develop'
 import { readKelvinScale, readPresets, type KelvinScale, type WhiteBalancePresetValues } from '../white-balance';
 
 /** The engine's format ids; a new format brings its own. */
-export type RawFormatId = 'raf' | 'dng' | 'arw' | (string & {});
+export type RawFormatId = 'raf' | 'dng' | 'arw' | 'cr2' | 'nef' | (string & {});
 
 /** The formats the Edit view develops through the RAW interface. */
-export const RAW_PATH_FORMATS: ReadonlySet<ImageFormat> = new Set<ImageFormat>(['raf', 'dng', 'arw']);
+export const RAW_PATH_FORMATS: ReadonlySet<ImageFormat> = new Set<ImageFormat>(['raf', 'dng', 'arw', 'cr2', 'nef']);
 
 /**
  * How a photo in `format` opens: 'raw', through the RAW interface; 'baked',
