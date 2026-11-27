@@ -27,6 +27,7 @@ pub mod arw;
 pub mod dng;
 pub mod look;
 pub mod raf;
+pub mod scaled;
 pub mod white_balance;
 
 use serde::de::DeserializeOwned;
@@ -36,6 +37,7 @@ use crate::raf::develop::{DevelopProfile, ProfileRole, ProfileSettings, RawDevel
 pub use look::{OpeningCurve, OpeningLook, STANDARD_SATURATION};
 use crate::raf::wb_presets::RecipeWbPreset;
 use crate::raf::{RafBand, RafBandPixels};
+pub use scaled::ScaledBand;
 
 /// Rows of a plane to render: output rows `[y0, y1)` from plane rows
 /// `[src_y0, src_y1)` (the halo included). Every format's bands are this
@@ -206,8 +208,18 @@ pub trait RawFormat {
     fn describe(data: &[u8], prep: &RawPlane<Self::Params>, look: &OpeningLook) -> Result<RawDescription, String>;
     /// The plane's height, which bands are planned over.
     fn plane_height(p: &Self::Params) -> u32;
+    /// The EXIF orientation (1..=8) the renders apply, which says where a
+    /// band of plane rows lands in the oriented frame (`scaled`).
+    fn orientation(p: &Self::Params) -> u16;
+    /// The final (oriented) size, the description's `width` and `height`.
+    fn oriented_size(p: &Self::Params) -> (u32, u32);
     fn plan_bands(p: &Self::Params, max_bands: u32) -> Vec<RawBand> {
         crate::raf::plan_bands(Self::plane_height(p), max_bands)
+    }
+    /// A band that renders plane rows `[y0, y1)` (and perhaps a few more),
+    /// with the context the format's renders need.
+    fn band_for_rows(p: &Self::Params, y0: u32, y1: u32) -> RawBand {
+        crate::raf::band_for_rows(Self::plane_height(p), y0, y1)
     }
     fn render_linear_band(src: &[f32], p: &Self::Params, band: RawBand) -> Result<RawBandPixels, String>;
     fn render_binned_linear(plane: &[f32], p: &Self::Params, min_long_edge: u32) -> Result<(u32, u32, Vec<f32>), String>;
@@ -365,6 +377,22 @@ pub fn prepare_with(data: &[u8], look: &OpeningLook) -> Result<PreparedRaw, Stri
 /// Bands for the plane of a prepared file.
 pub fn plan_bands(format: RawFormatId, params_json: &str, max_bands: u32) -> Result<Vec<RawBand>, String> {
     dispatch!(format, F => Ok(F::plan_bands(&params_from::<<F as RawFormat>::Params>(format, params_json)?, max_bands)))
+}
+
+/// Bands that render the frame reduced to `dst_width`×`dst_height`
+/// (`scaled`): each a [`RawBand`] of plane rows and the destination rows or
+/// columns it makes.
+pub fn plan_scaled_bands(format: RawFormatId, params_json: &str, dst_width: u32, dst_height: u32, max_bands: u32) -> Result<Vec<ScaledBand>, String> {
+    dispatch!(format, F => scaled::plan::<F>(&params_from::<<F as RawFormat>::Params>(format, params_json)?, dst_width, dst_height, max_bands))
+}
+
+/// One band of the frame reduced to `dst_width`×`dst_height` (`scaled`):
+/// `src` holds plane rows `[band.src_y0, band.src_y1)`, and the result is
+/// destination rows (or columns) `[d0, d1)`, oriented RGBA f32, placed in
+/// the reduced frame: linear camera RGB, or with `linear` false the
+/// format's finished look (an error for a format without one).
+pub fn render_scaled_band(format: RawFormatId, src: &[f32], params_json: &str, scaled: ScaledBand, dst_width: u32, dst_height: u32, linear: bool) -> Result<RawBandPixels, String> {
+    dispatch!(format, F => scaled::render::<F>(src, &params_from::<<F as RawFormat>::Params>(format, params_json)?, scaled, dst_width, dst_height, linear))
 }
 
 /// Render plane rows `[band.src_y0, band.src_y1)` (`src`) to linear camera

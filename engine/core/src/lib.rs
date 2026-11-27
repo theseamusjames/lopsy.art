@@ -18,6 +18,7 @@ pub mod brush;
 pub mod dab_rect;
 pub mod sparse;
 pub mod pixel_buffer;
+pub mod area_resample;
 pub mod filters;
 pub mod export;
 pub mod hdr_png;

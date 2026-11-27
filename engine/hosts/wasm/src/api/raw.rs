@@ -2,7 +2,9 @@
 //! RAF, DNG and Sony ARW. `rawPrepare` runs the whole-frame stage once and
 //! describes the file; workers render bands with `rawRenderLinearBand` (or
 //! `rawRenderFinishedBand`, RAF's legacy look) from rows of the plane,
-//! planned with `rawPlanBands`; the main thread asks `rawWhiteBalance` and
+//! planned with `rawPlanBands` (or `rawRenderScaledBand` from
+//! `rawPlanScaledBands`, for a frame reduced to fit the GPU's textures);
+//! the main thread asks `rawWhiteBalance` and
 //! `rawTemperatureForKelvin` for the RAW step's white balance in recipe
 //! units, and `rawAutoWhiteBalance` for Auto. Every call after
 //! `rawPrepare` takes the format id (`"raf"`, `"dng"`, `"arw"`) and that
@@ -163,6 +165,45 @@ pub fn raw_plan_bands(format: &str, params_json: &str, max_bands: u32) -> Result
 #[wasm_bindgen(js_name = "rawRenderLinearBand")]
 pub fn raw_render_linear_band(format: &str, src: &[f32], params_json: &str, y0: u32, y1: u32, src_y0: u32, src_y1: u32) -> Result<RawRenderedBand, JsError> {
     let out = raw::render_linear_band(format_of(format)?, src, params_json, RawBand { y0, y1, src_y0, src_y1 }).map_err(err)?;
+    Ok(out.into())
+}
+
+/// Bands that render the frame reduced to `dstWidth`×`dstHeight` (each side
+/// at most the frame's), for a device whose largest texture is smaller than
+/// the frame (`lopsy_core::raw::scaled`), flattened as `[y0, y1, srcY0,
+/// srcY1, d0, d1, …]`: plane rows to render, as `rawPlanBands` gives them,
+/// and the destination rows (or columns, when the frame is turned a quarter)
+/// `[d0, d1)` they make.
+#[wasm_bindgen(js_name = "rawPlanScaledBands")]
+pub fn raw_plan_scaled_bands(format: &str, params_json: &str, dst_width: u32, dst_height: u32, max_bands: u32) -> Result<Vec<u32>, JsError> {
+    let bands = raw::plan_scaled_bands(format_of(format)?, params_json, dst_width, dst_height, max_bands).map_err(err)?;
+    Ok(bands.into_iter().flat_map(|s| [s.band.y0, s.band.y1, s.band.src_y0, s.band.src_y1, s.d0, s.d1]).collect())
+}
+
+/// One band of `rawPlanScaledBands`: plane rows `[srcY0, srcY1)` (passed as
+/// `src`) rendered as `rawRenderLinearBand` renders them (or, with `linear`
+/// false, as `rawRenderFinishedBand` does), then reduced by area to
+/// destination rows (or columns) `[d0, d1)` of the `dstWidth`×`dstHeight`
+/// frame, placed in it (`x`, `y`): oriented RGBA f32, bit-identical to the
+/// same pixels of the whole frame reduced.
+#[allow(clippy::too_many_arguments)]
+#[wasm_bindgen(js_name = "rawRenderScaledBand")]
+pub fn raw_render_scaled_band(
+    format: &str,
+    src: &[f32],
+    params_json: &str,
+    y0: u32,
+    y1: u32,
+    src_y0: u32,
+    src_y1: u32,
+    dst_width: u32,
+    dst_height: u32,
+    d0: u32,
+    d1: u32,
+    linear: bool,
+) -> Result<RawRenderedBand, JsError> {
+    let scaled = raw::ScaledBand { band: RawBand { y0, y1, src_y0, src_y1 }, d0, d1 };
+    let out = raw::render_scaled_band(format_of(format)?, src, params_json, scaled, dst_width, dst_height, linear).map_err(err)?;
     Ok(out.into())
 }
 

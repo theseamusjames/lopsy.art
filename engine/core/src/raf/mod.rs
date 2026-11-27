@@ -181,6 +181,17 @@ pub fn plan_bands(height: u32, max_bands: u32) -> Vec<RafBand> {
         .collect()
 }
 
+/// A band for frame rows `[y0, y1)` or a few more: it starts on the 6-row
+/// CFA period (at 0 when it would start inside the first halo), so its
+/// source starts at CFA phase 0, and it carries `plan_bands`' halo. For
+/// renders that need particular rows (a reduced frame's bands, `raw::scaled`)
+/// rather than an even split of the frame.
+pub fn band_for_rows(height: u32, y0: u32, y1: u32) -> RafBand {
+    let y1 = y1.min(height);
+    let y0 = if y0 <= BAND_HALO_ROWS { 0 } else { y0 / 6 * 6 };
+    RafBand { y0, y1, src_y0: y0.saturating_sub(BAND_HALO_ROWS), src_y1: (y1 + BAND_HALO_ROWS).min(height) }
+}
+
 /// One rendered band, already EXIF-oriented, with its rectangle in the
 /// final (oriented) image.
 pub struct RafBandPixels {
