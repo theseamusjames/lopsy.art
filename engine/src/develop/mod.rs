@@ -100,6 +100,29 @@
 //! rendered at full size and reduced with the rest, as the resized 8-bit
 //! export (a full-size export scaled down by the canvas) has them.
 //!
+//! **Tiles.** A document can be one rectangle of a larger picture
+//! (`setDocumentRegion`, `EngineInner::document_region`,
+//! `lopsy_core::tile`): a picture larger than the GPU's textures is
+//! rendered tile by tile, and the tiles' kept parts assemble into what one
+//! render of the whole gives, bit for bit (`tests/tiles.rs`). Everything
+//! the host sets keeps the whole picture's coordinates. Per stage, with a
+//! region: stage 1 moves each layer (and its mask) by the region's origin;
+//! 2, 2i, 2t's profile, 5, 6, 6L's colour, D, D′ and 11's mapping are per
+//! pixel and unchanged (5's vignette, Lopsy's, which Photonamous never
+//! sets, stays the tile's own; so do layer effects); every area mask (2t, 6L, 7, 7b's mix) and 9's
+//! vignette and grain evaluate at the pixel's place in the whole, the
+//! vignette in a frame of the whole's size; 11's dither hashes the whole's
+//! pixel (`include/region.wgsl`, `wholePoint`). Blurs (2n, 2h, 3, 4, 7b,
+//! 8): up to σ = 4 they run on the tile as they always do; above it the
+//! smaller image is the whole picture's (as large, on the same grid), with
+//! only the texels the tile meets drawn (`thumbnail_box.wgsl`'s region,
+//! `tile::low_rect`), and the combining shader reads it at the whole
+//! render's own coordinate (`blurUv`). Every stage still clamps at the
+//! tile's edge, so a tile carries an apron of real pixels, the sum of the
+//! reaches of the neighbourhood stages that run (`tile::apron`,
+//! `developApron`), and ends exactly at a picture edge. With no region
+//! every shader takes the branch that is the arithmetic it always had.
+//!
 //! **Statistics.** With the working space, the live frame keeps its
 //! rendered image (after D′, before 11) in the working space's own texture,
 //! from the first read of it on (`compositor::want_rendered`, which draws
@@ -160,6 +183,20 @@
 //! - `setDevelopHdr(engine, on, peak)`: the HDR view of the live frame, on by default; `peak` in units of SDR white (4.0 to start, 1..=64).
 //! - `readHdrOutputF32(engine, peak)` (readback): the HDR picture for a file, linear Rec. 2020 RGBA f32 at the document's size, 1.0 = SDR white, up to `peak`.
 //! - `readHdrOutputF32Sized(engine, peak, width, height)` (readback): the same at `width × height` (each at most the document's, neither 0), `width × height × 4` floats; `compositeForExportSized(engine, width, height)` (readback): `compositeForExport` at that size, `width × height × 4` bytes of 8-bit sRGB, its SDR twin for a gain map. Both re-composite the document (the next frame rebuilds the live composite), so neither is an any-time read.
+//!
+//! Tiles (`develop.rs`, `layer.rs`):
+//! - `setDocumentRegion(engine, x, y, wholeWidth, wholeHeight)`: the
+//!   document is the rectangle at (`x`, `y`), of its own size, of a
+//!   `wholeWidth` × `wholeHeight` picture, in whole-document pixels after
+//!   the crop; throws when it would leave the picture. Set it after
+//!   `setDocumentSize`, which clears it. `clearDocumentRegion(engine)`.
+//! - `developApron(engine)`: pixels a tile needs on each side that is not
+//!   a picture edge, for the current settings (`tile::apron`).
+//! - `uploadLayerPixelsF32Window(engine, layer, windowX, windowY,
+//!   windowWidth, windowHeight, bandX, bandY, bandWidth, bandHeight,
+//!   pixels)`: the part of a band (frame pixels, RGBA f32 rows as
+//!   `uploadLayerPixelsF32Rect` takes) inside a window of the frame, into
+//!   a layer texture that is the window; a band outside it does nothing.
 //!
 //! White balance and statistics:
 //! - `rafAutoWhiteBalance(linearRgba)`: near-neutral-pixel white balance, as `wbRatio`.

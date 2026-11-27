@@ -1344,3 +1344,204 @@ On the final tree (86ca279f4) and the engine built from it:
   files shot under daylight-balanced light, where a Sony A7 III reads
   5900 K. Not looked into.
 - **XMP export's Kelvin** still takes the RAF route only.
+
+## 10. Tiles
+
+A photo whose long edge is larger than the GPU's largest texture (8192 on
+some GPUs; a Leica Q2 frame is 8368 wide, a GFX 100 frame 11648) opens
+and exports reduced (decision 75), because every texture of the develop
+chain is the document's size. This section records the first phase of
+rendering such a photo at its own size one tile at a time: the engine's
+half, proved against whole renders. The app phase, which plans the tiles,
+loads each tile's pixels and assembles files, is not done. Decisions are
+numbered on from section 9's.
+
+### Done
+
+- **A document can be one rectangle of a larger picture**
+  (`setDocumentRegion(x, y, wholeWidth, wholeHeight)`,
+  `clearDocumentRegion`; `lopsy_core::tile::Region`,
+  `EngineInner::document_region`). Everything the app sets keeps the
+  whole picture's coordinates: the layer's position and mask move by the
+  region's origin; the area masks, Finish's vignette (in a frame of the
+  whole's size) and grain, and the output step's dither evaluate at each
+  pixel's place in the whole (`include/region.wgsl`, `wholePoint`). The
+  stage map in `engine/src/develop/mod.rs` ("Tiles") says what each
+  stage does.
+- **Blurs on the whole picture's grid.** A blur up to σ 4 runs on the
+  tile as it always does. A larger one goes through a smaller image
+  that is the whole picture's, as large and on the same grid, with only
+  the texels the tile meets drawn (`thumbnail_box.wgsl`'s region,
+  `tile::low_rect`) and blurred there, and the combining shader reads it
+  at the whole render's own coordinate (`blurUv`).
+- **The apron** (`developApron`, `develop::tile::apron`): the pixels from
+  a tile edge that is not a picture edge within which a tile's export
+  can differ from the whole's, the sum of the reaches of the
+  neighbourhood stages the export chain runs with the current settings,
+  in either chain order, each area layer's included. The reaches are in
+  `lopsy_core::detail` and `linear_detail` beside the blur constants
+  (`blur_reach`, `noise_reduction_reach`, `sharpen_reach`,
+  `local_contrast_reach`, `haze_reach`). At full size: noise reduction
+  26, sharpening up to 10, the large and small details 202, haze 202.
+- **The source half:** `uploadLayerPixelsF32Window` writes the part of
+  a band (full-width rows for orientations 1 to 4, full-height columns
+  for 5 to 8, float or finished, in frame pixels) that lies inside a
+  window of the frame into a layer texture that is the window. A band
+  outside the window changes nothing. No pixel is cropped in TypeScript.
+- **The CPU references take the region** (`areas_reference_at`,
+  `area_layer_reference_at`, `finish_reference_at`,
+  `output_reference_at`, `look_reference_at`,
+  `scene_tone_reference_at`).
+
+### Decided
+
+76. **Tiles are only for a photo larger than the GPU's textures.** A
+    photo that fits takes today's path and renders today's pixels; a
+    photo that fits but fails for memory still steps down as decision 75
+    says. This is the owner's rule, and absolute: with no region every
+    shader takes a branch that is the arithmetic it always had, never a
+    generalised expression that could round differently.
+77. **The engine moves, the app keeps the whole's coordinates.** The
+    area masks are evaluated at the pixel plus the region's origin
+    rather than with the origin taken from the geometry when the
+    uniforms are built: the origin is a whole number and the pixel's
+    centre a half, so the sum is exact and is the whole render's own
+    position, where `x0 − origin` would round differently from the
+    whole's `p − x0`.
+78. **A tile's blur image is as large as the whole picture's**, not the
+    small "texels k0 to k1" image first designed. The combining shaders
+    read it with the hardware's bilinear filter, and only the same
+    texture size and the same normalised coordinate make that read the
+    whole render's on every GPU; an offset small texture needs a
+    coordinate the sampler rounds the same way, which no API promises.
+    The cost is memory while the blur runs: two textures of the whole's
+    smaller image, cleared, only the tile's part drawn. For noise
+    reduction's colour blur at full size (factor 3) that is two of
+    ⌈W/3⌉ × ⌈H/3⌉ half-float RGBA, about 181 MB for an 11648 × 8736
+    frame; for the σ 50 blurs (factor 25) about 2.6 MB. It also needs
+    ⌈W/3⌉ to fit the GPU's textures (W up to about 24,500 on an 8192
+    GPU).
+79. **Which smaller texels a tile draws:** every texel whose footprint
+    `[k·W/lw, (k+1)·W/lw)` meets the tile and one more either side
+    (`tile::low_range`, in integers). The box downscale computes the
+    whole picture's footprints and fetches each pixel from the tile at
+    its place in the whole, clamped to the whole's edges first and to
+    the tile second, so a texel whose pixels are all in the tile, or
+    that reaches the picture's edge with it, is the whole's own; the
+    ones at the ends are wrong and lie inside the apron.
+80. **A blur's reach** is its taps up to σ 4 and `(r + 2) · f + 2`
+    above it, `f` the downscale factor and `r` the small image's taps.
+    The bound derived from the shaders is `(r + 1.5) · F + 1`, `F ≤ f`
+    the footprint; the margin covers a bilinear coordinate rounded the
+    other way at a texel boundary. A model of the engine's blur on one
+    axis (`lopsy_core::tile` tests) measures the reach within `f + 2` of
+    it and never above, and shows a tile with it as its apron blurring
+    as the whole does, bit for bit.
+81. **The apron adds the reaches in chain order**, since each stage
+    widens what the next reads: noise reduction (its colour blur, or the
+    bilateral's 2), haze and the details with the working space as the
+    passes of their own they are, the old pass's two blurs whenever any
+    of its three sliders is set without it, each area layer's own noise
+    reduction, haze, details and sharpening, and sharpening (its blur
+    and the edge mask's gradient, one more). A stage that is off, and an
+    area layer that sets no neighbourhood stage, adds nothing. The
+    exports differ only in per-pixel stages, so one apron serves them
+    all.
+82. **A new document size clears the region.** The region is set after
+    the size, and a render never runs with a region the document no
+    longer fits. A refused region changes nothing.
+83. **The window upload copies in Rust only the band's part inside the
+    window** (whole rows pass through uncopied), and a band that misses
+    the window does nothing, not even allocate the texture.
+84. **The export bundle's glue:** the four new exports took the glue past
+    the 3 % margin (gzip +3.49 % over a budget that origin/main already
+    measures +1.76 % against here); their doc comments, which
+    wasm-bindgen copies into the glue, were shortened to point at the
+    commands, which brought it to +2.72 %. The budget was not raised.
+
+### Verified
+
+On this machine's GPU (wgpu on Metal), with the tree of this section's
+commits:
+
+- `engine/tests/tiles.rs` (13 tests): a picture rendered whole and as a
+  3 × 3 grid of tiles (kept parts on even coordinates, the middle one
+  clear of every edge by more than its apron, the others touching each
+  edge and corner), each tile its kept part plus the apron the engine
+  reports, clipped to the picture, its layer filled band by band through
+  the window upload. The assembled `compositeForExport`, 16-bit sRGB
+  read (`exportPng16`'s) and `readHdrOutputF32` equal the whole's in
+  every value, working space on and off, for: per-pixel stages only
+  (apron 0); the areas (linear, and radial, inverted and rotated) with
+  Finish's vignette and grain and the 8-bit dither (apron 0); noise
+  reduction alone (26); sharpening alone (10); the large and small
+  details alone (202); haze alone (202); every stage at once with an
+  area layer's noise reduction, sharpening, Finish and look (466 on,
+  264 off, at 1600 × 1100); and every stage at half pixel scale with an
+  area layer's own haze and details too (449 on, 237 off). An apron of
+  8 makes 860,174 (working space) and 573,641 values differ, by up to
+  20,224 and 8,544 16-bit steps. A region set and cleared, or one that
+  is the whole picture, leaves every export as it was; the tile loop
+  gives back every texture; the window upload is the crop of the whole
+  upload for row and column bands, and a band outside the window
+  changes nothing.
+- Without a region nothing moved: a temporary probe hashing every
+  export (8-bit, 16-bit in each colour space, sized, HDR and sized
+  HDR), the composite thumbnail, the scene statistics, the histograms,
+  the kept rendered image and the live frame with the overlays, for 24
+  documents (RAW or not, working space on or off, three levels of
+  settings, two pixel scales), gave the same 24 lines of hashes built
+  from origin/main and from this tree. The golden renders: every cell
+  moved 0 steps. `render.rs` 63 passed (Finish and the areas on a region
+  against their references among them), `hdr.rs` 17, the engine's unit
+  tests 169, lopsy-core's unit tests 642 (the tile module's 7 among
+  them), the command-line host's 14.
+- `npm run wgsl:check`: 119 of 119 shaders compile on WebGPU
+  (SwiftShader). Both wasm builds; the bundle check passes (wasm +0.91 %
+  gzip, glue +2.72 %). Lint (no errors) and type-check.
+
+### Not done
+
+- **The app phase:** planning tiles, loading each tile's window of the
+  frame, assembling the files, the HDR gain map's min and max over the
+  whole (`gain_map`, whose 2 × 2 blocks want the kept parts on even
+  coordinates), and the steps for one tile: `setDocumentSize` to the
+  tile, `setDocumentRegion`, the layer at the tile's place in whole
+  coordinates and of its size, `uploadLayerPixelsF32Window` for each
+  band, the export read, the kept part; settings once, in whole
+  coordinates, and `developApron` after them.
+- **Rotate 90, flip and straighten on a tile** are untested. The layer
+  transform works in the layer's own coordinates and assumes nothing
+  about the document's size, so its centres and the layer's position
+  are passed in whole coordinates; but the affine shader computes
+  positions from `uv · layerSize + layerOffset`, which rounds
+  differently for a tile's offsets than for the whole's, and it treats
+  the source window's edge as the picture's (a transparent border, and
+  exact coverage on an axis-aligned map). The source window must reach
+  at least two pixels past what the tile's rectangle maps from, except
+  at the frame's edge, and a tile of a turned photo may differ from the
+  whole's by a bilinear weight's rounding. Only a layer exactly the
+  tile's rectangle is proven exact; a layer at another offset samples
+  `blend.wgsl` at a coordinate computed from different numbers.
+- **WebGL** was not run with tiles (the native tests run wgpu). The
+  shaders are the same, translated; the parity fingerprints check that
+  nothing moved without a region.
+- **Another GPU's sampler.** The blurs up to σ 4 are read bilinearly at
+  the pixel's centre in a tile-sized texture, as the whole reads them in
+  a whole-sized one; on Metal both land exactly on the texel. A GPU
+  whose sampler leaves a weight of a fraction of a step on a neighbour
+  at a centre that rounded a hair low would make the two differ by that
+  much. Not seen; not ruled out on a software GPU.
+- **Stages Photonamous does not use are not region-aware:** Lopsy's
+  image adjustments' vignette (`filters/vignette.wgsl`, working space
+  off), layer effects (glow, shadow, stroke: moved with the layer, but
+  their reach is not in the apron), and the sized exports
+  (`compositeForExportSized`, `readHdrOutputF32Sized`), which reduce the
+  tile on its own grid. Tiles on 8-bit (no float) textures are untested.
+- **Memory per tile** was not measured on a GPU. A tile holds the
+  composite and two scratch textures, its layer, an area layer's copy of
+  the composite while it runs, and a blur's two tile-sized textures (or
+  the whole's smaller image, decision 78): about eight tile-sized
+  half-float textures at the peak. The pool keeps two free textures of
+  each size it has seen, so tiles of many sizes keep more memory than
+  tiles of one size.
