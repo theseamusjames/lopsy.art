@@ -36,6 +36,8 @@ engine/
       arw/            # Sony ARW decode (lossy, uncompressed, lossless; the SR2 block) onto
                       # the DNG decode's plane, renders and baked finish; measured colour for
                       # the bodies with data, camera_colour's matrix or Sony's (approximate) otherwise
+      cr2/            # Canon CR2 decode (lossless JPEG in slices; levels and colour filter measured
+                      # from the sensor data) onto the DNG decode's plane, renders and baked finish
       raw/            # One RAW interface over raf/, dng/ and arw/: sniff, prepare and describe,
                       # bands, binned view, white balance in recipe units (the raw… exports);
                       # scaled.rs: the frame reduced band by band, for a GPU whose textures are smaller;

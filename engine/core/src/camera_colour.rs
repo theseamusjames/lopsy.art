@@ -36,6 +36,15 @@ pub fn sony(model: &str) -> Option<CamToSrgb> {
     SONY.iter().find(|(m, _)| *m == model).map(|(_, matrix)| *matrix)
 }
 
+/// Canon bodies, by the exact `Model` string of IFD0 (`cr2`). None yet:
+/// a CR2 without one opens with its white balance only.
+const CANON: &[(&str, CamToSrgb)] = &[];
+
+/// The matrix of a Canon body, or `None` for one with none here.
+pub fn canon(model: &str) -> Option<CamToSrgb> {
+    CANON.iter().find(|(m, _)| *m == model).map(|(_, matrix)| *matrix)
+}
+
 /// The matrix of a Fujifilm body, by its sensor: the bodies that share a
 /// sensor share its colour filters. `None` for a sensor with none here
 /// (the X-H2S's stacked sensor, X-Trans 3 and earlier, and the X-A and

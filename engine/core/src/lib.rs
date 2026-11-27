@@ -35,6 +35,7 @@ pub mod dng;
 pub mod arw;
 pub mod raw;
 pub mod raf;
+pub mod cr2;
 pub mod develop_stats;
 pub mod color_mixer;
 pub mod tiff;
