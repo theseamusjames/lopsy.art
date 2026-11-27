@@ -8,7 +8,8 @@
 //! - DNG (`LOPSY_DNG_SAMPLES`, `LOPSY_DNG_ADOBE_SAMPLES`, and
 //!   `LOPSY_DNG_CAMERA_SAMPLES`: any folder of DNGs a camera wrote, such
 //!   as Leica's) and ARW
-//!   (`LOPSY_ARW_SAMPLES`): bands through the dispatch are bit-identical to
+//!   (`LOPSY_ARW_SAMPLES`) and Canon CR2 (`LOPSY_CR2_SAMPLES`): bands
+//!   through the dispatch are bit-identical to
 //!   the whole frame, the binned view works, and the lossy DNGs are refused
 //!   with "DNG cannot open as RAW:".
 //! - Every format: the oriented size of the linear path equals the baked
@@ -108,10 +109,15 @@ fn dng_and_arw_through_the_interface() {
         all.extend(files(var, "dng").into_iter().map(|p| (p, RawFormatId::Dng)));
     }
     all.extend(files("LOPSY_ARW_SAMPLES", "arw").into_iter().map(|p| (p, RawFormatId::Arw)));
+    all.extend(files("LOPSY_CR2_SAMPLES", "cr2").into_iter().map(|p| (p, RawFormatId::Cr2)));
     for (path, format) in all {
         let name = path.file_name().unwrap().to_string_lossy().to_string();
         let data = std::fs::read(&path).unwrap();
         assert_eq!(raw::sniff(&data), Some(format), "{name}");
+        // Canon's reduced-size raws are refused (`tests/cr2_decode.rs`).
+        if format == RawFormatId::Cr2 && raw::prepare(&data).err().as_deref() == Some(lopsy_core::cr2::SRAW_REFUSAL) {
+            continue;
+        }
         let t0 = std::time::Instant::now();
         let prep = raw::prepare(&data).unwrap_or_else(|e| panic!("{name}: {e}"));
         let prepare_ms = t0.elapsed().as_millis();
@@ -122,6 +128,10 @@ fn dng_and_arw_through_the_interface() {
             RawFormatId::Dng => {
                 let b = lopsy_core::dng::read_dng(&data).unwrap();
                 (b.width, b.height)
+            }
+            RawFormatId::Cr2 => {
+                let b = lopsy_core::cr2::read_cr2(&data).unwrap();
+                (b.image.width, b.image.height)
             }
             _ => {
                 let b = lopsy_core::arw::read_arw(&data).unwrap();
@@ -150,6 +160,7 @@ fn not_a_raw_is_named_as_such() {
 enum Bayer {
     Dng(lopsy_core::dng::linear::DngRenderParams),
     Arw(lopsy_core::arw::linear::ArwRenderParams),
+    Cr2(lopsy_core::cr2::linear::Cr2RenderParams),
 }
 
 impl lopsy_core::dng::linear::PlaneParams for Bayer {
@@ -157,12 +168,14 @@ impl lopsy_core::dng::linear::PlaneParams for Bayer {
         match self {
             Bayer::Dng(p) => p.layout(),
             Bayer::Arw(p) => p.layout(),
+            Bayer::Cr2(p) => p.layout(),
         }
     }
     fn highlight_chroma(&self) -> Option<&lopsy_core::raf::highlights::ChromaGrid> {
         match self {
             Bayer::Dng(p) => p.highlight_chroma.as_ref(),
             Bayer::Arw(p) => p.highlight_chroma.as_ref(),
+            Bayer::Cr2(p) => p.highlight_chroma.as_ref(),
         }
     }
 }
@@ -177,6 +190,7 @@ fn reconstruction_holds_highlight_hue() {
     use lopsy_core::dng::linear::{render_binned_linear, PlaneParams};
     let mut all: Vec<PathBuf> = files("LOPSY_DNG_ADOBE_SAMPLES", "dng");
     all.extend(files("LOPSY_ARW_SAMPLES", "arw"));
+    all.extend(files("LOPSY_CR2_SAMPLES", "cr2"));
     for path in all {
         let name = path.file_name().unwrap().to_string_lossy().to_string();
         let data = std::fs::read(&path).unwrap();
@@ -184,6 +198,7 @@ fn reconstruction_holds_highlight_hue() {
         let params = match &prep.prepared {
             raw::Prepared::Dng(p) => Bayer::Dng(p.params.clone()),
             raw::Prepared::Arw(p) => Bayer::Arw(p.params.clone()),
+            raw::Prepared::Cr2(p) => Bayer::Cr2(p.params.clone()),
             raw::Prepared::Raf(_) => continue,
         };
         let layout = params.layout();
@@ -235,11 +250,13 @@ fn the_format_answers_finished_bands_as_its_descriptions_do() {
     assert!(raw::renders_finished_bands(RawFormatId::Raf));
     assert!(!raw::renders_finished_bands(RawFormatId::Dng));
     assert!(!raw::renders_finished_bands(RawFormatId::Arw));
+    assert!(!raw::renders_finished_bands(RawFormatId::Cr2));
     let mut paths = files("LOPSY_RAF_SAMPLES", "raf");
     paths.extend(files("LOPSY_DNG_SAMPLES", "dng"));
     paths.extend(files("LOPSY_DNG_ADOBE_SAMPLES", "dng"));
     paths.extend(files("LOPSY_DNG_CAMERA_SAMPLES", "dng"));
     paths.extend(files("LOPSY_ARW_SAMPLES", "arw"));
+    paths.extend(files("LOPSY_CR2_SAMPLES", "cr2"));
     let mut seen = 0;
     for path in paths {
         let data = std::fs::read(&path).unwrap();

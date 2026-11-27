@@ -24,6 +24,7 @@
 //! the `dispatch!` matches below (the compiler lists every one).
 
 pub mod arw;
+pub mod cr2;
 pub mod dng;
 pub mod look;
 pub mod raf;
@@ -56,6 +57,7 @@ pub enum RawFormatId {
     Raf,
     Dng,
     Arw,
+    Cr2,
 }
 
 impl RawFormatId {
@@ -64,6 +66,7 @@ impl RawFormatId {
             RawFormatId::Raf => "raf",
             RawFormatId::Dng => "dng",
             RawFormatId::Arw => "arw",
+            RawFormatId::Cr2 => "cr2",
         }
     }
 
@@ -72,6 +75,7 @@ impl RawFormatId {
             "raf" => Ok(RawFormatId::Raf),
             "dng" => Ok(RawFormatId::Dng),
             "arw" => Ok(RawFormatId::Arw),
+            "cr2" => Ok(RawFormatId::Cr2),
             other => Err(format!("'{other}' is not a RAW format this engine reads")),
         }
     }
@@ -84,6 +88,9 @@ impl RawFormatId {
 pub fn sniff(data: &[u8]) -> Option<RawFormatId> {
     if data.starts_with(b"FUJIFILMCCD-RAW") {
         return Some(RawFormatId::Raf);
+    }
+    if crate::cr2::is_canon_cr2(data) {
+        return Some(RawFormatId::Cr2);
     }
     let reader = crate::dng::tiff::TiffReader::new(data).ok()?;
     let ifd0 = reader.read_ifd(0).ok()?;
@@ -296,6 +303,10 @@ macro_rules! dispatch {
                 type $F = arw::Arw;
                 $body
             }
+            RawFormatId::Cr2 => {
+                type $F = cr2::Cr2;
+                $body
+            }
         }
     };
 }
@@ -305,6 +316,7 @@ pub enum Prepared {
     Raf(RawPlane<<raf::Raf as RawFormat>::Params>),
     Dng(RawPlane<<dng::Dng as RawFormat>::Params>),
     Arw(RawPlane<<arw::Arw as RawFormat>::Params>),
+    Cr2(RawPlane<<cr2::Cr2 as RawFormat>::Params>),
 }
 
 /// What [`prepare`] gives: the file prepared, its description and its
@@ -322,6 +334,7 @@ impl PreparedRaw {
             Prepared::Raf(p) => &p.plane,
             Prepared::Dng(p) => &p.plane,
             Prepared::Arw(p) => &p.plane,
+            Prepared::Cr2(p) => &p.plane,
         }
     }
 
@@ -330,6 +343,7 @@ impl PreparedRaw {
             Prepared::Raf(p) => std::mem::take(&mut p.plane),
             Prepared::Dng(p) => std::mem::take(&mut p.plane),
             Prepared::Arw(p) => std::mem::take(&mut p.plane),
+            Prepared::Cr2(p) => std::mem::take(&mut p.plane),
         }
     }
 
@@ -338,6 +352,7 @@ impl PreparedRaw {
             Prepared::Raf(p) => &p.debug_log,
             Prepared::Dng(p) => &p.debug_log,
             Prepared::Arw(p) => &p.debug_log,
+            Prepared::Cr2(p) => &p.debug_log,
         }
     }
 
@@ -347,6 +362,7 @@ impl PreparedRaw {
             Prepared::Raf(p) => raf::Raf::render_binned_linear(&p.plane, &p.params, min_long_edge),
             Prepared::Dng(p) => dng::Dng::render_binned_linear(&p.plane, &p.params, min_long_edge),
             Prepared::Arw(p) => arw::Arw::render_binned_linear(&p.plane, &p.params, min_long_edge),
+            Prepared::Cr2(p) => cr2::Cr2::render_binned_linear(&p.plane, &p.params, min_long_edge),
         }
     }
 }
@@ -372,6 +388,7 @@ pub fn prepare_with(data: &[u8], look: &OpeningLook) -> Result<PreparedRaw, Stri
         RawFormatId::Raf => finish::<raf::Raf>(data, look, Prepared::Raf),
         RawFormatId::Dng => finish::<dng::Dng>(data, look, Prepared::Dng),
         RawFormatId::Arw => finish::<arw::Arw>(data, look, Prepared::Arw),
+        RawFormatId::Cr2 => finish::<cr2::Cr2>(data, look, Prepared::Cr2),
     }
 }
 
