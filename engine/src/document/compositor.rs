@@ -576,6 +576,14 @@ pub fn present(engine: &mut EngineInner) -> Result<(), String> {
     }
     let (screen_w, screen_h) = engine.gpu().screen_size()?;
     let channel_mask = engine.overlays.channel_mask;
+    // A tile drawn at its own size dithers at its pixels' places in the
+    // whole picture, rows counted from the bottom as the shader counts them.
+    let dither_region = match engine.document_region {
+        Some(r) if (screen_w, screen_h) == (engine.doc_width as i32, engine.doc_height as i32) => {
+            [r.x as f32, (r.whole_height - r.y - engine.doc_height) as f32, 1.0, 0.0]
+        }
+        _ => [0.0; 4],
+    };
     engine
         .pass(&engine.shaders.final_blit, FinalBlitParams {
             resolution: [screen_w as f32, screen_h as f32],
@@ -588,6 +596,7 @@ pub fn present(engine: &mut EngineInner) -> Result<(), String> {
             channel_mask: [channel_mask[0], channel_mask[1], channel_mask[2], channel_mask[3]],
             doc_color_mode: engine.doc_color_mode as i32,
             dither: if engine.gpu_ctx.is_screen_hdr() { 0.0 } else { 1.0 },
+            dither_region,
         })
         .blend(Blend::Off)
         .viewport(0, 0, screen_w, screen_h)

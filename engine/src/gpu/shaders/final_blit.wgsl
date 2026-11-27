@@ -12,6 +12,10 @@ struct Params {
     // 1 for an 8-bit screen, where the dither hides banding; 0 for a float
     // one (HDR), which has the precision and would only show the noise.
     u_dither: f32,
+    // A document that is a tile of a larger picture, drawn at its own size
+    // (an export's draw): (x, y, 1, 0), the whole picture's pixel, counted
+    // from the bottom, at this canvas's pixel (0, 0). All zeros otherwise.
+    u_ditherRegion: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var u_compositeTex: texture_2d<f32>;
@@ -135,9 +139,15 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
     }
 
     // Seeded by the pixel, so the dither is the same pattern on both
-    // backends: WebGPU's own fragment position counts rows down.
-    let n0 = fract(sin(dot(pixel, vec2<f32>(12.9898, 78.233))) * 43758.5453);
-    let n1 = fract(sin(dot(pixel, vec2<f32>(63.7264, 10.873))) * 28637.1136);
+    // backends: WebGPU's own fragment position counts rows down. A tile is
+    // seeded by its pixel's place in the whole picture, a sum of whole
+    // numbers and a half that is exact, so tiles dither as the whole does.
+    var seed = pixel;
+    if (params.u_ditherRegion.z > 0.5) {
+        seed = pixel + params.u_ditherRegion.xy;
+    }
+    let n0 = fract(sin(dot(seed, vec2<f32>(12.9898, 78.233))) * 43758.5453);
+    let n1 = fract(sin(dot(seed, vec2<f32>(63.7264, 10.873))) * 28637.1136);
     let dither = (n0 + n1 - 1.0) / 255.0 * params.u_dither;
 
     return vec4<f32>(color.rgb + dither, color.a);
