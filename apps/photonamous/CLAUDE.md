@@ -137,7 +137,15 @@ act as a GPU of that limit (`develop-override.ts`), which is how
 `e2e/export-tiles.spec.ts` reaches tiles on any machine; it compares
 tiled exports with whole ones, the same bytes on a hardware GPU
 (`PHOTONAMOUS_GPU=hardware`) and SwiftShader's measured rounding
-otherwise.
+otherwise. The Edit view's engine shows such a photo's part on screen at
+its own size when zoomed in (the detail, `src/engine/detail-view.ts`):
+one tile as the engine's document, shown within the whole
+(`setScreenRegion`), while the class's sizes and view keep describing the
+held document. Anything that reads the document (histograms, Auto tone,
+the white-balance picker, previews, exports) goes through
+`withHeldDocument`, which holds the screen's frame (`holdScreen`) while
+it reads the held one; a new reader must too. `e2e/edit-detail.spec.ts`
+compares the detail's canvas with the whole render's.
 
 The UI this app shares with Lopsy is `packages/ui` (`@lopsy/ui`, see its
 `README.md`): the design tokens, reset and fonts (`src/styles/index.css`

@@ -1354,9 +1354,10 @@ chain is the document's size. This section records rendering such a
 photo at its own size one tile at a time: first the engine's half,
 proved against whole renders (decisions 76 to 84), then the app's, which
 plans the tiles, loads each tile's pixels and assembles the files, so
-every export of such a photo can be made at its own size (85 on). The
-Edit view still shows it reduced. Decisions are numbered on from
-section 9's.
+every export of such a photo can be made at its own size (85 to 98),
+and then the Edit view's detail, which shows the part on screen at the
+photo's own size once the view is zoomed in (99 on). Decisions are
+numbered on from section 9's.
 
 ### Done
 
@@ -1424,6 +1425,13 @@ section 9's.
   (`fullSizeNoteText`, the note's `exports`) and the Export dialog's
   line under Size (`deviceSizeNote`, `canTile`); a toast when an export
   meant for tiles was made at the held size.
+- **The detail at 100 %** (the Edit view's engine): once the view
+  magnifies the held image and has been still for 200 ms, the part on
+  screen and a quarter of it on each side load as one tile at the
+  photo's own size (`detail-view.ts`; `develop-engine.ts` `whenStill`,
+  `loadDetail`, `showDetail`, `hideDetail`) and are shown within the
+  whole (`setScreenRegion`); every reader of the document reads the held
+  one through `withHeldDocument`, with the screen held (`holdScreen`).
 - **`?texture-limit=N`** in development builds (`develop-override.ts`),
   and the e2e spec `export-tiles.spec.ts`; `edit-oversize.spec.ts`
   updated (a Leica Q2 in tiles on SwiftShader, no override).
@@ -1602,6 +1610,72 @@ section 9's.
     move today's pixels. The e2e spec holds SwiftShader to its measured
     difference and the machine's GPU to the same bytes.
 
+99. **The detail is a second document on the Edit view's engine**, not
+    a second engine or an overlay canvas: the engine's own final blit
+    draws it, so the clipping warning, a mask's red, the sharpening mask
+    view and the HDR canvas work on it as on the held image. The held
+    image stays in its layer, hidden; the tile has a layer of its own,
+    kept hidden between shows. The class's sizes, view and area frame go
+    on describing the held document, so the React side and its overlays
+    changed only for the badge and a pointer's gesture.
+100. **The screen shows the tile within the whole**
+    (`setScreenRegion`): the app sends the whole own-size crop's viewport
+    and the final blit finds each pixel in the whole, snaps it as the
+    whole render does at a whole-number zoom, and subtracts the region's
+    origin, a whole number and exact (decision 77's rule). Shifting the
+    pan in the app instead would compute the position from other numbers
+    than the whole's. The flag also keeps an export tile's dither
+    (decision 92) from switching on when a tile happens to be the
+    canvas's size: the screen dithers by canvas pixel as the whole does.
+101. **The view at the photo's own size** is the held view's, with the
+    same centre and pan and `zoom · pixelScale` screen pixels to each own
+    pixel (what the zoom readout shows; a zoom within 10⁻⁶ of a whole
+    number is that number, so 100 % is exactly 1). The kept part is the
+    visible part a quarter wider on each side (at most 2.25 times its
+    area), on even pixels; the tile, it and the apron, within the side
+    limit, the tile budget (the held image's pixels) and a turned
+    window's limit, the margin shrunk in eight steps as far as needed;
+    none fits, no detail. The apron is measured at the photo's own size
+    with its settings sent for a moment and the held ones put back, in
+    one task.
+102. **What starts and ends it:** a detail is looked for 200 ms after the
+    last view change, never during a drag (`isInteractive`) or while a
+    pointer is down on the view (`setViewGesture`), and after a full-size
+    load. A view change whose visible part stays inside the kept part
+    only moves the viewport; one that leaves it, or stops magnifying the
+    held image, shows the held image at once. An edit that leaves the
+    framing, straighten and crop alone is rendered on the tile (the
+    size-scaled settings are sent at pixel scale 1 while it shows,
+    `sizedFor`); one whose apron grows past the tile's shows the held
+    image and a wider tile loads; a geometry change, editing the crop, a
+    new photo or a full-size swap drop it.
+103. **Reads of the held document, and `holdScreen`:** the histograms,
+    Auto tone, the white-balance picker, previews, the Edit view's
+    exports and the parity read set the tile aside and read the held
+    document. On WebGPU those reads answer later, so without a hold the
+    browser would show a frame of the held image between two of the
+    tile's: `holdScreen` keeps the screen's frame while they run (a
+    render composites and keeps the rendered image the statistics read,
+    but draws nothing on screen), and the tile comes back on the next
+    frame after the last of them, unless another starts first. A draw
+    copied out of the canvas (previews, 8-bit exports) lets the hold go
+    for its own render; the canvas, cleared by its resizing, is drawn
+    again as the screen showed it. The Edit view reads the histogram only
+    when no slider is dragged and previews only when settled, so no
+    switch happens during a drag. The pixel readout reads the photo's own
+    pixel under the pointer from the tile, with no switch.
+104. **The source stays open** between detail loads (a RAW file's
+    prepared plane and workers, or the browser's decode), not tied to one
+    load's abort (a pan during a RAW prepare keeps it for the next tile),
+    and is closed a minute after the last load, on a new photo and on
+    dispose. The badge says "Loading full resolution…" for every detail
+    load; the first for a photo is said in the live region too.
+105. **The texture pool was left as it is.** Each switch resizes the
+    document's three textures between the held image's size and the
+    tile's; measured on this Mac's GPU, a histogram read with the
+    detail shown (switch out, a held render, the read) takes 12 to 26 ms
+    against 3 to 8 ms without it, which is no problem to fix.
+
 ### Verified
 
 On this machine's GPU (wgpu on Metal), with the tree of this section's
@@ -1692,11 +1766,47 @@ commits:
   called with the whole document's by every existing export; the final
   blit's no-region branch is its old seed.
 
+**The detail at 100 %**, with the tree of its commits:
+
+- `edit-detail.spec.ts`: the same photo, edit and view (100 % of its own
+  size, panned) shown with `?texture-limit=` (the detail) and without
+  (the whole render), the canvases compared. On this Mac's GPU, on
+  WebGPU and on WebGL: every stage with a crop and an area with its own
+  effects (4000 × 2600 at 3072, a tile of 2188 × 2176 with apron 466),
+  Rotate and Flip (2600 × 1700 at 2048), and a RAF cropped (at 4096) are
+  the same pixels; straightened by 7°, 1465 values differ, by at most 4
+  8-bit steps. On SwiftShader (its WebGPU and WebGL alike): 154 values by
+  at most 2, 180 by 1, 2292 by 1 and 90 by 1. The histogram is the same with the detail shown as
+  without it; a pan inside the kept part loads nothing and one past it
+  shows the held image at once, then a new tile; a tone edit renders on
+  the tile and the details' apron loads a wider one; crop editing and
+  the Edit view's export work on the held image and the detail comes
+  back; a photo that fits never asks for one (`__photonamousDetail`).
+- On this Mac's GPU (4000 × 2600 at 3072, every neighbourhood stage):
+  the first detail load 60 ms on WebGPU and 73 ms on WebGL (the
+  browser's decode at its own size included); a new tile after a pan
+  under 1 ms of script, its pixels on the next frame; a RAW file's first
+  load 555 ms (its prepare included). A switch either way is under 1 ms
+  of script and one render of the other document; a histogram read in
+  detail 12 to 26 ms against 3 to 8 ms; a settle (an edit to the
+  previews) 1.29 to 1.32 s in detail and out of it alike, the previews'
+  own 1.2 s wait most of it.
+- A Leica Q2 on SwiftShader's 8192 (`edit-oversize.spec.ts`): at 100 %
+  the detail loads once the held image is in (660 ms, the DNG's prepare
+  in the workers included), and zooming further in stays inside it.
+- Found while testing, and left as it is: a full-size load that lands
+  after the view was zoomed keeps the zoom but centres the view again
+  (`swapInLayer` refits before it puts the zoom back), for every photo.
+  The spec sets its view after the full size is in.
+
 ### Not done
 
-- **The 100 % view through a tile of the visible area.** The Edit view
-  still shows a photo larger than the GPU reduced; only exports are
-  made at its own size.
+- **RAW detail loads render whole rows.** A band renders every column
+  of its plane rows, so a tile a third of the frame wide renders about
+  three times the pixels it shows; column-limited renders would need
+  each format's band renderer to take a column range.
+- **The detail on other hardware GPUs**, and on a display at another
+  pixel ratio than 1, is unmeasured.
 - **Straighten is not exact in tiles** (decision 88): the affine
   transform reads the window at coordinates computed from other numbers
   than the whole's. Making it exact would need the transform to compute

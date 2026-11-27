@@ -386,6 +386,29 @@ the newer version made.
   The status bar keeps the photo's own size. Straighten keeps the turned
   picture inside the frame when its turned bounds would be larger than
   the GPU's textures, which shows the same.
+- **Zoomed in on such a photo, the part on screen at its own size**
+  (the detail): where the GPU renders in floating point, once the view
+  magnifies the reduced image (more than one screen pixel to each of its
+  pixels, as at 100 %) and has been still for a moment, the Edit view
+  shows the part on screen, and a margin of a quarter of it on each side,
+  from the photo's own pixels: the RAW file's frame or the browser's
+  decode, with every edit, the clipping warning, a mask's red and the
+  sharpening mask view as on the whole. It is what one render of the
+  whole photo would show there (on this Mac's GPU pixel for pixel; a
+  straightened photo within a few steps). The first such load says
+  "Loading full resolution…" in the badge and aloud; later ones, after a
+  pan past the margin, show the badge only, and the reduced image shows
+  meanwhile. Pans and zooms within the margin, and edits that leave the
+  framing, straighten and crop alone, keep it (a drag leaves out the
+  costly stages, as it does on the whole); an edit whose effects reach
+  further than it allows, a new framing or crop, editing the crop or a
+  pan past the margin show the reduced image until a new part loads.
+  The histogram, Auto tone, the white-balance picker, previews and the
+  Edit view's own exports read the whole photo, as before, with the
+  screen kept as it was; the pixel readout reads the photo's own pixel
+  under the pointer. The line under the view bar says the part on screen
+  is shown at its full size when zoomed in. A RAW file is prepared once
+  for it and kept a minute after the last load.
 - **Exporting such a photo at its own size, a part at a time** (tiles):
   where the GPU renders in floating point, an export from the Export
   dialog larger than the reduced image is made at the photo's own size
