@@ -31,6 +31,7 @@ pub mod cmyk;
 pub mod decode;
 pub mod dng;
 pub mod arw;
+pub mod raw;
 pub mod raf;
 pub mod develop_stats;
 pub mod color_mixer;

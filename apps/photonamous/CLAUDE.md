@@ -40,7 +40,7 @@ later, and the glue's declarations are the WebGL build's: import
 which types them for both builds and orders reads as Lopsy's
 `asyncReadback` does (`apps/lopsy-web/src/engine-wasm/readback-order.ts`).
 ESLint refuses them from the glue. A new readback the app uses goes in
-`wasm.ts` and in that ESLint list. The RAF workers load the glue by its
+`wasm.ts` and in that ESLint list. The RAW workers load the glue by its
 `.js` name, past the selector, for the build the page runs.
 
 **Three engines.** The e2e suite runs in Chromium by default, and in

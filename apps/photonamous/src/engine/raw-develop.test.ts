@@ -105,6 +105,28 @@ describe('rawSettingsFor', () => {
     expect(s.baseCurve).toBeNull();
     expect(s.saturation).toBe(1);
   });
+
+  it('is the same with a fixed-matrix white balance as without one, down to the JSON', () => {
+    const fixed = { settingsFor: (t: number, m: number) => ({ wbRatio: wbRatioFor(t, m), camToRgb: null }) };
+    const edit = recipe({ temperature: 35, tint: -12, exposure: 0.4, profile: 'monochrome' });
+    expect(rawSettingsJson(rawSettingsFor(defaults, edit, [], fixed))).toBe(rawSettingsJson(rawSettingsFor(defaults, edit)));
+  });
+
+  it("takes the gains and matrix of a white balance whose matrix follows the white, over the profile's", () => {
+    const matrix = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+    const calls: [number, number][] = [];
+    const perWhite = {
+      settingsFor: (t: number, m: number) => {
+        calls.push([t, m]);
+        return { wbRatio: [0.9, 1, 1.1] as const, camToRgb: matrix };
+      },
+    };
+    const s = rawSettingsFor(defaults, recipe({ temperature: 20, tint: 5, exposure: 0.5 }), [], perWhite);
+    expect(calls).toEqual([[20, 5]]);
+    expect(s.wbRatio).toEqual([0.9, 1, 1.1]);
+    expect(s.camToRgb).toEqual(matrix);
+    expect(s.exposureEv).toBeCloseTo(0.88, 10);
+  });
 });
 
 describe('temperatureTintFor', () => {

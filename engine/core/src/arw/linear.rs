@@ -51,6 +51,17 @@ pub struct ArwRenderParams {
     pub calibration: Option<DngCalibration>,
     /// `Make Model`, for the host to show.
     pub camera_model: String,
+    /// The exposure the develop chain opens with, in stops: matched to the
+    /// camera's embedded preview by the RAW interface's prepare
+    /// (`exposure::match_develop_exposure`), 0 otherwise. Carried here so
+    /// every worker and mode gets the same; the baked decode never reads it.
+    #[serde(default)]
+    pub default_exposure_ev: f32,
+    /// What the renders need to reconstruct clipped channels, measured by
+    /// the RAW interface's prepare (`dng::linear::measure_highlight_chroma`);
+    /// `None` (and not written) otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub highlight_chroma: Option<crate::raf::highlights::ChromaGrid>,
 }
 
 impl ArwRenderParams {
@@ -63,6 +74,10 @@ impl ArwRenderParams {
 impl PlaneParams for ArwRenderParams {
     fn layout(&self) -> PlaneLayout {
         PlaneLayout { width: self.width, height: self.height, kind: DngKind::Bayer, samples_per_pixel: 1, cfa: self.cfa, orientation: self.orientation }
+    }
+
+    fn highlight_chroma(&self) -> Option<&crate::raf::highlights::ChromaGrid> {
+        self.highlight_chroma.as_ref()
     }
 }
 
@@ -105,20 +120,22 @@ pub fn prepare_arw(data: &[u8]) -> Result<ArwPrepared, String> {
         colour: stored.colour,
         calibration: stored.calibration,
         camera_model: stored.camera_model,
+        default_exposure_ev: 0.0,
+        highlight_chroma: None,
     };
     Ok(ArwPrepared { params, plane, unhandled: stored.unhandled, debug_log: stored.debug_log })
 }
 
 /// The develop settings an ARW opens with: the as-shot white balance
-/// (`wbRatio` 1), the file's matrix, no baseline exposure (an ARW records
-/// none), no extra saturation, and the engine's neutral base curve. The
-/// exposure stays 0 here for now: the baked decode matches the camera's
-/// preview (`arw::exposure`), this path does not yet.
+/// (`wbRatio` 1), the file's matrix, `default_exposure_ev` (an ARW records
+/// no baseline exposure: the RAW interface matches it to the camera's
+/// preview, `exposure::match_develop_exposure`; 0 from `prepare_arw` alone),
+/// no extra saturation, and the engine's neutral base curve.
 pub fn develop_defaults(params: &ArwRenderParams) -> RawDevelopSettings {
     RawDevelopSettings {
         wb_ratio: [1.0, 1.0, 1.0],
         cam_to_rgb: params.cam_to_rgb,
-        exposure_ev: 0.0,
+        exposure_ev: params.default_exposure_ev,
         saturation: 1.0,
         highlight_desaturation: true,
         base_curve: Some(base_curves::curve_lut(&base_curves::NEUTRAL).to_vec()),

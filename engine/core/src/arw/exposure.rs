@@ -285,3 +285,55 @@ mod tests {
         assert!(whole_picture_preview(&[], 1.5).is_none());
     }
 }
+
+/// The exposure (stops) at which the develop chain's default rendering of a
+/// prepared ARW has the median brightness of the camera's embedded preview,
+/// or `None` without a usable preview. The rendering is the chain's CPU
+/// references with `develop_defaults` at that exposure: `scene_reference`
+/// (white balance, matrix, exposure into linear Rec. 2020), the scene tone
+/// step with every slider at 0, the tone step (the neutral base curve and
+/// its shoulder) and the SDR output step for sRGB. It is rendered on the
+/// binned view of the plane at the preview's long edge, reduced to the
+/// preview's pixel count (a quarter of it moved the median by 0.011), and
+/// bisected over [`MIN_EV`]..[`MAX_EV`] in 16
+/// steps; the median is the one [`whole_picture_preview`] takes (encoded
+/// Rec. 709 luminance of linear sRGB).
+pub fn match_develop_exposure(data: &[u8], params: &super::linear::ArwRenderParams, plane: &[f32]) -> Option<f32> {
+    use crate::output::{output_reference, OutputSettings, OutputTarget};
+    use crate::raf::develop::{scene_reference, tone_settings};
+    let (ow, oh) = params.oriented_size();
+    let preview = whole_picture_preview(data, f64::from(ow) / f64::from(oh))?;
+    let long = preview.width.max(preview.height);
+    let (bw, bh, binned) = crate::dng::linear::render_binned_linear_for(plane, params, long).ok()?;
+    let rgb: Vec<f32> = binned.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
+    let (sw, sh, small) = downscale(&rgb, bw as usize, bh as usize, (preview.width * preview.height) as usize);
+    let rgba: Vec<f32> = small.chunks_exact(3).flat_map(|c| [c[0], c[1], c[2], 1.0]).collect();
+    let mut settings = super::linear::develop_defaults(params);
+    let sliders = crate::scene_tone::ToneSliders::default();
+    let output = OutputSettings::sdr(OutputTarget::Srgb, Gamut::Rec2020, false);
+    let median_at = |ev: f32, settings: &mut crate::raf::develop::RawDevelopSettings| -> f32 {
+        settings.exposure_ev = ev;
+        let scene = scene_reference(&rgba, settings);
+        let toned = crate::scene_tone::scene_tone_reference(&scene, sw, sh, &sliders, &[], &[]);
+        let rendered = crate::tone::tone_reference(&toned, &tone_settings(settings));
+        let out = output_reference(&rendered, sw as u32, &output);
+        let mut lum: Vec<f32> = out.chunks_exact(4).map(|c| encoded_luma([srgb_decode(c[0]), srgb_decode(c[1]), srgb_decode(c[2])])).collect();
+        median(&mut lum).unwrap_or(0.0)
+    };
+    let (mut lo, mut hi) = (MIN_EV, MAX_EV);
+    if median_at(lo, &mut settings) >= preview.median {
+        return Some(lo);
+    }
+    if median_at(hi, &mut settings) <= preview.median {
+        return Some(hi);
+    }
+    for _ in 0..16 {
+        let mid = (lo + hi) / 2.0;
+        if median_at(mid, &mut settings) < preview.median {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    Some((lo + hi) / 2.0)
+}

@@ -50,9 +50,17 @@
 //! profile's hue and saturation twists), `ProfileToneCurve` (the engine's
 //! neutral base curve is used instead), a `DefaultCrop` that is not whole
 //! pixels or comes with a `DefaultScale` (the whole active area is kept
-//! then), semantic masks, a third calibration,
-//! and highlight reconstruction (clipped channels stay clipped).
-//! [`unhandled_features`] lists the ones a file carries.
+//! then), semantic masks, a third calibration, and highlight
+//! reconstruction on a LinearRaw plane (its clipped channels stay
+//! clipped). [`unhandled_features`] lists the ones a file carries.
+//!
+//! **Highlight reconstruction** of a Bayer plane is RAF's
+//! (`raf::highlights`, with the 2×2 period): the RAW interface's prepare
+//! measures the chroma grid once over the whole plane
+//! ([`measure_highlight_chroma`], into the params' `highlight_chroma`), and
+//! the band and binned renders reconstruct each sample near its clip level
+//! from it, so a band stays bit-identical to the whole frame. `prepare_dng`
+//! alone measures nothing, and the baked decode never reconstructs.
 
 use serde::{Deserialize, Serialize};
 
@@ -61,6 +69,7 @@ use super::tiff::{IfdEntry, TagId};
 use super::{get_rational_array, get_rational_array_either, get_tag_u16, get_tag_u16_vec, get_tag_u32_vec, image_area, read_stored_image, shift_cfa};
 use crate::black_level::BlackLevels;
 use crate::raf::develop::RawDevelopSettings;
+use crate::raf::highlights::ChromaGrid;
 use crate::raf::{base_curves, RafBand, RafBandPixels};
 
 /// What a DNG's samples are.
@@ -103,6 +112,13 @@ pub struct DngRenderParams {
     /// `UniqueCameraModel`, else `Make Model`, for the host to show.
     #[serde(default)]
     pub camera_model: String,
+    /// What the renders need to reconstruct clipped channels of a Bayer
+    /// plane (`raf::highlights`, period 2), measured once over the whole
+    /// plane by the RAW interface's prepare. `None` (and not written) when
+    /// nothing comes near its clip level, for LinearRaw, and from
+    /// `prepare_dng` alone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub highlight_chroma: Option<ChromaGrid>,
 }
 
 impl DngRenderParams {
@@ -455,6 +471,7 @@ pub fn prepare_dng(data: &[u8]) -> Result<DngPrepared, String> {
         clip_levels: Some(gain),
         calibration,
         camera_model,
+        highlight_chroma: None,
     };
     Ok(DngPrepared { params, plane, unhandled, debug_log })
 }
@@ -491,6 +508,11 @@ impl PlaneLayout {
 /// Parameters of a prepared plane the shared renders can draw.
 pub trait PlaneParams {
     fn layout(&self) -> PlaneLayout;
+    /// The chroma a Bayer plane's clipped channels are reconstructed from,
+    /// when it has one.
+    fn highlight_chroma(&self) -> Option<&ChromaGrid> {
+        None
+    }
 }
 
 impl PlaneParams for PlaneLayout {
@@ -510,25 +532,29 @@ impl PlaneParams for DngRenderParams {
             orientation: self.orientation,
         }
     }
-}
 
-/// How far (in rows) a rendered pixel reaches into the plane: one row for
-/// the bilinear demosaic, none for LinearRaw.
-pub fn reach_rows<P: PlaneParams + ?Sized>(params: &P) -> u32 {
-    match params.layout().kind {
-        DngKind::Linear => 0,
-        DngKind::Bayer => 1,
+    fn highlight_chroma(&self) -> Option<&ChromaGrid> {
+        self.highlight_chroma.as_ref()
     }
 }
 
-fn check_band(src: &[f32], params: &PlaneLayout, band: RafBand) -> Result<usize, String> {
+/// How far (in rows) a rendered pixel reaches into the plane: one row for
+/// the bilinear demosaic, and the reconstruction's `REACH_ROWS` more when
+/// clipped channels are reconstructed; none for LinearRaw.
+pub fn reach_rows<P: PlaneParams + ?Sized>(params: &P) -> u32 {
+    match params.layout().kind {
+        DngKind::Linear => 0,
+        DngKind::Bayer => 1 + if params.highlight_chroma().is_some() { crate::raf::highlights::REACH_ROWS } else { 0 },
+    }
+}
+
+fn check_band(src: &[f32], params: &PlaneLayout, band: RafBand, reach: u32) -> Result<usize, String> {
     let phase_ok = params.kind == DngKind::Linear || band.src_y0 % 2 == 0;
     let valid = phase_ok && band.src_y0 <= band.y0 && band.y0 < band.y1 && band.y1 <= band.src_y1 && band.src_y1 <= params.height;
     if !valid {
         return Err(format!("Invalid DNG band {band:?} for a {}-row frame", params.height));
     }
     // A band edge inside the frame needs the demosaic's context rows.
-    let reach = reach_rows(params);
     let context_ok = (band.y0 == band.src_y0 && band.src_y0 == 0 || band.y0 - band.src_y0 >= reach)
         && (band.src_y1 == params.height || band.src_y1 - band.y1 >= reach);
     if !context_ok {
@@ -561,8 +587,9 @@ fn orient_band(rgba: Vec<f32>, params: &PlaneLayout, band: RafBand) -> RafBandPi
 /// to the same rows of a whole-frame render. Bands from
 /// `raf::plan_bands` have enough context for either kind.
 pub fn render_linear_band<P: PlaneParams + ?Sized>(src: &[f32], params: &P, band: RafBand) -> Result<RafBandPixels, String> {
+    let (grid, reach) = (params.highlight_chroma(), reach_rows(params));
     let params = &params.layout();
-    let src_h = check_band(src, params, band)?;
+    let src_h = check_band(src, params, band, reach)?;
     let w = params.width as usize;
     let skip = (band.y0 - band.src_y0) as usize;
     let rows = (band.y1 - band.y0) as usize;
@@ -574,6 +601,10 @@ pub fn render_linear_band<P: PlaneParams + ?Sized>(src: &[f32], params: &P, band
             }
         }
         DngKind::Bayer => {
+            // Clipped channels first, with the chroma at the rows' place in
+            // the frame, as a RAF's are.
+            let reconstructed = grid.and_then(|g| g.reconstruct(src, w, src_h, band.src_y0 as usize, &params.cfa, 2));
+            let src = reconstructed.as_deref().unwrap_or(src);
             let rgb = super::demosaic::bilinear(src, params.width, src_h as u32, &params.cfa);
             for px in rgb[skip * w * 3..(skip + rows) * w * 3].chunks_exact(3) {
                 rgba.extend_from_slice(&[px[0], px[1], px[2], 1.0]);
@@ -609,6 +640,10 @@ pub fn binned_factor_for<P: PlaneParams + ?Sized>(params: &P, min_long_edge: u32
 /// Oriented RGBA f32 in the same units as [`render_linear_band`]. Returns
 /// (width, height, pixels) after orientation.
 pub fn render_binned_linear<P: PlaneParams + ?Sized>(plane: &[f32], params: &P, factor: u32) -> Result<(u32, u32, Vec<f32>), String> {
+    // A sample near its clip level is reconstructed exactly as the band
+    // render reconstructs it, so the two agree.
+    let grid = params.highlight_chroma();
+    let thresholds = grid.map_or([f32::INFINITY; 3], |g| g.thresholds());
     let params = &params.layout();
     let (w, h) = (params.width as usize, params.height as usize);
     if plane.len() != params.row_len() * h {
@@ -649,9 +684,14 @@ pub fn render_binned_linear<P: PlaneParams + ?Sized>(plane: &[f32], params: &P, 
                 DngKind::Bayer => {
                     let line = &plane[row * w..row * w + bw * f];
                     let phase = (row & 1) * 2;
-                    for (sum, block) in sums.iter_mut().zip(line.chunks_exact(f)) {
+                    for (bx, (sum, block)) in sums.iter_mut().zip(line.chunks_exact(f)).enumerate() {
                         for (i, &v) in block.iter().enumerate() {
-                            sum[params.cfa[phase + (i & 1)] as usize] += v;
+                            let c = params.cfa[phase + (i & 1)] as usize;
+                            let v = match grid {
+                                Some(g) if v >= thresholds[c] => g.sample(plane, w, h, bx * f + i, row, 0, &params.cfa, 2),
+                                _ => v,
+                            };
+                            sum[c] += v;
                         }
                     }
                 }
@@ -750,6 +790,7 @@ mod tests {
             clip_levels: Some(gain),
             calibration: cal,
             camera_model: "Test".into(),
+            highlight_chroma: None,
         }
     }
 
@@ -850,4 +891,15 @@ mod tests {
         assert!((wb.kelvin - 3200.0).abs() < 1.0);
         assert!(white_balance_for_temperature(&p, f32::NAN, 0.0).is_err());
     }
+}
+
+/// Measure, once over a whole prepared Bayer plane, the chroma its clipped
+/// channels are reconstructed from (`raf::highlights::ChromaGrid`, period
+/// 2), with each channel clipping at `clip`. `None` for LinearRaw, without
+/// clip levels, or when nothing comes near its clip level.
+pub fn measure_highlight_chroma(plane: &[f32], layout: &PlaneLayout, clip: Option<[f32; 3]>) -> Option<ChromaGrid> {
+    if layout.kind != DngKind::Bayer {
+        return None;
+    }
+    ChromaGrid::measure(plane, layout.width as usize, layout.height as usize, &layout.cfa, 2, clip?)
 }

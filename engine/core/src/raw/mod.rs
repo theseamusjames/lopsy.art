@@ -1,0 +1,345 @@
+//! One RAW interface over every format the develop chain takes: RAF, DNG
+//! and Sony ARW. A host asks for a file's format ([`sniff`]), prepares it
+//! once ([`prepare`]: the plane, the parameters as the format's own JSON,
+//! and a [`RawDescription`] of everything the app needs to show and develop
+//! it), then renders bands and the binned first view through functions that
+//! take the format and its parameters string ([`render_linear_band`],
+//! [`render_binned_linear`], [`plan_bands`], [`render_finished_band`]).
+//!
+//! Each format implements [`RawFormat`] by delegating to its own decoder and
+//! nothing else (`raf.rs`, `dng.rs`, `arw.rs`): RAF's parameters are exactly
+//! the string `rafPrepare` writes, and its renders exactly `raf::develop`'s.
+//! The parameters travel as the format's own JSON, with the format named
+//! beside them, rather than as one tagged enum, so no format's floats are
+//! parsed twice on their way to a worker.
+//!
+//! **White balance** stays in the recipe's relative units for every format
+//! (`white_balance`); what differs is the model the description reports:
+//! the matrix is fixed (RAF, an ARW without measured colour) or follows the
+//! white (DNG, a measured ARW), and Kelvin is fitted (RAF), measured (DNG,
+//! measured ARW) or absent.
+//!
+//! **A fourth format** brings a decoder under `core/src/<fmt>/`, an `impl
+//! RawFormat`, one [`RawFormatId`] variant, one [`sniff`] arm and the arms of
+//! the `dispatch!` matches below (the compiler lists every one).
+
+pub mod arw;
+pub mod dng;
+pub mod raf;
+pub mod white_balance;
+
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+
+use crate::raf::develop::{DevelopProfile, ProfileSettings, RawDevelopSettings};
+use crate::raf::wb_presets::RecipeWbPreset;
+use crate::raf::{RafBand, RafBandPixels};
+
+/// The formats the RAW interface knows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RawFormatId {
+    Raf,
+    Dng,
+    Arw,
+}
+
+impl RawFormatId {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            RawFormatId::Raf => "raf",
+            RawFormatId::Dng => "dng",
+            RawFormatId::Arw => "arw",
+        }
+    }
+
+    pub fn parse(s: &str) -> Result<Self, String> {
+        match s {
+            "raf" => Ok(RawFormatId::Raf),
+            "dng" => Ok(RawFormatId::Dng),
+            "arw" => Ok(RawFormatId::Arw),
+            other => Err(format!("'{other}' is not a RAW format this engine reads")),
+        }
+    }
+}
+
+/// The format of a file, from its header only: a RAF by its magic, a DNG by
+/// a TIFF IFD0 with `DNGVersion`, a Sony raw by `arw::is_sony_raw` (which
+/// includes Sony's older SR2 and SRF; preparing them says they are not
+/// supported). `None` for anything else.
+pub fn sniff(data: &[u8]) -> Option<RawFormatId> {
+    if data.starts_with(b"FUJIFILMCCD-RAW") {
+        return Some(RawFormatId::Raf);
+    }
+    let reader = crate::dng::tiff::TiffReader::new(data).ok()?;
+    let ifd0 = reader.read_ifd(0).ok()?;
+    if ifd0.iter().any(|e| e.tag == 0xC612) {
+        return Some(RawFormatId::Dng);
+    }
+    crate::arw::is_sony_raw(data).then_some(RawFormatId::Arw)
+}
+
+/// A prepared file: its parameters, its plane (the RAF mosaic, the DNG or
+/// ARW prepared plane), and what the decode noticed.
+pub struct RawPlane<P> {
+    pub params: P,
+    pub plane: Vec<f32>,
+    pub not_applied: Vec<String>,
+    pub debug_log: Vec<String>,
+}
+
+/// How the matrix of the RAW step relates to the white balance.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MatrixModel {
+    /// One matrix whatever the white (the profile's `camToRgb`).
+    Fixed,
+    /// The matrix follows the white: ask `white_for_recipe` for it.
+    PerWhite,
+}
+
+/// Where Kelvin comes from, if anywhere.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum KelvinModel {
+    /// A line fitted to the body's presets (RAF):
+    /// `kelvin = 1e6 / (miredAtZero + miredPerUnit · temperature)`.
+    Fitted { mired_at_zero: f32, mired_per_unit: f32, as_shot_kelvin: f32 },
+    /// From the file's calibration (DNG, measured ARW): the correlated
+    /// colour temperature of each white, through `white_for_recipe`.
+    Measured { as_shot_kelvin: f32, as_shot_tint: f32 },
+    /// No Kelvin: Temperature shows the recipe's relative numbers.
+    None,
+}
+
+/// Where the white-balance presets come from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PresetSource {
+    /// The body's own presets (RAF).
+    Camera,
+    /// CIE standard illuminants, through the file's calibration.
+    Illuminants,
+    None,
+}
+
+/// A format's white-balance model for the app.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WhiteBalanceModel {
+    pub matrix: MatrixModel,
+    pub kelvin: KelvinModel,
+    pub preset_source: PresetSource,
+    /// In the recipe's units, in menu order, as `rafWhiteBalancePresets`.
+    pub presets: Vec<RecipeWbPreset>,
+}
+
+/// Everything the app needs to show and develop a prepared file.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RawDescription {
+    pub format: RawFormatId,
+    /// The final (oriented) size: the size of the developed picture, and of
+    /// the baked decode.
+    pub width: u32,
+    pub height: u32,
+    /// The plane's size, before orientation; a plane row is
+    /// `plane_width · samples_per_pixel` values.
+    pub plane_width: u32,
+    pub plane_height: u32,
+    pub samples_per_pixel: u32,
+    pub clip_levels: Option<[f32; 3]>,
+    pub camera_model: String,
+    /// A sentence to show under the Profile control, when there is one.
+    pub color_note: Option<String>,
+    pub not_applied: Vec<String>,
+    /// `setRawDevelop`'s settings to open with.
+    pub develop_defaults: RawDevelopSettings,
+    /// The Profile control's entries (`id`, `name`, `settings`).
+    pub profiles: Vec<DevelopProfile>,
+    pub white_balance: WhiteBalanceModel,
+    /// Whether `render_finished_band` renders the finished look (RAF's
+    /// legacy path); for the others the host uses the baked decode.
+    pub finished_bands: bool,
+}
+
+/// The RAW step's white balance for recipe values (see `white_balance`).
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RawWhite {
+    pub wb_ratio: [f32; 3],
+    /// `None`: the matrix is fixed (the profile's `camToRgb`).
+    pub cam_to_rgb: Option<[f32; 9]>,
+    pub kelvin: Option<f32>,
+    /// `cct::TINT_PER_DUV` × Duv, for display only.
+    pub tint: Option<f32>,
+}
+
+/// One format on the RAW interface.
+pub trait RawFormat {
+    const ID: RawFormatId;
+    type Params: Serialize + DeserializeOwned;
+
+    fn prepare(data: &[u8]) -> Result<RawPlane<Self::Params>, String>;
+    /// Needs the bytes: RAF's presets and Kelvin scale come from its
+    /// makernote.
+    fn describe(data: &[u8], prep: &RawPlane<Self::Params>) -> Result<RawDescription, String>;
+    /// The plane's height, which bands are planned over.
+    fn plane_height(p: &Self::Params) -> u32;
+    fn plan_bands(p: &Self::Params, max_bands: u32) -> Vec<RafBand> {
+        crate::raf::plan_bands(Self::plane_height(p), max_bands)
+    }
+    fn render_linear_band(src: &[f32], p: &Self::Params, band: RafBand) -> Result<RafBandPixels, String>;
+    fn render_binned_linear(plane: &[f32], p: &Self::Params, min_long_edge: u32) -> Result<(u32, u32, Vec<f32>), String>;
+    /// The finished look of a band, for formats that have one (RAF).
+    fn render_finished_band(_src: &[f32], _p: &Self::Params, _band: RafBand) -> Option<Result<RafBandPixels, String>> {
+        None
+    }
+    /// The RAW step's white balance for the recipe's temperature and tint.
+    fn white_for_recipe(p: &Self::Params, temperature: f32, tint: f32) -> Result<RawWhite, String>;
+    /// The recipe temperature whose white reads `kelvin`, holding the
+    /// recipe's `tint`.
+    fn temperature_for_kelvin(p: &Self::Params, kelvin: f32, tint: f32) -> Result<f32, String>;
+}
+
+/// The Camera look and Monochrome for a format without film looks: the
+/// develop defaults as they are, and the same with no colour.
+pub(crate) fn camera_and_monochrome(defaults: &RawDevelopSettings) -> Vec<DevelopProfile> {
+    let settings = |saturation: f32| ProfileSettings {
+        cam_to_rgb: defaults.cam_to_rgb,
+        exposure_ev: defaults.exposure_ev,
+        saturation,
+        highlight_desaturation: defaults.highlight_desaturation,
+        base_curve: defaults.base_curve.clone(),
+    };
+    vec![
+        DevelopProfile { id: "camera".into(), name: "Standard".into(), settings: settings(defaults.saturation) },
+        DevelopProfile { id: "monochrome".into(), name: "Monochrome".into(), settings: settings(0.0) },
+    ]
+}
+
+fn params_from<P: DeserializeOwned>(format: RawFormatId, json: &str) -> Result<P, String> {
+    serde_json::from_str(json).map_err(|e| format!("{} params: {e}", format.as_str().to_uppercase()))
+}
+
+/// Run `$body` with `$F` the format's type.
+macro_rules! dispatch {
+    ($format:expr, $F:ident => $body:expr) => {
+        match $format {
+            RawFormatId::Raf => {
+                type $F = raf::Raf;
+                $body
+            }
+            RawFormatId::Dng => {
+                type $F = dng::Dng;
+                $body
+            }
+            RawFormatId::Arw => {
+                type $F = arw::Arw;
+                $body
+            }
+        }
+    };
+}
+
+/// A prepared file of any format.
+pub enum Prepared {
+    Raf(RawPlane<<raf::Raf as RawFormat>::Params>),
+    Dng(RawPlane<<dng::Dng as RawFormat>::Params>),
+    Arw(RawPlane<<arw::Arw as RawFormat>::Params>),
+}
+
+/// What [`prepare`] gives: the file prepared, its description and its
+/// parameters as the format's own JSON.
+pub struct PreparedRaw {
+    pub format: RawFormatId,
+    pub description: RawDescription,
+    pub params_json: String,
+    pub prepared: Prepared,
+}
+
+impl PreparedRaw {
+    pub fn plane(&self) -> &[f32] {
+        match &self.prepared {
+            Prepared::Raf(p) => &p.plane,
+            Prepared::Dng(p) => &p.plane,
+            Prepared::Arw(p) => &p.plane,
+        }
+    }
+
+    pub fn take_plane(&mut self) -> Vec<f32> {
+        match &mut self.prepared {
+            Prepared::Raf(p) => std::mem::take(&mut p.plane),
+            Prepared::Dng(p) => std::mem::take(&mut p.plane),
+            Prepared::Arw(p) => std::mem::take(&mut p.plane),
+        }
+    }
+
+    pub fn debug_log(&self) -> &[String] {
+        match &self.prepared {
+            Prepared::Raf(p) => &p.debug_log,
+            Prepared::Dng(p) => &p.debug_log,
+            Prepared::Arw(p) => &p.debug_log,
+        }
+    }
+
+    /// The binned first view of the plane this still holds.
+    pub fn binned_linear(&self, min_long_edge: u32) -> Result<(u32, u32, Vec<f32>), String> {
+        match &self.prepared {
+            Prepared::Raf(p) => raf::Raf::render_binned_linear(&p.plane, &p.params, min_long_edge),
+            Prepared::Dng(p) => dng::Dng::render_binned_linear(&p.plane, &p.params, min_long_edge),
+            Prepared::Arw(p) => arw::Arw::render_binned_linear(&p.plane, &p.params, min_long_edge),
+        }
+    }
+}
+
+fn finish<F: RawFormat>(data: &[u8], prep: RawPlane<F::Params>, wrap: fn(RawPlane<F::Params>) -> Prepared) -> Result<PreparedRaw, String> {
+    let description = F::describe(data, &prep)?;
+    let params_json = serde_json::to_string(&prep.params).map_err(|e| format!("JSON serialize: {e}"))?;
+    Ok(PreparedRaw { format: F::ID, description, params_json, prepared: wrap(prep) })
+}
+
+/// Prepare a file of any format the interface knows. An error is a
+/// sentence; a DNG's starts "DNG cannot open as RAW:" (the host then uses
+/// the baked decode).
+pub fn prepare(data: &[u8]) -> Result<PreparedRaw, String> {
+    match sniff(data).ok_or("This file is not a RAW format this app reads")? {
+        RawFormatId::Raf => finish::<raf::Raf>(data, raf::Raf::prepare(data)?, Prepared::Raf),
+        RawFormatId::Dng => finish::<dng::Dng>(data, dng::Dng::prepare(data)?, Prepared::Dng),
+        RawFormatId::Arw => finish::<arw::Arw>(data, arw::Arw::prepare(data)?, Prepared::Arw),
+    }
+}
+
+/// Bands for the plane of a prepared file.
+pub fn plan_bands(format: RawFormatId, params_json: &str, max_bands: u32) -> Result<Vec<RafBand>, String> {
+    dispatch!(format, F => Ok(F::plan_bands(&params_from::<<F as RawFormat>::Params>(format, params_json)?, max_bands)))
+}
+
+/// Render plane rows `[band.src_y0, band.src_y1)` (`src`) to linear camera
+/// RGB: oriented RGBA f32, bit-identical to the same rows of the whole frame.
+pub fn render_linear_band(format: RawFormatId, src: &[f32], params_json: &str, band: RafBand) -> Result<RafBandPixels, String> {
+    dispatch!(format, F => F::render_linear_band(src, &params_from::<<F as RawFormat>::Params>(format, params_json)?, band))
+}
+
+/// The binned first view of a whole plane.
+pub fn render_binned_linear(format: RawFormatId, plane: &[f32], params_json: &str, min_long_edge: u32) -> Result<(u32, u32, Vec<f32>), String> {
+    dispatch!(format, F => F::render_binned_linear(plane, &params_from::<<F as RawFormat>::Params>(format, params_json)?, min_long_edge))
+}
+
+/// The finished look of a band (RAF); an error for a format without one.
+pub fn render_finished_band(format: RawFormatId, src: &[f32], params_json: &str, band: RafBand) -> Result<RafBandPixels, String> {
+    dispatch!(format, F => {
+        let p = params_from::<<F as RawFormat>::Params>(format, params_json)?;
+        F::render_finished_band(src, &p, band).unwrap_or_else(|| Err(format!("{} has no finished bands: use the baked decode", format.as_str().to_uppercase())))
+    })
+}
+
+/// The RAW step's white balance for the recipe's temperature and tint.
+pub fn white_for_recipe(format: RawFormatId, params_json: &str, temperature: f32, tint: f32) -> Result<RawWhite, String> {
+    dispatch!(format, F => F::white_for_recipe(&params_from::<<F as RawFormat>::Params>(format, params_json)?, temperature, tint))
+}
+
+/// The recipe temperature whose white reads `kelvin` at the recipe's tint.
+pub fn temperature_for_kelvin(format: RawFormatId, params_json: &str, kelvin: f32, tint: f32) -> Result<f32, String> {
+    dispatch!(format, F => F::temperature_for_kelvin(&params_from::<<F as RawFormat>::Params>(format, params_json)?, kelvin, tint))
+}

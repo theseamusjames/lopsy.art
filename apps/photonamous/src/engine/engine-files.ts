@@ -1,6 +1,6 @@
 /**
  * The engine's wasm file for each build, as the bundler names them. The
- * RAF workers instantiate the one the page runs, and the service worker is
+ * RAW workers instantiate the one the page runs, and the service worker is
  * asked to keep that one for offline use (sw/register.ts): a visitor
  * downloads one build, not both.
  */

@@ -352,12 +352,15 @@ Nothing in the app changes such a version meanwhile: a preset, pasted
 edits or Reset from the grid passes it by, and its previews stay the ones
 the newer version made.
 
-- **Loading and working size.** RAF decodes on a pool of workers into the
-  engine's RAW develop stage; DNG and Sony ARW through the engine's
-  decoders; 16-bit PNG
-  at full depth; JPEG and WebP through the browser. Editing starts on a
-  *working image* sized to the view (at most 4096 px on its long edge),
-  so a large photo is editable quickly (DNG and ARW load at full size); zooming
+- **Loading and working size.** RAF, DNG and Sony ARW decode on a pool of
+  workers into the engine's RAW develop stage. A DNG the RAW path cannot
+  read (a lossy one), and DNG and ARW on a GPU without float targets,
+  open as the engine's finished picture and are edited as an ordinary
+  photo; when that cannot be read either, the Edit view says why. 16-bit
+  PNG at full depth; JPEG and WebP through the browser. Editing starts on
+  a *working image* sized to the view (at most 4096 px on its long edge;
+  a RAW file binned by a whole factor, so one less than twice that size
+  opens at full size), so a large photo is editable quickly; zooming
   to 50 % or closer loads the full resolution ("Loading full
   resolution…"), and Edit in Lopsy and Done always render from it. While it loads, the version's stored preview shows
   with "Loading…".
@@ -432,9 +435,9 @@ the newer version made.
 - **Profile**: for RAW, the camera's look first ("Camera (Velvia look)",
   not listed a second time), then the engine's film looks with Provia
   shown as "Standard (Provia look)" (or "Camera (Provia look, Standard)"
-  when the camera shot Provia), Neutral and Monochrome; for other photos,
-  Standard and Monochrome. A Sony ARW opens as other photos do (Standard
-  and Monochrome). Eleven Sony bodies have colour computed from measured
+  when the camera shot Provia), Neutral and Monochrome; for a DNG or a
+  Sony ARW, Standard, Monochrome and Neutral; for other photos, Standard
+  and Monochrome. Eleven Sony bodies have colour computed from measured
   sensor data (RX100 IV, A6400, A7C II, A7 III, A7 IV, A7R II, A7R III,
   A7R IV, A7S II, A7S III, A9). For any other body the colour is only
   approximate (the file carries part of the camera's colour, so it is
@@ -444,16 +447,24 @@ the newer version made.
 - **Straighten**: Angle, and **Level** (draw along something that should
   be level). The crop shrinks to the largest rectangle inside.
 - **White balance**: under its heading, a **Mode** menu (As shot; Auto,
-  on RAW files; the RAW file's presets — Daylight, Cloudy, Shade,
-  Tungsten, the fluorescents, Flash, Underwater, as the body has them
-  (one whose values are those of another, as Underwater is of Daylight on
-  many bodies, is listed once);
+  on RAW files; the RAW file's presets — on a RAF, Daylight, Cloudy,
+  Shade, Tungsten, the fluorescents, Flash, Underwater, as the body has
+  them (one whose values are those of another, as Underwater is of
+  Daylight on many bodies, is listed once); on a DNG or a Sony ARW with
+  measured colour, the standard illuminants Daylight, Cloudy, Shade and
+  Tungsten through the file's own calibration; none on an ARW without);
   and Custom, which the sliders set) and a **picker** (the pipette):
   while it is armed, "Click something neutral · Esc to cancel" shows on
   the photo, and a click sets Temperature and Tint to neutralise that
-  spot. Then Temperature and Tint. On RAW files the Temperature readout
-  shows Kelvin and takes typed Kelvin (clamped to 2000–50000 K; text
-  that is not a number puts the readout back), and the group waits,
+  spot. Then Temperature and Tint. On RAW files with Kelvin (RAF, DNG,
+  an ARW with measured colour) the Temperature readout shows Kelvin and
+  takes typed Kelvin (clamped to 2000–50000 K, then to what the slider
+  reaches, with the readout showing the Kelvin reached; text that is not
+  a number puts the readout back): a RAF's from a scale fitted to the
+  body's presets, a DNG's or ARW's measured, the colour temperature of
+  the white both sliders make, exactly the file's as-shot Kelvin at As
+  shot. On an ARW without measured colour Temperature is relative. On
+  every RAW file the group waits,
   "Reading the camera's white balance…", until the photo is read. On
   other photos the sliders are relative. Each choice, pick or slider
   release is one history step ("White balance: Daylight", "White

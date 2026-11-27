@@ -33,7 +33,10 @@ engine/
       dng/            # DNG decode: the baked import (mod.rs), linear camera RGB (linear.rs),
                       # and camera colour by the DNG specification's method (camera_color.rs)
       arw/            # Sony ARW decode (lossy, uncompressed, lossless; the SR2 block) onto
-                      # the DNG decode's plane, renders and baked finish; colour is approximate
+                      # the DNG decode's plane, renders and baked finish; measured colour for
+                      # the bodies with data, Sony's matrix (approximate) otherwise
+      raw/            # One RAW interface over raf/, dng/ and arw/: sniff, prepare and describe,
+                      # bands, binned view, white balance in recipe units (the raw… exports)
       tone.rs         # The develop tone step (scene to rendered) and its curve's shoulder
       scene_tone.rs   # Tone on scene data: the tone sliders and masks, a monotone map in stops
       look.rs         # Colour in OkLab, colour grading and curves on rendered linear data
