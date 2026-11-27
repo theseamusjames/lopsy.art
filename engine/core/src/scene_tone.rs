@@ -331,11 +331,26 @@ pub fn tone_pixel(c: [f32; 3], ev: f32, t: f32, tint: f32, tone: [f32; 5]) -> [f
 /// Steps 1 to 3 over straight-alpha RGBA f32 (`w`×`h`, scene linear
 /// Rec. 2020), alpha untouched, nothing clamped.
 pub fn scene_tone_reference(rgba: &[f32], w: usize, h: usize, sliders: &ToneSliders, areas: &[Area], area_tone: &[AreaTone]) -> Vec<f32> {
+    scene_tone_reference_at(rgba, w, h, sliders, areas, area_tone, None)
+}
+
+/// `scene_tone_reference` for a document that is `region` of a larger
+/// picture: the masks at each pixel's place in the whole (`tile::whole_point`).
+pub fn scene_tone_reference_at(
+    rgba: &[f32],
+    w: usize,
+    h: usize,
+    sliders: &ToneSliders,
+    areas: &[Area],
+    area_tone: &[AreaTone],
+    region: Option<crate::tile::Region>,
+) -> Vec<f32> {
     let mut out = rgba.to_vec();
     for y in 0..h {
         for x in 0..w {
             let i = (y * w + x) * 4;
-            let (ev, t, tint, tone) = blended(sliders, areas, area_tone, x as f32 + 0.5, y as f32 + 0.5);
+            let (px, py) = crate::tile::whole_point(region, x, y);
+            let (ev, t, tint, tone) = blended(sliders, areas, area_tone, px, py);
             let c = tone_pixel([out[i], out[i + 1], out[i + 2]], ev, t, tint, tone);
             out[i..i + 3].copy_from_slice(&c);
         }

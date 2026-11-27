@@ -329,6 +329,12 @@ pub struct LookInputs<'a> {
 /// The look pass over straight-alpha RGBA f32 (`w`×`h`, rendered linear
 /// Rec. 2020), alpha untouched, nothing clamped.
 pub fn look_reference(rgba: &[f32], w: usize, h: usize, inputs: &LookInputs) -> Vec<f32> {
+    look_reference_at(rgba, w, h, inputs, None)
+}
+
+/// `look_reference` for a document that is `region` of a larger picture:
+/// the masks at each pixel's place in the whole (`tile::whole_point`).
+pub fn look_reference_at(rgba: &[f32], w: usize, h: usize, inputs: &LookInputs, region: Option<crate::tile::Region>) -> Vec<f32> {
     let m = oklab_matrices();
     let s = &inputs.settings;
     let mut out = rgba.to_vec();
@@ -337,7 +343,8 @@ pub fn look_reference(rgba: &[f32], w: usize, h: usize, inputs: &LookInputs) -> 
             let i = (y * w + x) * 4;
             let (mut sat, mut vib) = (s.saturation, s.vibrance);
             for (k, a) in inputs.areas.iter().enumerate() {
-                let mk = areas::mask(a, x as f32 + 0.5, y as f32 + 0.5);
+                let (px, py) = crate::tile::whole_point(region, x, y);
+                let mk = areas::mask(a, px, py);
                 if mk > 0.0 {
                     sat += mk * a.saturation;
                     vib += mk * inputs.area_vibrance.get(k).copied().unwrap_or(0.0);

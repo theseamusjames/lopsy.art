@@ -187,6 +187,12 @@ pub fn haze_draws(s: &LocalContrastSettings) -> bool {
     s.haze != 0.0
 }
 
+/// How far haze reaches: its veil's blur (`detail::blur_reach`); the
+/// statistics and the pass itself read only the pixel.
+pub fn haze_reach(s: &LocalContrastSettings) -> u32 {
+    crate::detail::blur_reach(HAZE_SIGMA * s.pixel_scale)
+}
+
 /// `c − v · (1 − e^(−c / v))`: `v` taken from `c` without going below 0;
 /// `c` where it or `v` is not above 0.
 pub fn remove_veil(c: f32, v: f32) -> f32 {

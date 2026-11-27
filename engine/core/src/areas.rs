@@ -230,13 +230,20 @@ pub fn adjust(rgb: [f32; 3], a: &Area, m: f32) -> [f32; 3] {
 
 /// Every area over straight-alpha RGBA f32 (`w`×`h`, encoded), alpha untouched.
 pub fn areas_reference(rgba: &[f32], w: usize, h: usize, areas: &[Area]) -> Vec<f32> {
+    areas_reference_at(rgba, w, h, areas, None)
+}
+
+/// `areas_reference` for a document that is `region` of a larger picture:
+/// the masks at each pixel's place in the whole (`tile::whole_point`).
+pub fn areas_reference_at(rgba: &[f32], w: usize, h: usize, areas: &[Area], region: Option<crate::tile::Region>) -> Vec<f32> {
     let mut out = rgba.to_vec();
     for y in 0..h {
         for x in 0..w {
             let i = (y * w + x) * 4;
             let mut c = [out[i], out[i + 1], out[i + 2]];
+            let (px, py) = crate::tile::whole_point(region, x, y);
             for a in areas {
-                c = adjust(c, a, mask(a, x as f32 + 0.5, y as f32 + 0.5));
+                c = adjust(c, a, mask(a, px, py));
             }
             out[i..i + 3].copy_from_slice(&c);
         }
@@ -248,11 +255,25 @@ pub fn areas_reference(rgba: &[f32], w: usize, h: usize, areas: &[Area]) -> Vec<
 /// adjustments applied to all of it) over `rgba` with the area's mask as
 /// its opacity. Both are straight-alpha RGBA f32, `w`×`h`; alpha is `rgba`'s.
 pub fn area_layer_reference(rgba: &[f32], adjusted: &[f32], w: usize, h: usize, area: &Area) -> Vec<f32> {
+    area_layer_reference_at(rgba, adjusted, w, h, area, None)
+}
+
+/// `area_layer_reference` for a document that is `region` of a larger
+/// picture: the mask at each pixel's place in the whole.
+pub fn area_layer_reference_at(
+    rgba: &[f32],
+    adjusted: &[f32],
+    w: usize,
+    h: usize,
+    area: &Area,
+    region: Option<crate::tile::Region>,
+) -> Vec<f32> {
     let mut out = rgba.to_vec();
     for y in 0..h {
         for x in 0..w {
             let i = (y * w + x) * 4;
-            let m = mask(area, x as f32 + 0.5, y as f32 + 0.5);
+            let (px, py) = crate::tile::whole_point(region, x, y);
+            let m = mask(area, px, py);
             for c in 0..3 {
                 out[i + c] += m * (adjusted[i + c] - out[i + c]);
             }

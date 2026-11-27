@@ -350,10 +350,17 @@ pub fn dither_at(x: u32, y: u32, dither: f32) -> f32 {
 /// of rendered linear Rec. 2020: encoded values for the target, alpha
 /// untouched.
 pub fn output_reference(rgba: &[f32], width: u32, s: &OutputSettings) -> Vec<f32> {
+    output_reference_at(rgba, width, s, None)
+}
+
+/// `output_reference` for a document that is `region` of a larger
+/// picture: the dither of each pixel's place in the whole.
+pub fn output_reference_at(rgba: &[f32], width: u32, s: &OutputSettings, region: Option<crate::tile::Region>) -> Vec<f32> {
+    let (ox, oy) = region.map_or((0, 0), |r| (r.x, r.y));
     let mut out = Vec::with_capacity(rgba.len());
     for (i, px) in rgba.chunks_exact(4).enumerate() {
         let e = output_rgb([px[0], px[1], px[2]], s);
-        let n = if s.dither > 0.0 { dither_at(i as u32 % width, i as u32 / width, s.dither) } else { 0.0 };
+        let n = if s.dither > 0.0 { dither_at(ox + i as u32 % width, oy + i as u32 / width, s.dither) } else { 0.0 };
         out.extend_from_slice(&[e[0] + n, e[1] + n, e[2] + n, px[3]]);
     }
     out
