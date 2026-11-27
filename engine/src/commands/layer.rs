@@ -29,6 +29,15 @@ pub fn add_layer(engine: &mut EngineInner, layer_desc_json: &str) -> Result<(), 
     layer_manager::add_layer(&mut *engine, desc)
 }
 
+/// The largest width and height of a texture this engine's GPU accepts:
+/// what a layer, the document and every texture of the develop chain may
+/// be at most. On wgpu the adapter's limit (the device is asked for it);
+/// on WebGL `MAX_TEXTURE_SIZE`, or `u32::MAX` where the context does not
+/// say.
+pub fn max_texture_size(engine: &EngineInner) -> u32 {
+    engine.texture_pool.max_size()
+}
+
 pub fn remove_layer(engine: &mut EngineInner, layer_id: &str) {
     layer_manager::remove_layer(&mut *engine, layer_id);
 }
@@ -138,24 +147,7 @@ pub fn decode_and_upload_dng(
         crate::host::log(crate::host::LogLevel::Info, line);
     }
 
-    #[derive(serde::Serialize)]
-    #[serde(rename_all = "camelCase")]
-    struct DngMeta {
-        width: u32,
-        height: u32,
-        baseline_exposure: f64,
-        tone_curve: Vec<[f64; 2]>,
-    }
-
-    let meta = DngMeta {
-        width: dng.width,
-        height: dng.height,
-        baseline_exposure: dng.baseline_exposure,
-        tone_curve: dng.tone_curve.iter().map(|&(x, y)| [x, y]).collect(),
-    };
-
-    serde_json::to_string(&meta)
-        .map_err(|e| format!("JSON serialize: {e}"))
+    dng_meta_json(&dng)
 }
 
 /// Decode a Sony ARW and upload it to a layer texture as f32 RGBA, as
@@ -183,6 +175,34 @@ pub fn decode_and_upload_arw(
         crate::host::log(crate::host::LogLevel::Info, line);
     }
 
+    arw_meta_json(&arw)
+}
+
+/// `decode_and_upload_dng`'s JSON for a decoded DNG.
+fn dng_meta_json(dng: &lopsy_core::dng::DngImage) -> Result<String, String> {
+    #[derive(serde::Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct DngMeta {
+        width: u32,
+        height: u32,
+        baseline_exposure: f64,
+        tone_curve: Vec<[f64; 2]>,
+    }
+
+    let meta = DngMeta {
+        width: dng.width,
+        height: dng.height,
+        baseline_exposure: dng.baseline_exposure,
+        tone_curve: dng.tone_curve.iter().map(|&(x, y)| [x, y]).collect(),
+    };
+
+    serde_json::to_string(&meta)
+        .map_err(|e| format!("JSON serialize: {e}"))
+}
+
+/// `decode_and_upload_arw`'s JSON for a decoded ARW.
+fn arw_meta_json(arw: &lopsy_core::arw::ArwImage) -> Result<String, String> {
+    let img = &arw.image;
     #[derive(serde::Serialize)]
     #[serde(rename_all = "camelCase")]
     struct ArwMeta<'a> {
@@ -218,26 +238,102 @@ pub fn decode_and_upload_arw(
 /// `raf::read_raf`. Returns that decode's JSON with `format` added (a RAF's
 /// is `{ format, width, height }`). For the hosts' legacy path and for DNG
 /// versions edited before DNG took the RAW develop path.
+///
+/// A picture wider or taller than an editable layer may be (the GPU's
+/// largest texture, [`max_texture_size`], less [`TRANSFORM_BORDER`]) is
+/// reduced by area to the largest size that is, aspect kept
+/// (`lopsy_core::area_resample`), and uploaded band by band; `width` and
+/// `height` are then the layer's size, and `fullWidth` and `fullHeight`
+/// (only then present) the picture's own. A picture that fits is uploaded
+/// as it always was.
 pub fn decode_and_upload_raw_baked(engine: &mut EngineInner, layer_id: &str, data: &[u8]) -> Result<String, String> {
     use lopsy_core::raw::RawFormatId;
     let format = lopsy_core::raw::sniff(data).ok_or("This file is not a RAW format this app reads")?;
-    let json = match format {
-        RawFormatId::Dng => decode_and_upload_dng(engine, layer_id, data)?,
-        RawFormatId::Arw => decode_and_upload_arw(engine, layer_id, data)?,
-        RawFormatId::Raf => {
-            let img = lopsy_core::raf::read_raf(data).map_err(|e| format!("RAF decode failed: {e}"))?;
-            layer_manager::upload_pixels_f32(&mut *engine, layer_id, &img.pixels, img.width, img.height)?;
+    let max = engine.texture_pool.max_size().saturating_sub(TRANSFORM_BORDER).max(1);
+    let (json, full) = match format {
+        RawFormatId::Dng => {
+            let dng = lopsy_core::dng::read_dng(data).map_err(|e| format!("DNG decode failed: {e}"))?;
+            let full = (dng.width, dng.height);
+            let reduced = full.0 > max || full.1 > max;
+            if reduced {
+                upload_reduced_f32(engine, layer_id, &dng.pixels, full, max)?;
+            } else {
+                layer_manager::upload_pixels_f32(&mut *engine, layer_id, &dng.pixels, dng.width, dng.height)?;
+            }
+            for line in &dng.debug_log {
+                crate::host::log(crate::host::LogLevel::Info, line);
+            }
+            (dng_meta_json(&dng)?, reduced.then_some(full))
+        }
+        RawFormatId::Arw => {
+            let arw = lopsy_core::arw::read_arw(data)?;
+            let img = &arw.image;
+            let full = (img.width, img.height);
+            let reduced = full.0 > max || full.1 > max;
+            if reduced {
+                upload_reduced_f32(engine, layer_id, &img.pixels, full, max)?;
+            } else {
+                layer_manager::upload_pixels_f32(&mut *engine, layer_id, &img.pixels, img.width, img.height)?;
+            }
             for line in &img.debug_log {
                 crate::host::log(crate::host::LogLevel::Info, line);
             }
-            serde_json::json!({ "width": img.width, "height": img.height }).to_string()
+            (arw_meta_json(&arw)?, reduced.then_some(full))
+        }
+        RawFormatId::Raf => {
+            let img = lopsy_core::raf::read_raf(data).map_err(|e| format!("RAF decode failed: {e}"))?;
+            let full = (img.width, img.height);
+            let reduced = full.0 > max || full.1 > max;
+            if reduced {
+                upload_reduced_f32(engine, layer_id, &img.pixels, full, max)?;
+            } else {
+                layer_manager::upload_pixels_f32(&mut *engine, layer_id, &img.pixels, img.width, img.height)?;
+            }
+            for line in &img.debug_log {
+                crate::host::log(crate::host::LogLevel::Info, line);
+            }
+            (serde_json::json!({ "width": img.width, "height": img.height }).to_string(), reduced.then_some(full))
         }
     };
     let mut meta: serde_json::Value = serde_json::from_str(&json).map_err(|e| format!("JSON: {e}"))?;
     if let Some(obj) = meta.as_object_mut() {
         obj.insert("format".into(), serde_json::Value::String(format.as_str().into()));
+        if let Some((width, height)) = full {
+            let (w, h) = lopsy_core::area_resample::fit_within(width, height, max);
+            obj.insert("width".into(), w.into());
+            obj.insert("height".into(), h.into());
+            obj.insert("fullWidth".into(), width.into());
+            obj.insert("fullHeight".into(), height.into());
+        }
     }
     Ok(meta.to_string())
+}
+
+/// What a layer transform adds to each side of the layer it lifts: a
+/// transparent pixel on each edge (`layer_transform_gpu::begin_layer_transform`),
+/// so a layer that may be turned (Photonamous' straighten) is at most the
+/// largest texture less this.
+pub const TRANSFORM_BORDER: u32 = 2;
+
+/// Destination rows reduced and uploaded at a time by `upload_reduced_f32`.
+const REDUCED_BAND_ROWS: u32 = 256;
+
+/// `pixels`, a `full` RGBA f32 picture larger than `max` on a side, reduced
+/// by area to the largest size within `max` and uploaded into the layer
+/// band by band, so the reduced picture is never held whole beside it.
+fn upload_reduced_f32(engine: &mut EngineInner, layer_id: &str, pixels: &[f32], full: (u32, u32), max: u32) -> Result<(), String> {
+    use lopsy_core::area_resample::{fit_within, AreaScale, PixelRect};
+    let (w, h) = fit_within(full.0, full.1, max);
+    let scale = AreaScale::new(full.0, full.1, w, h)?;
+    let whole = PixelRect::new(0, 0, full.0, full.1);
+    let mut y = 0;
+    while y < h {
+        let rows = REDUCED_BAND_ROWS.min(h - y);
+        let band = scale.reduce(pixels, whole, PixelRect::new(0, y, w, rows))?;
+        layer_manager::upload_pixels_f32_rect(&mut *engine, layer_id, w, h, 0, y, w, rows, &band)?;
+        y += rows;
+    }
+    Ok(())
 }
 
 /// Upload an RGBA f32 rectangle into a layer whose texture is (re)allocated

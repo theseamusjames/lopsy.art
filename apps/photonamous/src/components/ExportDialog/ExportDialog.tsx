@@ -16,6 +16,7 @@ import { tiffExportAvailable } from '../../app/export-capabilities';
 import {
   COLOR_SPACE_WORDS,
   HDR_FORMATS,
+  deviceSizeNote,
   HDR_FORMAT_WORDS,
   fitExportChoices,
   fixedColorWords,
@@ -25,6 +26,7 @@ import {
   sizeChoicesFor,
 } from '../../library/export-form';
 import { currentStatus, onStatusChange } from '../../engine/engine-status';
+import { textureLimit } from '../../engine/texture-limit';
 import {
   DEFAULT_EXTRAS,
   extrasSettingKey,
@@ -107,6 +109,17 @@ export function ExportDialog() {
   const hdrBlocked = isHdrFormat(format) && hdrUnavailable !== null;
   const fixedColors = fixedColorWords(format);
   const sizeChoices = sizeChoicesFor(format, extras.size.mode);
+  // The photos' own sizes, for what this device can export of them (full-size.ts).
+  const ownSizes = useMemo(
+    () =>
+      versionIds.map((versionId) => {
+        const version = view.versions.get(versionId);
+        const asset = version ? view.assets.get(version.assetId) : undefined;
+        return asset?.width && asset.height ? { width: asset.width, height: asset.height } : null;
+      }),
+    [versionIds, view],
+  );
+  const deviceNote = deviceSizeNote(ownSizes, textureLimit(), format, extras);
   const isBlocked = running || versionIds.length === 0 || problem !== null || tiffBlocked || hdrBlocked;
   const finished = progress?.finished ?? false;
 
@@ -335,6 +348,7 @@ export function ExportDialog() {
             <select
               id={`${id}-size`}
               className={styles.select}
+              aria-describedby={deviceNote !== null ? `${id}-device-size` : undefined}
               disabled={running || !sizeChoices.canChoose}
               value={extras.size.mode}
               onChange={(e) => {
@@ -379,6 +393,11 @@ export function ExportDialog() {
             </label>
           )}
           {sizeChoices.note !== null && <span className={styles.muted}>{sizeChoices.note}</span>}
+          {deviceNote !== null && (
+            <span className={styles.muted} id={`${id}-device-size`} data-testid="export-device-size">
+              {deviceNote}
+            </span>
+          )}
         </div>
 
           </div>

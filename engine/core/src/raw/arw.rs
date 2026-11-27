@@ -67,6 +67,14 @@ impl RawFormat for Arw {
         p.height
     }
 
+    fn orientation(p: &ArwRenderParams) -> u16 {
+        p.orientation
+    }
+
+    fn oriented_size(p: &ArwRenderParams) -> (u32, u32) {
+        p.oriented_size()
+    }
+
     fn render_linear_band(src: &[f32], p: &ArwRenderParams, band: RafBand) -> Result<RafBandPixels, String> {
         render_linear_band(src, p, band)
     }

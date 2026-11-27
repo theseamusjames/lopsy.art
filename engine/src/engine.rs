@@ -536,19 +536,56 @@ impl EngineInner {
         })
     }
 
+    /// Resize the document: its composite and scratch textures are released
+    /// and acquired again at the new size. When the new size cannot be had
+    /// (larger than the GPU's textures, or no memory for them) the error is
+    /// returned and the document keeps its old size, with textures of that
+    /// size again, so the engine stays usable.
     pub fn set_document_size(&mut self, width: u32, height: u32) -> Result<(), String> {
-        self.doc_width = width;
-        self.doc_height = height;
-
-        // Reallocate composite and scratch textures
+        // Released before the new ones are acquired, so a document resized
+        // to its own size reuses its textures rather than holding two sets.
         self.texture_pool.release(self.composite_texture);
         self.texture_pool.release(self.scratch_texture_a);
         self.texture_pool.release(self.scratch_texture_b);
 
-        self.composite_texture = self.texture_pool.acquire(width, height)?;
-        self.scratch_texture_a = self.texture_pool.acquire(width, height)?;
-        self.scratch_texture_b = self.texture_pool.acquire(width, height)?;
+        let textures = match self.acquire_document_textures(width, height) {
+            Ok(textures) => textures,
+            Err(err) => {
+                let (old_w, old_h) = (self.doc_width, self.doc_height);
+                [self.composite_texture, self.scratch_texture_a, self.scratch_texture_b] = self.acquire_document_textures(old_w, old_h)?;
+                self.attach_document_textures()?;
+                self.needs_recomposite = true;
+                return Err(err);
+            }
+        };
+        self.doc_width = width;
+        self.doc_height = height;
+        [self.composite_texture, self.scratch_texture_a, self.scratch_texture_b] = textures;
+        self.attach_document_textures()?;
+        self.needs_recomposite = true;
+        Ok(())
+    }
 
+    /// The composite and two scratch textures at `width`×`height`; on a
+    /// failure, none (any acquired is released).
+    fn acquire_document_textures(&mut self, width: u32, height: u32) -> Result<[TextureHandle; 3], String> {
+        let mut acquired = Vec::with_capacity(3);
+        for _ in 0..3 {
+            match self.texture_pool.acquire(width, height) {
+                Ok(handle) => acquired.push(handle),
+                Err(err) => {
+                    for handle in acquired {
+                        self.texture_pool.release(handle);
+                    }
+                    return Err(err);
+                }
+            }
+        }
+        Ok([acquired[0], acquired[1], acquired[2]])
+    }
+
+    /// Point the document's framebuffers at its composite and scratch textures.
+    fn attach_document_textures(&mut self) -> Result<(), String> {
         // System textures use NEAREST — always sampled 1:1
         self.texture_pool.set_nearest_filter(self.composite_texture);
         self.texture_pool.set_nearest_filter(self.scratch_texture_a);
@@ -563,8 +600,6 @@ impl EngineInner {
         self.fbo_pool.attach_texture(self.scratch_fbo_b,
             self.texture_pool.get(self.scratch_texture_b).ok_or("texture pool handle invalid")?,
         );
-
-        self.needs_recomposite = true;
         Ok(())
     }
 

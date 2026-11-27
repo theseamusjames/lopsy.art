@@ -12,6 +12,14 @@ pub fn add_layer(engine: &mut Engine, layer_desc_json: &str) -> Result<(), JsErr
     lopsy_engine::commands::layer::add_layer(&mut engine.inner, layer_desc_json).map_err(|e| JsError::new(&e))
 }
 
+/// The largest width and height of a texture this engine's GPU accepts
+/// (`commands::layer::max_texture_size`): what a layer and the document may
+/// be at most.
+#[wasm_bindgen(js_name = "maxTextureSize")]
+pub fn max_texture_size(engine: &Engine) -> u32 {
+    lopsy_engine::commands::layer::max_texture_size(&engine.inner)
+}
+
 #[wasm_bindgen(js_name = "removeLayer")]
 pub fn remove_layer(engine: &mut Engine, layer_id: &str) {
     lopsy_engine::commands::layer::remove_layer(&mut engine.inner, layer_id)

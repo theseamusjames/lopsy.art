@@ -116,6 +116,14 @@ impl RawFormat for Dng {
         p.height
     }
 
+    fn orientation(p: &DngRenderParams) -> u16 {
+        p.orientation
+    }
+
+    fn oriented_size(p: &DngRenderParams) -> (u32, u32) {
+        p.oriented_size()
+    }
+
     fn render_linear_band(src: &[f32], p: &DngRenderParams, band: RafBand) -> Result<RafBandPixels, String> {
         linear::render_linear_band(src, p, band)
     }

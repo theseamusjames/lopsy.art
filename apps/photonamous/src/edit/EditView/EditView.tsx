@@ -84,6 +84,7 @@ import { useEditSizes } from './use-edit-sizes';
 import { CoalescedReads } from './coalesced-reads';
 import styles from './EditView.module.css';
 import { NO_INSETS } from '../../engine/viewport';
+import { fullSizeNoteText } from '../../engine/full-size';
 
 export interface EditViewProps {
   readonly asset: Asset;
@@ -896,6 +897,9 @@ export function EditView({
   const workingScale = engine?.workingScale() ?? 1;
   const zoomPercent = view ? Math.round(view.zoom * workingScale * 100) : 100;
   const isLoadingFull = engine?.isLoadingFullResolution() ?? false;
+  // Shown below its own size for this device's sake (its GPU's largest texture, or a full-size load that failed).
+  const fullSizeNote = canEdit ? engine?.fullSizeNote() ?? null : null;
+  const sizeNoteText = fullSizeNote ? fullSizeNoteText(fullSizeNote) : null;
   const photoLabel =
     status.kind === 'error'
       ? `${asset.fileName}, could not be opened`
@@ -919,11 +923,21 @@ export function EditView({
   }, [status.kind, asset.fileName, announce]);
 
   const wasLoadingFull = useRef(false);
+  // The size note is said once for each photo; the load's end says it in place of "Full resolution loaded".
+  const saidSizeNote = useRef<string | null>(null);
   useEffect(() => {
     if (isLoadingFull && !wasLoadingFull.current) announce('Loading full resolution…');
-    else if (!isLoadingFull && wasLoadingFull.current) announce('Full resolution loaded');
+    else if (!isLoadingFull && wasLoadingFull.current) {
+      announce(sizeNoteText ?? 'Full resolution loaded');
+      if (sizeNoteText) saidSizeNote.current = sizeNoteText;
+    }
     wasLoadingFull.current = isLoadingFull;
-  }, [isLoadingFull, announce]);
+  }, [isLoadingFull, announce, sizeNoteText]);
+
+  useEffect(() => {
+    if (sizeNoteText && saidSizeNote.current !== sizeNoteText) announce(sizeNoteText);
+    saidSizeNote.current = sizeNoteText;
+  }, [sizeNoteText, announce]);
 
   useEffect(() => {
     if (isPickingWb) announce('Click something in the photo that should be neutral grey, or press Escape. Temperature and Tint set the white balance by keyboard.');
@@ -1190,6 +1204,11 @@ export function EditView({
               </button>
             </div>
           </div>
+          {sizeNoteText && (
+            <p className={styles.sizeNote} data-testid="size-note">
+              {sizeNoteText}
+            </p>
+          )}
           <p id={stageHintId} className={styles.srOnly}>
             Arrow keys move a zoomed photo, Shift by more; plus and minus zoom in and out.
           </p>

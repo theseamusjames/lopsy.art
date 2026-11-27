@@ -54,6 +54,14 @@ impl RawFormat for Raf {
         p.height
     }
 
+    fn orientation(p: &RafRenderParams) -> u16 {
+        p.orientation
+    }
+
+    fn oriented_size(p: &RafRenderParams) -> (u32, u32) {
+        p.oriented_size()
+    }
+
     fn render_linear_band(src: &[f32], p: &RafRenderParams, band: RafBand) -> Result<RafBandPixels, String> {
         develop::render_linear_band(src, p, band)
     }
