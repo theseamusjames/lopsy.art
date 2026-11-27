@@ -18,6 +18,8 @@ interface FakeEngine {
   /** The resolution the photo is loaded at; ensureFullResolution raises it in place. */
   resolution: 'working' | 'full';
   upgrades: number;
+  /** The document at the photo's own size when the engine would make tiles of it (`tiledExportSize`). */
+  own: { width: number; height: number } | null;
 }
 
 function fakeEngine(): FakeEngine {
@@ -29,6 +31,7 @@ function fakeEngine(): FakeEngine {
     isLost: false,
     resolution: 'working',
     upgrades: 0,
+    own: null,
     engine: undefined as unknown as DevelopEngine,
   };
   const engine: Partial<DevelopEngine> = {
@@ -39,6 +42,8 @@ function fakeEngine(): FakeEngine {
       return { width: 10, height: 10 };
     },
     imageSize: () => ({ width: 4000, height: 3000 }),
+    tiledExportSize: () => fake.own,
+    canExportHdr: () => true,
     isFullResolution: () => fake.resolution === 'full',
     ensureFullResolution: async () => {
       fake.upgrades++;
@@ -77,17 +82,46 @@ describe('createEngineExportRenderer', () => {
     vi.useRealTimers();
   });
 
-  function renderer() {
+  function renderer(own: FakeEngine['own'] = null, onNote?: (note: string) => void) {
     return createEngineExportRenderer({
       loadOriginal: loadOriginal as unknown as (asset: typeof assetA, signal: AbortSignal) => Promise<Blob>,
       idleMs: 1000,
       createEngine: async () => {
         const f = fakeEngine();
+        f.own = own;
         fakes.push(f);
         return f.engine;
       },
+      ...(onNote ? { onNote } : {}),
     });
   }
+
+  it('sizes a photo made in tiles from its own size, and says the held image’s size for an export that is not', async () => {
+    const notes: string[] = [];
+    // Held at 4000 × 3000; its own size 8000 × 6000.
+    const r = renderer({ width: 8000, height: 6000 }, (note) => notes.push(note));
+    const signal = new AbortController().signal;
+    const version = harnessVersion(assetA, warm);
+    await r.render(assetA, version, DEFAULT_EXPORT_SETTINGS, signal);
+    const original = fakes[0]?.exports.at(-1);
+    expect(original).toMatchObject({ format: 'jpeg', size: { width: 8000, height: 6000 }, reducedSize: null, signal });
+    original?.onReduced?.('made smaller');
+    expect(notes).toEqual(['made smaller']);
+    const long = { ...DEFAULT_EXTRAS, size: { mode: 'long' as const, px: 5000 } };
+    await r.render(assetA, version, withExtras(DEFAULT_EXPORT_SETTINGS, long) as typeof DEFAULT_EXPORT_SETTINGS, signal);
+    expect(fakes[0]?.exports.at(-1)).toMatchObject({ size: { width: 5000, height: 3750 }, reducedSize: null });
+    const short = { ...DEFAULT_EXTRAS, size: { mode: 'short' as const, px: 1500 } };
+    await r.render(assetA, version, withExtras(DEFAULT_EXPORT_SETTINGS, short) as typeof DEFAULT_EXPORT_SETTINGS, signal);
+    expect(fakes[0]?.exports.at(-1)).toMatchObject({ size: { width: 2000, height: 1500 }, reducedSize: { width: 2000, height: 1500 } });
+    await r.render(assetA, version, { ...DEFAULT_EXPORT_SETTINGS, format: 'hdr-png' }, signal);
+    expect(fakes[0]?.exports.at(-1)).toMatchObject({ format: 'hdr-png', size: { width: 8000, height: 6000 }, reducedSize: null });
+  });
+
+  it('asks an engine that makes no tiles exactly as before', async () => {
+    const r = renderer(null);
+    await r.render(assetA, harnessVersion(assetA, warm), DEFAULT_EXPORT_SETTINGS, new AbortController().signal);
+    expect(fakes[0]?.exports.at(-1)).toEqual({ format: 'jpeg', quality: 0.9, maxSize: undefined, colorSpace: 'srgb' });
+  });
 
   it('loads, applies the version recipe and exports at the settings size', async () => {
     const r = renderer();

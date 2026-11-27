@@ -68,6 +68,13 @@ export interface FullSizeNote {
   readonly shown: Size;
   /** The longest side this device can edit (`editableLimit`). */
   readonly limit: number;
+  /**
+   * 'own': exports larger than `shown` are made at the photo's own size, in
+   * tiles; 'shown': they are made at `shown` (a source tiles cannot read, a
+   * GPU without float targets, or a full size that failed for memory);
+   * 'settings': tiles could be made, but not with the edit's settings.
+   */
+  readonly exports: 'own' | 'shown' | 'settings';
 }
 
 const times = (size: Size) => `${size.width} × ${size.height}`;

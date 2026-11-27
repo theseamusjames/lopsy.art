@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import type { Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Asset, Json, Preset, PreviewRef, Version } from '@lopsy/photos-core/library/types';
+import { DEFAULT_EXPORT_SETTINGS, type ExportSettings } from '@lopsy/photos-core/export/types';
+import { createEngineExportRenderer, type EngineRenderer } from '../../engine/export-renderer';
 import { EditView } from '../EditView/EditView';
 import type { FilmstripItem } from '../Filmstrip/Filmstrip';
 import { applyChanges } from '../edit-controls';
@@ -24,6 +26,15 @@ export interface HarnessRecord {
 declare global {
   interface Window {
     __photosHarness?: HarnessRecord;
+    /**
+     * The open photo exported through the harness's export renderer (the
+     * app's export path, on an engine of its own) with `settings` and
+     * `recipe` (the version's when omitted), for e2e tests of every format.
+     * `abort`, when given, is checked by the export like a cancel button.
+     */
+    __photosHarnessExport?: (settings: Partial<ExportSettings>, recipe?: Recipe, abort?: { aborted: boolean }) => Promise<Blob>;
+    /** The notes the harness's export renderer gave (`onNote`), in order. */
+    __photosHarnessNotes?: string[];
   }
 }
 
@@ -51,6 +62,28 @@ export function EditHarness() {
   const record = useMemo<HarnessRecord>(() => ({ previews: [], exports: [], steps: [], lopsyPngs: [], recipe: null }), []);
   const photo = currentPhoto(state);
   const current = currentVersion(state);
+  const filesRef = useRef(files);
+  filesRef.current = files;
+  // `__photosHarnessExport` renders as the app's Export does: on an export renderer's engine, which makes a photo
+  // larger than the GPU in tiles. The Export button stays the Edit view's own engine's, which never makes tiles.
+  const exportRenderer = useRef<EngineRenderer | null>(null);
+  useEffect(() => {
+    const notes: string[] = [];
+    window.__photosHarnessNotes = notes;
+    const renderer = createEngineExportRenderer({
+      loadOriginal: async (asset) => {
+        const file = filesRef.current.get(asset.id);
+        if (!file) throw new Error('That file is no longer open');
+        return file;
+      },
+      onNote: (note) => notes.push(note),
+    });
+    exportRenderer.current = renderer;
+    return () => {
+      renderer.dispose();
+      if (exportRenderer.current === renderer) exportRenderer.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     window.__photosHarness = record;
@@ -59,6 +92,26 @@ export function EditHarness() {
   useEffect(() => {
     record.recipe = current?.history.present ?? null;
   }, [current, record]);
+
+  const shownAsset = photo?.asset ?? null;
+  const shownRecipe = current?.history.present ?? null;
+  const renderExport = useCallback(
+    (settings: Partial<ExportSettings>, recipe?: Recipe, abort?: { aborted: boolean }): Promise<Blob> => {
+      const renderer = exportRenderer.current;
+      if (!shownAsset || !shownRecipe || !renderer) return Promise.reject(new Error('No photo is open'));
+      const controller = new AbortController();
+      const watch = abort ? setInterval(() => abort.aborted && controller.abort(), 50) : null;
+      return renderer
+        .render(shownAsset, harnessVersion(shownAsset, recipe ?? shownRecipe), { ...DEFAULT_EXPORT_SETTINGS, ...settings }, controller.signal)
+        .finally(() => {
+          if (watch) clearInterval(watch);
+        });
+    },
+    [shownAsset, shownRecipe],
+  );
+  useEffect(() => {
+    window.__photosHarnessExport = renderExport;
+  }, [renderExport]);
 
   useEffect(() => () => thumbnails.forEach((url) => URL.revokeObjectURL(url)), [thumbnails]);
 

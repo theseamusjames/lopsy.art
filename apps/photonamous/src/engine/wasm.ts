@@ -10,6 +10,7 @@
  */
 
 import {
+  assembleExportTile as rawAssembleExportTile,
   compositeForExport as rawCompositeForExport,
   compositeForExportSized as rawCompositeForExportSized,
   createEngine as rawCreateEngine,
@@ -98,6 +99,12 @@ export const readHdrHistogram = readbacks.asyncReadback(rawReadHdrHistogram, 'an
  */
 export const readRenderedF32 = readbacks.asyncReadback(rawReadRenderedF32, 'any-time');
 export const exportTiff16 = readbacks.asyncReadback(rawExportTiff16);
+/**
+ * A tile's export read into the whole picture being assembled in the
+ * engine (`beginExportAssembly`); the pixels stay in the module. It
+ * re-composites, so it waits its turn.
+ */
+export const assembleExportTile = readbacks.asyncReadback(rawAssembleExportTile);
 
 /** Readbacks out, as Lopsy's `parkedReadbackCount`: always 0 on WebGL. */
 export function parkedReadbackCount(): number {

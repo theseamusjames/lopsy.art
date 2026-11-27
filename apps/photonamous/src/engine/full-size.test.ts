@@ -117,11 +117,11 @@ describe('FullSizeLoads', () => {
 
 describe('fullSizeNoteText', () => {
   it('says the photo’s own size, the limit and the size it is shown and exported at', () => {
-    expect(fullSizeNoteText({ kind: 'too-large', own: Q2, shown: { width: 8190, height: 5465 }, limit: 8190 })).toBe(
+    expect(fullSizeNoteText({ kind: 'too-large', own: Q2, shown: { width: 8190, height: 5465 }, limit: 8190, exports: 'shown' })).toBe(
       'This photo is 8368 × 5584 pixels, larger than this device’s graphics can edit (8190 on a side), so it is shown and exported at 8190 × 5465.',
     );
-    expect(fullSizeNoteText({ kind: 'failed', own: Q2, shown: { width: 4184, height: 2792 }, limit: 8192 })).toContain('could not load this photo');
-    expect(fullSizeNoteText({ kind: 'stepped-down', own: Q2, shown: { width: 6144, height: 4100 }, limit: 8192 })).toContain('6144 × 4100');
+    expect(fullSizeNoteText({ kind: 'failed', own: Q2, shown: { width: 4184, height: 2792 }, limit: 8192, exports: 'shown' })).toContain('could not load this photo');
+    expect(fullSizeNoteText({ kind: 'stepped-down', own: Q2, shown: { width: 6144, height: 4100 }, limit: 8192, exports: 'shown' })).toContain('6144 × 4100');
   });
 });
 

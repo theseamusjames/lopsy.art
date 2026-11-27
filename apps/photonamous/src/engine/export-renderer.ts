@@ -12,6 +12,7 @@ import { buildExportExif } from '@lopsy/photos-core/export/exif-writer';
 import { extrasOf, outputSize } from '../library/export-size';
 import { developSource } from '../library/develop-source';
 import { grainSeed } from './finish-controls';
+import type { Size } from './viewport';
 
 export interface EngineExportRendererOptions {
   readonly loadOriginal: (asset: Asset, signal: AbortSignal) => Promise<Blob>;
@@ -19,6 +20,12 @@ export interface EngineExportRendererOptions {
   readonly idleMs?: number;
   /** Test seam; the real engine by default. */
   readonly createEngine?: (canvas: HTMLCanvasElement) => Promise<DevelopEngine>;
+  /**
+   * Told when an export of a photo larger than the GPU can edit, meant to
+   * be made at its own size in tiles, was made at the held size instead
+   * (`ExportOptions.onReduced`): a sentence for the person.
+   */
+  readonly onNote?: (note: string) => void;
 }
 
 export class ExportAbortedError extends Error {
@@ -41,13 +48,17 @@ function hiddenCanvas(): HTMLCanvasElement {
  * The engine module (and its wasm) loads with the first export, not with
  * the app. When WebGPU fails to start and the page changes to WebGL, the
  * engine is made again on a new canvas (develop-engine.ts `RendererChangedError`).
+ * Its canvas is never shown, so it makes the exports of a photo larger than
+ * the GPU can edit at the photo's own size, in tiles, on the same engine:
+ * a second engine would double the GPU memory on exactly the devices with
+ * least of it.
  */
 async function createRealEngine(canvas: HTMLCanvasElement): Promise<DevelopEngine> {
   const m = await import('./develop-engine');
   try {
-    return await m.createDevelopEngine(canvas);
+    return await m.createDevelopEngine(canvas, { tiledExports: true });
   } catch (err) {
-    if (err instanceof m.RendererChangedError) return m.createDevelopEngine(hiddenCanvas());
+    if (err instanceof m.RendererChangedError) return m.createDevelopEngine(hiddenCanvas(), { tiledExports: true });
     throw err;
   }
 }
@@ -144,10 +155,22 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
     const e = await loaded(asset, signal, isSmall ? 'working' : 'full');
     e.setRecipe(version.recipe);
     const image = e.imageSize();
+    // A photo larger than the GPU can edit: sizes are worked out from its own size, which tiles make,
+    // and from the held image for an export that is not made in tiles (develop-engine.ts `reducedSize`).
+    const own = e.tiledExportSize();
+    const tiles = (sized: (base: Size) => Size | null) => {
+      if (!own || !image) return {};
+      // What the engine is asked for without tiles: a size only where it is not the held image's own.
+      const reduced = sized(image);
+      const reducedSize = reduced && (reduced.width !== image.width || reduced.height !== image.height) ? reduced : null;
+      return { signal, onReduced: (note: string) => options.onNote?.(note), reducedSize };
+    };
     if (isHdrFormat(settings.format)) {
       if (!e.canExportHdr()) throw new Error('HDR files need a GPU that renders in floating point, and this one does not. Choose JPEG or PNG.');
       // The engine reduces the HDR picture but cannot enlarge it, so an HDR file is never enlarged (photos-core exportSettingsProblem).
-      const hdrSize = image ? outputSize(image, { ...extras, allowEnlarge: false }) : null;
+      const hdrSized = (base: Size) => outputSize(base, { ...extras, allowEnlarge: false });
+      const base = own ?? image;
+      const hdrSize = base ? hdrSized(base) : null;
       // The gain-map JPEG's EXIF goes into its base picture before assembly (photos-core metadataWrittenByRenderer).
       const exif = settings.format === 'hdr-jpeg' ? buildExportExif(asset, settings) : null;
       const blob = await e.exportImage({
@@ -155,13 +178,16 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
         quality: settings.quality,
         exif,
         maxSize: settings.maxLongEdge ?? undefined,
-        ...(hdrSize && image && (hdrSize.width !== image.width || hdrSize.height !== image.height) ? { size: hdrSize } : {}),
+        ...(hdrSize && base && (own || hdrSize.width !== base.width || hdrSize.height !== base.height) ? { size: hdrSize } : {}),
+        ...tiles(hdrSized),
       });
       checkSignal(signal);
       return blob;
     }
     const space = settings.colorSpace ?? 'srgb';
-    const size = image && !fullSize ? outputSize(image, extras) : null;
+    const base = own ?? image;
+    const sized = (from: Size) => (fullSize ? null : outputSize(from, extras));
+    const size = base ? sized(base) : null;
     // Before the engine draws: an 8-bit file in Rec. 2020 bands (photos-core colorSpacesFor).
     if (!colorSpacesFor(settings.format, extras.pngDepth).includes(space)) throw new Error('Rec. 2020 needs a 16-bit file (TIFF, or a 16-bit PNG).');
     const blob = await e.exportImage({
@@ -170,8 +196,9 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
       // The engine's TIFF is the full image; the dialog says so.
       maxSize: settings.format === 'tiff' ? undefined : (settings.maxLongEdge ?? undefined),
       colorSpace: space,
-      ...(size && image && (size.width !== image.width || size.height !== image.height) ? { size } : {}),
+      ...(size && base && (own || size.width !== base.width || size.height !== base.height) ? { size } : {}),
       ...(settings.format === 'png' ? { pngDepth: extras.pngDepth } : {}),
+      ...tiles(sized),
     });
     checkSignal(signal);
     return blob;
