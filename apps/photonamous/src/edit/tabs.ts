@@ -1,15 +1,26 @@
 /**
- * The tabs pattern for the Edit view's tabbed groups (WCAG 4.1.2, 2.1.1):
- * one tab stop for the tab list, arrow keys, Home and End between tabs,
- * each tab naming the panel it controls.
+ * The tabs pattern (WCAG 4.1.2, 2.1.1), for the Edit view's tabbed groups
+ * and the sections of Settings: one tab stop for the tab list, arrow keys,
+ * Home and End between tabs, each tab naming the panel it controls.
  */
 
 import { useId, useRef, type KeyboardEvent } from 'react';
 
+/**
+ * How a tab list is laid out. A vertical one takes Up and Down as well as
+ * Left and Right, since it lies along a row where the screen is narrow.
+ */
+export type TabOrientation = 'horizontal' | 'vertical';
+
 /** The tab a key moves to from tab `index` of `count`, or null for other keys. Arrows wrap. */
-export function nextTabIndex(index: number, key: string, count: number): number | null {
+export function nextTabIndex(index: number, key: string, count: number, orientation: TabOrientation = 'horizontal'): number | null {
   if (count <= 0) return null;
+  const isVertical = orientation === 'vertical';
   switch (key) {
+    case 'ArrowDown':
+      return isVertical ? (index + 1) % count : null;
+    case 'ArrowUp':
+      return isVertical ? (index - 1 + count) % count : null;
     case 'ArrowRight':
       return (index + 1) % count;
     case 'ArrowLeft':
@@ -45,6 +56,7 @@ export function useTabs<T extends string>(
   ids: readonly T[],
   selected: T,
   onSelect: (id: T) => void,
+  orientation: TabOrientation = 'horizontal',
 ): { tabProps: (id: T) => TabProps; panelProps: TabPanelProps } {
   const base = useId();
   const tabs = useRef(new Map<T, HTMLButtonElement>());
@@ -63,7 +75,7 @@ export function useTabs<T extends string>(
     },
     onClick: () => onSelect(id),
     onKeyDown: (e) => {
-      const next = nextTabIndex(ids.indexOf(id), e.key, ids.length);
+      const next = nextTabIndex(ids.indexOf(id), e.key, ids.length, orientation);
       const nextId = next === null ? undefined : ids[next];
       if (nextId === undefined) return;
       e.preventDefault();
