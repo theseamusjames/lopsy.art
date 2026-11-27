@@ -126,6 +126,11 @@ test('every view, as a user reaches it', async ({ page }) => {
     await page.getByRole('button', { name: 'Settings' }).click();
     await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible({ timeout: 15_000 });
   });
+  for (const section of ['Data', 'Cloud provider']) {
+    await step(page, `settings, ${section}`, async () => {
+      await page.getByRole('dialog', { name: 'Settings' }).getByRole('tab', { name: section }).click();
+    });
+  }
   await page.keyboard.press('Escape');
 
   await step(page, 'export dialog', async () => {
@@ -267,6 +272,7 @@ test('every view, as a user reaches it', async ({ page }) => {
 
   await step(page, 'check library', async () => {
     await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('dialog', { name: 'Settings' }).getByRole('tab', { name: 'Data' }).click();
     await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Check library' }).click();
     await expect(page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Check library' })).toBeEnabled({ timeout: 30_000 });
   });

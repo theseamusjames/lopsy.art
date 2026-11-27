@@ -34,6 +34,7 @@ test('Check library marks a missing original', async ({ page }) => {
   await page.getByRole('button', { name: /^All photos/ }).click();
   await expect(tiles(page)).toHaveCount(2, { timeout: 30_000 });
   await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('tab', { name: 'Data' }).click();
   await page.getByRole('button', { name: 'Check library' }).click();
   await expect(page.getByText('1 original is missing from storage.')).toBeVisible({ timeout: 30_000 });
   await page.keyboard.press('Escape');

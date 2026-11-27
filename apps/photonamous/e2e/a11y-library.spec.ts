@@ -220,6 +220,14 @@ test('a dialog leaves the library behind it out of reach, and focus comes back a
   await page.keyboard.press('Enter');
   const dialog = page.getByRole('dialog', { name: 'Settings' });
   await expect(dialog).toBeVisible();
+  // It opens on its sections, a tab list: Down goes to the next one and shows that section's settings.
+  const general = dialog.getByRole('tab', { name: 'General' });
+  await expect(general).toBeFocused();
+  await expect(general).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('ArrowDown');
+  await expect(dialog.getByRole('tab', { name: 'Data' })).toBeFocused();
+  await expect(dialog.getByRole('tabpanel', { name: 'Data' }).getByRole('button', { name: 'Check library' })).toBeVisible();
+  await expect(dialog.getByRole('checkbox', { name: 'Single-key shortcuts' })).toBeHidden();
   expect(await page.locator('header').first().evaluate((el) => el.closest('[inert]') !== null)).toBe(true);
   expect(await dialog.evaluate((el) => el.closest('[inert]') === null)).toBe(true);
   await page.keyboard.press('Escape');

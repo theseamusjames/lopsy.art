@@ -178,7 +178,7 @@ could use too goes there; one only this app uses stays here.
   - sliders are `@lopsy/ui/Slider`, in the Edit view through
     `edit/EditSlider` (this app's readouts, one commit per change);
   - new single-character shortcuts go in `src/shortcuts/registry.ts`, so
-    the help lists them and Settings > Keyboard can turn them off.
+    the help lists them and Settings > General can turn them off.
 - **A click pays for one popup.** The Google token is renewed from the
   user's clicks (`src/app/real/gesture-refresh.ts`): once it is 45 minutes
   old, a click anywhere opens Google's window for a moment. A control
