@@ -321,7 +321,7 @@ pub fn read_info(data: &[u8]) -> Result<Cr2Info, String> {
     // The as-shot white balance.
     let cd = shorts(&maker_note, TAG_CANON_COLOR_DATA).ok_or("This Canon RAW has no colour data, so no white balance")?;
     let (wb, searched) = colour_data::as_shot_levels(&cd).ok_or("This Canon RAW's white balance is not where this decoder can find it, which is not supported")?;
-    let as_shot_gain = colour_data::gains(wb);
+    let as_shot_gain = colour_data::gains(wb).ok_or_else(|| format!("This Canon RAW's white balance {wb:?} is not one a camera records"))?;
     if searched {
         debug_log.push(format!("[CR2] colour data of {} numbers (first {}) is a layout not seen before: its white balance was searched for", cd.len(), cd[0]));
     }

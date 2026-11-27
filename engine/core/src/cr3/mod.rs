@@ -230,7 +230,7 @@ pub fn read_info(data: &[u8]) -> Result<Cr3Info, String> {
     let maker_note = tiff_ifd0(b"CMT3").unwrap_or_default();
     let camera_model = crate::cr2::camera_model(&ifd0);
     let orientation = get_tag_u16(&ifd0, TagId::Orientation).ok().filter(|o| (1..=8).contains(o)).unwrap_or(1);
-    let as_shot_gain = crate::cr2::shorts(&maker_note, 0x4001).and_then(|cd| crate::cr2::colour_data::as_shot_levels(&cd)).map(|(l, _)| crate::cr2::colour_data::gains(l));
+    let as_shot_gain = crate::cr2::shorts(&maker_note, 0x4001).and_then(|cd| crate::cr2::colour_data::as_shot_levels(&cd)).and_then(|(l, _)| crate::cr2::colour_data::gains(l));
     let mut tracks = Vec::new();
     for trak in moov_boxes.iter().filter(|b| &b.typ == b"trak") {
         if let Some(t) = track(data, *trak)? {

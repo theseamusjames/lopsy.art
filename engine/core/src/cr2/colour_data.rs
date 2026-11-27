@@ -53,10 +53,16 @@ pub fn as_shot_levels(cd: &[u16]) -> Option<([u16; 4], bool)> {
     is_entry(e).then(|| ([e[0], e[1], e[2], e[3]], searched))
 }
 
-/// The levels as channel gains, green 1.
-pub fn gains(levels: [u16; 4]) -> [f32; 3] {
+/// The gains a camera records lie well inside this range (as NEF bounds
+/// its own): outside it, the levels are not a white balance.
+pub const GAIN_RANGE: std::ops::RangeInclusive<f32> = 0.05..=20.0;
+
+/// The levels as channel gains, green 1, or `None` when a gain is outside
+/// [`GAIN_RANGE`] (a green level of 0 among them).
+pub fn gains(levels: [u16; 4]) -> Option<[f32; 3]> {
     let g = (f64::from(levels[1]) + f64::from(levels[2])) / 2.0;
-    [(f64::from(levels[0]) / g) as f32, 1.0, (f64::from(levels[3]) / g) as f32]
+    let gains = [(f64::from(levels[0]) / g) as f32, 1.0, (f64::from(levels[3]) / g) as f32];
+    gains.iter().all(|v| GAIN_RANGE.contains(v)).then_some(gains)
 }
 
 #[cfg(test)]
@@ -73,7 +79,7 @@ mod tests {
         cd.extend_from_slice(&[1689, 1024, 1024, 2217, 3653, 1689, 1024, 1024, 2217, 3653, 7, 7]);
         assert_eq!(find_run(&cd), Some(at));
         assert_eq!(as_shot_levels(&cd), Some(([1689, 1024, 1024, 2217], true)));
-        let g = gains([1689, 1024, 1024, 2217]);
+        let g = gains([1689, 1024, 1024, 2217]).unwrap();
         assert!((g[0] - 1.6494).abs() < 1e-3 && g[1] == 1.0 && (g[2] - 2.1650).abs() < 1e-3);
     }
 
@@ -88,5 +94,15 @@ mod tests {
         assert_eq!(as_shot_levels(&cd), None);
         cd[65] = 1171;
         assert_eq!(as_shot_levels(&cd), Some(([1921, 1171, 1171, 2241], false)));
+    }
+
+    #[test]
+    fn levels_that_are_not_a_white_balance_give_no_gains() {
+        // Green 0: the gains would be infinite.
+        assert_eq!(gains([1689, 0, 0, 2217]), None);
+        // Red 25 times green, blue a hundredth of it.
+        assert_eq!(gains([25_600, 1024, 1024, 2217]), None);
+        assert_eq!(gains([1689, 1024, 1024, 10]), None);
+        assert!(gains([52, 1024, 1024, 20_000]).is_some());
     }
 }
