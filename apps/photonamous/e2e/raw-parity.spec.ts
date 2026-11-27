@@ -37,9 +37,10 @@ import { previewCount, settledPreview, waitForPreview, waitForReady } from './ha
  *
  * DNG and Sony ARW samples are fingerprinted the same way, on the linear
  * and no-float ways (the second opens them with the baked decode): the
- * four Sony bodies from LOPSY_ARW_SAMPLES and the two Canon DNGs from
- * LOPSY_DNG_ADOBE_SAMPLES. In recipe 2 a DNG or ARW takes Neutral, having
- * no film looks.
+ * four Sony bodies from LOPSY_ARW_SAMPLES, the two Canon DNGs from
+ * LOPSY_DNG_ADOBE_SAMPLES and the two iPhone ProRAW files from
+ * LOPSY_DNG_SAMPLES. In recipe 2 a DNG or ARW takes the first look after
+ * its camera's (Neutral, or a ProRAW's Standard).
  *
  * Needs LOPSY_RAF_SAMPLES (and the others for their files); each set is
  * skipped without its variable. LOPSY_RAW_PARITY_UPDATE=1 records the
@@ -49,6 +50,7 @@ import { previewCount, settledPreview, waitForPreview, waitForReady } from './ha
 const samples = process.env.LOPSY_RAF_SAMPLES;
 const arwSamples = process.env.LOPSY_ARW_SAMPLES;
 const dngSamples = process.env.LOPSY_DNG_ADOBE_SAMPLES;
+const prorawSamples = process.env.LOPSY_DNG_SAMPLES;
 /** The DNG and ARW samples fingerprinted: four Sony bodies (two with measured colour, two without) and a mosaic and a linear DNG. */
 const OTHER_RAW: readonly { readonly dir: string | undefined; readonly name: string }[] = [
   { dir: arwSamples, name: 'ILCE-7M3_DSC0009.ARW' },
@@ -57,6 +59,8 @@ const OTHER_RAW: readonly { readonly dir: string | undefined; readonly name: str
   { dir: arwSamples, name: 'DSC-RX100M3_DSC00734.ARW' },
   { dir: dngSamples, name: '5D3-adobe-lossless.dng' },
   { dir: dngSamples, name: '5D3-adobe-lossless-rgb.dng' },
+  { dir: prorawSamples, name: 'sample_dng_00.dng' },
+  { dir: prorawSamples, name: 'sample_dng_01.dng' },
 ];
 const isUpdate = process.env.LOPSY_RAW_PARITY_UPDATE === '1';
 const STORE = join(dirname(fileURLToPath(import.meta.url)), 'raw-parity');
@@ -330,7 +334,7 @@ test.describe('RAW parity: each DNG and ARW renders as recorded', () => {
   for (const { dir, name } of OTHER_RAW) {
     test(name, async ({ page }) => {
       const path = dir ? join(dir, name) : '';
-      test.skip(!dir || !existsSync(path), `needs ${name} (LOPSY_ARW_SAMPLES, LOPSY_DNG_ADOBE_SAMPLES)`);
+      test.skip(!dir || !existsSync(path), `needs ${name} (LOPSY_ARW_SAMPLES, LOPSY_DNG_ADOBE_SAMPLES, LOPSY_DNG_SAMPLES)`);
       // The RAW path, and the baked decode a GPU without float targets opens these formats with.
       await checkSample(page, name, path, ['', '?develop=no-float']);
     });

@@ -105,9 +105,19 @@ const MARGIN = 0.03;
 // +24.1 KB gzip, +12.8 KB of glue raw and +1.5 KB gzip (+4.6 % and +4.3 %,
 // past the margin on their own: wasm-bindgen spends glue on every export).
 // The old raf…, dng… and arw… exports stay for Lopsy.
+//
+// Re-based after the Standard look and the rest of the universal RAW path,
+// to what a local release build measures (wasm 5,142,743 B raw and
+// 2,126,718 B gzip, +0.85 % and +0.63 %; glue 295,881 B and 38,160 B,
+// +1.49 % and +1.55 %), because together they had used half the margin:
+// the parametric Standard curve and the opening look of DNG and ARW, the
+// ProRAW preview match, profile roles, DNG's ProfileGainTableMap and its
+// own tone curve, a RAF's white-balance presets read from the file (the
+// per-camera table they replace was smaller than the reader), and three
+// exports (rawAutoWhiteBalance, RawRenderedBand, rawRendersFinishedBands).
 const BUDGET = {
-  'lopsy_wasm_bg.wasm': { raw: 5_099_214, gzip: 2_113_350 },
-  'lopsy_wasm.js': { raw: 291_545, gzip: 37_578 },
+  'lopsy_wasm_bg.wasm': { raw: 5_142_743, gzip: 2_126_718 },
+  'lopsy_wasm.js': { raw: 295_881, gzip: 38_160 },
 };
 
 function format(bytes) {

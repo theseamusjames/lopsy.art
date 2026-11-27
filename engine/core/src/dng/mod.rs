@@ -29,7 +29,9 @@
 //! for bit the same. Lossy JPEG DNGs (`Compression` 34892) are refused: the
 //! engine has no baseline JPEG decoder.
 //!
-//! (The gain map is disabled by default — see ProfileGainTableMap note below.)
+//! (This baked decode leaves the gain map off by default — see the
+//! ProfileGainTableMap note below. The linear path, `linear::prepare_dng`,
+//! applies it by the specification: `gain_map`.)
 //!
 //! The TIFF Orientation tag (0x0112) is applied last so portrait shots
 //! (orientation 6/8) load upright; see `crate::orientation`.
@@ -94,6 +96,7 @@ pub mod demosaic;
 pub mod color;
 pub mod camera_color;
 pub mod linear;
+pub mod gain_map;
 pub mod preview;
 
 use tiff::{TiffReader, IfdEntry, TagId};
@@ -263,6 +266,10 @@ pub(crate) struct ImageArea {
     /// Whether `DefaultCrop` was applied (false when the file has none, or
     /// one this decoder does not apply: see [`image_area`]).
     pub default_crop_applied: bool,
+    /// The active area's size, which positions relative to the image (a
+    /// `ProfileGainTableMap`'s) are fractions of.
+    pub active_width: usize,
+    pub active_height: usize,
 }
 
 /// The picture's area in a `width` × `height` stored image: `ActiveArea`
@@ -284,7 +291,7 @@ pub(crate) fn image_area(ifd0: &[IfdEntry], main: &[IfdEntry], width: u32, heigh
         return Err(format!("ActiveArea {top},{left},{bottom},{right} is outside the {sw}×{sh} image"));
     }
     let (aw, ah) = (right - left, bottom - top);
-    let whole = ImageArea { top, left, width: aw, height: ah, from_active: (0, 0), default_crop_applied: false };
+    let whole = ImageArea { top, left, width: aw, height: ah, from_active: (0, 0), default_crop_applied: false, active_width: aw, active_height: ah };
     // DefaultCrop is RATIONAL, SHORT or LONG.
     let pair = |tag: TagId| -> Option<[f64; 2]> {
         let r = get_rational_array_either(main, ifd0, tag);
@@ -308,7 +315,7 @@ pub(crate) fn image_area(ifd0: &[IfdEntry], main: &[IfdEntry], width: u32, heigh
     if cw == 0 || ch == 0 || cx + cw > aw || cy + ch > ah {
         return Ok(whole);
     }
-    Ok(ImageArea { top: top + cy, left: left + cx, width: cw, height: ch, from_active: (cy, cx), default_crop_applied: true })
+    Ok(ImageArea { top: top + cy, left: left + cx, width: cw, height: ch, from_active: (cy, cx), default_crop_applied: true, active_width: aw, active_height: ah })
 }
 
 /// A 2×2 colour filter pattern that starts `(dy, dx)` into `pattern`.

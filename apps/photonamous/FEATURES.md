@@ -353,7 +353,8 @@ edits or Reset from the grid passes it by, and its previews stay the ones
 the newer version made.
 
 - **Loading and working size.** RAF, DNG and Sony ARW decode on a pool of
-  workers into the engine's RAW develop stage. A DNG the RAW path cannot
+  workers into the engine's RAW develop stage; an iPhone ProRAW's local
+  tone map (its gain table map) is applied there. A DNG the RAW path cannot
   read (a lossy one), and DNG and ARW on a GPU without float targets,
   open as the engine's finished picture and are edited as an ordinary
   photo; when that cannot be read either, the Edit view says why. 16-bit
@@ -435,9 +436,14 @@ the newer version made.
 - **Profile**: for RAW, the camera's look first ("Camera (Velvia look)",
   not listed a second time), then the engine's film looks with Provia
   shown as "Standard (Provia look)" (or "Camera (Provia look, Standard)"
-  when the camera shot Provia), Neutral and Monochrome; for a DNG or a
-  Sony ARW, Standard, Neutral and Monochrome; for other photos, Standard
-  and Monochrome. Eleven Sony bodies have colour computed from measured
+  when the camera shot Provia), Neutral and Monochrome; for an iPhone
+  ProRAW (a DNG carrying Apple's local tone map), **Camera** first and
+  chosen (the file's own tone curve and local tone map at the file's own
+  exposure), then Standard (the app's curve, at an exposure matched to
+  the photo's embedded preview), Neutral and Monochrome; for any other
+  DNG or a Sony ARW, Standard, Neutral and Monochrome; for other photos,
+  Standard and Monochrome. Each profile brings its own exposure, to which
+  the Exposure slider adds. Eleven Sony bodies have colour computed from measured
   sensor data (RX100 IV, A6400, A7C II, A7 III, A7 IV, A7R II, A7R III,
   A7R IV, A7S II, A7S III, A9). For any other body the colour is only
   approximate (the file carries part of the camera's colour, so it is
@@ -447,10 +453,10 @@ the newer version made.
 - **Straighten**: Angle, and **Level** (draw along something that should
   be level). The crop shrinks to the largest rectangle inside.
 - **White balance**: under its heading, a **Mode** menu (As shot; Auto,
-  on RAW files; the RAW file's presets — on a RAF, Daylight, Cloudy,
-  Shade, Tungsten, the fluorescents, Flash, Underwater, as the body has
-  them (one whose values are those of another, as Underwater is of
-  Daylight on many bodies, is listed once); on a DNG or a Sony ARW with
+  on RAW files; the RAW file's presets — on a RAF, the camera's own,
+  read from the file: Daylight, Shade, Tungsten and three fluorescents
+  (daylight, day white, cool white), none on a RAF whose header does not
+  hold them (one whose values are those of another is listed once); on a DNG or a Sony ARW with
   measured colour, the standard illuminants Daylight, Cloudy, Shade and
   Tungsten through the file's own calibration; none on an ARW without);
   and Custom, which the sliders set) and a **picker** (the pipette):
@@ -460,8 +466,9 @@ the newer version made.
   an ARW with measured colour) the Temperature readout shows Kelvin and
   takes typed Kelvin (clamped to 2000–50000 K, then to what the slider
   reaches, with the readout showing the Kelvin reached; text that is not
-  a number puts the readout back): a RAF's from a scale fitted to the
-  body's presets, a DNG's or ARW's measured, the colour temperature of
+  a number puts the readout back): a RAF's from a scale fitted through
+  the camera's illuminant A and D65 whites in the file (none without
+  them), a DNG's or ARW's measured, the colour temperature of
   the white both sliders make, exactly the file's as-shot Kelvin at As
   shot. On an ARW without measured colour Temperature is relative. On
   every RAW file the group waits,

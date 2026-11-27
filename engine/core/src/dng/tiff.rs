@@ -34,6 +34,8 @@ pub enum TagId {
     ForwardMatrix2 = 50965,
     ProfileToneCurve = 50940,
     ProfileGainTableMap = 52525,
+    /// DNG 1.7's form of the gain table map.
+    ProfileGainTableMap2 = 52544,
     BaselineExposureOffset = 51109,
     CfaRepeatPatternDim = 33421,
     Make = 271,

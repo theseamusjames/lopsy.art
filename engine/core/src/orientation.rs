@@ -11,8 +11,6 @@
 /// "rotated 90°" orientations (5..=8) the width and height swap. Orientation
 /// 1 (and the absent/0 case) is a no-op copy.
 pub fn apply_exif_orientation(w: u32, h: u32, src: &[f32], orientation: u16) -> (u32, u32, Vec<f32>) {
-    let wu = w as usize;
-    let hu = h as usize;
     if orientation == 1 || orientation == 0 {
         return (w, h, src.to_vec());
     }
@@ -22,10 +20,17 @@ pub fn apply_exif_orientation(w: u32, h: u32, src: &[f32], orientation: u16) -> 
         5 | 6 | 7 | 8 => (h, w),
         _ => (w, h),
     };
-    let owu = out_w as usize;
-    let ohu = out_h as usize;
-    let mut dst = vec![0.0f32; owu * ohu * 4];
+    let mut dst = vec![0.0f32; out_w as usize * out_h as usize * 4];
+    orient_into(w, h, src, orientation, &mut dst);
+    (out_w, out_h, dst)
+}
 
+/// Write `src` turned by `orientation` (2..=8) into `dst`, which holds the
+/// turned image's pixels.
+fn orient_into(w: u32, h: u32, src: &[f32], orientation: u16, dst: &mut [f32]) {
+    let wu = w as usize;
+    let hu = h as usize;
+    let owu = if matches!(orientation, 5..=8) { hu } else { wu };
     for y in 0..hu {
         for x in 0..wu {
             let s = (y * wu + x) * 4;
@@ -47,7 +52,6 @@ pub fn apply_exif_orientation(w: u32, h: u32, src: &[f32], orientation: u16) -> 
             dst[d + 3] = src[s + 3];
         }
     }
-    (out_w, out_h, dst)
 }
 
 /// Like `apply_exif_orientation`, but takes ownership so the common
@@ -57,6 +61,22 @@ pub fn apply_exif_orientation_owned(w: u32, h: u32, src: Vec<f32>, orientation: 
         return (w, h, src);
     }
     apply_exif_orientation(w, h, &src, orientation)
+}
+
+/// [`apply_exif_orientation_owned`], or `None` when the turned copy cannot
+/// be allocated (a band render returns a sentence then instead of
+/// aborting the worker).
+pub fn try_apply_exif_orientation_owned(w: u32, h: u32, src: Vec<f32>, orientation: u16) -> Option<(u32, u32, Vec<f32>)> {
+    if orientation == 1 || orientation == 0 {
+        return Some((w, h, src));
+    }
+    let (out_w, out_h) = if matches!(orientation, 5..=8) { (h, w) } else { (w, h) };
+    let n = src.len();
+    let mut dst: Vec<f32> = Vec::new();
+    dst.try_reserve_exact(n).ok()?;
+    dst.resize(n, 0.0);
+    orient_into(w, h, &src, orientation, &mut dst);
+    Some((out_w, out_h, dst))
 }
 
 #[cfg(test)]
@@ -74,6 +94,15 @@ mod tests {
     fn px(buf: &[f32], w: u32, x: u32, y: u32) -> [f32; 4] {
         let i = ((y * w + x) * 4) as usize;
         [buf[i], buf[i + 1], buf[i + 2], buf[i + 3]]
+    }
+
+    #[test]
+    fn the_fallible_turn_is_the_same_turn() {
+        let src: Vec<f32> = (0..3 * 2 * 4).map(|i| i as f32).collect();
+        for o in 0..=9 {
+            let (w, h, px) = apply_exif_orientation(3, 2, &src, o);
+            assert_eq!(try_apply_exif_orientation_owned(3, 2, src.clone(), o), Some((w, h, px)), "{o}");
+        }
     }
 
     #[test]

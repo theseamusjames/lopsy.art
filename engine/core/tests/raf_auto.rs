@@ -95,8 +95,9 @@ fn white_balance_presets_place_daylight_near_a_sunny_as_shot() {
     for path in &files {
         let data = std::fs::read(path).unwrap();
         let Ok((model, Some(as_shot))) = lopsy_core::raf::read_wb_info(&data) else { continue };
-        let presets = lopsy_core::raf::wb_presets::recipe_presets(&model, as_shot);
-        let kelvin = lopsy_core::raf::wb_presets::kelvin_scale(&model, as_shot);
+        let camera = lopsy_core::raf::wb_presets::read_camera_white_balance(&data);
+        let presets = lopsy_core::raf::wb_presets::recipe_presets(&camera, as_shot);
+        let kelvin = lopsy_core::raf::wb_presets::kelvin_scale(&camera, as_shot);
         println!("{} ({model}): {presets:?}; {kelvin:?}", path.file_name().unwrap().to_string_lossy());
         if path.file_name().is_some_and(|n| n == "DSCF6952.RAF") {
             let daylight = presets.iter().find(|p| p.name == "Daylight").expect("a Daylight preset");

@@ -113,7 +113,7 @@ pub enum MatrixModel {
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum KelvinModel {
-    /// A line fitted to the body's presets (RAF):
+    /// A line fitted through the camera's calibration whites (RAF):
     /// `kelvin = 1e6 / (miredAtZero + miredPerUnit · temperature)`.
     Fitted { mired_at_zero: f32, mired_per_unit: f32, as_shot_kelvin: f32 },
     /// From the file's calibration (DNG, measured ARW): the correlated
@@ -232,6 +232,10 @@ pub trait RawFormat {
 ///   saturation, the look these formats opened with before Standard: a flat
 ///   start for grading. Same exposure as Standard.
 /// - `monochrome`, "Monochrome": Standard with no colour.
+///
+/// A DNG that opens with its own curve (its gain table map applied, its
+/// `ProfileToneCurve` used) lists its camera look first instead, "Camera",
+/// then Standard matched to the camera's preview (`raw::dng`).
 pub(crate) fn standard_profiles(defaults: &RawDevelopSettings) -> Vec<DevelopProfile> {
     let settings = |saturation: f32, base_curve: Option<Vec<f32>>| ProfileSettings {
         cam_to_rgb: defaults.cam_to_rgb,

@@ -32,12 +32,12 @@ describe('white balance presets', () => {
   });
 
   it('leaves out a preset whose slider values are those of an earlier one', () => {
-    // A Fujifilm body's Underwater multipliers are within a percent of its Daylight ones: the same two slider values.
+    // Two presets whose multipliers are within a percent of each other round to the same two slider values.
     const json = JSON.stringify([
-      { name: 'Daylight', temperature: 45, tint: -17 },
-      { name: 'Cloudy', temperature: 74, tint: -27 },
-      { name: 'Underwater', temperature: 45.3, tint: -16.6 },
-      { name: 'Shade', temperature: 45, tint: -18 },
+      { name: 'Daylight', temperature: 20, tint: -5 },
+      { name: 'Cloudy', temperature: 45, tint: -15 },
+      { name: 'Underwater', temperature: 20.3, tint: -4.6 },
+      { name: 'Shade', temperature: 20, tint: -6 },
     ]);
     expect(parsePresets(json).map((p) => p.name)).toEqual(['Daylight', 'Cloudy', 'Shade']);
   });

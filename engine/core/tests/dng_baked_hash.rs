@@ -45,8 +45,9 @@ fn baked_hash(data: &[u8]) -> u64 {
     h.0
 }
 
-fn linear_hash(data: &[u8]) -> u64 {
-    let prep = lopsy_core::dng::linear::prepare_dng(data).unwrap();
+fn linear_hash(data: &[u8], apply_gain_table_map: bool) -> u64 {
+    let options = lopsy_core::dng::linear::PrepareOptions { apply_gain_table_map };
+    let prep = lopsy_core::dng::linear::prepare_dng_with(data, options).unwrap();
     let mut h = Fnv::new();
     h.eat(serde_json::to_string(&prep.params).unwrap().as_bytes());
     h.floats(&prep.plane);
@@ -56,14 +57,21 @@ fn linear_hash(data: &[u8]) -> u64 {
     h.0
 }
 
-/// (file, baked decode, linear plane and parameters) at commit 682471f19.
-/// The linear hashes were re-recorded when DNG began to open with the
-/// Standard curve: only the wording of the ProfileToneCurve note in the
-/// not-applied list changed ("the Standard curve is used instead"); the
-/// plane and parameters hashed the same with the old wording.
-const EXPECTED: [(&str, u64, u64); 2] = [
-    ("sample_dng_00.dng", 0x3e370f9742a8521a, 0x362fbac48dda4a8f),
-    ("sample_dng_01.dng", 0x9bc594c8f822e0b5, 0xf8319c3b76fb6480),
+/// (file, baked decode, linear plane and parameters without the gain map,
+/// with it) at commit 682471f19. The linear hashes were re-recorded when
+/// DNG began to open with the Standard curve: only the wording of the
+/// ProfileToneCurve note in the not-applied list changed ("the Standard
+/// curve is used instead"); the plane and parameters hashed the same with
+/// the old wording. The plane without the map is the one before
+/// `ProfileGainTableMap` was applied (`PrepareOptions`), and hashes as it
+/// did; the last column is the plane with the map applied, its clip levels
+/// and its shorter not-applied list, recorded when the map was, and again
+/// when its parameters began to carry the file's own tone curve (the camera
+/// look, `camera_curve`) and ProfileToneCurve left the not-applied list:
+/// the plane itself did not change then.
+const EXPECTED: [(&str, u64, u64, u64); 2] = [
+    ("sample_dng_00.dng", 0x3e370f9742a8521a, 0x362fbac48dda4a8f, 0xcc34e68de4ff5fcc),
+    ("sample_dng_01.dng", 0x9bc594c8f822e0b5, 0xf8319c3b76fb6480, 0x925740f22a2e626b),
 ];
 
 #[test]
@@ -77,19 +85,20 @@ fn dng_decodes_are_unchanged_on_every_sample() {
         files.sort();
         for p in files {
             let data = std::fs::read(&p).unwrap();
-            println!("(\"{}\", {:#018x}, {:#018x}),", p.file_name().unwrap().to_string_lossy(), baked_hash(&data), linear_hash(&data));
+            println!("(\"{}\", {:#018x}, {:#018x}, {:#018x}),", p.file_name().unwrap().to_string_lossy(), baked_hash(&data), linear_hash(&data, false), linear_hash(&data, true));
         }
     }
     let mut seen = 0;
-    for (name, baked, linear) in EXPECTED {
+    for (name, baked, linear, mapped) in EXPECTED {
         let Ok(data) = std::fs::read(dir.join(name)) else {
             eprintln!("{name} is not in {}: skipped", dir.display());
             continue;
         };
-        let (b, l) = (baked_hash(&data), linear_hash(&data));
-        eprintln!("{name}: baked {b:#018x}, linear {l:#018x}");
+        let (b, l, m) = (baked_hash(&data), linear_hash(&data, false), linear_hash(&data, true));
+        eprintln!("{name}: baked {b:#018x}, linear {l:#018x}, with the gain map {m:#018x}");
         assert_eq!(b, baked, "{name}: the baked DNG decode changed");
         assert_eq!(l, linear, "{name}: the linear DNG plane or its parameters changed");
+        assert_eq!(m, mapped, "{name}: the linear DNG plane with its gain map, or its parameters, changed");
         seen += 1;
     }
     eprintln!("{seen} DNG files hashed");

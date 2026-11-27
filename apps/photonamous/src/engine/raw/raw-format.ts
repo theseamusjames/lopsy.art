@@ -14,36 +14,27 @@ import { readKelvinScale, readPresets, type KelvinScale, type WhiteBalancePreset
 /** The engine's format ids; a new format brings its own. */
 export type RawFormatId = 'raf' | 'dng' | 'arw' | (string & {});
 
-/**
- * The formats the Edit view develops through the RAW interface (unless the
- * version being shown says to open the baked decode instead).
- */
+/** The formats the Edit view develops through the RAW interface. */
 export const RAW_PATH_FORMATS: ReadonlySet<ImageFormat> = new Set<ImageFormat>(['raf', 'dng', 'arw']);
-
-/**
- * The formats whose description has `finishedBands`: their finished look
- * renders in bands, so a GPU without float targets takes them through the
- * workers too; the others open with the baked decode there. Known before
- * the file is prepared, so the choice is made before any worker starts;
- * the engine has no call that says it from the format alone, and the
- * decode checks the description agrees.
- */
-const FINISHED_BAND_FORMATS: ReadonlySet<string> = new Set(['raf']);
-
-export function formatHasFinishedBands(format: string): boolean {
-  return FINISHED_BAND_FORMATS.has(format);
-}
 
 /**
  * How a photo in `format` opens: 'raw', through the RAW interface; 'baked',
  * as the finished picture the engine's baked decode makes, where the GPU
- * has no float targets and the format has no finished look in bands;
+ * has no float targets and the format renders no finished look in bands;
  * 'image', any other photo. (A file the RAW interface cannot prepare also
  * falls back to the baked decode, once it has tried.)
+ *
+ * `rendersFinishedBands` is the engine's `rawRendersFinishedBands`, which
+ * answers from the format id alone, so the choice is made before any
+ * worker starts; the decode checks the file's description agrees.
  */
-export function rawLoadPath(format: ImageFormat, hasFloat: boolean): 'raw' | 'baked' | 'image' {
+export function rawLoadPath(
+  format: ImageFormat,
+  hasFloat: boolean,
+  rendersFinishedBands: (format: string) => boolean,
+): 'raw' | 'baked' | 'image' {
   if (!RAW_PATH_FORMATS.has(format)) return 'image';
-  return hasFloat || formatHasFinishedBands(format) ? 'raw' : 'baked';
+  return hasFloat || rendersFinishedBands(format) ? 'raw' : 'baked';
 }
 
 /** Where Kelvin comes from, if anywhere. */

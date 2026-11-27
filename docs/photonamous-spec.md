@@ -125,7 +125,7 @@ what each piece is and what it lacks for this app.
 |---|---|---|
 | Fujifilm RAF decode | `engine/core/src/raf/`: X-Trans Markesteijn demosaic, Fujifilm 14-bit lossless decompression, CFA-phase detection, as-shot white balance. A worker pool renders row bands bit-identically (`apps/lopsy-web/src/io/raf-decode.ts`). | The decode bakes a final look and clamps it to 0..1: film-simulation saturation, a 1.3× exposure boost, highlight desaturation, base curve, sRGB gamma, capture sharpening. Develop needs it to stop at linear, unclamped camera RGB. Lossy and 12-bit compressed RAF are unsupported. |
 | DNG decode | `engine/core/src/dng/`: CFA and Linear DNG (Apple ProRAW), lossless JPEG, deflate, LinearizationTable, ForwardMatrix and ColorMatrix paths | Bilinear Bayer demosaic only. Opcode lists (lens correction data) are not applied. Only iPhone ProRAW has been tested. Lossy JPEG and JPEG XL DNGs are unsupported. Also clamps to 0..1. |
-| White-balance presets | `engine/core/src/raf/wb_presets.rs`: 341 measured presets across 49 Fujifilm bodies | Compiled in but nothing calls it. It becomes the White balance presets. |
+| White-balance presets | `engine/core/src/raf/wb_presets.rs`: reads the camera's own presets and its illuminant A and D65 whites from the RAF itself | Read only from files whose header has the layout it was identified on (the X100VI, X-E5 and X-T5 samples); another body gets no presets. |
 | Camera profiles | `engine/core/src/raf/dcp.rs`: a complete DCP reader (matrices, tone curve, hue/sat maps, look table) | Parse-only, with no consumer. It becomes the Profile control. |
 | Camera looks | `engine/core/src/raf/base_curves.rs`: film-simulation tone curves and saturation | Baked into decode. They become profiles. |
 | Colour matrices | One ColorMatrix per Fujifilm sensor generation (`color_matrix_for_model`) | Temperature and tint in kelvin need two illuminants per camera (8: E9). |
@@ -272,7 +272,7 @@ can be switched off, to see what it does, and reset.
 | Group | Controls | Notes |
 |---|---|---|
 | Profile | Standard, Neutral (flat, for grading), Monochrome; Fujifilm camera looks from the existing base curves; profiles the user added (DCP files); Amount | The Fujifilm looks are named after the in-camera setting they approximate; confirm the wording (open question 9) |
-| White balance | As shot, Auto, presets (Daylight, Cloudy, Shade, Tungsten, Fluorescent, Flash), Temperature (K), Tint, a picker that clicks on something neutral | Presets come from `wb_presets.rs` for Fujifilm bodies and from camera data for others. JPEG, PNG and WebP get relative Temperature and Tint. |
+| White balance | As shot, Auto, presets (Daylight, Cloudy, Shade, Tungsten, Fluorescent, Flash), Temperature (K), Tint, a picker that clicks on something neutral | Presets come from the file: a RAF's own preset table (`wb_presets.rs`), a DNG's or measured ARW's calibration for the standard illuminants. JPEG, PNG and WebP get relative Temperature and Tint. |
 | Tone | Exposure (EV), Contrast, Highlights, Shadows, Whites, Blacks, Auto | Auto sets values the user can see and change |
 | Curves | Point curves for luminance, red, green and blue | Reuses Lopsy's `CurveEditor` |
 | Color | Vibrance, Saturation; Color by hue (eight hues, each with hue, saturation and brightness); Black & White with a per-hue mix | |

@@ -5,21 +5,55 @@
 use super::white_balance::{illuminant_presets, measured_white, temperature_for_kelvin};
 use super::{standard_profiles, KelvinModel, MatrixModel, OpeningLook, PresetSource, RawDescription, RawFormat, RawFormatId, RawPlane, RawWhite, WhiteBalanceModel};
 use crate::dng::linear::{self, DngRenderParams, PlaneParams};
+use crate::raf::develop::{DevelopProfile, ProfileRole, ProfileSettings, RawDevelopSettings};
 use crate::raf::{RafBand, RafBandPixels};
 
 pub struct Dng;
 
-/// The opening exposure matched to the camera's preview (`dng::preview`),
-/// or `None` when the file does not qualify or has no usable preview.
+/// The exposure at which `look`'s curve and saturation match the camera's
+/// preview (`dng::preview`), or `None` when the file does not qualify or
+/// has no usable preview.
 fn preview_exposure(data: &[u8], params: &DngRenderParams, plane: &[f32], look: &OpeningLook) -> Option<f32> {
-    use crate::arw::exposure::{match_rendered_median, preview_sized_view};
-    use crate::dng::preview::{camera_preview_for_exposure, MAX_ABOVE_BASELINE, MIN_BELOW_BASELINE};
-    let (ow, oh) = params.oriented_size();
-    let preview = camera_preview_for_exposure(data, f64::from(ow) / f64::from(oh))?;
-    let (sw, sh, rgba) = preview_sized_view(plane, params, &preview)?;
-    let settings = linear::develop_defaults_with(params, look).ok()?;
-    let base = params.calibration.baseline_exposure as f32;
-    Some(match_rendered_median(&rgba, sw, sh, &settings, preview.median, (base - MIN_BELOW_BASELINE, base + MAX_ABOVE_BASELINE)))
+    use crate::dng::preview::{matched_exposure, MAX_ABOVE_BASELINE, MIN_BELOW_BASELINE};
+    let defaults = linear::develop_defaults_with(params, look).ok()?;
+    let settings = RawDevelopSettings { base_curve: Some(look.curve.lut()), saturation: look.saturation, ..defaults };
+    matched_exposure(data, params, plane, &settings, (MIN_BELOW_BASELINE, MAX_ABOVE_BASELINE))
+}
+
+/// The profiles of a file that opens with its own curve (its gain table
+/// map applied, its `ProfileToneCurve` usable): the camera look first,
+/// named "Camera" and standing for the maker's standard; then the
+/// Standard look, at the exposure that matches the camera's preview, when
+/// there is one (at the BaselineExposure the Standard curve opens these
+/// files a stop or more too bright, so without a preview it is left out);
+/// then Neutral, and Monochrome as the camera look without colour.
+fn camera_curve_profiles(defaults: &RawDevelopSettings, standard_ev: Option<f32>, look: &OpeningLook) -> Vec<DevelopProfile> {
+    let mut list = standard_profiles(defaults);
+    if let Some(camera) = list.iter_mut().find(|p| p.role == ProfileRole::Camera) {
+        camera.name = "Camera".into();
+        camera.menu_name = "Camera".into();
+        camera.maker_standard = true;
+    }
+    if let Some(ev) = standard_ev {
+        let standard = DevelopProfile {
+            id: "standard".into(),
+            name: "Standard".into(),
+            settings: ProfileSettings {
+                cam_to_rgb: defaults.cam_to_rgb,
+                exposure_ev: ev,
+                saturation: look.saturation,
+                highlight_desaturation: defaults.highlight_desaturation,
+                base_curve: Some(look.curve.lut()),
+            },
+            role: ProfileRole::Look,
+            menu_name: "Standard".into(),
+            listed: true,
+            same_as: None,
+            maker_standard: false,
+        };
+        list.insert(1, standard);
+    }
+    list
 }
 
 impl RawFormat for Dng {
@@ -30,12 +64,20 @@ impl RawFormat for Dng {
         let mut prep = linear::prepare_dng(data).map_err(|e| format!("DNG cannot open as RAW: {e}"))?;
         // Clipped channels of a Bayer plane are reconstructed, as a RAF's.
         prep.params.highlight_chroma = linear::measure_highlight_chroma(&prep.plane, &prep.params.layout(), prep.params.clip_levels);
-        // A prototype, off by default: a file that relies on a gain map
-        // opens as bright as the camera's preview, through the curve.
+        // A file with a gain map opens as bright as the camera's preview
+        // through the Standard curve (`dng::preview` says why), unless the
+        // map was applied and the file has its own curve: that pair opens
+        // at the BaselineExposure, and the match is kept for the Standard
+        // entry of its profile list.
         if look.dng_preview_exposure {
             if let Some(ev) = preview_exposure(data, &prep.params, &prep.plane, look) {
-                prep.params.default_exposure_ev = Some(ev);
-                prep.debug_log.push(format!("[DNG] develop exposure {ev:+.3} EV, matched to the camera's preview (baseline {:+.3})", prep.params.calibration.baseline_exposure));
+                if prep.params.camera_curve.is_some() {
+                    prep.params.standard_exposure_ev = Some(ev);
+                    prep.debug_log.push(format!("[DNG] develop exposure: the BaselineExposure {:+.3} with the file's own curve; Standard {ev:+.3} EV, matched to the camera's preview", prep.params.calibration.baseline_exposure));
+                } else {
+                    prep.params.default_exposure_ev = Some(ev);
+                    prep.debug_log.push(format!("[DNG] develop exposure {ev:+.3} EV, matched to the camera's preview (baseline {:+.3})", prep.params.calibration.baseline_exposure));
+                }
             }
         }
         Ok(RawPlane { params: prep.params, plane: prep.plane, not_applied: prep.unhandled, debug_log: prep.debug_log })
@@ -57,7 +99,7 @@ impl RawFormat for Dng {
             camera_model: p.camera_model.clone(),
             color_note: None,
             not_applied: prep.not_applied.clone(),
-            profiles: standard_profiles(&defaults),
+            profiles: if p.camera_curve.is_some() { camera_curve_profiles(&defaults, p.standard_exposure_ev, look) } else { standard_profiles(&defaults) },
             develop_defaults: defaults,
             white_balance: WhiteBalanceModel {
                 matrix: MatrixModel::PerWhite,

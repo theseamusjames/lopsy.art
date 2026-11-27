@@ -33,8 +33,7 @@ function isFiniteNumber(v: unknown): v is number {
  * preset whose slider values are those of one already listed. A preset is
  * stored as its two slider values and the menu names the first preset
  * that matches them, so the second of two equal ones could never be
- * shown as chosen. They do occur: on many bodies the camera's Underwater
- * multipliers are its Daylight ones.
+ * shown as chosen.
  */
 export function parsePresets(json: string): WhiteBalancePresetValues[] {
   let raw: unknown;
@@ -97,9 +96,10 @@ export const KELVIN_RANGE = { min: 2000, max: 50000 } as const;
 
 /**
  * How a format with Kelvin shows the recipe's relative Temperature and
- * takes typed Kelvin back. 'fitted': a line fitted to the body's presets,
- * which ignores Tint; 'measured': the colour temperature of the white the
- * file's calibration gives for both sliders.
+ * takes typed Kelvin back. 'fitted': a line fitted through the camera's
+ * illuminant A and D65 whites (a RAF), which ignores Tint; 'measured':
+ * the colour temperature of the white the file's calibration gives for
+ * both sliders.
  */
 export interface KelvinReadout {
   readonly kind: 'fitted' | 'measured';
