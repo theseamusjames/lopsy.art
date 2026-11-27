@@ -111,27 +111,52 @@ export function sizeChoicesFor(
 
 /**
  * What the Export dialog says when the size chosen asks more of some
- * photos than this device's GPU can hold (`textureLimit`, its largest
- * texture side; null when unknown): each is exported at the largest size
- * the device can edit instead (`full-size.ts`), a crop smaller in proportion. An
- * enlargement asked for is made from that size. `photos` are the photos'
- * own sizes, as imported; a photo of unknown size is left out. Null when
- * no photo is affected.
+ * photos than this device's GPU can edit at once (`textureLimit`, its
+ * largest texture side; null when unknown). `photos` are the photos' own
+ * sizes, as imported; a photo of unknown size is left out. Null when no
+ * photo is affected.
+ *
+ * Where the engine makes tiles (`canTile`: float targets, so not the 8-bit
+ * fallback), each is exported at the size asked for, its own included, a
+ * part at a time (tile-plan.ts), except an HDR file smaller than its own
+ * size, which is made from the largest size the device can edit. Without
+ * tiles each is exported at that largest size (`full-size.ts`), a crop
+ * smaller in proportion, and an enlargement asked for is made from it. A
+ * photo the export cannot make in parts after all (a file the RAW decode
+ * refuses, an edit that leaves no workable tile) is said when it is made.
  */
 export function deviceSizeNote(
   photos: readonly (PixelSize | null)[],
   textureLimit: number | null,
   format: ExportFormat,
   extras: Pick<ExportExtras, 'size' | 'allowEnlarge'>,
+  canTile = false,
 ): string | null {
   if (textureLimit === null || !(textureLimit > 0)) return null;
   const limit = editableLimit(textureLimit);
-  const asked = (own: PixelSize) => (isAlwaysFullSize(format) ? own : outputSize(own, isHdrFormat(format) ? { ...extras, allowEnlarge: false } : extras));
+  const isHdr = isHdrFormat(format);
+  const asked = (own: PixelSize) => (isAlwaysFullSize(format) ? own : outputSize(own, isHdr ? { ...extras, allowEnlarge: false } : extras));
   const long = (size: PixelSize) => Math.max(size.width, size.height);
   const over = photos.filter((own): own is PixelSize => own !== null && long(own) > limit && long(asked(own)) > limit);
   const [first] = over;
   if (!first) return null;
-  const enlarged = extras.allowEnlarge && !isAlwaysFullSize(format) && !isHdrFormat(format) ? ' Larger sizes are enlarged from that.' : '';
+  if (canTile) {
+    // An HDR file below its own size is made from the held image (develop-engine.ts `encodeTiledOrNot`).
+    const isHdrReduced = (own: PixelSize) => isHdr && long(asked(own)) < long(own);
+    if (photos.length === 1) {
+      const lead = `This photo is ${first.width} × ${first.height} pixels, more than this device’s graphics can edit at once (${limit} on a side).`;
+      if (isHdrReduced(first)) {
+        const held = heldSize(first, limit);
+        return `${lead} An HDR file is made a part at a time only at its full size; smaller, the largest this device can make is ${held.width} × ${held.height}.`;
+      }
+      const full = long(asked(first)) === long(first) ? ' at its full size,' : '';
+      return `${lead} It is exported${full} a part at a time.`;
+    }
+    const count = over.length === 1 ? 'One of these photos is' : `${over.length} of these photos are`;
+    const hdr = over.some(isHdrReduced) ? ` An HDR file smaller than its photo’s own size is made at most ${limit} pixels on its long edge.` : '';
+    return `${count} more than this device’s graphics can edit at once (${limit} pixels on a side), so each is exported a part at a time.${hdr}`;
+  }
+  const enlarged = extras.allowEnlarge && !isAlwaysFullSize(format) && !isHdr ? ' Larger sizes are enlarged from that.' : '';
   if (photos.length === 1) {
     const held = heldSize(first, limit);
     return (

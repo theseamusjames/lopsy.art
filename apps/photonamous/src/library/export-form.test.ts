@@ -104,6 +104,24 @@ describe('deviceSizeNote', () => {
     expect(deviceSizeNote([null], 8192, 'jpeg', DEFAULT_EXTRAS)).toBeNull();
   });
 
+  it('says a photo larger than the textures is exported a part at a time where the engine makes tiles', () => {
+    expect(deviceSizeNote([q2], 8192, 'jpeg', DEFAULT_EXTRAS, true)).toBe(
+      'This photo is 8368 × 5584 pixels, more than this device’s graphics can edit at once (8190 on a side). It is exported at its full size, a part at a time.',
+    );
+    expect(deviceSizeNote([q2], 8192, 'png', { ...DEFAULT_EXTRAS, size: { mode: 'long', px: 8300 } }, true)).toBe(
+      'This photo is 8368 × 5584 pixels, more than this device’s graphics can edit at once (8190 on a side). It is exported a part at a time.',
+    );
+    expect(deviceSizeNote([q2], 8192, 'tiff', DEFAULT_EXTRAS, true)).toContain('at its full size, a part at a time');
+    expect(deviceSizeNote([q2], 8192, 'hdr-png', DEFAULT_EXTRAS, true)).toContain('at its full size, a part at a time');
+    expect(deviceSizeNote([q2], 8192, 'hdr-jpeg', { ...DEFAULT_EXTRAS, size: { mode: 'long', px: 8300 } }, true)).toContain(
+      'An HDR file is made a part at a time only at its full size; smaller, the largest this device can make is 8190 × 5465.',
+    );
+    expect(deviceSizeNote([q2, { width: 9000, height: 6000 }], 8192, 'jpeg', DEFAULT_EXTRAS, true)).toBe(
+      '2 of these photos are more than this device’s graphics can edit at once (8190 pixels on a side), so each is exported a part at a time.',
+    );
+    expect(deviceSizeNote([q2], 8192, 'jpeg', { ...DEFAULT_EXTRAS, size: { mode: 'long', px: 4096 } }, true)).toBeNull();
+  });
+
   it('counts the photos it affects among several, and says an enlargement is made from the largest size', () => {
     const note = deviceSizeNote([q2, small, { width: 9000, height: 6000 }], 8192, 'png', { ...DEFAULT_EXTRAS, size: { mode: 'long', px: 9000 }, allowEnlarge: true });
     expect(note).toBe(

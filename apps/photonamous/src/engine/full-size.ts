@@ -87,10 +87,12 @@ export function fullSizeNoteText(note: FullSizeNote): string {
   if (note.kind === 'stepped-down') {
     return `This device ran short of graphics memory for this ${times(note.own)} photo, so it is shown and exported at ${times(note.shown)}.`;
   }
-  return (
-    `This photo is ${times(note.own)} pixels, larger than this device’s graphics can edit (${note.limit} on a side), ` +
-    `so it is shown and exported at ${times(note.shown)}.`
-  );
+  const larger = `This photo is ${times(note.own)} pixels, larger than this device’s graphics can edit (${note.limit} on a side), `;
+  if (note.exports === 'own') return `${larger}so it is shown at ${times(note.shown)}. It is exported at its full size, a part at a time.`;
+  if (note.exports === 'settings') {
+    return `${larger}so it is shown at ${times(note.shown)}. With these settings it cannot be exported a part at a time, so it is exported at ${times(note.shown)} too.`;
+  }
+  return `${larger}so it is shown and exported at ${times(note.shown)}.`;
 }
 
 /** The full size of one photo on one engine: what to try, and what happened. */
@@ -183,7 +185,6 @@ export class FullSizeLoads {
     if (!this.isTooLarge() || !this.loaded) return null;
     return this.loaded.width * this.loaded.height;
   }
-
 
   /** Why the photo is below its own size once settled; null when it is not (or nothing is settled yet). */
   outcome(): FullSizeOutcome | null {
