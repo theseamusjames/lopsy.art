@@ -161,11 +161,14 @@ pub fn decode_and_upload_dng(
 /// Decode a Sony ARW and upload it to a layer texture as f32 RGBA, as
 /// `decode_and_upload_dng` does a DNG (`lopsy_core::arw::read_arw`: sRGB,
 /// upright, cropped). Returns JSON: `{ width, height, baselineExposure,
-/// toneCurve, cameraModel, colorApproximate, colorNote, notApplied }`,
-/// the first four as for a DNG (`baselineExposure` 0, `toneCurve` empty),
-/// `colorApproximate` true and `colorNote` the sentence to show when the
-/// file carries no full colour matrix (every ARW today), `notApplied` the
-/// corrections the file records that the decode does not apply. An error
+/// toneCurve, cameraModel, colorApproximate, colorNote, notApplied,
+/// previewExposureEv }`, the first four as for a DNG (`baselineExposure`
+/// 0, `toneCurve` empty), `colorApproximate` false for a body with measured
+/// colour (`lopsy_core::arw::colour`), else true with `colorNote` the
+/// sentence to show (absent when there is none), `notApplied` the
+/// corrections the file records that the decode does not apply,
+/// `previewExposureEv` the exposure in stops applied to match the camera's
+/// embedded preview (`lopsy_core::arw::exposure`; 0 without one). An error
 /// is a sentence a person can read (an unsupported Sony format or
 /// variant, a damaged file).
 pub fn decode_and_upload_arw(
@@ -189,8 +192,10 @@ pub fn decode_and_upload_arw(
         tone_curve: Vec<[f64; 2]>,
         camera_model: &'a str,
         color_approximate: bool,
-        color_note: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        color_note: Option<&'a str>,
         not_applied: &'a [String],
+        preview_exposure_ev: f32,
     }
 
     let meta = ArwMeta {
@@ -199,9 +204,10 @@ pub fn decode_and_upload_arw(
         baseline_exposure: img.baseline_exposure,
         tone_curve: img.tone_curve.iter().map(|&(x, y)| [x, y]).collect(),
         camera_model: &arw.camera_model,
-        color_approximate: true,
+        color_approximate: arw.colour.is_approximate(),
         color_note: arw.colour.note(),
         not_applied: &arw.not_applied,
+        preview_exposure_ev: arw.exposure_ev,
     };
     serde_json::to_string(&meta).map_err(|e| format!("JSON serialize: {e}"))
 }

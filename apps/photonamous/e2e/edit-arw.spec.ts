@@ -33,6 +33,8 @@ function samplePath(name: string): string | null {
 }
 
 const COLOR_NOTE = /^Colour is approximate/;
+/** Bodies the engine has no measured colour for: their decode says its colour is approximate. */
+const APPROXIMATE = new Set(['ILCE-6000_DSC01542.ARW', 'DSC-RX100M3_DSC00734.ARW']);
 
 /** Makes an edit and measures the screen preview rendered for it, once the edit has settled. */
 async function previewAfter(page: Page, edit: () => Promise<void>): Promise<ImageStats> {
@@ -76,14 +78,14 @@ test.describe('Edit view on a Sony ARW', () => {
   test.skip(!sample, 'Set LOPSY_ARW_SAMPLES to the directory of Sony ARW samples to run this test');
   test.setTimeout(6 * 60_000);
 
-  test('the harness opens it at full size, says its colour is approximate, edits and exports it', async ({ page }) => {
+  test('the harness opens it at full size with measured colour and no note, edits and exports it', async ({ page }) => {
     await openHarness(page);
     await page.getByTestId('harness-file').setInputFiles(sample ?? '');
     await waitForReady(page, 120_000);
 
-    // The decoder's note, quietly under the Profile menu and read with it.
-    await expect(page.getByTestId('color-note')).toHaveText(COLOR_NOTE);
-    await expect(page.getByRole('combobox', { name: 'Profile' })).toHaveAccessibleDescription(COLOR_NOTE);
+    // The A7 IV's colour is measured, so the decoder sends no note and the Profile menu has none.
+    await expect(page.getByTestId('color-note')).toHaveCount(0);
+    await expect(page.getByRole('combobox', { name: 'Profile' })).toHaveAccessibleDescription('');
     await page.screenshot({ path: test.info().outputPath('arw-harness.png') });
 
     // A DNG-like decode: the whole picture at once, so the full resolution is already there.
@@ -129,7 +131,7 @@ test.describe('Edit view on a Sony ARW', () => {
 
     await page.keyboard.press('Enter');
     await waitForReady(page, 120_000);
-    await expect(page.getByTestId('color-note')).toHaveText(COLOR_NOTE);
+    await expect(page.getByTestId('color-note')).toHaveCount(0);
     await raiseExposure(page, 10);
     await expect(page.getByLabel('Exposure value')).toHaveValue('+1.00');
     await page.getByRole('button', { name: 'Back', exact: true }).first().click();
@@ -191,6 +193,14 @@ test.describe('Every ARW sample opens and renders', () => {
       await openHarness(page);
       await page.getByTestId('harness-file').setInputFiles(path ?? '');
       await waitForReady(page, 150_000);
+      // A body without measured colour says so, quietly under the Profile menu and read with it.
+      const note = page.getByTestId('color-note');
+      if (APPROXIMATE.has(name)) {
+        await expect(note).toHaveText(COLOR_NOTE);
+        await expect(page.getByRole('combobox', { name: 'Profile' })).toHaveAccessibleDescription(COLOR_NOTE);
+      } else {
+        await expect(note).toHaveCount(0);
+      }
       const shown = await previewAfter(page, () => setExposure(page, '0.5'));
       expect(Math.max(shown.width, shown.height)).toBe(2048);
       expect(shown.width / shown.height).toBeCloseTo(width / height, 2);

@@ -19,6 +19,7 @@ use super::{read_info, read_mosaic, ArwColour};
 use crate::black_level::BlackLevels;
 use crate::dng::linear::{fill_plane, plane_scales, DngKind, PlaneLayout, PlaneMapping, PlaneParams, StoredPlane};
 use crate::raf::base_curves;
+use crate::dng::camera_color::{DngCalibration, DngWhiteBalance};
 use crate::raf::develop::RawDevelopSettings;
 
 /// Every per-image decision the renders need, settled by [`prepare_arw`].
@@ -44,6 +45,10 @@ pub struct ArwRenderParams {
     pub cam_to_rgb: [f32; 9],
     /// Where `cam_to_rgb` came from.
     pub colour: ArwColour,
+    /// The body's measured calibration, when it has one: white balance
+    /// then follows the DNG colour method (`white_balance_for_ratio`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub calibration: Option<DngCalibration>,
     /// `Make Model`, for the host to show.
     pub camera_model: String,
 }
@@ -86,7 +91,7 @@ pub fn prepare_arw(data: &[u8]) -> Result<ArwPrepared, String> {
     let (scales, _) = plane_scales(&black, &[], &[], &[stored.white], w, h, 1)?;
     let source = StoredPlane { values: &mosaic.values, width: stored.width as usize, samples: 1, top, left, width_out: w, height_out: h };
     let table = mosaic.table.as_deref();
-    let mapping = PlaneMapping { kind: DngKind::Bayer, cfa, table, black: &black, scales: &scales, gain: stored.as_shot_gain };
+    let mapping = PlaneMapping { kind: DngKind::Bayer, cfa, table, black: &black, black_origin: (0, 0), scales: &scales, gain: stored.as_shot_gain };
     let plane = fill_plane(&source, |v| v, &mapping)?;
     let params = ArwRenderParams {
         width: c.width,
@@ -98,6 +103,7 @@ pub fn prepare_arw(data: &[u8]) -> Result<ArwPrepared, String> {
         clip_levels: Some(stored.as_shot_gain),
         cam_to_rgb: stored.cam_to_rgb,
         colour: stored.colour,
+        calibration: stored.calibration,
         camera_model: stored.camera_model,
     };
     Ok(ArwPrepared { params, plane, unhandled: stored.unhandled, debug_log: stored.debug_log })
@@ -105,7 +111,9 @@ pub fn prepare_arw(data: &[u8]) -> Result<ArwPrepared, String> {
 
 /// The develop settings an ARW opens with: the as-shot white balance
 /// (`wbRatio` 1), the file's matrix, no baseline exposure (an ARW records
-/// none), no extra saturation, and the engine's neutral base curve.
+/// none), no extra saturation, and the engine's neutral base curve. The
+/// exposure stays 0 here for now: the baked decode matches the camera's
+/// preview (`arw::exposure`), this path does not yet.
 pub fn develop_defaults(params: &ArwRenderParams) -> RawDevelopSettings {
     RawDevelopSettings {
         wb_ratio: [1.0, 1.0, 1.0],
@@ -117,3 +125,26 @@ pub fn develop_defaults(params: &ArwRenderParams) -> RawDevelopSettings {
         clip_levels: params.clip_levels,
     }
 }
+
+/// The RAW step's `wbRatio` and `camToRgb`, and the white point's kelvin
+/// and tint, for a `wbRatio` on top of the as-shot balance, by the DNG
+/// colour method. An error for a body without measured colour, whose
+/// matrix is fixed (`develop_defaults`' `camToRgb` holds for every white
+/// balance) and whose white balance has no colour temperature.
+pub fn white_balance_for_ratio(params: &ArwRenderParams, wb_ratio: [f32; 3]) -> Result<DngWhiteBalance, String> {
+    let cal = params.calibration.as_ref().ok_or(NO_CALIBRATION)?;
+    cal.white_balance_for_ratio(wb_ratio, params.as_shot_gain)
+        .ok_or_else(|| format!("white balance {wb_ratio:?} is not a colour this camera can see"))
+}
+
+/// The same for a white point in kelvin and tint.
+pub fn white_balance_for_temperature(params: &ArwRenderParams, kelvin: f32, tint: f32) -> Result<DngWhiteBalance, String> {
+    if !(kelvin.is_finite() && tint.is_finite()) {
+        return Err("temperature and tint must be numbers".into());
+    }
+    let cal = params.calibration.as_ref().ok_or(NO_CALIBRATION)?;
+    cal.white_balance_for_temperature(f64::from(kelvin), f64::from(tint), params.as_shot_gain)
+        .ok_or_else(|| format!("{kelvin} K, tint {tint} is not a white this camera can see"))
+}
+
+const NO_CALIBRATION: &str = "This camera has no measured colour data, so its white balance has no colour temperature";

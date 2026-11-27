@@ -87,9 +87,18 @@ const MARGIN = 0.03;
 // 4,848,472 B raw and 2,021,835 B gzip, glue 266,750 B and 34,297 B; with
 // them, +55,320 B (+1.1 %) and +22,341 B of wasm, +9,335 B and +1,348 B
 // of glue (+3.5 % and +3.9 %, past the margin on their own).
+//
+// Re-based after Sony ARW's colour and exposure, to what a local release
+// build measures (wasm 5,005,552 B raw and 2,089,277 B gzip; glue 278,698 B
+// and 36,044 B), because the two steps together had used two thirds of the
+// margin: measured colour for eleven Sony bodies and its white-balance
+// exports (+13.9 KB of wasm, +2.6 KB of glue), and the JPEG decoder that
+// reads the camera's embedded preview so an ARW opens as bright as the
+// camera rendered it (jpeg-decoder 0.3.2 without threads, with the exposure
+// match: +88.9 KB raw, +38.6 KB gzip).
 const BUDGET = {
-  'lopsy_wasm_bg.wasm': { raw: 4_903_792, gzip: 2_044_176 },
-  'lopsy_wasm.js': { raw: 276_085, gzip: 35_645 },
+  'lopsy_wasm_bg.wasm': { raw: 5_005_552, gzip: 2_089_277 },
+  'lopsy_wasm.js': { raw: 278_698, gzip: 36_044 },
 };
 
 function format(bytes) {

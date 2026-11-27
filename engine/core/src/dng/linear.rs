@@ -25,19 +25,32 @@
 //! as-shot gain, and channel `c` clips at `as_shot_gain[c]`
 //! (`clip_levels`).
 //!
+//! The kept area is the `ActiveArea` and, inside it, the `DefaultCrop`
+//! when it is whole pixels at `DefaultScale` 1 (`dng::image_area`); the
+//! black level tile and `CFAPattern` start at the active area's top-left.
+//!
 //! **Demosaic.** A Bayer DNG is demosaiced with the engine's bilinear
 //! Bayer interpolation (`dng::demosaic::bilinear`), the same one a Bayer
-//! RAF gets: soft, with colour fringes on fine detail. It has not been run
-//! on a real mosaic DNG (none is among the samples). A LinearRaw DNG is
+//! RAF gets: soft, with colour fringes on fine detail. A LinearRaw DNG is
 //! already demosaiced.
+//!
+//! **Checked on real files**: Apple ProRAW (LinearRaw, `dng_develop.rs`),
+//! and Adobe DNG Converter 9.8 files of one Canon EOS 5D Mark III frame
+//! (`dng_adobe.rs`): the Bayer mosaic uncompressed (16-bit strips) and
+//! lossless (256 × 256 lossless JPEG tiles), with an active area that
+//! masks a border, a 2 × 2 black level, a white level of 15000 and a
+//! default crop to 5760 × 3840; and its LinearRaw variants. Each lines up
+//! with the file's own preview and macOS's decode at no shift, with hues
+//! within 1° of them. The lossy JPEG variants are refused (`read_dng`).
 //!
 //! **What is not applied**, each a fallback-free omission the picture
 //! shows: opcode lists (`OpcodeList1–3`: lens shading `GainMap`, distortion
 //! and vignette corrections, bad pixels), `ProfileGainTableMap` (Apple's
 //! local tone map), `ProfileHueSatMap` and `ProfileLookTable` (the
 //! profile's hue and saturation twists), `ProfileToneCurve` (the engine's
-//! neutral base curve is used instead), `DefaultCrop` and `DefaultScale`
-//! (the whole active area is kept), semantic masks, a third calibration,
+//! neutral base curve is used instead), a `DefaultCrop` that is not whole
+//! pixels or comes with a `DefaultScale` (the whole active area is kept
+//! then), semantic masks, a third calibration,
 //! and highlight reconstruction (clipped channels stay clipped).
 //! [`unhandled_features`] lists the ones a file carries.
 
@@ -45,7 +58,7 @@ use serde::{Deserialize, Serialize};
 
 use super::camera_color::{Calibration, DngCalibration, DngWhiteBalance};
 use super::tiff::{IfdEntry, TagId};
-use super::{get_rational_array, get_rational_array_either, get_tag_u16, get_tag_u16_vec, get_tag_u32_vec, read_stored_image};
+use super::{get_rational_array, get_rational_array_either, get_tag_u16, get_tag_u16_vec, get_tag_u32_vec, image_area, read_stored_image, shift_cfa};
 use crate::black_level::BlackLevels;
 use crate::raf::develop::RawDevelopSettings;
 use crate::raf::{base_curves, RafBand, RafBandPixels};
@@ -191,7 +204,7 @@ pub fn unhandled_features(ifd0: &[IfdEntry], main: &[IfdEntry]) -> Vec<String> {
         (TagId::ProfileHueSatMapData1, "ProfileHueSatMap (the profile's hue and saturation corrections)"),
         (TagId::ProfileLookTableData, "ProfileLookTable (the profile's look)"),
         (TagId::ProfileToneCurve, "ProfileToneCurve (the neutral base curve is used instead)"),
-        (TagId::DefaultCropOrigin, "DefaultCrop (the whole active area is kept)"),
+        (TagId::DefaultCropOrigin, "DefaultCrop (not whole pixels at scale 1, so the whole active area is kept)"),
         (TagId::SemanticName, "semantic masks"),
         (TagId::ColorMatrix3, "a third calibration (ColorMatrix3)"),
         (TagId::ProfileHueSatMapData2, "a second ProfileHueSatMap"),
@@ -228,6 +241,9 @@ pub(crate) struct PlaneMapping<'a> {
     pub cfa: [u8; 4],
     pub table: Option<&'a [u16]>,
     pub black: &'a BlackLevels,
+    /// Where the kept area's top-left falls in the black level tile (rows,
+    /// columns): the tile starts at the active area's top-left.
+    pub black_origin: (usize, usize),
     pub scales: &'a [f64],
     pub gain: [f32; 3],
 }
@@ -309,7 +325,7 @@ pub(crate) fn fill_plane(src: &StoredPlane, raw_of: impl Fn(u16) -> u16, m: &Pla
                     Some(t) if !t.is_empty() => t[(raw as usize).min(last)],
                     _ => raw,
                 };
-                let v = ((f64::from(lin) - m.black.at(row, col, s)) * m.scales[s]).min(1.0);
+                let v = ((f64::from(lin) - m.black.at(row + m.black_origin.0, col + m.black_origin.1, s)) * m.scales[s]).min(1.0);
                 plane.push(v as f32 * m.gain[colour_of(row, col, s)]);
             }
         }
@@ -364,19 +380,16 @@ pub fn prepare_dng(data: &[u8]) -> Result<DngPrepared, String> {
 
     let calibration = calibration_from_tags(ifd0, main)?;
     let gain = as_shot_gain(&calibration)?;
-    let unhandled = unhandled_features(ifd0, main);
-
-    // ActiveArea: top, left, bottom, right in the stored image.
-    let (sw, sh) = (stored.width as usize, stored.height as usize);
-    let (top, left, bottom, right) = match u32s(ifd0, main, TagId::ActiveArea) {
-        Some(a) if a.len() == 4 => (a[0] as usize, a[1] as usize, a[2] as usize, a[3] as usize),
-        Some(_) => return Err("ActiveArea does not have four values".into()),
-        None => (0, 0, sh, sw),
-    };
-    if !(top < bottom && left < right && bottom <= sh && right <= sw) {
-        return Err(format!("ActiveArea {top},{left},{bottom},{right} is outside the {sw}×{sh} image"));
+    // The active area, and the default crop inside it (`dng::image_area`).
+    let sw = stored.width as usize;
+    let area = image_area(ifd0, main, stored.width, stored.height)?;
+    let (top, left, w, h) = (area.top, area.left, area.width, area.height);
+    let mut unhandled = unhandled_features(ifd0, main);
+    if area.default_crop_applied {
+        unhandled.retain(|u| !u.starts_with("DefaultCrop"));
     }
-    let (w, h) = (right - left, bottom - top);
+    // The pattern and black levels start at the active area's top-left.
+    cfa = shift_cfa(cfa, area.from_active);
     crate::decode::check_image_size(w as u32, h as u32, 4 * spp as u64)?;
 
     // Linearization, black level and white level, from the raw IFD.
@@ -411,7 +424,7 @@ pub fn prepare_dng(data: &[u8]) -> Result<DngPrepared, String> {
         }
     };
     let source = StoredPlane { values: &pixel_data, width: sw, samples: stored.samples as usize, top, left, width_out: w, height_out: h };
-    let mapping = PlaneMapping { kind, cfa, table: table.as_deref(), black: &black, scales: &scales, gain };
+    let mapping = PlaneMapping { kind, cfa, table: table.as_deref(), black: &black, black_origin: area.from_active, scales: &scales, gain };
     let plane = fill_plane(&source, raw_of, &mapping)?;
     drop(pixel_data);
 

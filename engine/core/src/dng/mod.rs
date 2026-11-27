@@ -15,9 +15,19 @@
 //! ## Processing pipeline
 //!
 //! For both Linear DNG (Apple ProRAW) and standard CFA DNG:
-//!   LinearizationTable → normalize → WB(AsShotNeutral) → neutralized cam→sRGB
-//!   matrix → BaselineExposure → ProfileToneCurve → sRGB gamma → auto-levels →
-//!   EXIF orientation
+//!   LinearizationTable → keep the ActiveArea and DefaultCrop → normalize →
+//!   WB(AsShotNeutral) → neutralized cam→sRGB matrix → BaselineExposure →
+//!   ProfileToneCurve → sRGB gamma → auto-levels → EXIF orientation
+//!
+//! Checked on real files: Apple ProRAW (LinearRaw, 10-bit with a
+//! LinearizationTable), and Adobe DNG Converter 9.8 files of a Canon EOS 5D
+//! Mark III frame (`tests/dng_adobe.rs`): the Bayer mosaic uncompressed and
+//! as lossless JPEG tiles (an active area masking a border, a 2 × 2 black
+//! level, a default crop), and its LinearRaw variants, uncompressed and
+//! lossless. Each lines up with its own preview and macOS's decode, with
+//! hues within 2° of them; the uncompressed and lossless files decode bit
+//! for bit the same. Lossy JPEG DNGs (`Compression` 34892) are refused: the
+//! engine has no baseline JPEG decoder.
 //!
 //! (The gain map is disabled by default — see ProfileGainTableMap note below.)
 //!
@@ -73,8 +83,10 @@
 //! - ProfileLookTable (tag 50981): 3D LUT for profile "look".
 //! - Move gain table map processing to a background thread/worker — it's
 //!   O(width × height) with 8 gain lookups per pixel, ~2-3s for 24MP.
-//! - Support additional compression formats (lossy JPEG, JPEG XL).
-//! - Test with non-Apple DNG files (Adobe DNG Converter output, other cameras).
+//! - Support additional compression formats (lossy JPEG, JPEG XL). Lossy
+//!   JPEG needs a baseline JPEG decoder and the `MapPolynomial` opcodes
+//!   (OpcodeList2) Adobe stores to make its 8-bit samples linear.
+//! - Test with DNGs from other converters and cameras.
 
 pub mod tiff;
 pub(crate) mod ljpeg;
@@ -216,6 +228,8 @@ pub(crate) fn read_stored_image(data: &[u8], debug_log: &mut Vec<String>) -> Res
             }
         }
         8 | 32946 => decode_deflate(&raw_bytes, bits)?,
+        // Baseline (lossy) JPEG tiles: the engine has no lossy JPEG decoder.
+        34892 => return Err("This DNG uses lossy JPEG compression, which is not supported yet".into()),
         _ => return Err(format!("Unsupported DNG compression: {compression}")),
     };
 
@@ -230,6 +244,75 @@ pub(crate) fn read_stored_image(data: &[u8], debug_log: &mut Vec<String>) -> Res
     let eight_bit_shifted = bits == 8 && matches!(compression, 1 | 8 | 32946);
     let byte_swapped = bits == 16 && matches!(compression, 1 | 8 | 32946) && !reader.is_little_endian();
     Ok(StoredImage { ifd0, main_ifd, width, height, bits, samples, photo_interp, pixel_data, expected_pixels, eight_bit_shifted, byte_swapped })
+}
+
+/// The part of the stored image that is the picture: the `ActiveArea`
+/// (the sensor area with image data; the rest is masked), and inside it
+/// the `DefaultCrop` (the area the camera's maker means to be shown).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ImageArea {
+    /// The kept rectangle in the stored image.
+    pub top: usize,
+    pub left: usize,
+    pub width: usize,
+    pub height: usize,
+    /// The kept rectangle's top-left relative to the active area's, where
+    /// the black level tile and the colour filter pattern start.
+    pub from_active: (usize, usize),
+    /// Whether `DefaultCrop` was applied (false when the file has none, or
+    /// one this decoder does not apply: see [`image_area`]).
+    pub default_crop_applied: bool,
+}
+
+/// The picture's area in a `width` × `height` stored image: `ActiveArea`
+/// (top, left, bottom, right; the whole image when absent), then
+/// `DefaultCropOrigin` and `DefaultCropSize` inside it. The crop is applied
+/// when it is whole pixels inside the active area and `DefaultScale` is
+/// absent or 1, 1 (the case for the files this was checked on); otherwise
+/// the whole active area is kept. An error when the active area does not
+/// fit the image.
+pub(crate) fn image_area(ifd0: &[IfdEntry], main: &[IfdEntry], width: u32, height: u32) -> Result<ImageArea, String> {
+    let (sw, sh) = (width as usize, height as usize);
+    let active = get_tag_u32_vec(main, TagId::ActiveArea).or_else(|_| get_tag_u32_vec(ifd0, TagId::ActiveArea)).ok();
+    let (top, left, bottom, right) = match active {
+        Some(a) if a.len() == 4 => (a[0] as usize, a[1] as usize, a[2] as usize, a[3] as usize),
+        Some(_) => return Err("ActiveArea does not have four values".into()),
+        None => (0, 0, sh, sw),
+    };
+    if !(top < bottom && left < right && bottom <= sh && right <= sw) {
+        return Err(format!("ActiveArea {top},{left},{bottom},{right} is outside the {sw}×{sh} image"));
+    }
+    let (aw, ah) = (right - left, bottom - top);
+    let whole = ImageArea { top, left, width: aw, height: ah, from_active: (0, 0), default_crop_applied: false };
+    // DefaultCrop is RATIONAL, SHORT or LONG.
+    let pair = |tag: TagId| -> Option<[f64; 2]> {
+        let r = get_rational_array_either(main, ifd0, tag);
+        let v: Vec<f64> = if r.is_empty() {
+            get_tag_u32_vec(main, tag).or_else(|_| get_tag_u32_vec(ifd0, tag)).ok()?.iter().map(|&x| f64::from(x)).collect()
+        } else {
+            r
+        };
+        (v.len() == 2 && v.iter().all(|x| x.is_finite())).then(|| [v[0], v[1]])
+    };
+    let (Some(origin), Some(size)) = (pair(TagId::DefaultCropOrigin), pair(TagId::DefaultCropSize)) else {
+        return Ok(whole);
+    };
+    let scale_is_one = pair(TagId::DefaultScale).is_none_or(|s| s == [1.0, 1.0]);
+    let whole_pixels = origin.iter().chain(size.iter()).all(|v| *v >= 0.0 && (v - v.round()).abs() < 1e-6);
+    if !(scale_is_one && whole_pixels) {
+        return Ok(whole);
+    }
+    // Origin and size are horizontal, then vertical.
+    let (cx, cy, cw, ch) = (origin[0] as usize, origin[1] as usize, size[0] as usize, size[1] as usize);
+    if cw == 0 || ch == 0 || cx + cw > aw || cy + ch > ah {
+        return Ok(whole);
+    }
+    Ok(ImageArea { top: top + cy, left: left + cx, width: cw, height: ch, from_active: (cy, cx), default_crop_applied: true })
+}
+
+/// A 2×2 colour filter pattern that starts `(dy, dx)` into `pattern`.
+pub(crate) fn shift_cfa(pattern: [u8; 4], (dy, dx): (usize, usize)) -> [u8; 4] {
+    std::array::from_fn(|i| pattern[(((i >> 1) + dy) & 1) * 2 + (((i & 1) + dx) & 1)])
 }
 
 pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
@@ -302,6 +385,27 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         get_rational_array(&main_ifd, TagId::BlackLevelDeltaV),
     );
 
+    // Keep the picture: the active area (the rest of a sensor's data is
+    // masked, dark border) and the default crop inside it. The black level
+    // tile and the colour filter pattern start at the active area's
+    // top-left; `from_active` carries them to the kept area's.
+    let area = image_area(&ifd0, &main_ifd, width, height)?;
+    let (dy, dx) = area.from_active;
+    let (pixel_data, width, height, expected_pixels) = if (area.top, area.left, area.width, area.height) == (0, 0, width as usize, height as usize) {
+        (pixel_data, width, height, expected_pixels)
+    } else {
+        let stride = if is_linear { samples as usize } else { 1 };
+        let mut kept: Vec<u16> = Vec::new();
+        kept.try_reserve_exact(area.width * area.height * stride).map_err(|_| "not enough memory for the DNG's pixels".to_string())?;
+        for row in area.top..area.top + area.height {
+            let start = (row * width as usize + area.left) * stride;
+            kept.extend_from_slice(&pixel_data[start..start + area.width * stride]);
+        }
+        dng_log!("[DNG step] kept {}×{} at {},{} (active area, default crop {})", area.width, area.height, area.left, area.top, area.default_crop_applied);
+        let n = kept.len();
+        (kept, area.width as u32, area.height as u32, n)
+    };
+
     // Determine normalization range. After the LinearizationTable (if present),
     // pixel values are in the table's output range and WhiteLevel is authoritative.
     // Without a table, WhiteLevel may be 65535 even for 10/12/14-bit data (Apple
@@ -330,7 +434,7 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         for i in 0..(width * height) as usize {
             let (row, col) = (i / w, i % w);
             for s in 0..3 {
-                let b = black.at(row, col, s);
+                let b = black.at(row + dy, col + dx, s);
                 let v = pixel_data[i * samples as usize + s] as f64;
                 rgb_f32.push(((v - b) / (max_val - b)).max(0.0) as f32);
             }
@@ -338,13 +442,17 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     } else if is_cfa {
         let cfa_pattern = get_tag_u8_vec(&main_ifd, TagId::CfaPattern)
             .unwrap_or_else(|_| vec![0, 1, 1, 2]);
+        let cfa_pattern: [u8; 4] = match cfa_pattern.as_slice() {
+            [a, b, c, d] if cfa_pattern.iter().all(|&v| v <= 2) => shift_cfa([*a, *b, *c, *d], (dy, dx)),
+            _ => return Err("The colour filter pattern is not a 2×2 red, green and blue pattern".into()),
+        };
 
         let w = width as usize;
         let normalized: Vec<f32> = pixel_data[..expected_pixels]
             .iter()
             .enumerate()
             .map(|(i, &v)| {
-                let b = black.at(i / w, i % w, 0);
+                let b = black.at(i / w + dy, i % w + dx, 0);
                 ((v as f64 - b) / (max_val - b)).max(0.0) as f32
             })
             .collect();
@@ -518,7 +626,7 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     let orientation = get_tag_u16(&ifd0, TagId::Orientation)
         .or_else(|_| get_tag_u16(&main_ifd, TagId::Orientation))
         .unwrap_or(1);
-    let (out_w, out_h, rgba) = bake_finish(rgb_f32, width, height, &tone_curve, orientation, &mut debug_log)?;
+    let (out_w, out_h, rgba) = bake_finish(rgb_f32, width, height, &tone_curve, orientation, true, &mut debug_log)?;
 
     Ok(DngImage {
         width: out_w,
@@ -578,7 +686,8 @@ pub(crate) fn bake_colour(
 
 /// The baked decode's last steps on linear sRGB (interleaved, 3 values a
 /// pixel): the tone curve (when it has two points or more), the sRGB
-/// transfer, the auto-levels stretch, alpha, and the EXIF orientation so
+/// transfer, the auto-levels stretch (when `auto_levels`; else a clamp to
+/// 0..1), alpha, and the EXIF orientation so
 /// the image loads upright (orientations 5..=8 swap width and height).
 /// Returns the oriented `(width, height, RGBA f32)`. Shared by `read_dng`
 /// and `arw::read_arw`.
@@ -588,6 +697,7 @@ pub(crate) fn bake_finish(
     height: u32,
     tone_curve: &[(f64, f64)],
     orientation: u16,
+    auto_levels: bool,
     debug_log: &mut Vec<String>,
 ) -> Result<(u32, u32, Vec<f32>), String> {
     let ci = centre_index(width, height);
@@ -613,10 +723,19 @@ pub(crate) fn bake_finish(
     // black/white point from luminance percentiles and stretch all channels by
     // the same amount (preserving white balance, like a composite-RGB Levels
     // move). This is adaptive normalization, not a fixed creative curve.
-    let (bp, wp) = auto_levels_points(&rgb_f32, AUTO_LEVELS_BLACK_CLIP, AUTO_LEVELS_WHITE_CLIP);
-    debug_log.push(format!("[DNG step] auto-levels: black={:.4} white={:.4} (clip {:.2}%/{:.2}%)",
-        bp, wp, AUTO_LEVELS_BLACK_CLIP * 100.0, AUTO_LEVELS_WHITE_CLIP * 100.0));
-    if wp - bp > 0.05 {
+    // Without it (`auto_levels` false: a decode that has already set its
+    // brightness), values are only clamped to 0..1.
+    if !auto_levels {
+        for v in &mut rgb_f32 {
+            *v = v.clamp(0.0, 1.0);
+        }
+    }
+    let (bp, wp) = if auto_levels { auto_levels_points(&rgb_f32, AUTO_LEVELS_BLACK_CLIP, AUTO_LEVELS_WHITE_CLIP) } else { (0.0, 1.0) };
+    if auto_levels {
+        debug_log.push(format!("[DNG step] auto-levels: black={:.4} white={:.4} (clip {:.2}%/{:.2}%)",
+            bp, wp, AUTO_LEVELS_BLACK_CLIP * 100.0, AUTO_LEVELS_WHITE_CLIP * 100.0));
+    }
+    if auto_levels && wp - bp > 0.05 {
         let scale = 1.0 / (wp - bp);
         for v in &mut rgb_f32 {
             *v = (((*v as f64 - bp) * scale).clamp(0.0, 1.0)) as f32;

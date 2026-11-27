@@ -434,10 +434,13 @@ the newer version made.
   shown as "Standard (Provia look)" (or "Camera (Provia look, Standard)"
   when the camera shot Provia), Neutral and Monochrome; for other photos,
   Standard and Monochrome. A Sony ARW opens as other photos do (Standard
-  and Monochrome) and its colour is only approximate (the file carries
-  part of the camera's colour, so it is less saturated than the camera's
-  JPEG): the decoder's sentence saying so sits in small text under the
-  Profile menu, which a screen reader reads with the menu.
+  and Monochrome). Eleven Sony bodies have colour computed from measured
+  sensor data (RX100 IV, A6400, A7C II, A7 III, A7 IV, A7R II, A7R III,
+  A7R IV, A7S II, A7S III, A9). For any other body the colour is only
+  approximate (the file carries part of the camera's colour, so it is
+  less saturated than the camera's JPEG): the decoder's sentence saying
+  so sits in small text under the Profile menu, which a screen reader
+  reads with the menu.
 - **Straighten**: Angle, and **Level** (draw along something that should
   be level). The crop shrinks to the largest rectangle inside.
 - **White balance**: under its heading, a **Mode** menu (As shot; Auto,
