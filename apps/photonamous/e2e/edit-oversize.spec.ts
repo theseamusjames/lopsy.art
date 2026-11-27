@@ -14,8 +14,13 @@ import { generatedJpeg, importFiles, importStrip, toast } from './library';
  * rendered by the workers
  * reduced band by band (or, on `?develop=no-float`, the baked decode
  * reduced before its upload). The Edit view says so in words and in its
- * live region, the full-size load ends and is not asked for again, and an
- * export at full size is made at that size.
+ * live region, and the full-size load ends and is not asked for again.
+ * Exports are made by the export renderer, as the app's are (the Edit
+ * harness's `__photosHarnessExport`, and the library's Export): at the
+ * photo's own size, a tile at a time (plan section 10), where the GPU
+ * renders in floating point; at the held size on `?develop=no-float`. The
+ * Edit harness's own Export button is the Edit view's engine, which never
+ * makes tiles: it exports at the held size.
  *
  * The sample is not in the repository: LOPSY_DNG_CAMERA_SAMPLES is the
  * folder holding Leica-Q2.dng. On a GPU that holds the Q2 at its own size
@@ -26,7 +31,36 @@ const q2 = dir && existsSync(join(dir, 'Leica-Q2.dng')) ? join(dir, 'Leica-Q2.dn
 const OWN = { width: 8368, height: 5584 };
 /** The largest the GPU can edit at 8192: two pixels under it, for straighten's border (full-size.ts). */
 const HELD_AT_8192 = { width: 8190, height: 5465 };
-const NOTE = 'This photo is 8368 × 5584 pixels, larger than this device’s graphics can edit (8190 on a side), so it is shown and exported at 8190 × 5465.';
+const NOTE = 'This photo is 8368 × 5584 pixels, larger than this device’s graphics can edit (8190 on a side), so it is shown at 8190 × 5465. It is exported at its full size, a part at a time.';
+/** On a GPU without float targets nothing is made in tiles. */
+const NOTE_NO_TILES = 'This photo is 8368 × 5584 pixels, larger than this device’s graphics can edit (8190 on a side), so it is shown and exported at 8190 × 5465.';
+
+declare global {
+  interface Window {
+    __photosHarnessExport?: (settings: Record<string, unknown>) => Promise<Blob>;
+    __photonamousTiles?: { plan: { columns: number; rows: number; apron: number } | null; done: number; finished: boolean };
+  }
+}
+
+/** The open photo exported as a JPEG through the export renderer, the app's export path: its size, the plan it was made in, and how long it took. */
+async function rendererExport(
+  page: Page,
+  settings: Record<string, unknown> = { format: 'jpeg', quality: 0.9, maxLongEdge: null, metadata: 'none' },
+): Promise<{ size: { width: number; height: number } | null; plan: { columns: number; rows: number; apron: number } | null; seconds: number }> {
+  return page.evaluate(async (settings) => {
+    const run = window.__photosHarnessExport;
+    if (!run) throw new Error('no export hook');
+    window.__photonamousTiles = undefined;
+    const started = performance.now();
+    const blob = await run(settings);
+    const seconds = (performance.now() - started) / 1000;
+    const bitmap = await createImageBitmap(blob);
+    const size = { width: bitmap.width, height: bitmap.height };
+    bitmap.close();
+    const tiles = window.__photonamousTiles;
+    return { size, plan: tiles?.finished ? tiles.plan : null, seconds };
+  }, settings);
+}
 
 async function open(page: Page, path: string, query = ''): Promise<void> {
   await page.goto(`/edit-harness.html${query}`);
@@ -106,9 +140,15 @@ test.describe('a photo larger than the GPU’s textures', () => {
     await expect(page.getByTestId('loading-badge')).toHaveCount(0);
     expect((await engineSizes(page)).document).toEqual(HELD_AT_8192);
 
+    // The harness's own Export: the Edit view's engine, which makes no tiles.
     expect(await exportedSize(page)).toEqual(HELD_AT_8192);
     await expect(page.getByTestId('edit-problem')).toHaveCount(0);
     await expectSamePicture(page);
+    // The app's export: at its own size, in tiles.
+    const tiled = await rendererExport(page);
+    console.log(`Leica Q2 at its own size: ${JSON.stringify(tiled)}`);
+    expect(tiled.size).toEqual(OWN);
+    expect(tiled.plan?.columns ?? 0).toBeGreaterThanOrEqual(2);
 
     // Straightened, the turned picture is wider than the GPU's textures: it keeps to the frame, and the crop inside it is the document.
     const angle = page.getByLabel('Angle value', { exact: true });
@@ -124,6 +164,12 @@ test.describe('a photo larger than the GPU’s textures', () => {
     await download;
     expect(await lastExportSize(page)).toEqual(straightened);
     await expect(page.getByTestId('edit-problem')).toHaveCount(0);
+    // In tiles, the straightened crop at the photo's own size: the held one's, larger in proportion.
+    const turned = await rendererExport(page);
+    console.log(`Leica Q2 straightened at its own size: ${JSON.stringify(turned)}`);
+    expect(turned.plan).not.toBeNull();
+    expect(Math.abs((turned.size?.width ?? 0) - (straightened.width * OWN.width) / HELD_AT_8192.width)).toBeLessThan(4);
+    expect(Math.abs((turned.size?.height ?? 0) - (straightened.height * OWN.height) / HELD_AT_8192.height)).toBeLessThan(4);
     expect(pageErrors).toEqual([]);
   });
 
@@ -134,10 +180,14 @@ test.describe('a photo larger than the GPU’s textures', () => {
     await skipUnlessTooLarge(page);
     await waitForPreview(page, 0, 120_000);
     expect((await engineSizes(page)).document).toEqual(HELD_AT_8192);
-    await expect(page.getByTestId('size-note')).toHaveText(NOTE);
-    await expect(page.getByTestId('edit-status')).toContainText(NOTE);
+    await expect(page.getByTestId('size-note')).toHaveText(NOTE_NO_TILES);
+    await expect(page.getByTestId('edit-status')).toContainText(NOTE_NO_TILES);
     expect(await exportedSize(page)).toEqual(HELD_AT_8192);
     await expectSamePicture(page);
+    // Without float targets the export renderer makes no tiles either.
+    const reduced = await rendererExport(page);
+    expect(reduced.size).toEqual(HELD_AT_8192);
+    expect(reduced.plan).toBeNull();
   });
 
   for (const type of ['image/jpeg', 'image/png'] as const) {
@@ -151,7 +201,9 @@ test.describe('a photo larger than the GPU’s textures', () => {
       // 600 · 8190 / 8400 = 585.
       const held = { width: 8190, height: 585 };
       await expect.poll(async () => (await engineSizes(page)).document).toEqual(held);
-      const note = 'This photo is 8400 × 600 pixels, larger than this device’s graphics can edit (8190 on a side), so it is shown and exported at 8190 × 585.';
+      const note =
+        'This photo is 8400 × 600 pixels, larger than this device’s graphics can edit (8190 on a side), so it is shown at 8190 × 585. ' +
+        'It is exported at its full size, a part at a time.';
       await expect(page.getByTestId('size-note')).toHaveText(note);
       await expect(page.getByTestId('edit-status')).toHaveText(note);
       const download = page.waitForEvent('download', { timeout: 2 * 60_000 });
@@ -161,10 +213,14 @@ test.describe('a photo larger than the GPU’s textures', () => {
       // The generated picture: the middle half grey (#707070), the sides a gradient.
       const centre = await imageStats(page, { kind: 'export', index: 0, half: 'centre' });
       expect(Math.abs(centre.mean - 0x70)).toBeLessThan(4);
+      // The browser decodes a picture wider than the GPU's textures, and each tile is drawn from that decode.
+      const tiled = await rendererExport(page);
+      expect(tiled.size).toEqual({ width: 8400, height: 600 });
+      expect(tiled.plan?.columns).toBe(2);
     });
   }
 
-  test('the Export dialog names the largest size this device can export, and the library export makes it', async ({ page }) => {
+  test('the Export dialog says a photo larger than the GPU is exported a part at a time, and the library export makes it at its own size', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('button', { name: /This browser/ }).click();
     await expect(page.getByText('Your library is empty')).toBeVisible();
@@ -180,8 +236,7 @@ test.describe('a photo larger than the GPU’s textures', () => {
 
     const note = page.getByTestId('export-device-size');
     await expect(note).toHaveText(
-      'This photo is 8400 × 600 pixels, more than this device’s graphics can edit (8190 on a side). ' +
-        'The largest this device can export of it is 8190 × 585, a crop smaller in proportion.',
+      'This photo is 8400 × 600 pixels, more than this device’s graphics can edit at once (8190 on a side). It is exported at its full size, a part at a time.',
     );
     // Said with the Size field, where it applies; a size the device holds says nothing.
     const size = page.getByRole('combobox', { name: 'Size' });
@@ -198,11 +253,11 @@ test.describe('a photo larger than the GPU’s textures', () => {
     const file = await download;
     const bytes = await readFile(await file.path());
     await file.delete();
-    expect(jpegSize(Uint8Array.from(bytes))).toEqual({ width: 8190, height: 585 });
+    expect(jpegSize(Uint8Array.from(bytes))).toEqual({ width: 8400, height: 600 });
     await expect(page.getByText('Exported 1 photo.')).toBeVisible();
   });
 
-  test('a library export of the Q2 at its own size is made at the largest size the GPU can edit', async ({ page }) => {
+  test('a library export of the Q2 is made at its own size, in tiles', async ({ page }) => {
     test.skip(!q2, 'Set LOPSY_DNG_CAMERA_SAMPLES to the folder with Leica-Q2.dng to run this test');
     await page.goto('/');
     await page.getByRole('button', { name: /This browser/ }).click();
@@ -217,7 +272,7 @@ test.describe('a photo larger than the GPU’s textures', () => {
     await page.getByRole('navigation', { name: 'Library' }).getByRole('button', { name: /^All photos/ }).click();
     await page.locator('[role="gridcell"][title="Leica-Q2.dng"]').click();
     await page.getByRole('button', { name: /^Export 1/ }).click();
-    await expect(page.getByTestId('export-device-size')).toContainText('The largest this device can export of it is 8190 × 5465');
+    await expect(page.getByTestId('export-device-size')).toContainText('It is exported at its full size, a part at a time.');
 
     await page.getByRole('radio', { name: 'Download to this computer' }).check();
     const download = page.waitForEvent('download', { timeout: 6 * 60_000 });
@@ -225,7 +280,7 @@ test.describe('a photo larger than the GPU’s textures', () => {
     const file = await download;
     const bytes = await readFile(await file.path());
     await file.delete();
-    expect(jpegSize(Uint8Array.from(bytes))).toEqual(HELD_AT_8192);
+    expect(jpegSize(Uint8Array.from(bytes))).toEqual(OWN);
     await expect(page.getByText('Exported 1 photo.')).toBeVisible();
   });
 });
