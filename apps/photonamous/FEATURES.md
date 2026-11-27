@@ -370,6 +370,23 @@ the newer version made.
   to 50 % or closer loads the full resolution ("Loading full
   resolution…"), and Edit in Lopsy and Done always render from it. While it loads, the version's stored preview shows
   with "Loading…".
+- **A photo larger than the GPU's textures** (the Leica Q2's 8368 pixels
+  where SwiftShader and some integrated GPUs stop at 8192): its full
+  resolution is the largest size the GPU can edit, the long edge two
+  pixels under the GPU's largest texture (room for Straighten), aspect
+  kept: a RAW file rendered reduced by area, band by band, in the decode
+  workers; JPEG, WebP and PNG reduced by the browser's decode (a 16-bit
+  PNG then loses its depth); a RAW file opened as the finished picture
+  (a GPU without float targets) reduced before its upload. A full-size
+  load that fails for any other reason (memory) is tried again at three
+  quarters and then half of that size; when none loads the working image
+  stays. Either way it is not asked for again for that photo, and
+  "Loading full resolution…" goes. A line under the view bar then says
+  the photo's own size and the size it is shown and exported at, and is
+  read out once. The status bar keeps the photo's own size; exports at
+  full size are made at the reduced size. Straighten keeps the turned
+  picture inside the frame when its turned bounds would be larger than
+  the GPU's textures, which shows the same.
 - **Left column**: **Presets** (apply one, delete one, or **Save
   preset…** from this edit, choosing its groups), **Versions** (switch, rename, **New
   version**) and **History** (every step; clicking one goes back to it).
@@ -670,7 +687,13 @@ the newer version made.
 - **Size**: original, or by long edge, short edge or megapixels, with
   **Don't enlarge** on by default. TIFF is always the full size. The HDR
   files are never enlarged: Don't enlarge is not offered for them, and a
-  photo smaller than the size asked for is made at its own size.
+  photo smaller than the size asked for is made at its own size. When a
+  photo chosen is larger than this device's GPU can edit and the size
+  asked for would need more, a line under Size says so and gives the
+  largest size this device can export of it (several photos: how many,
+  and the long edge they stop at); each is then made at that size, a
+  crop smaller in proportion, in every format (with enlarging allowed, a
+  larger size is enlarged from it).
 - **Details in the file**: all (with **Remove location**, on by default;
   "Location will be kept" shows when it is off), copyright and contact
   only, or none; Creator and Copyright fields.

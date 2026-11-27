@@ -37,7 +37,9 @@ engine/
                       # the DNG decode's plane, renders and baked finish; measured colour for
                       # the bodies with data, camera_colour's matrix or Sony's (approximate) otherwise
       raw/            # One RAW interface over raf/, dng/ and arw/: sniff, prepare and describe,
-                      # bands, binned view, white balance in recipe units (the raw… exports)
+                      # bands, binned view, white balance in recipe units (the raw… exports);
+                      # scaled.rs: the frame reduced band by band, for a GPU whose textures are smaller
+      area_resample.rs # Area (box) downscale of RGBA f32 at any scale, band by band, bit-identical to whole
       tone.rs         # The develop tone step (scene to rendered) and its curve's shoulder
       scene_tone.rs   # Tone on scene data: the tone sliders and masks, a monotone map in stops
       look.rs         # Colour in OkLab, colour grading and curves on rendered linear data

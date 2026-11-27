@@ -1241,6 +1241,41 @@ section 8's, for Seamus to review).
     medium-format sensors have matrices in `camera_colour` too. No GFX
     file is in the test samples: the two rules have unit tests, and the
     three files were opened and measured by hand.
+75. **A photo larger than the GPU's textures opens at the largest size
+    the GPU can edit**, not at its own size (`full-size.ts`). Its long
+    edge is the engine's own texture limit (`maxTextureSize`, new, on
+    both backends) less two pixels: every texture the develop chain
+    needs is the document's size or smaller, the document is the crop of
+    the framed image, and the one texture larger than the image is the
+    copy Straighten turns, which the layer transform lifts with a
+    transparent pixel on each side. Straighten's turned layer keeps to
+    the framed image when its turned bounds would be larger than the
+    limit; the document is the straightened crop inside the frame, so
+    nothing that shows changes. A RAW file is rendered reduced by area in
+    the decode workers, band by band (`lopsy_core::area_resample`,
+    `raw::scaled`, `rawPlanScaledBands` and `rawRenderScaledBand`): each
+    band of destination rows renders the plane rows it reads with the
+    format's own band renderer, unchanged, and reduces them, so the frame
+    is never whole at its own size and the bands are bit for bit the
+    whole frame reduced. JPEG, WebP and PNG are reduced by the browser's
+    decode (a 16-bit PNG then loses its depth); the baked decode reduces
+    the picture it holds before uploading it, band by band. A load that
+    fails anyway (memory) is tried again at three quarters and then half
+    of that size, each larger than the working image, and never more: a
+    failed try decodes the whole file again. A RAW file the decoder
+    refuses is not retried. Whatever happens is remembered for the
+    photo, so the full size is not asked for again on each view change,
+    and "Loading full resolution…" goes. The Edit view says the photo's
+    own size and the size it is shown and exported at, in a line under
+    the view bar and once in its live region; the Export dialog gives
+    the largest size this device can export under Size. The status bar
+    and file info keep the photo's own size. An export of a reduced
+    photo at full size is made at the reduced size in every format (8-
+    and 16-bit PNG, JPEG, TIFF, both HDR files); with enlarging allowed a
+    larger size is enlarged from it. `set_document_size` now puts the
+    document back at its old size when the new one cannot be allocated,
+    so the engine stays usable after a failed swap. On a GPU that holds
+    the photo nothing changes: the same calls, the same pixels.
 
 ### Verified at the end
 
@@ -1300,10 +1335,11 @@ On the final tree (86ca279f4) and the engine built from it:
   either. The M Monochroms (no colour filter) are untested.
 - **A picture wider or taller than the GPU's largest texture** (8368
   pixels on the Q2, where SwiftShader and some integrated GPUs stop at
-  8192): the working image opens, but the full-size view fails, is
-  asked for again on every view change, and "Loading full resolution…"
-  never goes away; on the no-float way the photo does not open. Any
-  format, found with the Q2. This Mac's GPU takes 16384 and shows it.
+  8192) opens at the largest size the GPU can edit (decision 75): it is
+  never shown or exported at its own size on such a GPU, since nothing
+  is tiled. The step down after a failed load is covered by unit tests
+  only: no test makes a GPU run out of memory. A layer from Lopsy larger
+  than the GPU's textures still fails to open.
 - **A Leica DNG's Kelvin readout** is high: 10200 to 11300 K for two
   files shot under daylight-balanced light, where a Sony A7 III reads
   5900 K. Not looked into.
