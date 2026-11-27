@@ -287,14 +287,27 @@ mod tests {
 
     /// The tables, not the pixels, are most of the cost of a small image;
     /// a large one is a few table reads and multiply-adds a pixel.
+    ///
+    /// `cargo test` builds without optimisation and runs the other tests
+    /// beside this one, so a single timing on a shared CI runner can be
+    /// three times this machine's (511 ms against 152 ms). The fastest of
+    /// three conversions is judged, against a limit with room for that:
+    /// what it guards against, building the tables again for each pixel,
+    /// is many times slower still.
     #[test]
     fn a_large_image_converts_quickly() {
         let n = 26_000_000 / 8;
-        let mut px: Vec<u16> = (0..n * 4).map(|i| (i as u32).wrapping_mul(2_654_435_761) as u16).collect();
-        let t = std::time::Instant::now();
-        convert_rgba16(&mut px, ColorSpace::Srgb, ColorSpace::DisplayP3);
-        let per_mp = t.elapsed().as_secs_f64() / (n as f64 / 1e6);
-        eprintln!("sRGB → P3: {:.1} ms a megapixel", per_mp * 1000.0);
-        assert!(per_mp < 0.5, "{per_mp} s a megapixel");
+        let source: Vec<u16> = (0..n * 4).map(|i| (i as u32).wrapping_mul(2_654_435_761) as u16).collect();
+        let fastest = (0..3)
+            .map(|_| {
+                let mut px = source.clone();
+                let t = std::time::Instant::now();
+                convert_rgba16(&mut px, ColorSpace::Srgb, ColorSpace::DisplayP3);
+                t.elapsed().as_secs_f64()
+            })
+            .fold(f64::INFINITY, f64::min);
+        let per_mp = fastest / (n as f64 / 1e6);
+        eprintln!("sRGB → P3: {:.1} ms a megapixel, the fastest of three", per_mp * 1000.0);
+        assert!(per_mp < 1.0, "{per_mp} s a megapixel");
     }
 }
