@@ -31,7 +31,9 @@ const q2 = dir && existsSync(join(dir, 'Leica-Q2.dng')) ? join(dir, 'Leica-Q2.dn
 const OWN = { width: 8368, height: 5584 };
 /** The largest the GPU can edit at 8192: two pixels under it, for straighten's border (full-size.ts). */
 const HELD_AT_8192 = { width: 8190, height: 5465 };
-const NOTE = 'This photo is 8368 × 5584 pixels, larger than this device’s graphics can edit (8190 on a side), so it is shown at 8190 × 5465. It is exported at its full size, a part at a time.';
+const NOTE =
+  'This photo is 8368 × 5584 pixels, larger than this device’s graphics can edit (8190 on a side), so it is shown at 8190 × 5465; ' +
+  'zoomed in, the part on screen is shown at its full size. It is exported at its full size, a part at a time.';
 /** On a GPU without float targets nothing is made in tiles. */
 const NOTE_NO_TILES = 'This photo is 8368 × 5584 pixels, larger than this device’s graphics can edit (8190 on a side), so it is shown and exported at 8190 × 5465.';
 
@@ -39,6 +41,7 @@ declare global {
   interface Window {
     __photosHarnessExport?: (settings: Record<string, unknown>) => Promise<Blob>;
     __photonamousTiles?: { plan: { columns: number; rows: number; apron: number } | null; done: number; finished: boolean };
+    __photonamousDetail?: { loads: number; shown: { rect: { width: number; height: number } } | null; loadMs: number | null };
   }
 }
 
@@ -68,12 +71,20 @@ async function open(page: Page, path: string, query = ''): Promise<void> {
   await page.getByTestId('harness-file').setInputFiles(path);
 }
 
-/** The engine's document and texture limit (development builds' hooks). */
-async function engineSizes(page: Page): Promise<{ document: { width: number; height: number }; limit: number }> {
+/**
+ * The held document's size (as the Edit view sees it, also while a detail
+ * tile is the engine's document), the engine's own document, and the
+ * texture limit (development builds' hooks).
+ */
+async function engineSizes(page: Page): Promise<{ document: { width: number; height: number }; engine: { width: number; height: number }; limit: number }> {
   return page.evaluate(() => {
-    const hook = window.__photonamousScreenEngine;
+    const hook = window.__photonamousScreenEngine as unknown as {
+      imageSize: () => { width: number; height: number } | null;
+      documentSize: () => { width: number; height: number };
+      textureLimit: () => number;
+    } | undefined;
     if (!hook) throw new Error('no screen engine');
-    return { document: hook.documentSize(), limit: hook.textureLimit() };
+    return { document: hook.imageSize() ?? hook.documentSize(), engine: hook.documentSize(), limit: hook.textureLimit() };
   });
 }
 
@@ -125,20 +136,25 @@ test.describe('a photo larger than the GPU’s textures', () => {
 
     await page.getByRole('button', { name: 'Full', exact: true }).click();
     await expect(page.getByTestId('loading-badge')).toHaveText('Loading full resolution…', { timeout: 30_000 });
-    await expect(page.getByTestId('loading-badge')).toHaveCount(0, { timeout: 6 * 60_000 });
+    await expect(page.getByTestId('size-note')).toHaveText(NOTE, { timeout: 6 * 60_000 });
     await expect(page.getByTestId('zoom-readout')).toHaveValue('100%');
-    expect((await engineSizes(page)).document).toEqual(HELD_AT_8192);
+    // 100 % of the photo's own size magnifies the held image (8368 to 8190): the part on screen is shown from
+    // the photo's own pixels, a tile on the Edit view's engine, once the held image is in and the view still.
+    await page.waitForFunction(() => window.__photonamousDetail?.shown != null, undefined, { timeout: 6 * 60_000 });
+    await expect(page.getByTestId('loading-badge')).toHaveCount(0, { timeout: 60_000 });
+    const firstDetail = await page.evaluate(() => window.__photonamousDetail);
+    console.log(`Leica Q2 detail at 100 %: ${JSON.stringify(firstDetail)}`);
+    expect(await engineSizes(page)).toMatchObject({ document: HELD_AT_8192, engine: { width: firstDetail?.shown?.rect.width, height: firstDetail?.shown?.rect.height } });
+    // The first detail load is said once; the size note stays on screen.
+    await expect(page.getByTestId('edit-status')).toHaveText('Loading full resolution…');
 
-    await expect(page.getByTestId('size-note')).toHaveText(NOTE);
-    await expect(page.getByTestId('edit-status')).toHaveText(NOTE);
-
-    // Zooming further asks for nothing more: the full size is what this device holds.
+    // Zooming further in stays inside the tile: nothing more loads.
     await page.getByRole('group', { name: 'Photo' }).focus();
     await page.keyboard.press('+');
     await expect(page.getByTestId('zoom-readout')).toHaveValue('125%');
     await page.waitForTimeout(3000);
     await expect(page.getByTestId('loading-badge')).toHaveCount(0);
-    expect((await engineSizes(page)).document).toEqual(HELD_AT_8192);
+    expect((await page.evaluate(() => window.__photonamousDetail))?.loads).toBe(firstDetail?.loads);
 
     // The harness's own Export: the Edit view's engine, which makes no tiles.
     expect(await exportedSize(page)).toEqual(HELD_AT_8192);
@@ -202,8 +218,8 @@ test.describe('a photo larger than the GPU’s textures', () => {
       const held = { width: 8190, height: 585 };
       await expect.poll(async () => (await engineSizes(page)).document).toEqual(held);
       const note =
-        'This photo is 8400 × 600 pixels, larger than this device’s graphics can edit (8190 on a side), so it is shown at 8190 × 585. ' +
-        'It is exported at its full size, a part at a time.';
+        'This photo is 8400 × 600 pixels, larger than this device’s graphics can edit (8190 on a side), so it is shown at 8190 × 585; ' +
+        'zoomed in, the part on screen is shown at its full size. It is exported at its full size, a part at a time.';
       await expect(page.getByTestId('size-note')).toHaveText(note);
       await expect(page.getByTestId('edit-status')).toHaveText(note);
       const download = page.waitForEvent('download', { timeout: 2 * 60_000 });
