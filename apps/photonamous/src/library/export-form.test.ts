@@ -3,6 +3,7 @@ import { DEFAULT_EXPORT_SETTINGS } from '@lopsy/photos-core/export/types';
 import {
   HDR_FORMATS,
   HDR_FORMAT_WORDS,
+  deviceSizeNote,
   fitExportChoices,
   fixedColorWords,
   hdrUnavailableReason,
@@ -80,5 +81,34 @@ describe('the size choices in the export form', () => {
     const tiff = fitExportChoices({ ...DEFAULT_EXPORT_SETTINGS, format: 'tiff' }, extras);
     expect(tiff.extras).toMatchObject({ size: { mode: 'original' }, allowEnlarge: false });
     expect(fitExportChoices({ ...DEFAULT_EXPORT_SETTINGS, format: 'jpeg' }, extras).extras.allowEnlarge).toBe(true);
+  });
+});
+
+describe('deviceSizeNote', () => {
+  const q2 = { width: 8368, height: 5584 };
+  const small = { width: 6000, height: 4000 };
+
+  it('names the largest size this device can export of one photo larger than its textures', () => {
+    expect(deviceSizeNote([q2], 8192, 'jpeg', DEFAULT_EXTRAS)).toBe(
+      'This photo is 8368 × 5584 pixels, more than this device’s graphics can edit (8190 on a side). ' +
+        'The largest this device can export of it is 8190 × 5465, a crop smaller in proportion.',
+    );
+    expect(deviceSizeNote([q2], 8192, 'tiff', { ...DEFAULT_EXTRAS, size: { mode: 'long', px: 2048 } })).toContain('8190 × 5465');
+  });
+
+  it('says nothing when the photos fit, the size asked for fits, or the limit is unknown', () => {
+    expect(deviceSizeNote([small], 8192, 'jpeg', DEFAULT_EXTRAS)).toBeNull();
+    expect(deviceSizeNote([q2], 16384, 'png', DEFAULT_EXTRAS)).toBeNull();
+    expect(deviceSizeNote([q2], 8192, 'jpeg', { ...DEFAULT_EXTRAS, size: { mode: 'long', px: 4096 } })).toBeNull();
+    expect(deviceSizeNote([q2], null, 'jpeg', DEFAULT_EXTRAS)).toBeNull();
+    expect(deviceSizeNote([null], 8192, 'jpeg', DEFAULT_EXTRAS)).toBeNull();
+  });
+
+  it('counts the photos it affects among several, and says an enlargement is made from the largest size', () => {
+    const note = deviceSizeNote([q2, small, { width: 9000, height: 6000 }], 8192, 'png', { ...DEFAULT_EXTRAS, size: { mode: 'long', px: 9000 }, allowEnlarge: true });
+    expect(note).toBe(
+      '2 of these photos are more than this device’s graphics can edit (8190 pixels on a side), so each is exported at most 8190 pixels on its long edge, ' +
+        'a crop smaller in proportion. Larger sizes are enlarged from that.',
+    );
   });
 });
