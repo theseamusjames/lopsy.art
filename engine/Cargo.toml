@@ -43,6 +43,11 @@ required-features = ["native"]
 name = "golden"
 required-features = ["native"]
 
+# Tiles of a picture against the whole picture on a real GPU; see the file's header.
+[[test]]
+name = "tiles"
+required-features = ["native"]
+
 [build-dependencies]
 lopsy-shaderc = { path = "shaderc" }
 

@@ -1107,6 +1107,48 @@ fn finish_matches_its_cpu_reference() {
     }
 }
 
+/// Makes the stage document the rectangle at (40, 24) of a 300×200
+/// picture, its layer moved there so the composite is as before.
+fn in_a_region(engine: &mut EngineInner) {
+    commands::develop::set_document_region(engine, 40, 24, 300, 200).expect("region");
+    commands::layer::update_layer(engine, &layer_json("art", 40, 24, STAGE_W, STAGE_H, 1.0)).expect("layer");
+}
+
+#[test]
+fn finish_and_areas_on_a_region_match_their_cpu_reference() {
+    use lopsy_core::{areas, finish};
+    let (w, h) = (STAGE_W as usize, STAGE_H as usize);
+    // The whole picture's vignette and grain, at each pixel's place in it.
+    let values = [-60.0, 40.0, 50.0, 60.0, 50.0, 60.0, 40.0, 7.0, 1.0];
+    let Some(run) = run_stage(&|e| {
+        in_a_region(e);
+        commands::develop::set_image_finish(e, &values).expect("finish")
+    }) else {
+        return;
+    };
+    let s = finish::FinishSettings::from_values(&values).unwrap();
+    let region = lopsy_core::tile::Region::new(40, 24, 300, 200, STAGE_W, STAGE_H).ok();
+    let reference = |_| finish::finish_reference_at(&run.input, w, h, &s, region);
+    // As `finish_matches_its_cpu_reference`.
+    assert_matches_reference("finish on a region", &run, &reference, 40.0, NO_ALLOWANCE);
+
+    // A linear and an inverted, rotated radial area across the region's
+    // edge, in the whole picture's pixels.
+    let mut values = [0.0f32; 32];
+    values[..16].copy_from_slice(&[0.0, 0.0, 0.9, 30.0, 10.0, 130.0, 90.0, 0.0, 0.0, 1.2, 40.0, 50.0, 40.0, 60.0, -30.0, 50.0]);
+    values[16..].copy_from_slice(&[1.0, 1.0, 0.8, 90.0, 60.0, 40.0, 25.0, 0.6, 0.5, -0.8, -50.0, -60.0, -40.0, -50.0, 40.0, -70.0]);
+    let Some(run) = run_stage(&|e| {
+        in_a_region(e);
+        commands::develop::set_image_areas(e, &values).expect("areas")
+    }) else {
+        return;
+    };
+    let (parsed, _) = areas::parse_areas(&values).expect("parse");
+    let reference = |_| areas::areas_reference_at(&run.input, w, h, &parsed, region);
+    // As `the_built_in_area_adjustments_match_their_cpu_reference`.
+    assert_matches_reference("areas on a region", &run, &reference, 40.0, NO_ALLOWANCE);
+}
+
 #[test]
 fn undo_snapshots_of_a_large_layer_restore_bit_for_bit() {
     // Big enough that an interpolated UV strays off the texel centre: a
