@@ -41,6 +41,15 @@ pub(crate) fn mask_doc_offset(layer_type: lopsy_core::layer::LayerType, layer_x:
     }
 }
 
+/// `position` (a layer's, or its mask's, in document pixels) in the
+/// document the engine renders: moved by the document region's origin when
+/// the document is a tile of a larger picture, whose coordinates the
+/// layers keep (`EngineInner::document_region`).
+fn in_region(engine: &EngineInner, position: (f32, f32)) -> (f32, f32) {
+    let (ox, oy) = engine.region_origin();
+    (position.0 - ox, position.1 - oy)
+}
+
 /// `mask_doc_offset` for a layer looked up by id in the engine's stack.
 pub(crate) fn mask_doc_origin(engine: &EngineInner, layer_id: &str) -> (f32, f32) {
     engine.layer_stack.iter()
@@ -141,14 +150,15 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         ) = {
             let layer = &engine.layer_stack[idx];
             let is_editing = mask_edit_id.as_deref() == Some(layer.id.as_str());
+            let (layer_x, layer_y) = in_region(engine, (layer.x as f32, layer.y as f32));
             (
                 layer.id.clone(),
                 layer.layer_type,
                 layer.visible,
                 layer.opacity,
                 layer.blend_mode as i32,
-                layer.x as f32,
-                layer.y as f32,
+                layer_x,
+                layer_y,
                 layer.width as f32,
                 layer.height as f32,
                 layer.effects.outer_glow.as_ref().filter(|g| g.enabled).cloned(),
@@ -292,7 +302,10 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         let effect_tex_handle = merged_handle.unwrap_or(tex_handle);
 
         // In mask edit mode: skip mask clipping so full layer content is visible
-        let (mask_offset_x, mask_offset_y) = mask_doc_offset(layer_type, layer_x, layer_y);
+        let (mask_offset_x, mask_offset_y) = {
+            let layer = &engine.layer_stack[idx];
+            in_region(engine, mask_doc_offset(layer_type, layer.x as f32, layer.y as f32))
+        };
         let layer_mask = live_mask(engine, &layer_id, mask_offset_x, mask_offset_y);
         let is_mask_enabled = engine.layer_stack[idx].mask.as_ref().map_or(false, |m| m.enabled);
         let mask_arg = layer_mask.filter(|_| is_mask_enabled && !is_mask_editing);
@@ -1543,10 +1556,11 @@ fn composite_layers_for_export_with(engine: &mut EngineInner, finish: ExportFini
     let mut group_stack: Vec<GroupFrame> = Vec::new();
 
     let layer_info: Vec<_> = engine.layer_stack.iter().map(|layer| {
-        let (mask_offset_x, mask_offset_y) = mask_doc_offset(layer.layer_type, layer.x as f32, layer.y as f32);
+        let (mask_offset_x, mask_offset_y) = in_region(engine, mask_doc_offset(layer.layer_type, layer.x as f32, layer.y as f32));
         let is_mask_enabled = layer.mask.as_ref().map_or(false, |m| m.enabled);
         let mask_info = live_mask(engine, &layer.id, mask_offset_x, mask_offset_y).filter(|_| is_mask_enabled);
-        (layer.id.clone(), layer.layer_type, layer.visible, layer.opacity, layer.blend_mode as i32, layer.x as f32, layer.y as f32, layer.width as f32, layer.height as f32, layer.effects.clone(), mask_info)
+        let (layer_x, layer_y) = in_region(engine, (layer.x as f32, layer.y as f32));
+        (layer.id.clone(), layer.layer_type, layer.visible, layer.opacity, layer.blend_mode as i32, layer_x, layer_y, layer.width as f32, layer.height as f32, layer.effects.clone(), mask_info)
     }).collect();
 
     for (layer_id, layer_type, visible, opacity, blend_mode, layer_x, layer_y, layer_w, layer_h, effects, mask_arg) in &layer_info {
@@ -1902,6 +1916,7 @@ fn reduce_composite_into_scratch_a(engine: &mut EngineInner, size: (u32, u32)) -
         let params = crate::gpu::params::core::ThumbnailBoxParams {
             dst_size: [w as f32, h as f32],
             channel: crate::document::thumbnail_gpu::COLOUR,
+            region: lopsy_core::tile::NO_REGION,
         };
         let pass = engine
             .pass(&engine.shaders.thumbnail_box, params)
@@ -2474,7 +2489,7 @@ fn scene_stages(engine: &mut EngineInner) {
 fn capture_scene(engine: &EngineInner) {
     let Some(target) = engine.scene_capture else { return };
     let Some((tw, th)) = engine.texture_pool.get_size(target) else { return };
-    let params = crate::gpu::params::core::ThumbnailBoxParams { dst_size: [tw as f32, th as f32], channel: -1 };
+    let params = crate::gpu::params::core::ThumbnailBoxParams { dst_size: [tw as f32, th as f32], channel: -1, region: lopsy_core::tile::NO_REGION };
     engine
         .pass(&engine.shaders.thumbnail_box, params)
         .texture("u_tex", engine.composite_texture)
@@ -2642,6 +2657,7 @@ fn apply_finish(engine: &EngineInner) {
         grain: [s.grain, s.grain_size, s.roughness, s.pixel_scale],
         doc_size: [engine.doc_width as f32, engine.doc_height as f32],
         seed: s.seed,
+        region: engine.region_uniform(),
     };
     let pass = engine.pass(&program, params).texture("u_tex", engine.composite_texture);
     let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
@@ -2722,6 +2738,7 @@ fn apply_areas(engine: &EngineInner, mode: AreasMode) {
         count,
         mode: if mode == AreasMode::Overlay { 1 } else { 0 },
         overlay: engine.area_overlay.max(0),
+        region: engine.region_uniform(),
     };
     let pass = engine.pass(&program, params).texture("u_tex", engine.composite_texture);
     let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
@@ -2763,7 +2780,7 @@ fn apply_area_layers(engine: &mut EngineInner) {
 /// With the working space (`ws`) its Whites, Blacks and Vibrance act in the
 /// document's tone and look passes, not here, and its image adjustments
 /// and old colour by hue are not used.
-fn area_layer_draws(layer: &crate::engine::AreaLayer, ws: bool) -> bool {
+pub(crate) fn area_layer_draws(layer: &crate::engine::AreaLayer, ws: bool) -> bool {
     let wrapped = layer.detail.is_some_and(|d| d.reduces_noise() || d.sharpens())
         || layer.local_contrast.is_some_and(|l| l.is_active())
         || layer.finish.is_some();
@@ -2870,7 +2887,7 @@ fn area_layer(engine: &mut EngineInner, area: &[f32], layer: crate::engine::Area
         area_layer_display(engine, layer);
     }
 
-    let params = crate::gpu::params::develop::AreaLayerParams { area: Vec4Array::from_floats(area) };
+    let params = crate::gpu::params::develop::AreaLayerParams { area: Vec4Array::from_floats(area), region: engine.region_uniform() };
     let pass = engine.pass(&program, params).texture("u_tex", original).texture("u_adjusted", engine.composite_texture);
     let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
     engine.gpu().unbind_textures(2);

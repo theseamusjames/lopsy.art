@@ -20,6 +20,25 @@ pub fn clear_raw_develop(engine: &mut Engine) {
     lopsy_engine::commands::develop::clear_raw_develop(&mut engine.inner)
 }
 
+/// The document is the rectangle at (`x`, `y`) of a larger picture;
+/// `commands::develop::set_document_region`. Set it after the size.
+#[wasm_bindgen(js_name = "setDocumentRegion")]
+pub fn set_document_region(engine: &mut Engine, x: u32, y: u32, whole_width: u32, whole_height: u32) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::set_document_region(&mut engine.inner, x, y, whole_width, whole_height).map_err(|e| JsError::new(&e))
+}
+
+/// The document is the whole picture (the default).
+#[wasm_bindgen(js_name = "clearDocumentRegion")]
+pub fn clear_document_region(engine: &mut Engine) {
+    lopsy_engine::commands::develop::clear_document_region(&mut engine.inner)
+}
+
+/// The apron in pixels a tile needs: `develop::tile::apron`.
+#[wasm_bindgen(js_name = "developApron")]
+pub fn develop_apron(engine: &Engine) -> u32 {
+    lopsy_engine::commands::develop::develop_apron(&engine.inner)
+}
+
 /// Turn the develop working space on (`on`) or off. On, the image is held
 /// as unclamped linear Rec. 2020 float from the RAW step (after
 /// `setRawDevelop`) or, for a photo that is not RAW, from an input step that

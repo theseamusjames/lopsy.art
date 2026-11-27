@@ -14,6 +14,9 @@ struct Params {
     u_smallEpsilon: f32,
     u_floor: f32,
     u_centre: f32,
+    // How u_small and u_large are read (include/region.wgsl, blurUv).
+    u_smallGrid: vec4<f32>,
+    u_largeGrid: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var u_tex: texture_2d<f32>;
@@ -29,13 +32,16 @@ fn wienerDetail(x: f32, m: vec2<f32>, epsilon: f32) -> f32 {
     return (x - m.x) * epsilon / (variance + epsilon);
 }
 
+//#include region
+
 @fragment
 fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let size = vec2<f32>(textureDimensions(u_tex, 0));
     let src = textureLoad(u_tex, vec2<i32>(position.xy), 0);
-    let uv = position.xy / size;
-    let ms = textureSampleLevel(u_small, u_small_sampler, uv, 0.0).rg;
-    let ml = textureSampleLevel(u_large, u_large_sampler, uv, 0.0).rg;
+    let uvSmall = blurUv(position.xy, params.u_smallGrid, size);
+    let uvLarge = blurUv(position.xy, params.u_largeGrid, size);
+    let ms = textureSampleLevel(u_small, u_small_sampler, uvSmall, 0.0).rg;
+    let ml = textureSampleLevel(u_large, u_large_sampler, uvLarge, 0.0).rg;
     let x = log2(max(dot(params.u_luma, src.rgb), 0.0) + params.u_floor) - params.u_centre;
     let dl = wienerDetail(x, ml, params.u_largeEpsilon);
     let ds = wienerDetail(x, ms, params.u_smallEpsilon);

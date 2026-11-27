@@ -47,6 +47,8 @@ struct Params {
     u_areaCount: i32,
     // Each area's layer: (whites, blacks, 0, 0).
     u_areaTone: array<vec4<f32>, 8>,
+    // Where the document lies in a larger picture (include/region.wgsl).
+    u_region: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var u_tex: texture_2d<f32>;
@@ -54,6 +56,7 @@ struct Params {
 
 //#include base_curve
 //#include area_mask
+//#include region
 
 fn toneCurve(l: f32, size: i32, width: i32) -> f32 {
     if (l > 1.0) {
@@ -191,7 +194,7 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     var rgb = c.rgb;
 
     if (params.u_sceneOn == 1) {
-        rgb = sceneTone(rgb, position.xy);
+        rgb = sceneTone(rgb, wholePoint(position.xy, params.u_region));
     }
 
     let sat = params.u_saturation;

@@ -9,9 +9,14 @@ struct Params {
     // Document width and height in pixels.
     u_docSize: vec2<f32>,
     u_seed: u32,
+    // Where the document lies in a larger picture (include/region.wgsl):
+    // the vignette is the whole picture's, the grain at the whole's pixels.
+    u_region: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var u_tex: texture_2d<f32>;
+
+//#include region
 
 fn smoothstep1(e0: f32, e1: f32, x: f32) -> f32 {
     let t = clamp((x - e0) / (e1 - e0), 0.0, 1.0);
@@ -65,9 +70,14 @@ fn valueNoise(p: vec2<f32>, cell: f32, seed: u32) -> f32 {
 fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let src = textureLoad(u_tex, vec2<i32>(position.xy), 0);
     var c = src.rgb;
+    let p = wholePoint(position.xy, params.u_region);
+    var docSize = params.u_docSize;
+    if (params.u_region.z > 0.0) {
+        docSize = params.u_region.zw;
+    }
     let a = params.u_vignette.x / 100.0;
     if (a != 0.0) {
-        let k = vignetteMask(position.xy, params.u_docSize);
+        let k = vignetteMask(p, docSize);
         if (a < 0.0) {
             c = c * (1.0 + a * k);
         } else {
@@ -83,17 +93,17 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
         let r = params.u_grain.z / 100.0;
         var n = 0.0;
         if (scale >= 1.0) {
-            let p = position.xy / scale;
-            let coarse = valueNoise(p, cell, params.u_seed);
-            let fine = valueNoise(p, 0.5 * cell, params.u_seed ^ 0x9E3779B9u);
+            let g = p / scale;
+            let coarse = valueNoise(g, cell, params.u_seed);
+            let fine = valueNoise(g, 0.5 * cell, params.u_seed ^ 0x9E3779B9u);
             n = coarse + r * (fine - coarse) - 0.5;
         } else {
             // A working image: the full-size grain as a downscale shows it
             // (lopsy_core::finish::working_octave).
             let coarseCell = cell * scale;
             let fineCell = 0.5 * cell * scale;
-            let coarse = valueNoise(position.xy, max(coarseCell, 1.0), params.u_seed) - 0.5;
-            let fine = valueNoise(position.xy, max(fineCell, 1.0), params.u_seed ^ 0x9E3779B9u) - 0.5;
+            let coarse = valueNoise(p, max(coarseCell, 1.0), params.u_seed) - 0.5;
+            let fine = valueNoise(p, max(fineCell, 1.0), params.u_seed ^ 0x9E3779B9u) - 0.5;
             // GRAIN_PREVIEW_GAIN in lopsy_core::finish.
             let coarseAmp = min(1.6 * max(cell, 1.0) * scale, 1.0);
             let fineAmp = min(1.6 * max(0.5 * cell, 1.0) * scale, 1.0);

@@ -11,11 +11,15 @@ struct Params {
     u_guardScale: f32,
     // 1 leaves negative results as they are (the working space); 0 clamps.
     u_keepNegative: i32,
+    // How u_chroma is read (include/region.wgsl, blurUv).
+    u_chromaGrid: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var u_tex: texture_2d<f32>;
 @group(0) @binding(2) var u_chroma: texture_2d<f32>;
 @group(0) @binding(3) var u_chroma_sampler: sampler;
+
+//#include region
 
 fn luma(c: vec3<f32>) -> f32 {
     return dot(c, vec3<f32>(0.2126, 0.7152, 0.0722));
@@ -26,7 +30,7 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let size = vec2<i32>(textureDimensions(u_tex, 0));
     let p = vec2<i32>(position.xy);
     let src = textureLoad(u_tex, p, 0);
-    let uv = position.xy / vec2<f32>(size);
+    let uv = blurUv(position.xy, params.u_chromaGrid, vec2<f32>(size));
     let blurred = textureSampleLevel(u_chroma, u_chroma_sampler, uv, 0.0).rgb;
 
     let yc = luma(src.rgb);

@@ -5,6 +5,9 @@ struct Params {
     u_largeAmount: f32,
     u_smallAmount: f32,
     u_hazeAmount: f32,
+    // How u_small and u_large are read (include/region.wgsl, blurUv).
+    u_smallGrid: vec4<f32>,
+    u_largeGrid: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var u_tex: texture_2d<f32>;
@@ -33,13 +36,16 @@ fn hazeApply(c: vec3<f32>, large: vec3<f32>, haze: f32) -> vec3<f32> {
     return c;
 }
 
+//#include region
+
 @fragment
 fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let size = vec2<f32>(textureDimensions(u_tex, 0));
     let src = textureLoad(u_tex, vec2<i32>(position.xy), 0);
-    let uv = position.xy / size;
-    let lg = textureSampleLevel(u_large, u_large_sampler, uv, 0.0).rgb;
-    let sm = textureSampleLevel(u_small, u_small_sampler, uv, 0.0).rgb;
+    let uvSmall = blurUv(position.xy, params.u_smallGrid, size);
+    let uvLarge = blurUv(position.xy, params.u_largeGrid, size);
+    let lg = textureSampleLevel(u_large, u_large_sampler, uvLarge, 0.0).rgb;
+    let sm = textureSampleLevel(u_small, u_small_sampler, uvSmall, 0.0).rgb;
 
     let c = hazeApply(src.rgb, lg, params.u_hazeAmount);
     let cs = hazeApply(sm, lg, params.u_hazeAmount);

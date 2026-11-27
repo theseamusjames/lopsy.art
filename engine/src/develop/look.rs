@@ -135,6 +135,7 @@ pub fn params(run: &LookRun) -> LookParams {
         areas: Vec4Array::from_floats(run.areas),
         area_count: (run.areas.len() / STRIDE) as i32,
         area_vibrance: Vec4Array::from_floats(&run.area_vibrance),
+        region: lopsy_core::tile::NO_REGION,
     }
 }
 
@@ -149,7 +150,7 @@ pub fn pass<'a>(
     run: &LookRun,
 ) -> (Pass<'a, LookParams>, u32) {
     let lut = run.curves.map(|c| c.texture).filter(|&h| engine.gpu().has_texture(h));
-    let mut uniforms = params(run);
+    let mut uniforms = LookParams { region: engine.region_uniform(), ..params(run) };
     if lut.is_none() {
         uniforms.curve_on = [0.0; 4];
     }

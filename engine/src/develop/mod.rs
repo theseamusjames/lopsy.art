@@ -331,6 +331,7 @@
 pub mod detail;
 pub mod look;
 pub mod output;
+pub mod tile;
 pub mod tone;
 pub mod working_space;
 

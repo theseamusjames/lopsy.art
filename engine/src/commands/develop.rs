@@ -81,6 +81,35 @@ pub fn clear_raw_develop(engine: &mut EngineInner) {
     engine.needs_recomposite = true;
 }
 
+/// Make the document one tile of a larger picture: the rectangle at (`x`,
+/// `y`), of the document's own size, of a picture `whole_width` ×
+/// `whole_height`, all in whole-document pixels (after the crop). Everything
+/// the host sets keeps the whole picture's coordinates, as it would for the
+/// whole (the layers' positions, the areas' geometry, Finish, the seeds);
+/// the engine moves them, and each blur through a smaller image is built on
+/// the whole picture's grid (`develop::tile`, `lopsy_core::tile`). Set it
+/// after the document's size: a new size clears it. Fails, changing
+/// nothing, when the document would leave the picture.
+pub fn set_document_region(engine: &mut EngineInner, x: u32, y: u32, whole_width: u32, whole_height: u32) -> Result<(), String> {
+    let region = lopsy_core::tile::Region::new(x, y, whole_width, whole_height, engine.doc_width, engine.doc_height)?;
+    engine.document_region = Some(region);
+    engine.needs_recomposite = true;
+    Ok(())
+}
+
+/// The document is the whole picture again: today's arithmetic everywhere.
+pub fn clear_document_region(engine: &mut EngineInner) {
+    engine.document_region = None;
+    engine.needs_recomposite = true;
+}
+
+/// The apron, in pixels, a tile needs on each side that is not an edge of
+/// the picture for its exports with the current settings to equal the
+/// whole picture's there: see `develop::tile::apron`.
+pub fn develop_apron(engine: &EngineInner) -> u32 {
+    crate::develop::tile::apron(engine)
+}
+
 /// Turn the develop working space on or off (`develop::working_space`).
 /// On, the chain holds linear Rec. 2020 from the RAW step (with a RAW
 /// develop state) or the input step (without one) to the output step, and
@@ -442,7 +471,7 @@ pub fn read_hdr_histogram(engine: &mut EngineInner, peak: f32) -> Read<Vec<u32>>
         Ok(t) => t,
         Err(e) => return Read::failed(e),
     };
-    let params = crate::gpu::params::core::ThumbnailBoxParams { dst_size: [tw as f32, th as f32], channel: thumbnail_gpu::COLOUR };
+    let params = crate::gpu::params::core::ThumbnailBoxParams { dst_size: [tw as f32, th as f32], channel: thumbnail_gpu::COLOUR, region: lopsy_core::tile::NO_REGION };
     engine
         .pass(&engine.shaders.thumbnail_box, params)
         .texture("u_tex", image)

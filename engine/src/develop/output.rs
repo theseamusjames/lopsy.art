@@ -30,6 +30,7 @@ pub fn params(s: &OutputSettings) -> OutputParams {
         transfer,
         gamma,
         dither: s.dither,
+        region: lopsy_core::tile::NO_REGION,
     }
 }
 
@@ -40,7 +41,7 @@ pub fn pass<'a>(
     source: TextureHandle,
     settings: &OutputSettings,
 ) -> Pass<'a, OutputParams> {
-    engine.pass(program, params(settings)).texture("u_tex", source)
+    engine.pass(program, OutputParams { region: engine.region_uniform(), ..params(settings) }).texture("u_tex", source)
 }
 
 /// The gamut the document's colours can lie anywhere in when they reach

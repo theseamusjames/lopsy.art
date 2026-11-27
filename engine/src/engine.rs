@@ -219,6 +219,13 @@ pub struct EngineInner {
     pub viewport: ViewportState,
     pub doc_width: u32,
     pub doc_height: u32,
+    /// Where the document lies in a larger picture, when it is one tile of
+    /// it (`commands::develop::set_document_region`, `lopsy_core::tile`):
+    /// the layers' positions, the areas, Finish and the seeds stay in the
+    /// whole picture's coordinates and the engine moves them. `None` (the
+    /// default) is a document that is the whole picture. A new document
+    /// size clears it.
+    pub document_region: Option<lopsy_core::tile::Region>,
     pub bg_color: [f32; 4],
     /// Document color mode: 0 = RGB (also grayscale/indexed, which are
     /// RGBA-constrained), 1 = Lab, 2 = CMYK. Drives the display-decode branch
@@ -407,6 +414,7 @@ impl EngineInner {
             viewport: ViewportState::new(1.0, 0.0, 0.0, 1.0, 1.0),
             doc_width: doc_w,
             doc_height: doc_h,
+            document_region: None,
             bg_color: [1.0, 1.0, 1.0, 1.0],
             doc_color_mode: 0,
             needs_recomposite: true,
@@ -560,10 +568,23 @@ impl EngineInner {
         };
         self.doc_width = width;
         self.doc_height = height;
+        self.document_region = None;
         [self.composite_texture, self.scratch_texture_a, self.scratch_texture_b] = textures;
         self.attach_document_textures()?;
         self.needs_recomposite = true;
         Ok(())
+    }
+
+    /// The shaders' `u_region` for the document's region
+    /// (`lopsy_core::tile::NO_REGION` without one).
+    pub fn region_uniform(&self) -> [f32; 4] {
+        lopsy_core::tile::region_uniform(self.document_region)
+    }
+
+    /// The document's top-left pixel in the whole picture: (0, 0) without a
+    /// region.
+    pub fn region_origin(&self) -> (f32, f32) {
+        self.document_region.map_or((0.0, 0.0), |r| (r.x as f32, r.y as f32))
     }
 
     /// The composite and two scratch textures at `width`×`height`; on a
