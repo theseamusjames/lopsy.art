@@ -38,14 +38,15 @@ pub fn slice_widths(tag: Option<&[u16]>, width: u32) -> Result<Vec<u32>, String>
 }
 
 /// Place the stream's samples, in decode order, on a `width` × `height`
-/// sensor in slices of `slices` widths (which add up to `width`).
-pub fn unslice(stream: &[u16], width: usize, height: usize, slices: &[u32]) -> Result<Vec<u16>, String> {
+/// sensor in slices of `slices` widths (which add up to `width`). One slice
+/// is the stream as it is, given back without a copy.
+pub fn unslice(stream: Vec<u16>, width: usize, height: usize, slices: &[u32]) -> Result<Vec<u16>, String> {
     let total = width.checked_mul(height).ok_or("This Canon RAW's sensor size overflows")?;
     if stream.len() != total || slices.iter().map(|&s| s as usize).sum::<usize>() != width {
         return Err(format!("This Canon RAW's data holds {} samples, not the {total} of its {width}×{height} sensor", stream.len()));
     }
     if slices.len() == 1 {
-        return Ok(stream.to_vec());
+        return Ok(stream);
     }
     let mut out: Vec<u16> = Vec::new();
     out.try_reserve_exact(total).map_err(|_| "not enough memory for the Canon RAW's pixels".to_string())?;
@@ -67,7 +68,7 @@ pub fn unslice(stream: &[u16], width: usize, height: usize, slices: &[u32]) -> R
 /// Decode the raw strip to the sensor mosaic, `width` × `height` values.
 pub fn decode(strip: &[u8], width: usize, height: usize, slices: &[u32]) -> Result<Vec<u16>, String> {
     let stream = decode_lossless_jpeg(strip).map_err(|e| format!("This Canon RAW's data is damaged ({e})"))?;
-    unslice(&stream, width, height, slices)
+    unslice(stream, width, height, slices)
 }
 
 #[cfg(test)]
@@ -91,10 +92,18 @@ mod tests {
         // A 5×2 sensor in slices of 2, 2 and 1 columns: the stream holds
         // slice 0's rows, then slice 1's, then slice 2's.
         let stream: Vec<u16> = (0..10).collect();
-        let out = unslice(&stream, 5, 2, &[2, 2, 1]).unwrap();
+        let out = unslice(stream.clone(), 5, 2, &[2, 2, 1]).unwrap();
         assert_eq!(out, vec![0, 1, 4, 5, 8, 2, 3, 6, 7, 9]);
-        assert!(unslice(&stream[..9], 5, 2, &[2, 2, 1]).is_err());
-        assert!(unslice(&stream, 5, 2, &[2, 2]).is_err());
-        assert_eq!(unslice(&stream, 5, 2, &[5]).unwrap(), stream);
+        assert!(unslice(stream[..9].to_vec(), 5, 2, &[2, 2, 1]).is_err());
+        assert!(unslice(stream.clone(), 5, 2, &[2, 2]).is_err());
+        assert_eq!(unslice(stream.clone(), 5, 2, &[5]).unwrap(), stream);
+    }
+
+    #[test]
+    fn one_slice_is_the_stream_itself_not_a_copy() {
+        let stream: Vec<u16> = (0..10).collect();
+        let at = stream.as_ptr();
+        let out = unslice(stream, 5, 2, &[5]).unwrap();
+        assert_eq!(out.as_ptr(), at);
     }
 }
