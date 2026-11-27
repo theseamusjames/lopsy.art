@@ -149,6 +149,17 @@ function tilesOf(document: Size, xs: readonly number[], ys: readonly number[], a
 }
 
 /**
+ * Whether a tile `width`×`height` fits: no side over `limit`, no more than
+ * `maxTilePixels`, and turned by `angle` the window it is made from within
+ * the limit too.
+ */
+export function tileFits(width: number, height: number, limit: number, maxTilePixels: number, angle: number): boolean {
+  if (width > limit || height > limit || width * height > maxTilePixels) return false;
+  const window = turnedWindowSize(width, height, angle);
+  return window.width <= limit && window.height <= limit;
+}
+
+/**
  * The fewest tiles that make the document within the limits, and of those
  * the plan that renders the fewest pixels: one, the document itself, when
  * it fits as it is. Null when no plan is workable (`MAX_OVERDRAW`,
@@ -158,11 +169,7 @@ export function planTiles(input: TilePlanInput): TilePlan | null {
   const { document, limit, maxTilePixels, angle } = input;
   if (document.width <= 0 || document.height <= 0 || limit <= 0) return null;
   const apron = even(Math.max(0, input.apron));
-  const fits = (w: number, h: number) => {
-    if (w > limit || h > limit || w * h > maxTilePixels) return false;
-    const window = turnedWindowSize(w, h, angle);
-    return window.width <= limit && window.height <= limit;
-  };
+  const fits = (w: number, h: number) => tileFits(w, h, limit, maxTilePixels, angle);
   const docPixels = document.width * document.height;
   // One tile, the document itself: a crop that fits though the photo does not (a straightened one, a small crop).
   if (fits(document.width, document.height)) {
