@@ -226,6 +226,9 @@ pub struct EngineInner {
     /// default) is a document that is the whole picture. A new document
     /// size clears it.
     pub document_region: Option<lopsy_core::tile::Region>,
+    /// Whole pictures being put together from tiles' exports for the
+    /// encoders (`develop::assembly`); empty unless an export is assembling.
+    pub export_assembly: crate::develop::assembly::ExportAssembly,
     pub bg_color: [f32; 4],
     /// Document color mode: 0 = RGB (also grayscale/indexed, which are
     /// RGBA-constrained), 1 = Lab, 2 = CMYK. Drives the display-decode branch
@@ -415,6 +418,7 @@ impl EngineInner {
             doc_width: doc_w,
             doc_height: doc_h,
             document_region: None,
+            export_assembly: Default::default(),
             bg_color: [1.0, 1.0, 1.0, 1.0],
             doc_color_mode: 0,
             needs_recomposite: true,

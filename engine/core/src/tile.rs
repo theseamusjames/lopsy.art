@@ -97,6 +97,80 @@ pub fn low_rect(region: &Region, width: u32, height: u32, low_width: u32, low_he
     Rect::new(x0 as i32, y0 as i32, x1 - x0 + 1, y1 - y0 + 1)
 }
 
+/// A whole picture put together from tiles' kept parts, for an encoder that
+/// takes whole pictures: RGBA, four values a pixel, rows from the top. Its
+/// memory is reserved with `try_reserve_exact`, so a picture too large for
+/// the memory left is an error, not an abort. It counts the pixels written
+/// so a picture with a part missing is never encoded: kept parts partition
+/// the picture, and one written twice is refused.
+pub struct Assembly<T> {
+    pub width: u32,
+    pub height: u32,
+    pixels: Vec<T>,
+    /// The rectangles written so far.
+    written: Vec<Rect>,
+}
+
+impl<T: Copy + Default> Assembly<T> {
+    /// A `width`×`height` picture of `T::default()`.
+    pub fn new(width: u32, height: u32) -> Result<Self, String> {
+        if width == 0 || height == 0 {
+            return Err(format!("A {width}×{height} picture cannot be assembled"));
+        }
+        let len = (width as usize)
+            .checked_mul(height as usize)
+            .and_then(|n| n.checked_mul(4))
+            .ok_or_else(|| format!("A {width}×{height} picture is too large to assemble"))?;
+        let mut pixels = Vec::new();
+        pixels
+            .try_reserve_exact(len)
+            .map_err(|_| format!("There is not enough memory to assemble a {width}×{height} picture"))?;
+        pixels.resize(len, T::default());
+        Ok(Assembly { width, height, pixels, written: Vec::new() })
+    }
+
+    /// Writes `pixels` (`rect.width`×`rect.height`, RGBA) at `rect`, which
+    /// must lie inside the picture and meet no rectangle written before.
+    pub fn write(&mut self, rect: Rect, pixels: &[T]) -> Result<(), String> {
+        let inside = rect.x >= 0
+            && rect.y >= 0
+            && rect.width > 0
+            && rect.height > 0
+            && rect.x as u64 + u64::from(rect.width) <= u64::from(self.width)
+            && rect.y as u64 + u64::from(rect.height) <= u64::from(self.height);
+        if !inside {
+            return Err(format!("A kept part at ({}, {}), {}×{}, leaves the {}×{} picture", rect.x, rect.y, rect.width, rect.height, self.width, self.height));
+        }
+        if pixels.len() != rect.width as usize * rect.height as usize * 4 {
+            return Err(format!("A kept part of {}×{} came with {} values", rect.width, rect.height, pixels.len()));
+        }
+        if self.written.iter().any(|w| w.intersect(&rect).is_some()) {
+            return Err(format!("A kept part at ({}, {}) was written twice", rect.x, rect.y));
+        }
+        let row = rect.width as usize * 4;
+        for (i, from) in pixels.chunks_exact(row).enumerate() {
+            let at = ((rect.y as usize + i) * self.width as usize + rect.x as usize) * 4;
+            self.pixels[at..at + row].copy_from_slice(from);
+        }
+        self.written.push(rect);
+        Ok(())
+    }
+
+    /// Whether every pixel has been written.
+    pub fn is_complete(&self) -> bool {
+        let area: u64 = self.written.iter().map(|r| u64::from(r.width) * u64::from(r.height)).sum();
+        area == u64::from(self.width) * u64::from(self.height)
+    }
+
+    /// The whole picture, once every pixel has been written.
+    pub fn into_pixels(self) -> Result<Vec<T>, String> {
+        if !self.is_complete() {
+            return Err(format!("The {}×{} picture is missing a part", self.width, self.height));
+        }
+        Ok(self.pixels)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -360,5 +434,25 @@ mod tests {
             assert!(measured <= reach, "σ {sigma}: measured {measured}, reach {reach}");
             assert!(reach - measured <= slack, "σ {sigma}: reach {reach} is {} past the measured {measured}", reach - measured);
         }
+    }
+
+    #[test]
+    fn an_assembly_is_its_kept_parts_and_refuses_overlaps_gaps_and_strays() {
+        let mut a = Assembly::<u16>::new(4, 3).unwrap();
+        let left: Vec<u16> = (0..2 * 3 * 4).collect();
+        let right: Vec<u16> = (100..100 + 2 * 3 * 4).collect();
+        a.write(Rect::new(0, 0, 2, 3), &left).unwrap();
+        assert!(!a.is_complete());
+        assert!(a.write(Rect::new(1, 0, 2, 3), &right).is_err(), "overlap");
+        assert!(a.write(Rect::new(3, 0, 2, 3), &right).is_err(), "outside");
+        assert!(a.write(Rect::new(2, 0, 2, 2), &right).is_err(), "wrong length");
+        a.write(Rect::new(2, 0, 2, 3), &right).unwrap();
+        let pixels = a.into_pixels().unwrap();
+        assert_eq!(&pixels[0..8], &left[0..8]);
+        assert_eq!(&pixels[8..16], &right[0..8]);
+        assert_eq!(&pixels[16..24], &left[8..16]);
+        let missing = Assembly::<u8>::new(2, 2).unwrap();
+        assert!(missing.into_pixels().is_err());
+        assert!(Assembly::<f32>::new(0, 5).is_err());
     }
 }

@@ -593,3 +593,131 @@ fn a_window_upload_is_the_crop_of_the_whole_upload() {
     assert!(commands::layer::upload_layer_pixels_f32_window(&mut engine, "w", 0, 0, 4, 4, 0, 0, 4, 2, &[0.0; 12]).is_err());
     assert_no_gpu_errors();
 }
+
+/// Runs an `async fn` command to its result, polling while it waits for a
+/// read as the hosts do.
+fn run<T>(engine: &mut EngineInner, mut task: lopsy_engine::task::Task<T>) -> T {
+    loop {
+        if let Poll::Ready(value) = task.poll(engine) {
+            return value;
+        }
+        std::thread::yield_now();
+    }
+}
+
+/// The files the encoders that take whole pictures make: the 16-bit PNG
+/// (sRGB) and TIFF (Display P3), the PQ PNG, and the gain map's pixels and
+/// numbers over the 8-bit export.
+#[derive(PartialEq)]
+struct Files {
+    png: Vec<u8>,
+    tiff: Vec<u8>,
+    pq: Vec<u8>,
+    gain_map: (u32, u32, Vec<u8>, [f64; 7]),
+}
+
+impl std::fmt::Debug for Files {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PNG {} bytes, TIFF {}, PQ PNG {}, gain map {}×{}", self.png.len(), self.tiff.len(), self.pq.len(), self.gain_map.0, self.gain_map.1)
+    }
+}
+
+fn gain_map_of(map: lopsy_core::gain_map::GainMap) -> (u32, u32, Vec<u8>, [f64; 7]) {
+    (map.width, map.height, map.rgba, map.metadata.to_values())
+}
+
+#[test]
+fn files_encoded_from_assembled_tiles_are_the_whole_pictures_files() {
+    use lopsy_core::color::ColorSpace;
+    use lopsy_core::gain_map::{compute_gain_map, GainMapScale};
+    let size = LARGE;
+    let (w, h) = size;
+    let pixels = picture(w, h);
+    let settings = Settings { name: "everything", set: |e| everything(e, LARGE.0 as f32, LARGE.1 as f32, 1.0, false) };
+    let half = GainMapScale::from_divisor(2).expect("scale");
+
+    let Some(mut whole) = engine(w, h) else { return };
+    commands::layer::add_layer(&mut whole, &layer_json("raw", 0, 0, w, h)).expect("layer");
+    commands::layer::upload_layer_pixels_f32_rect(&mut whole, "raw", w, h, 0, 0, w, h, &pixels).expect("pixels");
+    develop(&mut whole, true);
+    (settings.set)(&mut whole);
+    let hdr = now(commands::develop::read_hdr_output_f32(&mut whole, 4.0));
+    let sdr = now(compositor::composite_for_export(&mut whole));
+    let expected = Files {
+        png: now(compositor::export_png_16(&mut whole, 0)),
+        tiff: now(compositor::export_tiff_16(&mut whole, 1)),
+        pq: lopsy_core::hdr_png::encode_pq_png(&hdr, w, h, 203.0).expect("PQ PNG"),
+        gain_map: gain_map_of(compute_gain_map(&hdr, &sdr, w, h, ColorSpace::Srgb, half).expect("gain map")),
+    };
+    drop(whole);
+
+    let Some(mut engine) = engine(w, h) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("raw", 0, 0, w, h)).expect("layer");
+    develop(&mut engine, true);
+    (settings.set)(&mut engine);
+    let apron = commands::develop::develop_apron(&engine);
+    let before = textures_in_use(&engine);
+    // (kind, value) as `begin_export_assembly` takes them: 16-bit sRGB, then Display P3, HDR at 4, 8-bit.
+    let passes: [&[(u8, f32)]; 2] = [&[(0, 0.0), (1, 4.0), (2, 0.0)], &[(0, 1.0), (1, 4.0)]];
+    let mut files = Vec::new();
+    let mut gain_map = None;
+    for kinds in passes {
+        for &(kind, value) in kinds {
+            commands::develop::begin_export_assembly(&mut engine, kind, value, w, h).expect("assembly");
+        }
+        for tile in tiles(size, apron) {
+            let doc = tile.doc;
+            engine.set_document_size(doc.width, doc.height).expect("tile size");
+            commands::develop::set_document_region(&mut engine, doc.x as u32, doc.y as u32, w, h).expect("region");
+            commands::layer::update_layer(&mut engine, &layer_json("raw", doc.x as u32, doc.y as u32, doc.width, doc.height)).expect("layer");
+            upload_window(&mut engine, "raw", &pixels, size, doc);
+            for &(kind, value) in kinds {
+                let k = tile.kept;
+                let task = lopsy_engine::task::Task::new(move |cx| commands::develop::assemble_export_tile(cx, kind, value, k.x, k.y, k.width, k.height));
+                run(&mut engine, task).expect("a tile's kept part");
+            }
+        }
+        if kinds.len() == 3 {
+            // The 16-bit PNG in sRGB, and the gain map (HDR over 8-bit).
+            files.push(commands::develop::encode_export_assembly(&mut engine, 0, 0.0).expect("PNG"));
+            gain_map = Some(gain_map_of(commands::develop::export_assembly_gain_map(&mut engine, ColorSpace::Srgb, half).expect("gain map")));
+        } else {
+            // The TIFF in Display P3, and the PQ PNG.
+            files.push(commands::develop::encode_export_assembly(&mut engine, 1, 0.0).expect("TIFF"));
+            files.push(commands::develop::encode_export_assembly(&mut engine, 2, 203.0).expect("PQ PNG"));
+        }
+    }
+    commands::develop::clear_document_region(&mut engine);
+    let got = Files { png: files[0].clone(), tiff: files[1].clone(), pq: files[2].clone(), gain_map: gain_map.expect("a gain map") };
+    assert!(got.gain_map == expected.gain_map, "the gain map of the assembled pictures is the whole's");
+    assert!(got.png == expected.png, "16-bit PNG: {got:?} against {expected:?}");
+    assert!(got.tiff == expected.tiff, "TIFF: {got:?} against {expected:?}");
+    assert!(got.pq == expected.pq, "PQ PNG: {got:?} against {expected:?}");
+    // The assembly holds nothing once encoded, and a picture with a part missing is never encoded.
+    assert!(commands::develop::encode_export_assembly(&mut engine, 0, 0.0).is_err());
+    commands::develop::begin_export_assembly(&mut engine, 0, 0.0, w, h).expect("assembly");
+    assert!(commands::develop::encode_export_assembly(&mut engine, 0, 0.0).is_err(), "no part written");
+    commands::develop::clear_export_assembly(&mut engine);
+    engine.set_document_size(w, h).expect("whole size");
+    assert_eq!(textures_in_use(&engine), before, "the assembly gives back every texture");
+    assert_no_gpu_errors();
+}
+
+#[test]
+fn a_kept_part_outside_the_tile_or_the_picture_is_refused() {
+    let Some((mut engine, _)) = small_document(64, 48) else { return };
+    commands::develop::begin_export_assembly(&mut engine, 0, 0.0, 200, 100).expect("assembly");
+    engine.set_document_size(64, 48).expect("size");
+    commands::develop::set_document_region(&mut engine, 100, 50, 200, 100).expect("region");
+    let assemble = |engine: &mut EngineInner, x: i32, y: i32| {
+        run(engine, lopsy_engine::task::Task::new(move |cx| commands::develop::assemble_export_tile(cx, 0, 0.0, x, y, 20, 20)))
+    };
+    assert!(assemble(&mut engine, 100, 50).is_ok());
+    assert!(assemble(&mut engine, 100, 50).is_err(), "a part written twice");
+    assert!(assemble(&mut engine, 99, 60).is_err(), "a part that starts before the tile");
+    assert!(assemble(&mut engine, 150, 80).is_err(), "a part that leaves the tile");
+    commands::develop::set_document_region(&mut engine, 0, 0, 300, 100).expect("another whole");
+    assert!(assemble(&mut engine, 0, 0).is_err(), "a tile of another picture");
+    commands::develop::clear_export_assembly(&mut engine);
+    assert!(assemble(&mut engine, 0, 0).is_err(), "nothing being assembled");
+}

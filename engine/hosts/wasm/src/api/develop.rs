@@ -7,7 +7,7 @@
 
 use wasm_bindgen::prelude::*;
 
-use crate::readback::{read, readback_export};
+use crate::readback::{read, readback_export, task};
 use crate::Engine;
 
 #[wasm_bindgen(js_name = "setRawDevelop")]
@@ -37,6 +37,32 @@ pub fn clear_document_region(engine: &mut Engine) {
 #[wasm_bindgen(js_name = "developApron")]
 pub fn develop_apron(engine: &Engine) -> u32 {
     lopsy_engine::commands::develop::develop_apron(&engine.inner)
+}
+
+/// `commands::develop::begin_export_assembly`.
+#[wasm_bindgen(js_name = "beginExportAssembly")]
+pub fn begin_export_assembly(engine: &mut Engine, kind: u8, value: f32, width: u32, height: u32) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::begin_export_assembly(&mut engine.inner, kind, value, width, height).map_err(|e| JsError::new(&e))
+}
+
+readback_export! {
+    /// `commands::develop::assemble_export_tile`.
+    #[wasm_bindgen(js_name = "assembleExportTile")]
+    pub fn assemble_export_tile(engine, kind: u8, value: f32, x: i32, y: i32, width: u32, height: u32) -> Result<()> {
+        task(move |cx| lopsy_engine::commands::develop::assemble_export_tile(cx, kind, value, x, y, width, height))
+    }
+}
+
+/// `commands::develop::encode_export_assembly`.
+#[wasm_bindgen(js_name = "encodeExportAssembly")]
+pub fn encode_export_assembly(engine: &mut Engine, file: u8, sdr_white_nits: f32) -> Result<Vec<u8>, JsError> {
+    lopsy_engine::commands::develop::encode_export_assembly(&mut engine.inner, file, sdr_white_nits).map_err(|e| JsError::new(&e))
+}
+
+/// `commands::develop::clear_export_assembly`.
+#[wasm_bindgen(js_name = "clearExportAssembly")]
+pub fn clear_export_assembly(engine: &mut Engine) {
+    lopsy_engine::commands::develop::clear_export_assembly(&mut engine.inner)
 }
 
 /// Turn the develop working space on (`on`) or off. On, the image is held

@@ -1686,8 +1686,13 @@ fn export_output_settings(engine: &EngineInner, output: ExportOutput, with_adjus
 
 /// Composite for export — render to FBO, readPixels
 pub fn composite_for_export(engine: &mut EngineInner) -> Read<Vec<u8>> {
-    let doc_w = engine.doc_width;
-    let doc_h = engine.doc_height;
+    let whole = Rect::new(0, 0, engine.doc_width, engine.doc_height);
+    composite_for_export_rect(engine, whole)
+}
+
+/// [`composite_for_export`], reading only `rect` of the document: a tile's
+/// kept part, for a whole picture assembled from tiles.
+pub fn composite_for_export_rect(engine: &mut EngineInner, rect: Rect) -> Read<Vec<u8>> {
     let output = ExportOutput::sdr(lopsy_core::output::OutputTarget::Srgb, true);
     if let Err(e) = composite_layers_for_export(engine, output) {
         return Read::failed(e);
@@ -1701,7 +1706,7 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Read<Vec<u8>> {
     // (PNG/JPEG encode, eyedropper, e2e pixel probes) expects sRGB, so decode
     // here with the same math final_blit.wgsl uses for the screen.
     let doc_color_mode = engine.doc_color_mode;
-    engine.gpu().read_rgba(engine.composite_texture, 0, 0, doc_w, doc_h).map(move |mut pixels| {
+    engine.gpu().read_rgba(engine.composite_texture, rect.x, rect.y, rect.width, rect.height).map(move |mut pixels| {
         decode_native_color_mode(doc_color_mode, &mut pixels);
         pixels
     })
@@ -1797,8 +1802,12 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Read<Vec<u16>> {
 /// `composite_for_export_u16` with the working space rendered for `target`
 /// (not dithered).
 pub fn composite_for_export_u16_to(engine: &mut EngineInner, target: lopsy_core::output::OutputTarget) -> Read<Vec<u16>> {
-    let doc_w = engine.doc_width;
-    let doc_h = engine.doc_height;
+    let whole = Rect::new(0, 0, engine.doc_width, engine.doc_height);
+    composite_for_export_u16_rect(engine, target, whole)
+}
+
+/// [`composite_for_export_u16_to`], reading only `rect` of the document.
+pub fn composite_for_export_u16_rect(engine: &mut EngineInner, target: lopsy_core::output::OutputTarget, rect: Rect) -> Read<Vec<u16>> {
     let finish = ExportFinish::Full { with_adjustments: true, output: ExportOutput::sdr(target, false) };
     if let Err(e) = composite_layers_for_export_with(engine, finish) {
         return Read::failed(e);
@@ -1806,7 +1815,7 @@ pub fn composite_for_export_u16_to(engine: &mut EngineInner, target: lopsy_core:
     engine.needs_recomposite = true;
 
     let is_lab = engine.doc_color_mode == 1;
-    engine.gpu().read_rgba_u16(engine.composite_texture, 0, 0, doc_w, doc_h).map(move |mut pixels| {
+    engine.gpu().read_rgba_u16(engine.composite_texture, rect.x, rect.y, rect.width, rect.height).map(move |mut pixels| {
         // Lab is stored 8-bit-encoded even in a 16-bit texture, so decoding steps
         // down to bytes and back; the extra precision is in the alpha/geometry, not
         // the encoded Lab channels.
@@ -1838,16 +1847,21 @@ pub fn composite_for_export_u16_to(engine: &mut EngineInner, target: lopsy_core:
 /// take. At the document's size, whatever the screen is. Fails without the
 /// working space, since without it nothing is linear or above white.
 pub fn composite_for_export_hdr_f32(engine: &mut EngineInner, peak: f32) -> Read<Vec<f32>> {
+    let whole = Rect::new(0, 0, engine.doc_width, engine.doc_height);
+    composite_for_export_hdr_f32_rect(engine, peak, whole)
+}
+
+/// [`composite_for_export_hdr_f32`], reading only `rect` of the document.
+pub fn composite_for_export_hdr_f32_rect(engine: &mut EngineInner, peak: f32, rect: Rect) -> Read<Vec<f32>> {
     if engine.working_space.is_none() {
         return Read::failed("The document has no working space".to_string());
     }
-    let (doc_w, doc_h) = (engine.doc_width, engine.doc_height);
     let output = ExportOutput { target: lopsy_core::output::OutputTarget::LinearRec2020, is_8bit: false, peak };
     if let Err(e) = composite_layers_for_export(engine, output) {
         return Read::failed(e);
     }
     engine.needs_recomposite = true;
-    engine.gpu().read_rgba_f32(engine.composite_texture, 0, 0, doc_w, doc_h)
+    engine.gpu().read_rgba_f32(engine.composite_texture, rect.x, rect.y, rect.width, rect.height)
 }
 
 /// The widest footprint, in source texels on an axis, of which one

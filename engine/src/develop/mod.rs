@@ -365,6 +365,7 @@
 //! the file's own colour and baseline exposure, which differ from Lopsy's
 //! baked DNG decode (that one stretches levels to fill 0..1).
 
+pub mod assembly;
 pub mod detail;
 pub mod look;
 pub mod output;
