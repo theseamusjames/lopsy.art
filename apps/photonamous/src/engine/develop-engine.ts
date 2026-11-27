@@ -62,6 +62,7 @@ import initWasm, {
   duplicateLayerTexture,
   getLayerEngineBounds,
   loseGpuDevice,
+  maxTextureSize,
   prepareLayerTransformTarget,
   clearImageColorGrading,
   clearImageColorMixer,
@@ -133,7 +134,6 @@ import { withJpegIccProfile, withPngColorTag } from '@lopsy/image-metadata';
 import { insertJpegExif } from '@lopsy/photos-core/export/exif-writer';
 import { wasmUrlFor } from './engine-files';
 import { keepForOffline } from '../sw/register';
-import { webGpuTextureLimit } from '@lopsy/engine-wasm/renderer-choice';
 import type { ImageFormat } from '@lopsy/photos-core/library/types';
 import { DEFAULT_RECIPE, liveAreas, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { KelvinReadout, WhiteBalancePresetValues } from './white-balance';
@@ -152,6 +152,8 @@ import { finishKey, finishValues } from './finish-controls';
 import { renderCounts, type RenderKind } from './render-counts';
 import { ScreenViews } from './screen-views';
 import { UpgradeSlot } from './upgrade-slot';
+import { FullSizeLoads, type FullSizeNote } from './full-size';
+import { noteTextureLimit } from './texture-limit';
 import { LOPSY_LAYER_MIME } from './lopsy-layer';
 
 export { LOPSY_LAYER_MIME };
@@ -159,7 +161,7 @@ import { areaLayerKey, areaLayerValues, areaValues, linearAreaLayerKey, linearAr
 import { developPathFor, developStages, type DevelopPath, type LegacyStages, type LinearStages } from './develop-stages';
 import { treatsAsFloat, usesWorkingSpace } from './develop-override';
 import { NO_INSETS, clampZoom, fitView, limitSize, panBy, zoomAround, type Insets, type Size, type View } from './viewport';
-import { decodeRawInWorkers, DecodeAbortedError, RawPrepareError } from './raw/raw-decode';
+import { decodeRawInWorkers, DecodeAbortedError, RawPrepareError, type FrameSize } from './raw/raw-decode';
 import { rawLoadPath, type RawDescription } from './raw/raw-format';
 import { rawWhiteBalanceFor, type RawWhiteBalance, type RawWhiteEngine } from './raw/raw-white-balance';
 import { rawSettingsFor, rawSettingsJson, temperatureTintFor, type RawDevelopSettings } from './raw-develop';
@@ -186,6 +188,10 @@ declare global {
       readRendered: () => Promise<RenderedForTest | null>;
       /** The RAW develop settings last sent to the engine (`setRawDevelop`'s JSON); null for a photo that is not RAW. */
       rawDevelopSettings: () => string | null;
+      /** The document's size in the engine (`getCompositeSize`): the crop of what the layer holds. */
+      documentSize: () => { width: number; height: number };
+      /** The GPU's largest texture side, as the engine reports it (`maxTextureSize`). */
+      textureLimit: () => number;
     };
   }
 }
@@ -301,9 +307,26 @@ export interface DevelopEngine {
   load(source: Blob, format: ImageFormat, onProgress?: (progress: LoadProgress) => void, options?: LoadOptions): Promise<Size>;
   /** The working image's width over the full image's: 1 at full resolution. */
   workingScale(): number;
+  /**
+   * Whether the largest image this engine will load for the photo is
+   * loaded: its own size, or the largest this GPU can hold (`full-size.ts`),
+   * or the working image once every full-size load failed.
+   */
   isFullResolution(): boolean;
-  /** Replaces the working image with the full-size one (zoom to 50 % or closer, full-size export). */
+  /**
+   * Replaces the working image with the full-size one (zoom to 50 % or
+   * closer, full-size export): the photo's own size, or the largest this
+   * GPU holds, stepping down when a load fails. Resolves however it ends,
+   * except when aborted: a failed load leaves the working image and is not
+   * asked for again for this photo.
+   */
   ensureFullResolution(): Promise<void>;
+  /**
+   * Set when the photo is shown and exported below its own size because of
+   * this device (its GPU's largest texture, or a full-size load that
+   * failed); null otherwise.
+   */
+  fullSizeNote(): FullSizeNote | null;
   isLoadingFullResolution(): boolean;
   /** Renders `recipe` from the next frame on. Cheap when nothing changed. */
   setRecipe(recipe: Recipe): void;
@@ -455,8 +478,6 @@ export const HDR_PEAK = 4;
 const PQ_SDR_WHITE_NITS = 203;
 /** The gain map is half the picture's width and height (plan decision 14). */
 const GAIN_MAP_SCALE = 2;
-/** WebGPU's guaranteed largest texture side, when the adapter's is not known. */
-const WEBGPU_DEFAULT_TEXTURE_LIMIT = 8192;
 
 let wasmReady: Promise<unknown> | null = null;
 
@@ -535,6 +556,9 @@ const RAW_WHITE_ENGINE: RawWhiteEngine = { whiteBalance: rawWhiteBalance, temper
 interface BakedRawMeta {
   readonly width: number;
   readonly height: number;
+  /** The picture's own size, when it was reduced to fit the GPU's textures (then `width` and `height` are the layer's). */
+  readonly fullWidth?: number;
+  readonly fullHeight?: number;
   readonly colorApproximate?: boolean;
   readonly colorNote?: string;
 }
@@ -556,6 +580,16 @@ async function decodeToCanvas(source: Blob, maxLongEdge: number | undefined): Pr
   } finally {
     bitmap.close();
   }
+}
+
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+/** A PNG's width and height from its IHDR chunk, which the format puts first; null when `data` does not start that way. */
+export function pngHeaderSize(data: Uint8Array): Size | null {
+  if (data.length < 24 || PNG_SIGNATURE.some((b, i) => data[i] !== b)) return null;
+  const view = new DataView(data.buffer, data.byteOffset, 24);
+  if (view.getUint32(12) !== 0x49484452) return null;
+  return { width: view.getUint32(16), height: view.getUint32(20) };
 }
 
 /**
@@ -652,7 +686,9 @@ export async function createDevelopEngine(canvas: HTMLCanvasElement, options: De
     setDevelopWorkingSpace(engine, isWorkingSpace, SRGB);
     // The status says what the edit can do: without the working space there are no HDR files, as on an 8-bit GPU.
     noteEngineStarted(isWorkingSpace);
-    return new PhotoEngine(engine, canvas, hasFloat, isWorkingSpace, options.isScreen === true);
+    const textureLimit = maxTextureSize(engine);
+    noteTextureLimit(textureLimit);
+    return new PhotoEngine(engine, canvas, hasFloat, isWorkingSpace, options.isScreen === true, textureLimit);
   } catch (err) {
     // Nothing else holds the engine yet: freed here, or its GPU device would stay with the page.
     freeQuietly(engine);
@@ -740,6 +776,10 @@ class PhotoEngine implements DevelopEngine {
   private pixelRatio = 1;
   private loadAbort: AbortController | null = null;
   private readonly upgrade = new UpgradeSlot();
+  /** The GPU's largest texture side (`maxTextureSize`): every texture the photo needs is at most this on a side. */
+  private readonly textureLimit: number;
+  /** The photo's full size on this GPU, and what loading it has taught (full-size.ts). */
+  private readonly fullLoads: FullSizeLoads;
   /** The original, kept to load the full size on demand. */
   private loaded: { source: Blob; format: ImageFormat } | null = null;
   /** The full image's oriented size, before framing. */
@@ -778,8 +818,10 @@ class PhotoEngine implements DevelopEngine {
     this.lostListeners.clear();
   };
 
-  constructor(engine: Engine, canvas: HTMLCanvasElement, hasFloat: boolean, isWorkingSpace: boolean, isScreen: boolean) {
+  constructor(engine: Engine, canvas: HTMLCanvasElement, hasFloat: boolean, isWorkingSpace: boolean, isScreen: boolean, textureLimit: number) {
     this.engine = engine;
+    this.textureLimit = textureLimit;
+    this.fullLoads = new FullSizeLoads(textureLimit);
     this.id = engineId(engine);
     this.canvas = canvas;
     this.hasFloat = hasFloat;
@@ -806,6 +848,11 @@ class PhotoEngine implements DevelopEngine {
         },
         readRendered: () => this.readRenderedForTest(),
         rawDevelopSettings: () => this.appliedRawJson,
+        documentSize: () => {
+          const [width = 0, height = 0] = getCompositeSize(this.engine);
+          return { width, height };
+        },
+        textureLimit: () => this.textureLimit,
       };
     }
     this.resizeObserver = new ResizeObserver((entries) => this.handleResize(entries));
@@ -835,10 +882,12 @@ class PhotoEngine implements DevelopEngine {
       this.pixelScale = 1;
       this.loaded = { source, format };
       this.fullSize = null;
+      this.fullLoads.reset(null);
       const mode = options.resolution === 'full' ? 'full' : 'working';
       const size = await this.decode(source, format, abort.signal, report, mode);
       if (abort.signal.aborted || this.isDisposed) throw new DecodeAbortedError();
       if (!this.fullSize) this.fullSize = size;
+      this.fullLoads.setOwn(this.fullSize);
       return size;
     } finally {
       if (this.loadAbort === abort) this.loadAbort = null;
@@ -847,7 +896,18 @@ class PhotoEngine implements DevelopEngine {
 
   /** The long edge the Edit view edits at (spec 6.10): the view's, at least a screen preview's, at most 4096 px. */
   private workingLongEdge(): number {
-    return Math.min(MAX_WORKING_EDGE, Math.max(MIN_WORKING_EDGE, Math.round(Math.max(this.canvas.width, this.canvas.height))));
+    const edge = Math.min(MAX_WORKING_EDGE, Math.max(MIN_WORKING_EDGE, Math.round(Math.max(this.canvas.width, this.canvas.height))));
+    return this.withinBinnedLimit(edge);
+  }
+
+  /**
+   * A first view's long edge the GPU can hold once binned: a RAW frame is
+   * binned by a whole factor to at least this edge, which can come out at
+   * up to twice it, so on a GPU whose largest texture is under twice the
+   * edge, half the limit. Unchanged on every GPU of 8192 or more.
+   */
+  private withinBinnedLimit(edge: number): number {
+    return Math.max(1, Math.min(edge, Math.floor(this.textureLimit / 2)));
   }
 
   workingScale(): number {
@@ -855,7 +915,7 @@ class PhotoEngine implements DevelopEngine {
   }
 
   isFullResolution(): boolean {
-    return this.pixelScale >= 1;
+    return this.pixelScale >= 1 || this.fullLoads.isSettled();
   }
 
   ensureFullResolution(): Promise<void> {
@@ -863,15 +923,69 @@ class PhotoEngine implements DevelopEngine {
     const running = this.upgrade.current();
     if (running) return running;
     const { source, format } = this.loaded;
+    // A new view object, so a listener that keeps the view (React state) notices the badge's change.
     const notify = () => {
+      this.view = { ...this.view };
       for (const listener of this.viewListeners) listener(this.view);
     };
-    const upgrade = this.upgrade.start(async (signal) => {
-      if (this.raw) await this.decodeRaw(source, signal, () => undefined, 'upgrade');
-      else await this.upgradeImage(source, signal, format);
-    }, notify);
+    const upgrade = this.upgrade.start((signal) => this.loadLargestHeld(source, format, signal), notify);
     notify();
     return upgrade;
+  }
+
+  /**
+   * The full size, or the largest this GPU holds: each of `fullLoads`'
+   * attempts in turn until one loads. A failure other than an abort is
+   * logged and the next, smaller size tried; once none is left the working
+   * image stays and the photo is not asked for again (full-size.ts).
+   */
+  private async loadLargestHeld(source: Blob, format: ImageFormat, signal: AbortSignal): Promise<void> {
+    const shown = this.sourceSize;
+    const attempts = shown ? this.fullLoads.attempts(Math.max(shown.width, shown.height)) : [];
+    for (const size of attempts) {
+      try {
+        await this.loadFullAt(source, format, size, signal);
+        this.fullLoads.noteLoaded(size);
+        return;
+      } catch (err) {
+        if (err instanceof DecodeAbortedError || signal.aborted || this.isDisposed) throw err;
+        console.warn(`Photonamous: the photo could not be loaded at ${size.width} × ${size.height}`, err);
+        this.fullLoads.noteFailed(size);
+        this.restoreWorkingImage();
+        // The file itself is refused: no size would load it.
+        if (err instanceof RawPrepareError) break;
+      }
+    }
+    this.fullLoads.noteGaveUp();
+  }
+
+  /** One full-size load at `size`, the photo's own or smaller, into a layer that replaces the working one. */
+  private async loadFullAt(source: Blob, format: ImageFormat, size: Size, signal: AbortSignal): Promise<void> {
+    if (this.raw) {
+      await this.decodeRaw(source, signal, () => undefined, 'upgrade', size);
+      return;
+    }
+    const own = this.fullSize;
+    const isOwn = own !== null && own.width === size.width && own.height === size.height;
+    // The engine's PNG decoder keeps 16 bits, at the PNG's own size only; smaller, the browser's decode.
+    if (format === 'png' && isOwn && (await this.upgradePng16(source, signal))) return;
+    await this.upgradeImage(source, signal, size);
+  }
+
+  /** After a failed full-size load: the working image's framing, layout and size-scaled stages sent again. */
+  private restoreWorkingImage(): void {
+    if (this.isDisposed || !this.sourceSize) return;
+    this.forgetSizedState();
+    this.applyRecipe();
+    this.invalidate();
+  }
+
+  fullSizeNote(): FullSizeNote | null {
+    const kind = this.fullLoads.outcome();
+    if (!kind || !this.sourceSize || !this.fullSize) return null;
+    const own = framedSize(this.fullSize.width, this.fullSize.height, this.framing.rotate);
+    const shown = framedSize(this.sourceSize.width, this.sourceSize.height, this.framing.rotate);
+    return { kind, own, shown, limit: this.fullLoads.limit };
   }
 
   isLoadingFullResolution(): boolean {
@@ -898,28 +1012,59 @@ class PhotoEngine implements DevelopEngine {
     }
     if (format === 'lopsy') throw new Error('Lopsy documents open in Lopsy, not in the Edit view');
     report('decoding', null);
-    const decoded = await decodeToCanvas(source, mode === 'working' ? this.workingLongEdge() : undefined);
+    // The full size is the largest the GPU can edit: the photo's own when it fits.
+    const decoded = await decodeToCanvas(source, mode === 'working' ? this.workingLongEdge() : this.fullLoads.limit);
     this.checkLive(signal);
     report('uploading', null);
     const { canvas, fullWidth, fullHeight } = decoded;
+    this.fullSize = { width: fullWidth, height: fullHeight };
+    this.fullLoads.setOwn(this.fullSize);
+    const shown = { width: canvas.width, height: canvas.height };
+    try {
+      this.resetLayer(canvas.width, canvas.height);
+      uploadLayerPixelsFromCanvas(this.engine, this.layerId, canvas, canvas.width, canvas.height);
+    } catch (err) {
+      // A full size the GPU could not take: the working image, and a smaller full size when one is asked for.
+      if (mode !== 'full') throw err;
+      console.warn(`Photonamous: the photo could not be loaded at ${canvas.width} × ${canvas.height}`, err);
+      this.fullLoads.noteFailed(shown);
+      return this.decodeImageAt(source, signal, this.workingLongEdge());
+    }
+    if (mode === 'full') this.fullLoads.noteLoaded(shown);
+    this.pixelScale = fullWidth > 0 ? canvas.width / fullWidth : 1;
+    return this.showImage(shown);
+  }
+
+  /** The browser's decode at `longEdge` at most, as the photo's image. */
+  private async decodeImageAt(source: Blob, signal: AbortSignal, longEdge: number): Promise<Size> {
+    const { canvas, fullWidth } = await decodeToCanvas(source, longEdge);
+    this.checkLive(signal);
     this.resetLayer(canvas.width, canvas.height);
     uploadLayerPixelsFromCanvas(this.engine, this.layerId, canvas, canvas.width, canvas.height);
-    this.fullSize = { width: fullWidth, height: fullHeight };
     this.pixelScale = fullWidth > 0 ? canvas.width / fullWidth : 1;
     return this.showImage({ width: canvas.width, height: canvas.height });
   }
 
-  /** The full-size image into a hidden layer that then replaces the working one. */
-  private async upgradeImage(source: Blob, signal: AbortSignal, format: ImageFormat): Promise<void> {
-    if (format === 'png' && (await this.upgradePng16(source, signal))) return;
-    const decoded = await decodeToCanvas(source, undefined);
+  /** The image at `size` (its own, or smaller) into a hidden layer that then replaces the working one. */
+  private async upgradeImage(source: Blob, signal: AbortSignal, size: Size): Promise<void> {
+    const decoded = await decodeToCanvas(source, Math.max(size.width, size.height));
     this.checkLive(signal);
     const previous = this.sourceSize;
     if (!previous) return;
     const { canvas } = decoded;
     const layer = this.addHiddenLayer(canvas.width, canvas.height);
-    uploadLayerPixelsFromCanvas(this.engine, layer, canvas, canvas.width, canvas.height);
-    this.swapInLayer(layer, { width: canvas.width, height: canvas.height }, previous);
+    try {
+      uploadLayerPixelsFromCanvas(this.engine, layer, canvas, canvas.width, canvas.height);
+      this.swapInLayer(layer, { width: canvas.width, height: canvas.height }, previous);
+    } catch (err) {
+      this.removeHiddenLayer(layer);
+      throw err;
+    }
+  }
+
+  /** A layer filled beside the working image that did not replace it. */
+  private removeHiddenLayer(layer: string): void {
+    if (layer !== this.layerId && !this.isDisposed) removeLayer(this.engine, layer);
   }
 
   /**
@@ -931,14 +1076,19 @@ class PhotoEngine implements DevelopEngine {
    * - 'full' (exports): the binned frame shows first while the full-size
    *   bands fill a hidden layer that replaces it;
    * - 'upgrade': the full-size bands replace the working image (zoom to
-   *   50 % or closer).
+   *   50 % or closer), at `target`.
    * Without float targets the bands carry the format's finished look.
+   * The full size is the largest the GPU holds (`fullLoads`): the file's
+   * own size when it fits, otherwise the frame reduced by area in the
+   * workers. In 'full' a full size that fails to load leaves the first
+   * view, and a smaller one is tried when the full size is asked for.
    */
   private async decodeRaw(
     source: Blob,
     signal: AbortSignal,
     report: (stage: LoadProgress['stage'], fraction: number | null) => void,
     mode: 'working' | 'full' | 'upgrade',
+    target?: Size,
   ): Promise<Size> {
     const data = new Uint8Array(await source.arrayBuffer());
     this.checkLive(signal);
@@ -948,16 +1098,19 @@ class PhotoEngine implements DevelopEngine {
     const isWorkingOnly = mode === 'working' && isLinear;
     let quick: Size | null = isUpgrade ? this.sourceSize : null;
     let fullLayer: string | null = null;
+    // The size the full-size bands land in, once the first arrives (set in a callback, so held in an object).
+    const filled: { frame: FrameSize | null } = { frame: null };
     try {
       const description = await decodeRawInWorkers(
         data,
-        (full, band) => {
+        (_, band, size) => {
           if (signal.aborted || this.isDisposed) return;
           if (fullLayer === null) {
-            fullLayer = quick ? this.addHiddenLayer(full.width, full.height) : this.resetLayer(full.width, full.height);
+            filled.frame = size;
+            fullLayer = quick ? this.addHiddenLayer(size.width, size.height) : this.resetLayer(size.width, size.height);
           }
           uploadLayerPixelsF32Rect(
-            this.engine, fullLayer, full.width, full.height,
+            this.engine, fullLayer, size.width, size.height,
             band.x, band.y, band.width, band.height, band.pixels,
           );
         },
@@ -965,7 +1118,8 @@ class PhotoEngine implements DevelopEngine {
           signal,
           linear: isLinear,
           renderBands: !isWorkingOnly,
-          ...(isUpgrade ? {} : { binnedLongEdge: isWorkingOnly ? this.workingLongEdge() : QUICK_VIEW_LONG_EDGE }),
+          frameSize: (d) => target ?? this.fullLoads.best() ?? { width: d.width, height: d.height },
+          ...(isUpgrade ? {} : { binnedLongEdge: isWorkingOnly ? this.workingLongEdge() : this.withinBinnedLimit(QUICK_VIEW_LONG_EDGE) }),
           onPrepared: (prepDescription, prepared) => {
             if (signal.aborted || this.isDisposed || !isLinear || isUpgrade) return;
             const whiteBalance = rawWhiteBalanceFor(prepDescription, prepared.paramsJson, RAW_WHITE_ENGINE);
@@ -975,6 +1129,7 @@ class PhotoEngine implements DevelopEngine {
             this.engineProfiles = [...prepDescription.profiles];
             this.colorNote = prepDescription.colorNote;
             this.fullSize = { width: prepDescription.width, height: prepDescription.height };
+            this.fullLoads.setOwn(this.fullSize);
             const binned = prepared.binned;
             if (!binned) return;
             const layer = this.resetLayer(binned.width, binned.height);
@@ -990,24 +1145,40 @@ class PhotoEngine implements DevelopEngine {
         },
       );
       this.checkLive(signal);
-      const size = { width: description.width, height: description.height };
       if (isWorkingOnly) {
         if (!quick) throw new Error('The RAW file decoded to an empty image');
         return quick;
       }
-      if (fullLayer === null) throw new Error('The RAW file decoded to an empty image');
+      const loaded = filled.frame;
+      if (fullLayer === null || loaded === null) throw new Error('The RAW file decoded to an empty image');
+      const size = { width: loaded.width, height: loaded.height };
       if (quick) {
         this.swapInLayer(fullLayer, size, quick);
-        return size;
+      } else {
+        // No first view (the finished look in bands): the photo's own size is the description's.
+        this.fullSize = { width: description.width, height: description.height };
+        this.fullLoads.setOwn(this.fullSize);
+        this.pixelScale = description.width > 0 ? size.width / description.width : 1;
+        this.showImage(size);
       }
-      return this.showImage(size);
+      if (!isUpgrade) this.fullLoads.noteLoaded(size);
+      return size;
     } catch (err) {
       // A full-size layer filled beside the working image and never swapped in.
       const hidden: string | null = fullLayer;
-      if (hidden !== null && hidden !== this.layerId && !this.isDisposed) removeLayer(this.engine, hidden);
+      if (hidden !== null) this.removeHiddenLayer(hidden);
       // A file the RAW interface cannot prepare (a DNG it does not develop, a damaged file) opens as the
       // baked decode's finished picture; if that refuses it too, its own sentence is what the person reads.
       if (err instanceof RawPrepareError && !isUpgrade) return this.decodeBaked(data, signal, report);
+      const isAbort = err instanceof DecodeAbortedError || signal.aborted || this.isDisposed;
+      // An export's full size that did not load: the first view stays, and a smaller size is tried when asked for.
+      if (mode === 'full' && quick && !isAbort) {
+        const tried = filled.frame ?? this.fullLoads.best();
+        console.warn(`Photonamous: the photo could not be loaded at ${tried ? `${tried.width} × ${tried.height}` : 'its full size'}`, err);
+        if (tried) this.fullLoads.noteFailed(tried);
+        this.restoreWorkingImage();
+        return quick;
+      }
       throw err;
     }
   }
@@ -1035,8 +1206,14 @@ class PhotoEngine implements DevelopEngine {
     const meta = JSON.parse(decodeAndUploadRawBaked(this.engine, this.layerId, data)) as BakedRawMeta;
     if (!meta.width || !meta.height) throw new Error('The RAW file decoded to an empty image');
     this.colorNote = meta.colorApproximate === true && typeof meta.colorNote === 'string' && meta.colorNote !== '' ? meta.colorNote : null;
+    // The whole picture is decoded at once: what the layer holds is its full size here, reduced when the GPU could not hold it.
+    const layer = { width: meta.width, height: meta.height };
+    this.fullSize = meta.fullWidth && meta.fullHeight ? { width: meta.fullWidth, height: meta.fullHeight } : layer;
+    this.fullLoads.setOwn(this.fullSize);
+    this.fullLoads.noteLoaded(layer);
+    this.pixelScale = layer.width / this.fullSize.width;
     this.sizeDocument(meta.width, meta.height);
-    return this.showImage({ width: meta.width, height: meta.height });
+    return this.showImage(layer);
   }
 
   /** A Lopsy layer blob, straight into the layer texture at full depth. */
@@ -1062,7 +1239,11 @@ class PhotoEngine implements DevelopEngine {
     return { width, height };
   }
 
-  /** The engine's PNG decoder keeps 16-bit files at full depth; null when it cannot read the file. */
+  /**
+   * The engine's PNG decoder keeps 16-bit files at full depth; null when it
+   * cannot read the file, or the PNG is wider or taller than the GPU can
+   * edit (then the browser's decode makes it smaller).
+   */
   private async decodePng16(
     source: Blob,
     signal: AbortSignal,
@@ -1070,6 +1251,7 @@ class PhotoEngine implements DevelopEngine {
   ): Promise<Size | null> {
     const data = new Uint8Array(await source.arrayBuffer());
     this.checkLive(signal);
+    if (!this.pngFits(data)) return null;
     report('decoding', null);
     this.resetLayer(1, 1);
     const result = decodeAndUploadImage(this.engine, this.layerId, data);
@@ -1085,14 +1267,27 @@ class PhotoEngine implements DevelopEngine {
     this.checkLive(signal);
     const previous = this.sourceSize;
     if (!previous) return true;
+    if (!this.pngFits(data)) return false;
     const layer = this.addHiddenLayer(1, 1);
     const [width = 0, height = 0] = decodeAndUploadImage(this.engine, layer, data);
     if (!width || !height) {
       removeLayer(this.engine, layer);
       return false;
     }
-    this.swapInLayer(layer, { width, height }, previous);
+    try {
+      this.swapInLayer(layer, { width, height }, previous);
+    } catch (err) {
+      this.removeHiddenLayer(layer);
+      throw err;
+    }
     return true;
+  }
+
+  /** Whether a PNG's header says it is within what the GPU can edit (true for a header it cannot read: the decoder decides then). */
+  private pngFits(data: Uint8Array): boolean {
+    const size = pngHeaderSize(data);
+    const limit = this.fullLoads.limit;
+    return !size || (size.width <= limit && size.height <= limit);
   }
 
   private checkLive(signal: AbortSignal): void {
@@ -1203,10 +1398,12 @@ class PhotoEngine implements DevelopEngine {
    */
   private swapInLayer(layer: string, size: Size, previous: Size): void {
     this.unturn();
-    this.pixelScale = 1;
+    // First: a document the GPU cannot make fails here, and the engine keeps the working image and its size.
+    setDocumentSize(this.engine, size.width, size.height);
+    // 1 at the photo's own size; less at the largest size a GPU with smaller textures holds.
+    this.pixelScale = this.fullSize && this.fullSize.width > 0 ? size.width / this.fullSize.width : 1;
     removeLayer(this.engine, this.layerId);
     this.layerId = layer;
-    setDocumentSize(this.engine, size.width, size.height);
     updateLayer(this.engine, layerDesc(layer, size.width, size.height, true));
     setLayerOrder(this.engine, JSON.stringify([layer]));
     const wasFit = this.view.isFit;
@@ -1441,7 +1638,11 @@ class PhotoEngine implements DevelopEngine {
     updateLayer(this.engine, layerDesc(this.layerId, width, height, true));
     beginLayerTransform(this.engine, this.layerId, 0, 0, width, height);
     const bounds = rotatedBounds(width, height, angle);
-    prepareLayerTransformTarget(this.engine, this.layerId, bounds.x, bounds.y, bounds.width, bounds.height);
+    // Turned bounds the GPU cannot hold keep to the framed image: the document is the straightened crop inside it,
+    // and while the crop is edited the framed image, so nothing outside it is ever shown.
+    const fits = bounds.width <= this.textureLimit && bounds.height <= this.textureLimit;
+    const target = fits ? bounds : { x: 0, y: 0, width, height };
+    prepareLayerTransformTarget(this.engine, this.layerId, target.x, target.y, target.width, target.height);
     compositeLayerTransformAffine(this.engine, inverseRotation(angle), width / 2, height / 2, width / 2, height / 2);
     dropFloat(this.engine);
     const [x = 0, y = 0, w = width, h = height] = getLayerEngineBounds(this.engine, this.layerId);
@@ -1708,7 +1909,8 @@ class PhotoEngine implements DevelopEngine {
 
   fullResolutionSize(): Size | null {
     const shown = this.imageSize();
-    if (!shown || this.isFullResolution() || !this.fullSize) return shown;
+    // The photo's own size, even where this GPU holds it smaller.
+    if (!shown || this.pixelScale >= 1 || !this.fullSize) return shown;
     const full = framedSize(this.fullSize.width, this.fullSize.height, this.framing.rotate);
     const framed = this.fullImageSize();
     // Uncropped, the full size is known exactly; a crop is scaled up from the working image.
@@ -2041,8 +2243,7 @@ class PhotoEngine implements DevelopEngine {
    */
   private canDrawAt(size: Size): boolean {
     if (rendererName() !== 'wgpu') return true;
-    const limit = webGpuTextureLimit() ?? WEBGPU_DEFAULT_TEXTURE_LIMIT;
-    return size.width <= limit && size.height <= limit;
+    return size.width <= this.textureLimit && size.height <= this.textureLimit;
   }
 
   private async encodePng16(space = SRGB): Promise<Blob> {

@@ -32,7 +32,21 @@ export type RawWorkerRequest =
       srcY1: number;
       /** Linear camera RGB for the develop stage (`rawRenderLinearBand`) rather than the finished look (`rawRenderFinishedBand`). */
       linear: boolean;
+      /**
+       * The frame reduced to `dstWidth`×`dstHeight`, and the destination
+       * rows (or columns) `[d0, d1)` this band makes (`rawRenderScaledBand`);
+       * null at the frame's own size.
+       */
+      scaled: RawScaledBand | null;
     };
+
+/** A band of the frame reduced for a GPU whose textures are smaller than it (`rawPlanScaledBands`). */
+export interface RawScaledBand {
+  readonly dstWidth: number;
+  readonly dstHeight: number;
+  readonly d0: number;
+  readonly d1: number;
+}
 
 export type RawWorkerResponse =
   | {

@@ -10,7 +10,8 @@ import {
   type ExportFormat,
   type ExportSettings,
 } from '@lopsy/photos-core/export/types';
-import { maxLongEdgeOf, type ExportExtras, type SizeSpec } from './export-size';
+import { maxLongEdgeOf, outputSize, type ExportExtras, type PixelSize, type SizeSpec } from './export-size';
+import { editableLimit, heldSize } from '../engine/full-size';
 
 /**
  * The colour spaces the dialog offers for a format: sRGB and Display P3
@@ -106,4 +107,41 @@ export function sizeChoicesFor(
     };
   }
   return { canChoose: true, offersEnlarge: mode !== 'original', note: null };
+}
+
+/**
+ * What the Export dialog says when the size chosen asks more of some
+ * photos than this device's GPU can hold (`textureLimit`, its largest
+ * texture side; null when unknown): each is exported at the largest size
+ * the device can edit instead (`full-size.ts`), a crop smaller in proportion. An
+ * enlargement asked for is made from that size. `photos` are the photos'
+ * own sizes, as imported; a photo of unknown size is left out. Null when
+ * no photo is affected.
+ */
+export function deviceSizeNote(
+  photos: readonly (PixelSize | null)[],
+  textureLimit: number | null,
+  format: ExportFormat,
+  extras: Pick<ExportExtras, 'size' | 'allowEnlarge'>,
+): string | null {
+  if (textureLimit === null || !(textureLimit > 0)) return null;
+  const limit = editableLimit(textureLimit);
+  const asked = (own: PixelSize) => (isAlwaysFullSize(format) ? own : outputSize(own, isHdrFormat(format) ? { ...extras, allowEnlarge: false } : extras));
+  const long = (size: PixelSize) => Math.max(size.width, size.height);
+  const over = photos.filter((own): own is PixelSize => own !== null && long(own) > limit && long(asked(own)) > limit);
+  const [first] = over;
+  if (!first) return null;
+  const enlarged = extras.allowEnlarge && !isAlwaysFullSize(format) && !isHdrFormat(format) ? ' Larger sizes are enlarged from that.' : '';
+  if (photos.length === 1) {
+    const held = heldSize(first, limit);
+    return (
+      `This photo is ${first.width} × ${first.height} pixels, more than this device’s graphics can edit (${limit} on a side). ` +
+      `The largest this device can export of it is ${held.width} × ${held.height}, a crop smaller in proportion.${enlarged}`
+    );
+  }
+  const count = over.length === 1 ? 'One of these photos is' : `${over.length} of these photos are`;
+  return (
+    `${count} more than this device’s graphics can edit (${limit} pixels on a side), so each is exported at most ` +
+    `${limit} pixels on its long edge, a crop smaller in proportion.${enlarged}`
+  );
 }

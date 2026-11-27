@@ -18,7 +18,7 @@ import type { RawBandPixels, RawWorkerRequest, RawWorkerResponse } from './raw-w
 /** What this worker calls: the same on both builds, unlike the glue's engine exports. */
 type Glue = Pick<
   typeof import('@lopsy/engine-pkg/lopsy_wasm.js'),
-  'rawAutoWhiteBalance' | 'rawPrepare' | 'rawRenderFinishedBand' | 'rawRenderLinearBand'
+  'rawAutoWhiteBalance' | 'rawPrepare' | 'rawRenderFinishedBand' | 'rawRenderLinearBand' | 'rawRenderScaledBand'
 > & { initSync(module: { module: WebAssembly.Module }): unknown };
 
 let glue: Promise<Glue> | null = null;
@@ -77,6 +77,14 @@ function handle(wasm: Glue, req: Exclude<RawWorkerRequest, { kind: 'init' }>): v
     } finally {
       prepared.free();
     }
+    return;
+  }
+  const { scaled } = req;
+  if (scaled) {
+    const band = takeBand(
+      wasm.rawRenderScaledBand(req.format, req.src, req.paramsJson, req.y0, req.y1, req.srcY0, req.srcY1, scaled.dstWidth, scaled.dstHeight, scaled.d0, scaled.d1, req.linear),
+    );
+    reply({ kind: 'band', index: req.index, ...band }, [band.pixels.buffer]);
     return;
   }
   const render = req.linear ? wasm.rawRenderLinearBand : wasm.rawRenderFinishedBand;

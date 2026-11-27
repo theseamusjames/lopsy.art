@@ -11,12 +11,18 @@
  * terminates them at once.
  */
 
-import { rawPlanBands } from '@lopsy/engine-pkg/lopsy_wasm';
+import { rawPlanBands, rawPlanScaledBands } from '@lopsy/engine-pkg/lopsy_wasm';
 import { wasmUrlFor } from '../engine-files';
 import { rendererName } from '../wasm';
 import { RAW_BANDS_PER_WORKER, rawWorkerCount } from './raw-decode-plan';
 import { parseRawDescription, type RawDescription } from './raw-format';
 import type { RawBandPixels, RawWorkerRequest, RawWorkerResponse } from './raw-worker-protocol';
+
+/** A width and height in pixels. */
+export interface FrameSize {
+  readonly width: number;
+  readonly height: number;
+}
 
 export interface RawDecodeProgress {
   readonly stage: 'preparing' | 'rendering';
@@ -122,6 +128,43 @@ interface PreparedPlane {
   readonly plane: Float32Array;
 }
 
+/**
+ * The frame reduced to `frame`, which is smaller than its own size: bands
+ * of destination rows (or columns), each rendering the plane rows it reads
+ * and reducing them by area in the worker (`rawPlanScaledBands`,
+ * `rawRenderScaledBand`), so the frame is never whole at its own size.
+ */
+async function renderScaledBands(
+  workers: Worker[],
+  prepared: PreparedPlane,
+  linear: boolean,
+  frame: FrameSize,
+  onBand: (band: RawBandPixels, done: number, count: number) => void,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  const { format, description, paramsJson, plane } = prepared;
+  const plan = rawPlanScaledBands(format, paramsJson, frame.width, frame.height, workers.length * RAW_BANDS_PER_WORKER);
+  const bandCount = plan.length / 6;
+  const rowLength = description.planeWidth * description.samplesPerPixel;
+  let next = 0;
+  let done = 0;
+
+  const drain = async (worker: Worker): Promise<void> => {
+    while (next < bandCount) {
+      const index = next++;
+      const [y0 = 0, y1 = 0, srcY0 = 0, srcY1 = 0, d0 = 0, d1 = 0] = plan.subarray(index * 6, index * 6 + 6);
+      const src = plane.slice(srcY0 * rowLength, srcY1 * rowLength);
+      const scaled = { dstWidth: frame.width, dstHeight: frame.height, d0, d1 };
+      const res = await call(worker, { kind: 'band', index, format, src, paramsJson, y0, y1, srcY0, srcY1, linear, scaled }, [src.buffer], signal);
+      if (res.kind !== 'band') throw new Error(`RAW worker sent ${res.kind} for band ${index}`);
+      done++;
+      onBand(res, done, bandCount);
+    }
+  };
+
+  await Promise.all(workers.map(drain));
+}
+
 async function renderBands(
   workers: Worker[],
   prepared: PreparedPlane,
@@ -142,7 +185,7 @@ async function renderBands(
       const index = next++;
       const [y0 = 0, y1 = 0, srcY0 = 0, srcY1 = 0] = plan.subarray(index * 4, index * 4 + 4);
       const src = plane.slice(srcY0 * rowLength, srcY1 * rowLength);
-      const res = await call(worker, { kind: 'band', index, format, src, paramsJson, y0, y1, srcY0, srcY1, linear }, [src.buffer], signal);
+      const res = await call(worker, { kind: 'band', index, format, src, paramsJson, y0, y1, srcY0, srcY1, linear, scaled: null }, [src.buffer], signal);
       if (res.kind !== 'band') throw new Error(`RAW worker sent ${res.kind} for band ${index}`);
       done++;
       onBand(res, done, bandCount);
@@ -170,19 +213,25 @@ export interface RawDecodeOptions {
   readonly onPrepared?: (description: RawDescription, prepared: RawPrepared) => void;
   /** False stops after the prepared frame (and its binned view): no full-size bands. */
   readonly renderBands?: boolean;
+  /**
+   * The size to render the frame at, once its description is known; the
+   * frame's own size when omitted or when it answers that. A smaller size
+   * renders the frame reduced by area, band by band.
+   */
+  readonly frameSize?: (description: RawDescription) => FrameSize;
 }
 
 /**
  * Decodes a RAW file across a pool of workers. `onBand` receives each
- * finished band (already oriented, positioned in the final image) as soon
- * as it is ready, in no particular order. Resolves with the file's
- * description once every band has been delivered. Without `linear` the
- * bands are the format's finished look, which only a format whose
- * description has `finishedBands` renders.
+ * finished band (already oriented, positioned in the frame, whose size is
+ * `frame`) as soon as it is ready, in no particular order. Resolves with
+ * the file's description once every band has been delivered. Without
+ * `linear` the bands are the format's finished look, which only a format
+ * whose description has `finishedBands` renders.
  */
 export async function decodeRawInWorkers(
   data: Uint8Array,
-  onBand: (description: RawDescription, band: RawBandPixels) => void,
+  onBand: (description: RawDescription, band: RawBandPixels, frame: FrameSize) => void,
   options: RawDecodeOptions = {},
 ): Promise<RawDescription> {
   const { signal, onProgress, onPrepared } = options;
@@ -207,12 +256,29 @@ export async function decodeRawInWorkers(
     onPrepared?.(description, { paramsJson: prepared.paramsJson, binned: prepared.binned, autoWbRatio: prepared.autoWbRatio });
     if (options.renderBands === false) return description;
     if (!linear && !description.finishedBands) throw new Error(`${prepared.format.toUpperCase()} has no finished look in bands`);
+    const own: FrameSize = { width: description.width, height: description.height };
+    const frame = options.frameSize ? options.frameSize(description) : own;
+    const preparedPlane = { format: prepared.format, description, paramsJson: prepared.paramsJson, plane: prepared.plane };
+    if (frame.width !== own.width || frame.height !== own.height) {
+      await renderScaledBands(
+        workers,
+        preparedPlane,
+        linear,
+        frame,
+        (band, done, count) => {
+          onBand(description, band, frame);
+          onProgress?.({ stage: 'rendering', bandsDone: done, bandCount: count });
+        },
+        signal,
+      );
+      return description;
+    }
     await renderBands(
       workers,
       { format: prepared.format, description, paramsJson: prepared.paramsJson, plane: prepared.plane },
       linear,
       (band, done, count) => {
-        onBand(description, band);
+        onBand(description, band, own);
         onProgress?.({ stage: 'rendering', bandsDone: done, bandCount: count });
       },
       signal,

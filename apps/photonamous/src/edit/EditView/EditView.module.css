@@ -312,6 +312,17 @@
   outline-offset: 2px;
 }
 
+/* Under the view bar, while the photo is shown below its own size for this device's sake: a sentence, no control. */
+.sizeNote {
+  flex-shrink: 0;
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-bg-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+  color: var(--ph-text-muted);
+}
+
 /* Under the photo: the zoom level, Fit and Full at the left; Before and Split at the right. */
 .stageBar {
   display: flex;
