@@ -86,6 +86,7 @@ pub fn params(engine: &EngineInner, raw: Option<&RawDevelopState>) -> ToneParams
         areas: Vec4Array::from_floats(areas),
         area_count: (areas.len() / STRIDE) as i32,
         area_tone: Vec4Array::from_floats(&area_tone),
+        region: engine.region_uniform(),
     }
 }
 

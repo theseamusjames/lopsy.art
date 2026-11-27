@@ -39,12 +39,15 @@ struct Params {
     u_areas: array<vec4<f32>, 32>,
     u_areaCount: i32,
     u_areaVibrance: array<vec4<f32>, 2>,
+    // Where the document lies in a larger picture (include/region.wgsl).
+    u_region: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var u_tex: texture_2d<f32>;
 @group(0) @binding(2) var u_curves: texture_2d<f32>;
 
 //#include area_mask
+//#include region
 //#include working_space
 
 fn cbrtOdd(v: f32) -> f32 {
@@ -217,11 +220,12 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
         var areas = params.u_areas;
         var av = params.u_areaVibrance;
         var vibs = array<f32, 8>(av[0].x, av[0].y, av[0].z, av[0].w, av[1].x, av[1].y, av[1].z, av[1].w);
+        let p = wholePoint(position.xy, params.u_region);
         for (var i = 0; i < 8; i++) {
             if (i >= params.u_areaCount) {
                 break;
             }
-            let mk = areaMask(areas[i * 4], areas[i * 4 + 1], areas[i * 4 + 2], position.xy);
+            let mk = areaMask(areas[i * 4], areas[i * 4 + 1], areas[i * 4 + 2], p);
             if (mk > 0.0) {
                 sat = sat + mk * areas[i * 4 + 3].w;
                 vib = vib + mk * vibs[i];

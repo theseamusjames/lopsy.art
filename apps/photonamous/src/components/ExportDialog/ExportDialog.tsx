@@ -119,7 +119,8 @@ export function ExportDialog() {
       }),
     [versionIds, view],
   );
-  const deviceNote = deviceSizeNote(ownSizes, textureLimit(), format, extras);
+  // Where the engine renders in floating point it exports a photo larger than its textures in tiles.
+  const deviceNote = deviceSizeNote(ownSizes, textureLimit(), format, extras, !engineStatus.isEightBit);
   const isBlocked = running || versionIds.length === 0 || problem !== null || tiffBlocked || hdrBlocked;
   const finished = progress?.finished ?? false;
 

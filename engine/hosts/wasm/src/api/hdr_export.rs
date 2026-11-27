@@ -110,6 +110,16 @@ pub fn compute_gain_map(
     Ok(GainMapResult { width: map.width, height: map.height, rgba: map.rgba, metadata: map.metadata })
 }
 
+/// `computeGainMap` of the pictures `assembleExportTile` assembled (HDR and
+/// 8-bit sRGB), freeing them: `commands::develop::export_assembly_gain_map`.
+#[wasm_bindgen(js_name = "assembledGainMap")]
+pub fn assembled_gain_map(engine: &mut crate::Engine, sdr_space: u8, scale: u32) -> Result<GainMapResult, JsError> {
+    let space = color_space_from_code(sdr_space).map_err(|e| JsError::new(&e))?;
+    let scale = GainMapScale::from_divisor(scale).map_err(|e| JsError::new(&e))?;
+    let map = lopsy_engine::commands::develop::export_assembly_gain_map(&mut engine.inner, space, scale).map_err(|e| JsError::new(&e))?;
+    Ok(GainMapResult { width: map.width, height: map.height, rgba: map.rgba, metadata: map.metadata })
+}
+
 /// The gain-map JPEG file from its two encoded JPEGs.
 ///
 /// - `base`: the SDR picture as a JPEG file (a `Uint8Array`). Its ICC

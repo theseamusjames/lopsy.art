@@ -3,6 +3,12 @@ struct Params {
     // -1 = colour, averaged in premultiplied space. 0..3 = that channel's
     // straight value averaged, as grey.
     u_channel: i32,
+    // A source that is one rectangle of a larger picture (lopsy_core::tile):
+    // (x, y, whole width, whole height), or all zeros for none. With one, the
+    // output is the whole picture's box downscale to u_dstSize, at the
+    // output texels the pass draws: footprints on the whole's grid, each
+    // source texel fetched from the tile at its place in the whole.
+    u_region: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var u_tex: texture_2d<f32>;
@@ -23,8 +29,18 @@ fn premultiplied(c: vec4<f32>) -> vec4<f32> {
 @fragment
 fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let size = vec2<i32>(textureDimensions(u_tex, 0));
-    let maxP = size - 1;
-    let footprint = vec2<f32>(size) / params.u_dstSize;
+    // The texels the footprints are of, and the fetch from the texture:
+    // with a region the whole picture's, moved to the tile and kept in it.
+    var sourceSize = vec2<f32>(size);
+    var maxP = size - 1;
+    var origin = vec2<i32>(0);
+    if (params.u_region.z > 0.0) {
+        sourceSize = params.u_region.zw;
+        maxP = vec2<i32>(params.u_region.zw) - 1;
+        origin = vec2<i32>(params.u_region.xy);
+    }
+    let tileMax = size - 1;
+    let footprint = sourceSize / params.u_dstSize;
     let lo = floor(position.xy) * footprint;
     let n = clamp(vec2<i32>(ceil(footprint * 0.5)), vec2<i32>(1), vec2<i32>(MAX_TAPS));
     let stepPx = footprint / vec2<f32>(n);
@@ -39,10 +55,10 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
             let qf = floor(q);
             let p0 = vec2<i32>(qf);
             let f = q - qf;
-            let c00 = textureLoad(u_tex, clamp(p0, vec2<i32>(0), maxP), 0);
-            let c10 = textureLoad(u_tex, clamp(p0 + vec2<i32>(1, 0), vec2<i32>(0), maxP), 0);
-            let c01 = textureLoad(u_tex, clamp(p0 + vec2<i32>(0, 1), vec2<i32>(0), maxP), 0);
-            let c11 = textureLoad(u_tex, clamp(p0 + vec2<i32>(1, 1), vec2<i32>(0), maxP), 0);
+            let c00 = textureLoad(u_tex, clamp(clamp(p0, vec2<i32>(0), maxP) - origin, vec2<i32>(0), tileMax), 0);
+            let c10 = textureLoad(u_tex, clamp(clamp(p0 + vec2<i32>(1, 0), vec2<i32>(0), maxP) - origin, vec2<i32>(0), tileMax), 0);
+            let c01 = textureLoad(u_tex, clamp(clamp(p0 + vec2<i32>(0, 1), vec2<i32>(0), maxP) - origin, vec2<i32>(0), tileMax), 0);
+            let c11 = textureLoad(u_tex, clamp(clamp(p0 + vec2<i32>(1, 1), vec2<i32>(0), maxP) - origin, vec2<i32>(0), tileMax), 0);
             straight += mix(mix(c00, c10, f.x), mix(c01, c11, f.x), f.y);
             premul += mix(
                 mix(premultiplied(c00), premultiplied(c10), f.x),

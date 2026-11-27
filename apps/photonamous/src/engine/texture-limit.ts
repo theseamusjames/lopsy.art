@@ -4,11 +4,13 @@
  * (`maxTextureSize`, recorded by develop-engine.ts as each engine starts)
  * is the truth; before one, on the wgpu build the WebGPU adapter's limit,
  * which that engine asks its device for, and on WebGL `MAX_TEXTURE_SIZE`
- * from a context made for the question.
+ * from a context made for the question. A development build's
+ * `?texture-limit=` lowers each.
  */
 
 import { webGpuTextureLimit } from '@lopsy/engine-wasm/renderer-choice';
 import { runningRenderer } from './renderer-choice';
+import { effectiveTextureLimit } from './develop-override';
 
 let engineLimit: number | null = null;
 let probedWebgl: number | null | undefined;
@@ -36,6 +38,7 @@ function probeWebgl(): number | null {
 /** The largest texture side, or null when nothing can tell. */
 export function textureLimit(): number | null {
   if (engineLimit !== null) return engineLimit;
-  if (runningRenderer() === 'wgpu') return webGpuTextureLimit();
-  return probeWebgl();
+  const probed = runningRenderer() === 'wgpu' ? webGpuTextureLimit() : probeWebgl();
+  // A development build's `?texture-limit=` (develop-override.ts), as every engine takes it.
+  return probed === null ? null : effectiveTextureLimit(probed);
 }

@@ -10,6 +10,8 @@ struct Params {
     u_remove: f32,
     u_add: f32,
     u_middleGrey: f32,
+    // How u_veil is read (include/region.wgsl, blurUv).
+    u_veilGrid: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var u_tex: texture_2d<f32>;
@@ -17,6 +19,8 @@ struct Params {
 // neighbourhood's luminance in G; a downscaled copy, read bilinearly.
 @group(0) @binding(2) var u_veil: texture_2d<f32>;
 @group(0) @binding(3) var u_veil_sampler: sampler;
+
+//#include region
 
 fn removeVeil(c: f32, v: f32) -> f32 {
     if (c > 0.0 && v > 0.0) {
@@ -29,7 +33,7 @@ fn removeVeil(c: f32, v: f32) -> f32 {
 fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let size = vec2<f32>(textureDimensions(u_tex, 0));
     let src = textureLoad(u_tex, vec2<i32>(position.xy), 0);
-    let veil = textureSampleLevel(u_veil, u_veil_sampler, position.xy / size, 0.0).rg;
+    let veil = textureSampleLevel(u_veil, u_veil_sampler, blurUv(position.xy, params.u_veilGrid, size), 0.0).rg;
     let h = params.u_haze;
     if (h > 0.0) {
         let v = params.u_remove * h * veil.x;

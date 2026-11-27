@@ -39,6 +39,7 @@ uniforms! {
         pub range_sigma: f32,
         pub guard_scale: f32,
         pub keep_negative: i32,
+        pub chroma_grid: [f32; 4],
     }
 }
 
@@ -57,6 +58,8 @@ uniforms! {
         pub large_amount: f32,
         pub small_amount: f32,
         pub haze_amount: f32,
+        pub small_grid: [f32; 4],
+        pub large_grid: [f32; 4],
     }
 }
 
@@ -80,6 +83,8 @@ uniforms! {
         pub small_epsilon: f32,
         pub floor: f32,
         pub centre: f32,
+        pub small_grid: [f32; 4],
+        pub large_grid: [f32; 4],
     }
 }
 
@@ -90,6 +95,7 @@ uniforms! {
         pub remove: f32,
         pub add: f32,
         pub middle_grey: f32,
+        pub veil_grid: [f32; 4],
     }
 }
 
@@ -100,6 +106,7 @@ uniforms! {
         pub count: i32,
         pub mode: i32,
         pub overlay: i32,
+        pub region: [f32; 4],
     }
 }
 
@@ -107,6 +114,7 @@ uniforms! {
     /// `develop/area_layer.wgsl`
     pub struct AreaLayerParams {
         pub area: Vec4Array<4>,
+        pub region: [f32; 4],
     }
 }
 
@@ -127,6 +135,7 @@ uniforms! {
         pub grain: [f32; 4],
         pub doc_size: [f32; 2],
         pub seed: u32,
+        pub region: [f32; 4],
     }
 }
 
@@ -164,6 +173,7 @@ uniforms! {
         pub areas: Vec4Array<32>,
         pub area_count: i32,
         pub area_tone: Vec4Array<8>,
+        pub region: [f32; 4],
     }
 }
 
@@ -191,6 +201,7 @@ uniforms! {
         pub areas: Vec4Array<32>,
         pub area_count: i32,
         pub area_vibrance: Vec4Array<2>,
+        pub region: [f32; 4],
     }
 }
 
@@ -206,5 +217,6 @@ uniforms! {
         pub transfer: i32,
         pub gamma: f32,
         pub dither: f32,
+        pub region: [f32; 4],
     }
 }

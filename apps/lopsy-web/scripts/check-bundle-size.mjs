@@ -115,9 +115,20 @@ const MARGIN = 0.03;
 // own tone curve, a RAF's white-balance presets read from the file (the
 // per-camera table they replace was smaller than the reader), and three
 // exports (rawAutoWhiteBalance, RawRenderedBand, rawRendersFinishedBands).
+//
+// The glue was re-based for tiles, to what a local release build measures
+// with them in (306,199 B raw, 39,552 B gzip; +3.49 % and +3.65 % over the
+// old budget): the document region, the apron and the window upload
+// (setDocumentRegion, clearDocumentRegion, developApron,
+// uploadLayerPixelsF32Window) had already taken it to +2.72 % gzip with
+// their doc comments cut to a line; the whole-picture assembly the export
+// encoders run on (beginExportAssembly, assembleExportTile, a readback,
+// encodeExportAssembly, assembledGainMap, clearExportAssembly) and
+// rawPlanWindowBands took it past the margin. The wasm stays inside it
+// (+1.39 % raw, +1.38 % gzip) and keeps its budget.
 const BUDGET = {
   'lopsy_wasm_bg.wasm': { raw: 5_142_743, gzip: 2_126_718 },
-  'lopsy_wasm.js': { raw: 295_881, gzip: 38_160 },
+  'lopsy_wasm.js': { raw: 306_199, gzip: 39_552 },
 };
 
 function format(bytes) {

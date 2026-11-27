@@ -153,6 +153,61 @@ pub fn blur_taps(sigma: f32) -> i32 {
     ((3.0 * sigma).ceil() as i32).clamp(1, MAX_BLUR_TAPS)
 }
 
+/// The box-downscale factor of a blur of σ working pixels above
+/// `PYRAMID_SIGMA`: its smaller image is `factor` times smaller each way
+/// (`pyramid_size`) and is blurred by `σ / factor`.
+pub fn pyramid_factor(sigma: f32) -> u32 {
+    (sigma / 2.0).ceil().max(2.0) as u32
+}
+
+/// The side of a blur's smaller image for a side of `side` pixels: whole
+/// texels of up to `factor` pixels each, the last one shorter.
+pub fn pyramid_size(side: u32, factor: u32) -> u32 {
+    side.div_ceil(factor).max(1)
+}
+
+/// How far, in working pixels on each axis, the engine's blur of σ reaches:
+/// a blurred pixel depends on no pixel further from it than this, and a
+/// pixel that far changes it, give or take the margin below.
+///
+/// Up to `PYRAMID_SIGMA` it is the two separable passes' taps,
+/// `blur_taps(max(σ, 0.3))`. Above it, the blur is read bilinearly from a
+/// smaller image `f = pyramid_factor(σ)` times smaller (footprint `F ≤ f`
+/// pixels a texel), blurred there by `σ / f` with `r` taps: a pixel at `x`
+/// reads low texels `floor(t)` and `floor(t) + 1` at `t = (x + 0.5) / F − 0.5`,
+/// each of which reads `r` texels either way, each the box of `F` pixels
+/// read through 2×2 bilinear taps (at most half a pixel past its
+/// footprint). That is at most `(r + 1.5) · F + 1` pixels; this gives
+/// `(r + 2) · f + 2`, which also covers a bilinear coordinate rounded the
+/// other way at a texel boundary.
+pub fn blur_reach(sigma: f32) -> u32 {
+    if sigma <= PYRAMID_SIGMA {
+        return blur_taps(sigma.max(0.3)) as u32;
+    }
+    let factor = pyramid_factor(sigma);
+    let taps = blur_taps((sigma / factor as f32).max(0.3)) as u32;
+    (taps + 2) * factor + 2
+}
+
+/// How far noise reduction reaches: its colour blur, or the 5×5 bilateral's
+/// two pixels when the blur reaches less.
+pub fn noise_reduction_reach(s: &DetailSettings) -> u32 {
+    blur_reach(NR_CHROMA_SIGMA * s.pixel_scale).max(2)
+}
+
+/// How far sharpening reaches: its blur (never a pyramid) and the edge
+/// mask's gradient of the blurred image, one pixel either way.
+pub fn sharpen_reach(s: &DetailSettings) -> u32 {
+    blur_reach(s.sharpen_sigma().min(PYRAMID_SIGMA)) + 1
+}
+
+/// How far large and small details reach, on encoded values or on log
+/// luminance (`linear_detail`), which blur the same two radii and read only
+/// the pixel itself besides.
+pub fn local_contrast_reach(s: &LocalContrastSettings) -> u32 {
+    blur_reach(LC_SMALL_SIGMA * s.pixel_scale).max(blur_reach(LC_LARGE_SIGMA * s.pixel_scale))
+}
+
 /// One separable Gaussian pass over RGBA f32 (`w`×`h`), edge-clamped:
 /// horizontal when `horizontal`, else vertical. `blur_axis.wgsl`.
 pub fn blur_axis(img: &[f32], w: usize, h: usize, horizontal: bool, sigma: f32) -> Vec<f32> {

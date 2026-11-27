@@ -116,11 +116,47 @@ describe('FullSizeLoads', () => {
 });
 
 describe('fullSizeNoteText', () => {
+  const shown = { width: 8190, height: 5465 };
   it('says the photo’s own size, the limit and the size it is shown and exported at', () => {
-    expect(fullSizeNoteText({ kind: 'too-large', own: Q2, shown: { width: 8190, height: 5465 }, limit: 8190 })).toBe(
+    expect(fullSizeNoteText({ kind: 'too-large', own: Q2, shown, limit: 8190, exports: 'shown' })).toBe(
       'This photo is 8368 × 5584 pixels, larger than this device’s graphics can edit (8190 on a side), so it is shown and exported at 8190 × 5465.',
     );
-    expect(fullSizeNoteText({ kind: 'failed', own: Q2, shown: { width: 4184, height: 2792 }, limit: 8192 })).toContain('could not load this photo');
-    expect(fullSizeNoteText({ kind: 'stepped-down', own: Q2, shown: { width: 6144, height: 4100 }, limit: 8192 })).toContain('6144 × 4100');
+    expect(fullSizeNoteText({ kind: 'failed', own: Q2, shown: { width: 4184, height: 2792 }, limit: 8192, exports: 'shown' })).toContain('could not load this photo');
+    expect(fullSizeNoteText({ kind: 'stepped-down', own: Q2, shown: { width: 6144, height: 4100 }, limit: 8192, exports: 'shown' })).toContain('6144 × 4100');
+  });
+
+  it('says a photo exported in tiles is exported at its full size, and when its settings prevent it', () => {
+    expect(fullSizeNoteText({ kind: 'too-large', own: Q2, shown, limit: 8190, exports: 'own' })).toBe(
+      'This photo is 8368 × 5584 pixels, larger than this device’s graphics can edit (8190 on a side), so it is shown at 8190 × 5465. ' +
+        'It is exported at its full size, a part at a time.',
+    );
+    expect(fullSizeNoteText({ kind: 'too-large', own: Q2, shown, limit: 8190, exports: 'own', detail: true })).toBe(
+      'This photo is 8368 × 5584 pixels, larger than this device’s graphics can edit (8190 on a side), so it is shown at 8190 × 5465; ' +
+        'zoomed in, the part on screen is shown at its full size. It is exported at its full size, a part at a time.',
+    );
+    expect(fullSizeNoteText({ kind: 'too-large', own: Q2, shown, limit: 8190, exports: 'settings' })).toContain(
+      'With these settings it cannot be exported a part at a time, so it is exported at 8190 × 5465 too.',
+    );
+  });
+});
+
+describe('tiles', () => {
+  it('are for a photo larger than the GPU can edit, as large as the image that loaded', () => {
+    const loads = new FullSizeLoads(8192);
+    loads.reset(Q2);
+    expect(loads.isTooLarge()).toBe(true);
+    expect(loads.tileBudget()).toBeNull();
+    loads.noteLoaded({ width: 8190, height: 5465 });
+    expect(loads.tileBudget()).toBe(8190 * 5465);
+  });
+
+  it('are never for a photo that fits, even one that failed for memory and stepped down', () => {
+    const loads = new FullSizeLoads(16384);
+    loads.reset(Q2);
+    loads.noteFailed(Q2);
+    loads.noteLoaded({ width: 6276, height: 4188 });
+    expect(loads.outcome()).toBe('stepped-down');
+    expect(loads.isTooLarge()).toBe(false);
+    expect(loads.tileBudget()).toBeNull();
   });
 });

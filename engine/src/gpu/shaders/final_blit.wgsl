@@ -12,6 +12,15 @@ struct Params {
     // 1 for an 8-bit screen, where the dither hides banding; 0 for a float
     // one (HDR), which has the precision and would only show the noise.
     u_dither: f32,
+    // A document that is a tile of a larger picture, drawn at its own size
+    // (an export's draw): (x, y, 1, 0), the whole picture's pixel, counted
+    // from the bottom, at this canvas's pixel (0, 0). All zeros otherwise.
+    u_ditherRegion: vec4<f32>,
+    // The document is the region (x, y) of a whole picture (z × w) on the
+    // screen: the viewport (zoom, pan, centre) is the whole's, and the
+    // pixel is found in the whole first, then moved by the region's
+    // origin, a whole number, which is exact. All zeros otherwise.
+    u_screenRegion: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var u_compositeTex: texture_2d<f32>;
@@ -65,7 +74,13 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
     let screenPos = vec2<f32>(pixel.x, params.u_resolution.y - pixel.y);
 
     let center = params.u_resolution * 0.5;
-    var canvasPos = (screenPos - center - params.u_pan) / params.u_zoom + params.u_docSize * 0.5;
+    let isScreenRegion = params.u_screenRegion.z > 0.0;
+    var canvasPos: vec2<f32>;
+    if (isScreenRegion) {
+        canvasPos = (screenPos - center - params.u_pan) / params.u_zoom + params.u_screenRegion.zw * 0.5;
+    } else {
+        canvasPos = (screenPos - center - params.u_pan) / params.u_zoom + params.u_docSize * 0.5;
+    }
 
     // At integer zoom levels, snap to texel centers so linear filtering doesn't
     // interpolate between adjacent composited pixels. Without this, fractional
@@ -75,9 +90,19 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
         canvasPos = floor(canvasPos) + 0.5;
     }
 
+    // Outside the whole picture, the whole's background; then the pixel in the region.
+    var wholePos = canvasPos;
+    if (isScreenRegion) {
+        let wholeUV = canvasPos / params.u_screenRegion.zw;
+        if (wholeUV.x < 0.0 || wholeUV.x > 1.0 || wholeUV.y < 0.0 || wholeUV.y > 1.0) {
+            return vec4<f32>(0.18, 0.18, 0.18, 1.0);
+        }
+        canvasPos = canvasPos - params.u_screenRegion.xy;
+    }
+
     let docUV = canvasPos / params.u_docSize;
 
-    let isSeamless = params.u_seamlessEnabled > 0.5;
+    let isSeamless = params.u_seamlessEnabled > 0.5 && !isScreenRegion;
 
     if (!isSeamless && (docUV.x < 0.0 || docUV.x > 1.0 || docUV.y < 0.0 || docUV.y > 1.0)) {
         return vec4<f32>(0.18, 0.18, 0.18, 1.0);
@@ -122,6 +147,7 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
     let isTransparentDoc = params.u_bgAlpha < 0.999;
     var tileCanvasPos = canvasPos;
     if (isSeamless) { tileCanvasPos = sampleUV * params.u_docSize; }
+    if (isScreenRegion) { tileCanvasPos = wholePos; }
     if (isTransparentDoc && color.a < 1.0 - 1.0 / 256.0) {
         let checker = floor(tileCanvasPos / 8.0);
         let cellSum = checker.x + checker.y;
@@ -135,9 +161,15 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
     }
 
     // Seeded by the pixel, so the dither is the same pattern on both
-    // backends: WebGPU's own fragment position counts rows down.
-    let n0 = fract(sin(dot(pixel, vec2<f32>(12.9898, 78.233))) * 43758.5453);
-    let n1 = fract(sin(dot(pixel, vec2<f32>(63.7264, 10.873))) * 28637.1136);
+    // backends: WebGPU's own fragment position counts rows down. A tile is
+    // seeded by its pixel's place in the whole picture, a sum of whole
+    // numbers and a half that is exact, so tiles dither as the whole does.
+    var seed = pixel;
+    if (params.u_ditherRegion.z > 0.5) {
+        seed = pixel + params.u_ditherRegion.xy;
+    }
+    let n0 = fract(sin(dot(seed, vec2<f32>(12.9898, 78.233))) * 43758.5453);
+    let n1 = fract(sin(dot(seed, vec2<f32>(63.7264, 10.873))) * 28637.1136);
     let dither = (n0 + n1 - 1.0) / 255.0 * params.u_dither;
 
     return vec4<f32>(color.rgb + dither, color.a);

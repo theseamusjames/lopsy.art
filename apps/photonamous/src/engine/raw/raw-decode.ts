@@ -11,7 +11,7 @@
  * terminates them at once.
  */
 
-import { rawPlanBands, rawPlanScaledBands } from '@lopsy/engine-pkg/lopsy_wasm';
+import { rawPlanBands, rawPlanScaledBands, rawPlanWindowBands } from '@lopsy/engine-pkg/lopsy_wasm';
 import { wasmUrlFor } from '../engine-files';
 import { rendererName } from '../wasm';
 import { RAW_BANDS_PER_WORKER, rawWorkerCount } from './raw-decode-plan';
@@ -286,5 +286,80 @@ export async function decodeRawInWorkers(
     return description;
   } finally {
     for (const worker of workers) worker.terminate();
+  }
+}
+
+/** A rectangle of the oriented frame, in its own pixels. */
+export interface FrameWindow {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * A RAW file prepared once and kept, with its workers, so windows of its
+ * frame can be rendered at the frame's own size one after another: the
+ * tiles of an export larger than the GPU's textures (tile-plan.ts). The
+ * plane stays on this thread between windows; each band is cut from it and
+ * handed to a worker, as `decodeRawInWorkers` does.
+ */
+export interface RawFrame {
+  readonly description: RawDescription;
+  /**
+   * Renders the bands that cover `window` (`rawPlanWindowBands`) and hands
+   * each to `onBand` as it is ready, oriented and placed in the frame:
+   * whole rows, or whole columns for a frame turned a quarter, of which
+   * only the part inside `window` belongs to it. Linear camera RGB.
+   */
+  renderWindow(window: FrameWindow, onBand: (band: RawBandPixels) => void, signal?: AbortSignal): Promise<void>;
+  /** Ends the workers and lets go of the plane. */
+  close(): void;
+}
+
+/** Prepares `data` for `RawFrame.renderWindow`. Rejects with `RawPrepareError` when the RAW interface refuses the file. */
+export async function openRawFrame(data: Uint8Array, signal?: AbortSignal): Promise<RawFrame> {
+  const compiled = await compileWasmModule();
+  if (signal?.aborted) throw new DecodeAbortedError();
+  let workers: Worker[] = Array.from({ length: rawWorkerCount(navigator.hardwareConcurrency) }, () => spawnWorker(compiled));
+  const close = () => {
+    for (const worker of workers) worker.terminate();
+    workers = [];
+  };
+  try {
+    const [first] = workers;
+    if (!first) throw new Error('No RAW decode workers');
+    let prepared: RawWorkerResponse;
+    try {
+      prepared = await call(first, { kind: 'prepare', data, binnedLongEdge: null }, [], signal);
+    } catch (err) {
+      if (err instanceof DecodeAbortedError) throw err;
+      throw new RawPrepareError(err instanceof Error ? err.message : String(err));
+    }
+    if (prepared.kind !== 'prepared') throw new Error(`RAW worker sent ${prepared.kind} instead of the prepared frame`);
+    const description = parseRawDescription(prepared.describeJson);
+    const { format, paramsJson, plane } = prepared;
+    const rowLength = description.planeWidth * description.samplesPerPixel;
+    const renderWindow = async (window: FrameWindow, onBand: (band: RawBandPixels) => void, windowSignal?: AbortSignal): Promise<void> => {
+      if (workers.length === 0) throw new Error('The RAW frame was closed');
+      const plan = rawPlanWindowBands(format, paramsJson, window.x, window.y, window.width, window.height, workers.length * RAW_BANDS_PER_WORKER);
+      const bandCount = plan.length / 4;
+      let next = 0;
+      const drain = async (worker: Worker): Promise<void> => {
+        while (next < bandCount) {
+          const index = next++;
+          const [y0 = 0, y1 = 0, srcY0 = 0, srcY1 = 0] = plan.subarray(index * 4, index * 4 + 4);
+          const src = plane.slice(srcY0 * rowLength, srcY1 * rowLength);
+          const res = await call(worker, { kind: 'band', index, format, src, paramsJson, y0, y1, srcY0, srcY1, linear: true, scaled: null }, [src.buffer], windowSignal);
+          if (res.kind !== 'band') throw new Error(`RAW worker sent ${res.kind} for band ${index}`);
+          onBand(res);
+        }
+      };
+      await Promise.all(workers.map(drain));
+    };
+    return { description, renderWindow, close };
+  } catch (err) {
+    close();
+    throw err;
   }
 }

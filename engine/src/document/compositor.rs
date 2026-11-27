@@ -41,6 +41,15 @@ pub(crate) fn mask_doc_offset(layer_type: lopsy_core::layer::LayerType, layer_x:
     }
 }
 
+/// `position` (a layer's, or its mask's, in document pixels) in the
+/// document the engine renders: moved by the document region's origin when
+/// the document is a tile of a larger picture, whose coordinates the
+/// layers keep (`EngineInner::document_region`).
+fn in_region(engine: &EngineInner, position: (f32, f32)) -> (f32, f32) {
+    let (ox, oy) = engine.region_origin();
+    (position.0 - ox, position.1 - oy)
+}
+
 /// `mask_doc_offset` for a layer looked up by id in the engine's stack.
 pub(crate) fn mask_doc_origin(engine: &EngineInner, layer_id: &str) -> (f32, f32) {
     engine.layer_stack.iter()
@@ -141,14 +150,15 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         ) = {
             let layer = &engine.layer_stack[idx];
             let is_editing = mask_edit_id.as_deref() == Some(layer.id.as_str());
+            let (layer_x, layer_y) = in_region(engine, (layer.x as f32, layer.y as f32));
             (
                 layer.id.clone(),
                 layer.layer_type,
                 layer.visible,
                 layer.opacity,
                 layer.blend_mode as i32,
-                layer.x as f32,
-                layer.y as f32,
+                layer_x,
+                layer_y,
                 layer.width as f32,
                 layer.height as f32,
                 layer.effects.outer_glow.as_ref().filter(|g| g.enabled).cloned(),
@@ -292,7 +302,10 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         let effect_tex_handle = merged_handle.unwrap_or(tex_handle);
 
         // In mask edit mode: skip mask clipping so full layer content is visible
-        let (mask_offset_x, mask_offset_y) = mask_doc_offset(layer_type, layer_x, layer_y);
+        let (mask_offset_x, mask_offset_y) = {
+            let layer = &engine.layer_stack[idx];
+            in_region(engine, mask_doc_offset(layer_type, layer.x as f32, layer.y as f32))
+        };
         let layer_mask = live_mask(engine, &layer_id, mask_offset_x, mask_offset_y);
         let is_mask_enabled = engine.layer_stack[idx].mask.as_ref().map_or(false, |m| m.enabled);
         let mask_arg = layer_mask.filter(|_| is_mask_enabled && !is_mask_editing);
@@ -557,12 +570,29 @@ pub fn export_tiff_16(engine: &mut EngineInner, color_space: u8) -> Read<Vec<u8>
 /// composite texture is the frame, and what reads the live frame (the
 /// develop histogram, the screen-only views) reads that texture.
 pub fn present(engine: &mut EngineInner) -> Result<(), String> {
+    // A held screen keeps its frame; the first render after the hold draws it.
+    if engine.is_screen_held {
+        engine.needs_present = true;
+        return Ok(());
+    }
     if !engine.gpu().has_screen() {
         engine.needs_present = false;
         return Ok(());
     }
     let (screen_w, screen_h) = engine.gpu().screen_size()?;
     let channel_mask = engine.overlays.channel_mask;
+    // A tile on the screen (`screen_region`) is drawn where the whole
+    // picture's viewport shows it, dithered by canvas pixel as the whole is.
+    // An export's tile drawn at its own size dithers at its pixels' places
+    // in the whole picture, rows counted from the bottom as the shader
+    // counts them.
+    let (dither_region, screen_region) = match engine.document_region {
+        Some(r) if engine.screen_region => ([0.0; 4], [r.x as f32, r.y as f32, r.whole_width as f32, r.whole_height as f32]),
+        Some(r) if (screen_w, screen_h) == (engine.doc_width as i32, engine.doc_height as i32) => {
+            ([r.x as f32, (r.whole_height - r.y - engine.doc_height) as f32, 1.0, 0.0], [0.0; 4])
+        }
+        _ => ([0.0; 4], [0.0; 4]),
+    };
     engine
         .pass(&engine.shaders.final_blit, FinalBlitParams {
             resolution: [screen_w as f32, screen_h as f32],
@@ -575,6 +605,8 @@ pub fn present(engine: &mut EngineInner) -> Result<(), String> {
             channel_mask: [channel_mask[0], channel_mask[1], channel_mask[2], channel_mask[3]],
             doc_color_mode: engine.doc_color_mode as i32,
             dither: if engine.gpu_ctx.is_screen_hdr() { 0.0 } else { 1.0 },
+            dither_region,
+            screen_region,
         })
         .blend(Blend::Off)
         .viewport(0, 0, screen_w, screen_h)
@@ -1543,10 +1575,11 @@ fn composite_layers_for_export_with(engine: &mut EngineInner, finish: ExportFini
     let mut group_stack: Vec<GroupFrame> = Vec::new();
 
     let layer_info: Vec<_> = engine.layer_stack.iter().map(|layer| {
-        let (mask_offset_x, mask_offset_y) = mask_doc_offset(layer.layer_type, layer.x as f32, layer.y as f32);
+        let (mask_offset_x, mask_offset_y) = in_region(engine, mask_doc_offset(layer.layer_type, layer.x as f32, layer.y as f32));
         let is_mask_enabled = layer.mask.as_ref().map_or(false, |m| m.enabled);
         let mask_info = live_mask(engine, &layer.id, mask_offset_x, mask_offset_y).filter(|_| is_mask_enabled);
-        (layer.id.clone(), layer.layer_type, layer.visible, layer.opacity, layer.blend_mode as i32, layer.x as f32, layer.y as f32, layer.width as f32, layer.height as f32, layer.effects.clone(), mask_info)
+        let (layer_x, layer_y) = in_region(engine, (layer.x as f32, layer.y as f32));
+        (layer.id.clone(), layer.layer_type, layer.visible, layer.opacity, layer.blend_mode as i32, layer_x, layer_y, layer.width as f32, layer.height as f32, layer.effects.clone(), mask_info)
     }).collect();
 
     for (layer_id, layer_type, visible, opacity, blend_mode, layer_x, layer_y, layer_w, layer_h, effects, mask_arg) in &layer_info {
@@ -1672,8 +1705,13 @@ fn export_output_settings(engine: &EngineInner, output: ExportOutput, with_adjus
 
 /// Composite for export — render to FBO, readPixels
 pub fn composite_for_export(engine: &mut EngineInner) -> Read<Vec<u8>> {
-    let doc_w = engine.doc_width;
-    let doc_h = engine.doc_height;
+    let whole = Rect::new(0, 0, engine.doc_width, engine.doc_height);
+    composite_for_export_rect(engine, whole)
+}
+
+/// [`composite_for_export`], reading only `rect` of the document: a tile's
+/// kept part, for a whole picture assembled from tiles.
+pub fn composite_for_export_rect(engine: &mut EngineInner, rect: Rect) -> Read<Vec<u8>> {
     let output = ExportOutput::sdr(lopsy_core::output::OutputTarget::Srgb, true);
     if let Err(e) = composite_layers_for_export(engine, output) {
         return Read::failed(e);
@@ -1687,7 +1725,7 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Read<Vec<u8>> {
     // (PNG/JPEG encode, eyedropper, e2e pixel probes) expects sRGB, so decode
     // here with the same math final_blit.wgsl uses for the screen.
     let doc_color_mode = engine.doc_color_mode;
-    engine.gpu().read_rgba(engine.composite_texture, 0, 0, doc_w, doc_h).map(move |mut pixels| {
+    engine.gpu().read_rgba(engine.composite_texture, rect.x, rect.y, rect.width, rect.height).map(move |mut pixels| {
         decode_native_color_mode(doc_color_mode, &mut pixels);
         pixels
     })
@@ -1783,8 +1821,12 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Read<Vec<u16>> {
 /// `composite_for_export_u16` with the working space rendered for `target`
 /// (not dithered).
 pub fn composite_for_export_u16_to(engine: &mut EngineInner, target: lopsy_core::output::OutputTarget) -> Read<Vec<u16>> {
-    let doc_w = engine.doc_width;
-    let doc_h = engine.doc_height;
+    let whole = Rect::new(0, 0, engine.doc_width, engine.doc_height);
+    composite_for_export_u16_rect(engine, target, whole)
+}
+
+/// [`composite_for_export_u16_to`], reading only `rect` of the document.
+pub fn composite_for_export_u16_rect(engine: &mut EngineInner, target: lopsy_core::output::OutputTarget, rect: Rect) -> Read<Vec<u16>> {
     let finish = ExportFinish::Full { with_adjustments: true, output: ExportOutput::sdr(target, false) };
     if let Err(e) = composite_layers_for_export_with(engine, finish) {
         return Read::failed(e);
@@ -1792,7 +1834,7 @@ pub fn composite_for_export_u16_to(engine: &mut EngineInner, target: lopsy_core:
     engine.needs_recomposite = true;
 
     let is_lab = engine.doc_color_mode == 1;
-    engine.gpu().read_rgba_u16(engine.composite_texture, 0, 0, doc_w, doc_h).map(move |mut pixels| {
+    engine.gpu().read_rgba_u16(engine.composite_texture, rect.x, rect.y, rect.width, rect.height).map(move |mut pixels| {
         // Lab is stored 8-bit-encoded even in a 16-bit texture, so decoding steps
         // down to bytes and back; the extra precision is in the alpha/geometry, not
         // the encoded Lab channels.
@@ -1824,16 +1866,21 @@ pub fn composite_for_export_u16_to(engine: &mut EngineInner, target: lopsy_core:
 /// take. At the document's size, whatever the screen is. Fails without the
 /// working space, since without it nothing is linear or above white.
 pub fn composite_for_export_hdr_f32(engine: &mut EngineInner, peak: f32) -> Read<Vec<f32>> {
+    let whole = Rect::new(0, 0, engine.doc_width, engine.doc_height);
+    composite_for_export_hdr_f32_rect(engine, peak, whole)
+}
+
+/// [`composite_for_export_hdr_f32`], reading only `rect` of the document.
+pub fn composite_for_export_hdr_f32_rect(engine: &mut EngineInner, peak: f32, rect: Rect) -> Read<Vec<f32>> {
     if engine.working_space.is_none() {
         return Read::failed("The document has no working space".to_string());
     }
-    let (doc_w, doc_h) = (engine.doc_width, engine.doc_height);
     let output = ExportOutput { target: lopsy_core::output::OutputTarget::LinearRec2020, is_8bit: false, peak };
     if let Err(e) = composite_layers_for_export(engine, output) {
         return Read::failed(e);
     }
     engine.needs_recomposite = true;
-    engine.gpu().read_rgba_f32(engine.composite_texture, 0, 0, doc_w, doc_h)
+    engine.gpu().read_rgba_f32(engine.composite_texture, rect.x, rect.y, rect.width, rect.height)
 }
 
 /// The widest footprint, in source texels on an axis, of which one
@@ -1902,6 +1949,7 @@ fn reduce_composite_into_scratch_a(engine: &mut EngineInner, size: (u32, u32)) -
         let params = crate::gpu::params::core::ThumbnailBoxParams {
             dst_size: [w as f32, h as f32],
             channel: crate::document::thumbnail_gpu::COLOUR,
+            region: lopsy_core::tile::NO_REGION,
         };
         let pass = engine
             .pass(&engine.shaders.thumbnail_box, params)
@@ -2474,7 +2522,7 @@ fn scene_stages(engine: &mut EngineInner) {
 fn capture_scene(engine: &EngineInner) {
     let Some(target) = engine.scene_capture else { return };
     let Some((tw, th)) = engine.texture_pool.get_size(target) else { return };
-    let params = crate::gpu::params::core::ThumbnailBoxParams { dst_size: [tw as f32, th as f32], channel: -1 };
+    let params = crate::gpu::params::core::ThumbnailBoxParams { dst_size: [tw as f32, th as f32], channel: -1, region: lopsy_core::tile::NO_REGION };
     engine
         .pass(&engine.shaders.thumbnail_box, params)
         .texture("u_tex", engine.composite_texture)
@@ -2642,6 +2690,7 @@ fn apply_finish(engine: &EngineInner) {
         grain: [s.grain, s.grain_size, s.roughness, s.pixel_scale],
         doc_size: [engine.doc_width as f32, engine.doc_height as f32],
         seed: s.seed,
+        region: engine.region_uniform(),
     };
     let pass = engine.pass(&program, params).texture("u_tex", engine.composite_texture);
     let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
@@ -2722,6 +2771,7 @@ fn apply_areas(engine: &EngineInner, mode: AreasMode) {
         count,
         mode: if mode == AreasMode::Overlay { 1 } else { 0 },
         overlay: engine.area_overlay.max(0),
+        region: engine.region_uniform(),
     };
     let pass = engine.pass(&program, params).texture("u_tex", engine.composite_texture);
     let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
@@ -2763,7 +2813,7 @@ fn apply_area_layers(engine: &mut EngineInner) {
 /// With the working space (`ws`) its Whites, Blacks and Vibrance act in the
 /// document's tone and look passes, not here, and its image adjustments
 /// and old colour by hue are not used.
-fn area_layer_draws(layer: &crate::engine::AreaLayer, ws: bool) -> bool {
+pub(crate) fn area_layer_draws(layer: &crate::engine::AreaLayer, ws: bool) -> bool {
     let wrapped = layer.detail.is_some_and(|d| d.reduces_noise() || d.sharpens())
         || layer.local_contrast.is_some_and(|l| l.is_active())
         || layer.finish.is_some();
@@ -2870,7 +2920,7 @@ fn area_layer(engine: &mut EngineInner, area: &[f32], layer: crate::engine::Area
         area_layer_display(engine, layer);
     }
 
-    let params = crate::gpu::params::develop::AreaLayerParams { area: Vec4Array::from_floats(area) };
+    let params = crate::gpu::params::develop::AreaLayerParams { area: Vec4Array::from_floats(area), region: engine.region_uniform() };
     let pass = engine.pass(&program, params).texture("u_tex", original).texture("u_adjusted", engine.composite_texture);
     let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
     engine.gpu().unbind_textures(2);

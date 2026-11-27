@@ -45,6 +45,7 @@ uniforms! {
     pub struct ThumbnailBoxParams {
         pub dst_size: [f32; 2],
         pub channel: i32,
+        pub region: [f32; 4],
     }
 }
 

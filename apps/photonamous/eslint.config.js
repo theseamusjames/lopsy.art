@@ -11,6 +11,7 @@ import globals from 'globals';
  */
 const ENGINE_GLUE = ['@lopsy/engine-pkg/lopsy_wasm', '@lopsy/engine-pkg/lopsy_wasm.js'];
 const TWO_TYPED = [
+  'assembleExportTile',
   'createEngine',
   'exportPng16',
   'exportTiff16',

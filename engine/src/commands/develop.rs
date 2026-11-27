@@ -12,6 +12,7 @@ use crate::develop::working_space::WorkingSpace;
 use crate::develop::{curve_texels, RawDevelopState, CURVE_WIDTH};
 use lopsy_core::working_space::SourceEncoding;
 use crate::engine::EngineInner;
+use crate::task::Cx;
 
 /// Develop the composite with `settings` from the next frame on. Uploads
 /// the base curve as a small LUT texture, reusing the previous one when it
@@ -79,6 +80,109 @@ pub fn clear_raw_develop(engine: &mut EngineInner) {
         engine.texture_pool.release(texture);
     }
     engine.needs_recomposite = true;
+}
+
+/// Make the document one tile of a larger picture: the rectangle at (`x`,
+/// `y`), of the document's own size, of a picture `whole_width` ×
+/// `whole_height`, all in whole-document pixels (after the crop). Everything
+/// the host sets keeps the whole picture's coordinates, as it would for the
+/// whole (the layers' positions, the areas' geometry, Finish, the seeds);
+/// the engine moves them, and each blur through a smaller image is built on
+/// the whole picture's grid (`develop::tile`, `lopsy_core::tile`). Set it
+/// after the document's size: a new size clears it. Fails, changing
+/// nothing, when the document would leave the picture.
+pub fn set_document_region(engine: &mut EngineInner, x: u32, y: u32, whole_width: u32, whole_height: u32) -> Result<(), String> {
+    let region = lopsy_core::tile::Region::new(x, y, whole_width, whole_height, engine.doc_width, engine.doc_height)?;
+    engine.document_region = Some(region);
+    engine.needs_recomposite = true;
+    Ok(())
+}
+
+/// The document is the whole picture again: today's arithmetic everywhere.
+pub fn clear_document_region(engine: &mut EngineInner) {
+    engine.document_region = None;
+    engine.needs_recomposite = true;
+}
+
+/// Whether the screen shows the document's region as part of the whole
+/// picture: on, while a region is set, the viewport (`set_viewport`) is the
+/// whole picture's (its zoom, and its pan from the whole's centre) and the
+/// final blit draws the document where that whole would show those
+/// pixels, dithered by canvas pixel as the whole is; the whole's
+/// arithmetic and one exact subtraction of the region's origin. Off (the
+/// default), a region is an export's tile, drawn at its own size. Without a
+/// region it changes nothing.
+pub fn set_screen_region(engine: &mut EngineInner, on: bool) {
+    engine.screen_region = on;
+    engine.needs_present = true;
+}
+
+/// Holds the screen's frame (`on`) or lets it go: while held, a render
+/// composites and keeps its rendered image (what the statistics read) but
+/// draws nothing on the screen, which keeps the frame it last showed; the
+/// first render after the hold draws the screen again. For reading one
+/// document while the screen shows another.
+pub fn hold_screen(engine: &mut EngineInner, on: bool) {
+    engine.is_screen_held = on;
+    if !on {
+        engine.needs_present = true;
+    }
+}
+
+/// The apron, in pixels, a tile needs on each side that is not an edge of
+/// the picture for its exports with the current settings to equal the
+/// whole picture's there: see `develop::tile::apron`.
+pub fn develop_apron(engine: &EngineInner) -> u32 {
+    crate::develop::tile::apron(engine)
+}
+
+/// Starts assembling a whole `width`×`height` picture from tiles' exports
+/// (`develop::assembly`): `kind` 0 the 16-bit export in the colour space
+/// `value` (0 sRGB, 1 Display P3, 2 Rec. 2020), 1 the HDR picture at peak
+/// `value`, 2 the 8-bit sRGB export. Fails, holding nothing of that kind,
+/// when the memory cannot be had.
+pub fn begin_export_assembly(engine: &mut EngineInner, kind: u8, value: f32, width: u32, height: u32) -> Result<(), String> {
+    let kind = crate::develop::assembly::AssemblyKind::from_code(kind, value)?;
+    crate::develop::assembly::begin(engine, kind, width, height)
+}
+
+/// Reads the document's (a tile's) export of `kind` and `value` (as
+/// [`begin_export_assembly`]) at the kept rectangle (`x`, `y`, `width`,
+/// `height`, whole-picture pixels) and writes it into the picture being
+/// assembled. The next frame rebuilds the live composite.
+pub async fn assemble_export_tile(cx: Cx, kind: u8, value: f32, x: i32, y: i32, width: u32, height: u32) -> Result<(), String> {
+    let kind = crate::develop::assembly::AssemblyKind::from_code(kind, value)?;
+    crate::develop::assembly::assemble_tile(cx, kind, lopsy_core::geometry::Rect::new(x, y, width, height)).await
+}
+
+/// Encodes the assembled picture, freeing it: `file` 0 the 16-bit PNG
+/// (`exportPng16`'s), 1 the 16-bit TIFF (`exportTiff16`'s), both from the
+/// 16-bit picture; 2 the PQ PNG (`encodePqPng`'s) from the HDR one, SDR
+/// white at `sdr_white_nits`. Fails when a part is missing.
+pub fn encode_export_assembly(engine: &mut EngineInner, file: u8, sdr_white_nits: f32) -> Result<Vec<u8>, String> {
+    use crate::develop::assembly::{encode, AssembledFile};
+    let file = match file {
+        0 => AssembledFile::Png16,
+        1 => AssembledFile::Tiff16,
+        2 => AssembledFile::PqPng,
+        _ => return Err(format!("{file} is not a file an assembled picture is encoded as")),
+    };
+    encode(engine, file, sdr_white_nits)
+}
+
+/// The gain map of the assembled HDR picture over the assembled 8-bit one,
+/// as `computeGainMap` makes it, freeing both.
+pub fn export_assembly_gain_map(
+    engine: &mut EngineInner,
+    sdr_space: lopsy_core::color::ColorSpace,
+    scale: lopsy_core::gain_map::GainMapScale,
+) -> Result<lopsy_core::gain_map::GainMap, String> {
+    crate::develop::assembly::gain_map(engine, sdr_space, scale)
+}
+
+/// Frees every picture being assembled.
+pub fn clear_export_assembly(engine: &mut EngineInner) {
+    crate::develop::assembly::clear(engine)
 }
 
 /// Turn the develop working space on or off (`develop::working_space`).
@@ -442,7 +546,7 @@ pub fn read_hdr_histogram(engine: &mut EngineInner, peak: f32) -> Read<Vec<u32>>
         Ok(t) => t,
         Err(e) => return Read::failed(e),
     };
-    let params = crate::gpu::params::core::ThumbnailBoxParams { dst_size: [tw as f32, th as f32], channel: thumbnail_gpu::COLOUR };
+    let params = crate::gpu::params::core::ThumbnailBoxParams { dst_size: [tw as f32, th as f32], channel: thumbnail_gpu::COLOUR, region: lopsy_core::tile::NO_REGION };
     engine
         .pass(&engine.shaders.thumbnail_box, params)
         .texture("u_tex", image)

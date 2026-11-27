@@ -47,7 +47,7 @@ pub fn read_box_thumbnail(
     let (tw, th) = thumbnail_size(w, h, max_size);
 
     engine
-        .pass(&engine.shaders.thumbnail_box, ThumbnailBoxParams { dst_size: [tw as f32, th as f32], channel })
+        .pass(&engine.shaders.thumbnail_box, ThumbnailBoxParams { dst_size: [tw as f32, th as f32], channel, region: lopsy_core::tile::NO_REGION })
         .texture("u_tex", src)
         .read_back(ReadFormat::Rgba8, tw, th)
         .map(move |thumb| {

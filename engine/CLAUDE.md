@@ -38,13 +38,15 @@ engine/
                       # the bodies with data, camera_colour's matrix or Sony's (approximate) otherwise
       raw/            # One RAW interface over raf/, dng/ and arw/: sniff, prepare and describe,
                       # bands, binned view, white balance in recipe units (the raw… exports);
-                      # scaled.rs: the frame reduced band by band, for a GPU whose textures are smaller
+                      # scaled.rs: the frame reduced band by band, for a GPU whose textures are smaller;
+                      # window.rs: the bands for one window of the frame at its own size (tiles)
       area_resample.rs # Area (box) downscale of RGBA f32 at any scale, band by band, bit-identical to whole
       tone.rs         # The develop tone step (scene to rendered) and its curve's shoulder
       scene_tone.rs   # Tone on scene data: the tone sliders and masks, a monotone map in stops
       look.rs         # Colour in OkLab, colour grading and curves on rendered linear data
       detail.rs       # Noise reduction, sharpening, and local contrast and haze on encoded values
       linear_detail.rs # Large and small details on log luminance, haze on scene data
+      tile.rs         # A document as one rectangle of a larger picture: regions, the whole's blur grid
       output.rs       # The develop output step: roll-off, gamut mapping, transfer, dither
       compress.rs     # RLE compression for undo snapshots
       layer.rs        # Layer descriptor types (GlowDesc, ShadowDesc, etc.)
@@ -201,6 +203,20 @@ JS API, and the deviations from `docs/photonamous-spec.md` 6.10. Rules:
   `LOPSY_ARW_SAMPLES` (`core/tests/arw_decode.rs`, `--release`).
 - Develop shaders compile lazily through `ShaderPrograms::<name>()`, never
   in `compile_all`.
+- **Tiles.** A document can be one rectangle of a larger picture
+  (`setDocumentRegion`, `develop/tile.rs`, `lopsy_core::tile`; the
+  stage map's "Tiles" says what each stage does with it). A stage that
+  depends on where a pixel is reads it through `include/region.wgsl`
+  (`wholePoint` for a position, `blurUv` for a blurred texture), and its
+  CPU reference takes the region (`…_reference_at`). A stage that reads
+  neighbours adds its reach in `lopsy_core::detail` (or
+  `linear_detail`) and to `develop::tile::apron`. With no region the
+  shaders take the branch that is today's arithmetic: keep new
+  arithmetic behind that branch. `tests/tiles.rs` assembles tiles and
+  compares them with the whole bit for bit. An encoder that takes a
+  whole picture runs on one the engine assembles from the tiles' kept
+  parts (`develop::assembly`), read straight into it, so the pixels
+  never cross into the host.
 - Screen-only views (overlays, clipping warning, mask view) run only in the
   live `compositor::composite`, never on an export path, and a test checks
   that exports are byte-identical with them on.

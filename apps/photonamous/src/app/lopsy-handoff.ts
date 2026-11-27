@@ -15,6 +15,8 @@ import type { StoredLopsySave } from '../handoff/store-lopsy-save';
 import { getExportRenderer } from './export-renderer-registry';
 import { unguarded } from './guard-session';
 import { dismissToast, showErrorToast, showToast } from './toasts';
+import { editableLimit } from '../engine/full-size';
+import { textureLimit } from '../engine/texture-limit';
 
 const previewRenderer = createBrowserPreviewRenderer();
 
@@ -55,6 +57,18 @@ export function receiverMessage(state: ReceiverState): string | null {
   }
 }
 
+/**
+ * The long edge Lopsy is handed a photo at: none (its full size) unless the
+ * photo is larger than this device's GPU can edit, which Lopsy edits on
+ * too; then the largest size the GPU can edit, the held image's, never
+ * the photo's own size the export renderer could make in tiles.
+ */
+export function lopsyLongEdge(photo: { readonly width: number | null; readonly height: number | null }, gpuTextureLimit: number | null): number | null {
+  if (gpuTextureLimit === null || !photo.width || !photo.height) return null;
+  const limit = editableLimit(gpuTextureLimit);
+  return Math.max(photo.width, photo.height) > limit ? limit : null;
+}
+
 /** The full-size 16-bit PNG of a version, through the export renderer (the engine). */
 async function renderPng16(session: LibrarySession, assetId: AssetId, versionId: string): Promise<ArrayBuffer> {
   const view = session.getView();
@@ -66,7 +80,7 @@ async function renderPng16(session: LibrarySession, assetId: AssetId, versionId:
   const blob = await renderer.render(
     asset,
     version,
-    { ...DEFAULT_EXPORT_SETTINGS, format: 'png', quality: 1, maxLongEdge: null, metadata: 'none' },
+    { ...DEFAULT_EXPORT_SETTINGS, format: 'png', quality: 1, maxLongEdge: lopsyLongEdge(asset, textureLimit()), metadata: 'none' },
     new AbortController().signal,
   );
   return blob.arrayBuffer();

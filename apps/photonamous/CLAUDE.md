@@ -121,6 +121,32 @@ only a fallback: a file `rawPrepare` refuses, and a format that renders
 no finished bands (`rawRendersFinishedBands`) on a GPU without float
 targets. `e2e/raw-parity.spec.ts` pins every format's render exactly.
 
+**Photos larger than the GPU.** One threshold, in `src/engine/full-size.ts`:
+a photo whose own long edge is larger than `editableLimit(textureLimit)`
+opens at the largest size the GPU can edit (the held image), and the
+export renderer's engine, created with `tiledExports`, makes its exports
+larger than that at its own size in tiles (`src/engine/tile-plan.ts`,
+`develop-engine.ts` `encodeTiled`; plan section 10). A photo that fits
+takes today's path, the same calls in the same order: keep the tile code
+behind that decision, and keep the Edit view's engine off it. A tile's
+pixels come from the RAW frame (`raw-decode.ts` `openRawFrame`) or the
+browser's decode, never cropped in TypeScript; its reads go into the
+engine's whole-picture assembly (`assembleExportTile`) or a 2D canvas,
+never through JavaScript. Development builds take `?texture-limit=N` to
+act as a GPU of that limit (`develop-override.ts`), which is how
+`e2e/export-tiles.spec.ts` reaches tiles on any machine; it compares
+tiled exports with whole ones, the same bytes on a hardware GPU
+(`PHOTONAMOUS_GPU=hardware`) and SwiftShader's measured rounding
+otherwise. The Edit view's engine shows such a photo's part on screen at
+its own size when zoomed in (the detail, `src/engine/detail-view.ts`):
+one tile as the engine's document, shown within the whole
+(`setScreenRegion`), while the class's sizes and view keep describing the
+held document. Anything that reads the document (histograms, Auto tone,
+the white-balance picker, previews, exports) goes through
+`withHeldDocument`, which holds the screen's frame (`holdScreen`) while
+it reads the held one; a new reader must too. `e2e/edit-detail.spec.ts`
+compares the detail's canvas with the whole render's.
+
 The UI this app shares with Lopsy is `packages/ui` (`@lopsy/ui`, see its
 `README.md`): the design tokens, reset and fonts (`src/styles/index.css`
 imports them), the Slider, the Menu, the StatusBar, and the keyboard and focus helpers

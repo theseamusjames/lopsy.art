@@ -29,6 +29,7 @@ pub mod look;
 pub mod raf;
 pub mod scaled;
 pub mod white_balance;
+pub mod window;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -393,6 +394,12 @@ pub fn plan_scaled_bands(format: RawFormatId, params_json: &str, dst_width: u32,
 /// format's finished look (an error for a format without one).
 pub fn render_scaled_band(format: RawFormatId, src: &[f32], params_json: &str, scaled: ScaledBand, dst_width: u32, dst_height: u32, linear: bool) -> Result<RawBandPixels, String> {
     dispatch!(format, F => scaled::render::<F>(src, &params_from::<<F as RawFormat>::Params>(format, params_json)?, scaled, dst_width, dst_height, linear))
+}
+
+/// Bands of plane rows that render the window of the oriented frame at
+/// (`x`, `y`), `width`×`height`, at the frame's own size (`window`).
+pub fn plan_window_bands(format: RawFormatId, params_json: &str, x: u32, y: u32, width: u32, height: u32, max_bands: u32) -> Result<Vec<RawBand>, String> {
+    dispatch!(format, F => window::plan::<F>(&params_from::<<F as RawFormat>::Params>(format, params_json)?, (x, y, width, height), max_bands))
 }
 
 /// Render plane rows `[band.src_y0, band.src_y1)` (`src`) to linear camera

@@ -15,6 +15,12 @@
  * size is tried again smaller, at `STEP_DOWN` of the largest held size, and
  * what happened is remembered for the photo: once a size loaded, or every
  * size failed, nothing is asked for again until another photo loads.
+ *
+ * The same limit decides whether a photo needs tiles (`isTooLarge`): only a
+ * photo whose own long edge is larger than the GPU can edit is exported at
+ * its own size a tile at a time (tile-plan.ts), each tile no larger than
+ * the image that loaded. A photo that fits but failed to load for memory
+ * steps down and is never tiled.
  */
 
 import { limitSize, type Size } from './viewport';
@@ -62,6 +68,15 @@ export interface FullSizeNote {
   readonly shown: Size;
   /** The longest side this device can edit (`editableLimit`). */
   readonly limit: number;
+  /**
+   * 'own': exports larger than `shown` are made at the photo's own size, in
+   * tiles; 'shown': they are made at `shown` (a source tiles cannot read, a
+   * GPU without float targets, or a full size that failed for memory);
+   * 'settings': tiles could be made, but not with the edit's settings.
+   */
+  readonly exports: 'own' | 'shown' | 'settings';
+  /** With 'own': the view shows the part on screen at the photo's own size once zoomed in (detail-view.ts). */
+  readonly detail?: boolean;
 }
 
 const times = (size: Size) => `${size.width} × ${size.height}`;
@@ -74,10 +89,18 @@ export function fullSizeNoteText(note: FullSizeNote): string {
   if (note.kind === 'stepped-down') {
     return `This device ran short of graphics memory for this ${times(note.own)} photo, so it is shown and exported at ${times(note.shown)}.`;
   }
-  return (
-    `This photo is ${times(note.own)} pixels, larger than this device’s graphics can edit (${note.limit} on a side), ` +
-    `so it is shown and exported at ${times(note.shown)}.`
-  );
+  const larger = `This photo is ${times(note.own)} pixels, larger than this device’s graphics can edit (${note.limit} on a side), `;
+  if (note.exports === 'own' && note.detail) {
+    return (
+      `${larger}so it is shown at ${times(note.shown)}; zoomed in, the part on screen is shown at its full size. ` +
+      'It is exported at its full size, a part at a time.'
+    );
+  }
+  if (note.exports === 'own') return `${larger}so it is shown at ${times(note.shown)}. It is exported at its full size, a part at a time.`;
+  if (note.exports === 'settings') {
+    return `${larger}so it is shown at ${times(note.shown)}. With these settings it cannot be exported a part at a time, so it is exported at ${times(note.shown)} too.`;
+  }
+  return `${larger}so it is shown and exported at ${times(note.shown)}.`;
 }
 
 /** The full size of one photo on one engine: what to try, and what happened. */
@@ -154,6 +177,21 @@ export class FullSizeLoads {
   /** The size loaded, when one did. */
   loadedSize(): Size | null {
     return this.loaded;
+  }
+
+  /** Whether the photo's own long edge is larger than this device can edit: the one threshold for tiles. */
+  isTooLarge(): boolean {
+    return this.own !== null && longEdge(this.own) > this.limit;
+  }
+
+  /**
+   * The most pixels a tile of the photo may have: the image that loaded,
+   * which the device has shown it can hold. Null unless the photo is too
+   * large and a size loaded (a photo whose every load failed is not tiled).
+   */
+  tileBudget(): number | null {
+    if (!this.isTooLarge() || !this.loaded) return null;
+    return this.loaded.width * this.loaded.height;
   }
 
   /** Why the photo is below its own size once settled; null when it is not (or nothing is settled yet). */

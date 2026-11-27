@@ -186,11 +186,20 @@ pub fn finish_pixel(rgb: [f32; 3], s: &FinishSettings, x: f32, y: f32, w: f32, h
 
 /// The finish over RGBA f32 (`w`×`h`, encoded), alpha untouched.
 pub fn finish_reference(rgba: &[f32], w: usize, h: usize, s: &FinishSettings) -> Vec<f32> {
+    finish_reference_at(rgba, w, h, s, None)
+}
+
+/// `finish_reference` for a document that is `region` of a larger
+/// picture: the vignette of the whole picture and its grain, at each
+/// pixel's place in it (`tile::whole_point`).
+pub fn finish_reference_at(rgba: &[f32], w: usize, h: usize, s: &FinishSettings, region: Option<crate::tile::Region>) -> Vec<f32> {
+    let (fw, fh) = region.map_or((w as f32, h as f32), |r| (r.whole_width as f32, r.whole_height as f32));
     let mut out = rgba.to_vec();
     for y in 0..h {
         for x in 0..w {
             let i = (y * w + x) * 4;
-            let c = finish_pixel([out[i], out[i + 1], out[i + 2]], s, x as f32 + 0.5, y as f32 + 0.5, w as f32, h as f32);
+            let (px, py) = crate::tile::whole_point(region, x, y);
+            let c = finish_pixel([out[i], out[i + 1], out[i + 2]], s, px, py, fw, fh);
             out[i..i + 3].copy_from_slice(&c);
         }
     }

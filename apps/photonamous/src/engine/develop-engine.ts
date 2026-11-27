@@ -109,9 +109,20 @@ import initWasm, {
   uploadLayerPixelsF32Rect,
   uploadLayerPixelsCompressedU16,
   uploadLayerPixelsFromCanvas,
+  uploadLayerPixelsF32Window,
+  setDocumentRegion,
+  clearDocumentRegion,
+  developApron,
+  setScreenRegion,
+  holdScreen,
+  beginExportAssembly,
+  encodeExportAssembly,
+  assembledGainMap,
+  clearExportAssembly,
   type Engine,
 } from '@lopsy/engine-pkg/lopsy_wasm';
 import {
+  assembleExportTile,
   compositeForExport,
   compositeForExportSized,
   createEngine,
@@ -153,15 +164,17 @@ import { renderCounts, type RenderKind } from './render-counts';
 import { ScreenViews } from './screen-views';
 import { UpgradeSlot } from './upgrade-slot';
 import { FullSizeLoads, type FullSizeNote } from './full-size';
+import { planTiles, tileFits, turnedWindow, unframeRect, type PixelRect, type Tile, type TilePlan } from './tile-plan';
+import { contains, detailTile, magnifiesHeld, ownViewport, visibleRect, type DetailTile, type OwnViewport } from './detail-view';
 import { noteTextureLimit } from './texture-limit';
 import { LOPSY_LAYER_MIME } from './lopsy-layer';
 
 export { LOPSY_LAYER_MIME };
 import { areaLayerKey, areaLayerValues, areaValues, linearAreaLayerKey, linearAreaLayerValues, type AreaFrame } from './areas';
 import { developPathFor, developStages, type DevelopPath, type LegacyStages, type LinearStages } from './develop-stages';
-import { treatsAsFloat, usesWorkingSpace } from './develop-override';
+import { effectiveTextureLimit, treatsAsFloat, usesWorkingSpace } from './develop-override';
 import { NO_INSETS, clampZoom, fitView, limitSize, panBy, zoomAround, type Insets, type Size, type View } from './viewport';
-import { decodeRawInWorkers, DecodeAbortedError, RawPrepareError, type FrameSize } from './raw/raw-decode';
+import { decodeRawInWorkers, DecodeAbortedError, openRawFrame, RawPrepareError, type FrameSize } from './raw/raw-decode';
 import { rawLoadPath, type RawDescription } from './raw/raw-format';
 import { rawWhiteBalanceFor, type RawWhiteBalance, type RawWhiteEngine } from './raw/raw-white-balance';
 import { rawSettingsFor, rawSettingsJson, temperatureTintFor, type RawDevelopSettings } from './raw-develop';
@@ -192,6 +205,40 @@ declare global {
       documentSize: () => { width: number; height: number };
       /** The GPU's largest texture side, as the engine reports it (`maxTextureSize`). */
       textureLimit: () => number;
+      /** Whether the full size is in and nothing is loading (the full size, or a detail tile). */
+      isSettled: () => boolean;
+      /** The held document's size as the Edit view sees it (`imageSize`), whether or not a detail tile is the engine's document. */
+      imageSize: () => { width: number; height: number } | null;
+      /** The view at `ownZoom` of the photo's own size (1 is 100 %), its centre panned by (panX, panY) CSS pixels. */
+      setView: (ownZoom: number, panX: number, panY: number) => void;
+      /** The pixel readout's read at a point of the document (`sampleAt`). */
+      sampleAt: (x: number, y: number) => Promise<readonly number[] | null>;
+    };
+    /**
+     * Development builds: the last tiled export, for e2e tests: its plan
+     * (columns, rows, apron, and each tile's kept part and rectangle), the
+     * tiles done so far, and whether it finished. Setting `failAt` makes
+     * the tile of that index fail, as a tile that ran out of memory would.
+     */
+    /**
+     * Development builds: the Edit view's detail at 100 % (detail-view.ts),
+     * for e2e tests: how many times a detail tile was asked for (never for a
+     * photo that fits) and loaded, what is shown now, and how long the last
+     * load and the last switch each way took, in milliseconds.
+     */
+    __photonamousDetail?: {
+      requests: number;
+      loads: number;
+      shown: { readonly kept: PixelRect; readonly rect: PixelRect } | null;
+      loadMs: number | null;
+      switchInMs: number | null;
+      switchOutMs: number | null;
+    };
+    __photonamousTiles?: {
+      plan: { columns: number; rows: number; apron: number; tiles: readonly Tile[] } | null;
+      done: number;
+      finished: boolean;
+      failAt: number | null;
     };
   }
 }
@@ -256,6 +303,19 @@ export interface ExportOptions {
    * index counts it. Null or absent: none.
    */
   readonly exif?: Uint8Array | null;
+  /**
+   * The size to make when the export is not made in tiles, for an engine
+   * that makes them (`tiledExportSize`): `size` is then worked out from the
+   * photo's own size, this from the held image, as an engine without tiles
+   * would be asked (null: no size, the held image's own). An export no
+   * larger than the held image, and one that falls back from tiles, is made
+   * with it, exactly as without tiles.
+   */
+  readonly reducedSize?: Size | null;
+  /** Checked between tiles: an abort stops a tiled export and frees what it took. */
+  readonly signal?: AbortSignal;
+  /** Told, in a sentence for the person, when an export meant for tiles is made at the held size instead. */
+  readonly onReduced?: (note: string) => void;
 }
 
 /** What the loaded photo offers the Edit view. */
@@ -328,6 +388,14 @@ export interface DevelopEngine {
    */
   fullSizeNote(): FullSizeNote | null;
   isLoadingFullResolution(): boolean;
+  /**
+   * Whether the Edit view's detail is loading: the part on screen of a
+   * photo larger than the GPU can edit, at its own size, for a view that
+   * magnifies the held image (detail-view.ts).
+   */
+  isLoadingDetail(): boolean;
+  /** A pointer is down on the view (a pan): no detail loads until it is up. */
+  setViewGesture(isActive: boolean): void;
   /** Renders `recipe` from the next frame on. Cheap when nothing changed. */
   setRecipe(recipe: Recipe): void;
   /** The size the image is shown and exported at: framed, then cropped. Null before a load. */
@@ -366,6 +434,13 @@ export interface DevelopEngine {
   /** JPEGs at each long edge in `maxSizes`, drawn in one go (one render each, one to put the view back). */
   renderPreviews(maxSizes: readonly number[], quality?: number, recipe?: Recipe): Promise<Blob[]>;
   exportImage(options: ExportOptions): Promise<Blob>;
+  /**
+   * The document's size at the photo's own size when this engine exports
+   * the loaded photo through tiles (`DevelopEngineOptions.tiledExports`, a
+   * photo larger than the GPU can edit, a source tiles can read); null
+   * otherwise. With the recipe as last set: the crop decides it.
+   */
+  tiledExportSize(): Size | null;
   /** Whether this engine can write HDR files: it edits in the working space (not the 8-bit fallback). */
   canExportHdr(): boolean;
   /** Paints clipped pixels on the live frame only (any channel at or past white red, at or below black blue); exports are unaffected. */
@@ -532,6 +607,11 @@ function layerDesc(id: string, width: number, height: number, isVisible: boolean
   });
 }
 
+/** The next task of the page's event loop, after the events waiting for it. */
+function nextTask(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 function nextFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
@@ -663,6 +743,14 @@ export interface DevelopEngineOptions {
    * renderer's and preview engines leave it off and never ask.
    */
   readonly isScreen?: boolean;
+  /**
+   * Exports of a photo larger than the GPU can edit are made at its own
+   * size in tiles (tile-plan.ts) when they are larger than the image held.
+   * The export renderer's engine, which is never shown, sets it: a tiled
+   * export takes over the engine's document while it runs. The Edit
+   * view's engine leaves it off.
+   */
+  readonly tiledExports?: boolean;
 }
 
 /**
@@ -686,9 +774,10 @@ export async function createDevelopEngine(canvas: HTMLCanvasElement, options: De
     setDevelopWorkingSpace(engine, isWorkingSpace, SRGB);
     // The status says what the edit can do: without the working space there are no HDR files, as on an 8-bit GPU.
     noteEngineStarted(isWorkingSpace);
-    const textureLimit = maxTextureSize(engine);
+    // A development build's `?texture-limit=` takes the GPU for a smaller one (develop-override.ts).
+    const textureLimit = effectiveTextureLimit(maxTextureSize(engine));
     noteTextureLimit(textureLimit);
-    return new PhotoEngine(engine, canvas, hasFloat, isWorkingSpace, options.isScreen === true, textureLimit);
+    return new PhotoEngine(engine, canvas, hasFloat, isWorkingSpace, options.isScreen === true, textureLimit, options.tiledExports === true);
   } catch (err) {
     // Nothing else holds the engine yet: freed here, or its GPU device would stay with the page.
     freeQuietly(engine);
@@ -704,6 +793,78 @@ function freeQuietly(engine: Engine): void {
     console.warn('Photonamous: an engine that failed to start could not be freed', err);
   }
 }
+
+/** The photo at its own size as the recipe frames it, for a tiled export. */
+interface OwnGeometry {
+  /** Its oriented size, before Rotate and Flip. */
+  readonly oriented: Size;
+  readonly framing: Framing;
+  /** Its size after Rotate and Flip. */
+  readonly framed: Size;
+  /** Straighten, in degrees. */
+  readonly angle: number;
+  /** The crop, in framed pixels: the document. */
+  readonly crop: PixelRect;
+}
+
+/** Where a tile's pixels come from: `fill` puts a window of the oriented frame in a layer whose texture is that window. */
+interface TileSource {
+  fill(layer: string, window: PixelRect, isVisible: boolean): Promise<void>;
+  close(): void;
+}
+
+/** A detail tile on the screen engine (detail-view.ts), loaded into its layer. */
+interface DetailState {
+  readonly geometry: OwnGeometry;
+  /** `geometryKeyOf` when it was loaded: the tile's pixels hold while it is the same. */
+  readonly geometryKey: string;
+  readonly tile: DetailTile;
+  /** The apron it was rendered with. */
+  readonly apron: number;
+  /** Its layer's place and size in the document's (the whole crop's) pixels. */
+  readonly layerRect: PixelRect;
+}
+
+/** How long the view stays still before a detail loads. */
+const DETAIL_STILL_MS = 200;
+/** How long a tile source (a prepared RAW frame, a decode) is kept unused before it is closed. */
+const DETAIL_SOURCE_IDLE_MS = 60_000;
+
+/** The 2D canvas a tiled export of a canvas format assembles in (`PhotoEngine.tileCanvas`). */
+interface TileCanvas {
+  draw(tile: Tile): void;
+  encode(out: Size, mime: string, quality: number | undefined): Promise<Blob>;
+  close(): void;
+}
+
+/** The areas' frame for the photo at its own size: its oriented size, framing, straighten and crop there. */
+function ownAreaFrame(geometry: OwnGeometry): AreaFrame {
+  return {
+    framing: geometry.framing,
+    angle: geometry.angle,
+    sourceWidth: geometry.oriented.width,
+    sourceHeight: geometry.oriented.height,
+    cropX: geometry.crop.x,
+    cropY: geometry.crop.y,
+  };
+}
+
+/** The apron the export's settings need leaves no tile within the limits (tile-plan.ts `planTiles`). */
+class NoWorkableTileError extends Error {
+  constructor() {
+    super('No tile is workable with these settings');
+    this.name = 'NoWorkableTileError';
+  }
+}
+
+/** `beginExportAssembly`'s kinds: the 16-bit export, the HDR picture, the 8-bit sRGB export. */
+const ASSEMBLE_16 = 0;
+const ASSEMBLE_HDR = 1;
+const ASSEMBLE_8 = 2;
+/** `encodeExportAssembly`'s files. */
+const ASSEMBLED_PNG16 = 0;
+const ASSEMBLED_TIFF16 = 1;
+const ASSEMBLED_PQ_PNG = 2;
 
 class PhotoEngine implements DevelopEngine {
   private readonly engine: Engine;
@@ -757,6 +918,8 @@ class PhotoEngine implements DevelopEngine {
   private pixelScale = 1;
   /** The document and layer placement last pushed, to skip unchanged layouts. */
   private layoutKey: string | null = null;
+  /** Where layout() last put the photo's layer, in document pixels. */
+  private layoutLayer: PixelRect | null = null;
   /** The RAW photo on the develop path: its description, its render parameters and its white balance; null otherwise. */
   private raw: { readonly description: RawDescription; readonly paramsJson: string; readonly whiteBalance: RawWhiteBalance } | null = null;
   /** The displayed (cropped) size. */
@@ -784,6 +947,32 @@ class PhotoEngine implements DevelopEngine {
   private loaded: { source: Blob; format: ImageFormat } | null = null;
   /** The full image's oriented size, before framing. */
   private fullSize: Size | null = null;
+  /** Whether exports larger than the held image are made in tiles (`DevelopEngineOptions.tiledExports`). */
+  private readonly tiledExports: boolean;
+  /** While a tile run holds the document, no frame of the screen is drawn: it would show a tile. */
+  private isTiling = false;
+  /**
+   * The detail at 100 % (detail-view.ts), on the Edit view's engine only:
+   * the tile shown now, and one loaded but not shown (a read of the held
+   * document is out, or the view moved), which comes back while it still
+   * holds what the view shows. Both null for a photo that fits.
+   */
+  private detail: DetailState | null = null;
+  private parkedDetail: DetailState | null = null;
+  /** The layer detail tiles load into, hidden while not shown. */
+  private detailLayer: string | null = null;
+  /** The detail load under way. */
+  private detailLoad: AbortController | null = null;
+  private detailTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The tile source kept between detail loads, and its idle timer. */
+  private detailSource: { readonly source: Promise<TileSource>; idle: ReturnType<typeof setTimeout> | null } | null = null;
+  /** The size-scaled settings are the photo's own size's for this geometry (a detail shown, or the apron measured); null: the held image's. */
+  private sizedFor: OwnGeometry | null = null;
+  /** Reads of the held document under way (`withHeldDocument`). */
+  private heldReads = 0;
+  /** Whether the screen keeps its frame (`holdScreen`) while they run: a detail was shown when they started. */
+  private isScreenHeld = false;
+  private isViewGesture = false;
 
   /** Whether the engine renders to float targets, which the RAW decode's linear camera RGB needs. */
   private readonly hasFloat: boolean;
@@ -818,8 +1007,17 @@ class PhotoEngine implements DevelopEngine {
     this.lostListeners.clear();
   };
 
-  constructor(engine: Engine, canvas: HTMLCanvasElement, hasFloat: boolean, isWorkingSpace: boolean, isScreen: boolean, textureLimit: number) {
+  constructor(
+    engine: Engine,
+    canvas: HTMLCanvasElement,
+    hasFloat: boolean,
+    isWorkingSpace: boolean,
+    isScreen: boolean,
+    textureLimit: number,
+    tiledExports: boolean,
+  ) {
     this.engine = engine;
+    this.tiledExports = tiledExports;
     this.textureLimit = textureLimit;
     this.fullLoads = new FullSizeLoads(textureLimit);
     this.id = engineId(engine);
@@ -853,6 +1051,10 @@ class PhotoEngine implements DevelopEngine {
           return { width, height };
         },
         textureLimit: () => this.textureLimit,
+        isSettled: () => this.isFullResolution() && !this.isLoadingFullResolution() && !this.isLoadingDetail(),
+        imageSize: () => this.imageSize(),
+        setView: (ownZoom, panX, panY) => this.setView({ zoom: ownZoom / (this.pixelScale || 1), panX, panY, isFit: false }),
+        sampleAt: (x, y) => this.sampleAt(x, y),
       };
     }
     this.resizeObserver = new ResizeObserver((entries) => this.handleResize(entries));
@@ -868,6 +1070,9 @@ class PhotoEngine implements DevelopEngine {
 
   async load(source: Blob, format: ImageFormat, onProgress?: (progress: LoadProgress) => void, options: LoadOptions = {}): Promise<Size> {
     this.loadAbort?.abort();
+    // Another photo: no detail of this one, and its source closed.
+    this.dropDetail();
+    this.closeDetailSource();
     // The old photo's full-size load ends here: a full-size request for the new photo starts its own.
     this.upgrade.cancel();
     const abort = new AbortController();
@@ -946,6 +1151,8 @@ class PhotoEngine implements DevelopEngine {
       try {
         await this.loadFullAt(source, format, size, signal);
         this.fullLoads.noteLoaded(size);
+        // A photo larger than the GPU, its held image loaded: the view may now show the detail.
+        this.scheduleDetail();
         return;
       } catch (err) {
         if (err instanceof DecodeAbortedError || signal.aborted || this.isDisposed) throw err;
@@ -985,11 +1192,34 @@ class PhotoEngine implements DevelopEngine {
     if (!kind || !this.sourceSize || !this.fullSize) return null;
     const own = framedSize(this.fullSize.width, this.fullSize.height, this.framing.rotate);
     const shown = framedSize(this.sourceSize.width, this.sourceSize.height, this.framing.rotate);
-    return { kind, own, shown, limit: this.fullLoads.limit };
+    const exports = kind === 'too-large' ? this.tiledExportsOf() : 'shown';
+    // The Edit view's engine shows the part on screen at its own size once zoomed in (detail-view.ts).
+    const detail = exports === 'own' && this.isScreen && !this.tiledExports;
+    return { kind, own, shown, limit: this.fullLoads.limit, exports, detail };
+  }
+
+  /**
+   * What an engine that makes tiled exports would make of this photo with
+   * the edit as it is: 'own' when it can be tiled, 'settings' when its
+   * apron leaves no workable tile, 'shown' when the photo cannot be tiled
+   * at all. On an engine holding the photo below its own size the apron is
+   * the one for that size, taken up to the photo's own (the reaches grow
+   * with the pixel scale); the export measures its own at its own size.
+   */
+  private tiledExportsOf(): 'own' | 'shown' | 'settings' {
+    const budget = this.fullLoads.tileBudget();
+    const geometry = this.ownGeometry();
+    if (budget === null || !geometry || this.tileSourceKind() === null) return 'shown';
+    const apron = Math.ceil(developApron(this.engine) / Math.max(this.pixelScale, 1e-3)) + 2;
+    return this.planFor(geometry, budget, apron) ? 'own' : 'settings';
   }
 
   isLoadingFullResolution(): boolean {
     return this.upgrade.isRunning();
+  }
+
+  isLoadingDetail(): boolean {
+    return this.detailLoad !== null;
   }
 
   private async decode(
@@ -1397,6 +1627,7 @@ class PhotoEngine implements DevelopEngine {
    * (and the mask overlay), detail, local contrast and Finish.
    */
   private swapInLayer(layer: string, size: Size, previous: Size): void {
+    this.dropDetail();
     this.unturn();
     // First: a document the GPU cannot make fails here, and the engine keeps the working image and its size.
     setDocumentSize(this.engine, size.width, size.height);
@@ -1435,6 +1666,7 @@ class PhotoEngine implements DevelopEngine {
 
   /** Replaces the document with one visible layer of this size; returns its id. */
   private resetLayer(width: number, height: number): string {
+    this.dropDetail();
     this.unturn();
     if (this.hasLayer) removeLayer(this.engine, this.layerId);
     this.layerId = this.nextLayerId();
@@ -1477,7 +1709,8 @@ class PhotoEngine implements DevelopEngine {
     if (key === this.layoutKey) return;
     const previous = this.displaySize;
     setDocumentSize(this.engine, px.width, px.height);
-    updateLayer(this.engine, layerDesc(this.layerId, layer.width, layer.height, true, layer.x - px.x, layer.y - px.y));
+    this.layoutLayer = { x: layer.x - px.x, y: layer.y - px.y, width: layer.width, height: layer.height };
+    updateLayer(this.engine, layerDesc(this.layerId, layer.width, layer.height, true, this.layoutLayer.x, this.layoutLayer.y));
     this.layoutKey = key;
     this.displaySize = { width: px.width, height: px.height };
     this.cropOrigin = { x: px.x, y: px.y };
@@ -1489,9 +1722,12 @@ class PhotoEngine implements DevelopEngine {
 
   setCropEditing(isEditing: boolean): void {
     if (this.isCropEditing === isEditing) return;
+    // The crop is edited on the held image, framed whole.
+    if (isEditing) this.dropDetail();
     this.isCropEditing = isEditing;
     this.layout();
     this.fit();
+    if (!isEditing) this.scheduleDetail();
   }
 
   // ---- the recipe ----------------------------------------------------
@@ -1513,6 +1749,11 @@ class PhotoEngine implements DevelopEngine {
   }
 
   private applyRecipe(): void {
+    // A new framing, straighten or crop moves every pixel of a detail tile: the held image, at once.
+    if ((this.detail || this.parkedDetail) && this.geometryKeyOf() !== (this.detail ?? this.parkedDetail)?.geometryKey) {
+      this.dropDetail();
+      this.scheduleDetail();
+    }
     const stages = developStages(this.recipe, { isRaw: this.rawDefaults !== null, path: this.path });
     if (stages.path === 'linear') this.applyLinearStages(stages);
     else this.applyLegacyStages(stages);
@@ -1530,6 +1771,11 @@ class PhotoEngine implements DevelopEngine {
     this.applyAngle(framingAngle(this.recipe.framing));
     this.layout();
     this.applyAreas();
+    // Settings that reach further than the tile's apron: the held image until a wider tile loads.
+    if (this.detail && !this.isInteractive && developApron(this.engine) > this.detail.apron) {
+      this.hideDetail(false);
+      this.scheduleDetail();
+    }
   }
 
   areaFrame(): AreaFrame | null {
@@ -1552,13 +1798,22 @@ class PhotoEngine implements DevelopEngine {
 
   /** The recipe's areas in document pixels: re-sent whenever they, the framing or the overlay shown change. */
   private applyAreas(): void {
-    const frame = this.areaFrame();
-    if (!frame) return;
+    const frame = this.sizedFor ? ownAreaFrame(this.sizedFor) : this.areaFrame();
+    if (frame) this.sendAreas(frame, this.sizedScale());
+  }
+
+  /** The pixel scale the size-scaled settings are sent at: the held image's, or 1 for the photo's own size. */
+  private sizedScale(): number {
+    return this.sizedFor ? 1 : this.pixelScale;
+  }
+
+  /** The areas in the pixels of `frame`'s document, sized for `pixelScale`; what changed since the last send. */
+  private sendAreas(frame: AreaFrame, pixelScale: number): void {
     const out = areaValues(this.recipe, frame);
     // A read under way keeps the overlay off; the last one to end shows what was asked for meanwhile.
     const overlay = this.views.isHeld() ? null : this.overlayAreaId;
     // Each area's own layer (its further effects), by its place among the areas.
-    const layerOptions = { pixelScale: this.pixelScale, grainSeed: this.grainSeedValue, isInteractive: this.isInteractive };
+    const layerOptions = { pixelScale, grainSeed: this.grainSeedValue, isInteractive: this.isInteractive };
     const areas = out ? liveAreas(this.recipe) : [];
     const linearLayers = this.path === 'linear' ? areas.map((area) => linearAreaLayerValues(area, layerOptions)) : [];
     const legacyLayers = this.path === 'legacy' ? areas.map((area) => areaLayerValues(area, layerOptions)) : [];
@@ -1695,10 +1950,11 @@ class PhotoEngine implements DevelopEngine {
   private applyFinish(): void {
     // An area's grain shares the seed.
     this.applyAreas();
-    const key = finishKey(this.recipe.finish, this.grainSeedValue, this.pixelScale);
+    const scale = this.sizedScale();
+    const key = finishKey(this.recipe.finish, this.grainSeedValue, scale);
     if (key === this.finishKeyApplied) return;
     this.finishKeyApplied = key;
-    const values = finishValues(this.recipe.finish, this.grainSeedValue, this.pixelScale);
+    const values = finishValues(this.recipe.finish, this.grainSeedValue, scale);
     if (values) setImageFinish(this.engine, values);
     else clearImageFinish(this.engine);
     this.invalidate();
@@ -1712,18 +1968,27 @@ class PhotoEngine implements DevelopEngine {
     if (this.isInteractive === isInteractive) return;
     this.isInteractive = isInteractive;
     this.applyDetail();
+    // A drag's end: a detail its stages now reach past is reloaded, and one waiting for it loads.
+    if (!isInteractive) this.followDetail();
+  }
+
+  setViewGesture(isActive: boolean): void {
+    if (this.isViewGesture === isActive) return;
+    this.isViewGesture = isActive;
+    if (!isActive) this.scheduleDetail();
   }
 
   private applyDetail(): void {
     // An area's sharpening, noise reduction and local contrast wait out a drag too.
     this.applyAreas();
-    const key = this.isInteractive ? 'interactive' : detailKey(this.recipe, this.pixelScale);
+    const scale = this.sizedScale();
+    const key = this.isInteractive ? 'interactive' : detailKey(this.recipe, scale);
     if (key === this.detailKeyApplied) return;
     this.detailKeyApplied = key;
-    const detail = this.isInteractive ? null : detailValues(this.recipe, this.pixelScale);
+    const detail = this.isInteractive ? null : detailValues(this.recipe, scale);
     if (detail) setImageDetail(this.engine, detail);
     else clearImageDetail(this.engine);
-    const local = this.isInteractive ? null : localContrastValues(this.recipe, this.pixelScale);
+    const local = this.isInteractive ? null : localContrastValues(this.recipe, scale);
     if (local) setImageLocalContrast(this.engine, local);
     else clearImageLocalContrast(this.engine);
     this.invalidate();
@@ -1801,6 +2066,17 @@ class PhotoEngine implements DevelopEngine {
   async sampleAt(x: number, y: number): Promise<readonly [number, number, number] | null> {
     const size = this.imageSize();
     if (!size || this.isDisposed || x < 0 || y < 0 || x >= size.width || y >= size.height) return null;
+    // In detail, the pixel of the photo at its own size under the same point, read from the tile.
+    const inTile = this.detail ? this.detailPoint(x, y, size) : null;
+    if (this.detail && inTile) {
+      const at = inTile;
+      return this.withStatisticsViewsOff(async () => {
+        this.renderFrameNow();
+        const rgba: unknown = await sampleColor(this.engine, at.x, at.y, 1);
+        if (!(rgba instanceof Uint8Array) || rgba.length < 3) return null;
+        return [rgba[0] ?? 0, rgba[1] ?? 0, rgba[2] ?? 0] as const;
+      });
+    }
     // One pixel of the developed, adjusted image: the photo, not the
     // clipping colours, the sharpening mask or a mask's red.
     return this.withStatisticsViewsOff(async () => {
@@ -1813,7 +2089,7 @@ class PhotoEngine implements DevelopEngine {
 
   async sampleWhiteBalance(x: number, y: number, radius: number): Promise<{ temperature: number; tint: number } | null> {
     if (!this.sourceSize || this.isDisposed) return null;
-    const out = await sampleNeutralWhiteBalance(this.engine, x, y, Math.max(0, Math.min(64, radius)));
+    const out = await this.withHeldDocument(() => sampleNeutralWhiteBalance(this.engine, x, y, Math.max(0, Math.min(64, radius))));
     const temperature = out[0];
     const tint = out[1];
     if (temperature === undefined || tint === undefined || !Number.isFinite(temperature) || !Number.isFinite(tint)) return null;
@@ -1821,11 +2097,11 @@ class PhotoEngine implements DevelopEngine {
   }
   async readHdrHistogram(): Promise<Uint32Array | null> {
     if (!this.sourceSize || this.isDisposed || !this.isWorkingSpace) return null;
-    return this.withStatisticsViewsOff(async () => {
+    return this.withHeldDocument(() => this.withStatisticsViewsOff(async () => {
       this.renderFrameNow();
       const bins: unknown = await readHdrHistogram(this.engine, HDR_PEAK);
       return bins instanceof Uint32Array && bins.length === 1024 ? bins : null;
-    });
+    }));
   }
 
   hdrWhiteBin(): number {
@@ -1834,19 +2110,19 @@ class PhotoEngine implements DevelopEngine {
 
   async readHistogram(): Promise<Uint32Array | null> {
     if (!this.sourceSize || this.isDisposed) return null;
-    // The histogram counts the photo, not the clipping colours or the sharpening mask.
-    return this.withStatisticsViewsOff(async () => {
+    // The histogram counts the photo, not the clipping colours or the sharpening mask, and the whole of it.
+    return this.withHeldDocument(() => this.withStatisticsViewsOff(async () => {
       this.renderFrameNow();
       renderCounts.histogramReads += 1;
       const bins: unknown = await readDevelopHistogram(this.engine);
       return bins instanceof Uint32Array && bins.length === 1024 ? bins : null;
-    });
+    }));
   }
 
   /** Development builds only (the screen engine's dev hook): see `RenderedForTest`. */
   private readRenderedForTest(): Promise<RenderedForTest | null> {
     if (!this.sourceSize || this.isDisposed) return Promise.resolve(null);
-    return this.withStatisticsViewsOff(async () => {
+    return this.withHeldDocument(() => this.withStatisticsViewsOff(async () => {
       this.renderFrameNow();
       const [width = 0, height = 0] = getCompositeSize(this.engine);
       if (width === 0 || height === 0) return null;
@@ -1862,12 +2138,14 @@ class PhotoEngine implements DevelopEngine {
       const drawn = this.drawAtSizes([size], 'srgb')[0];
       if (!drawn) return null;
       return { path: this.path, kind: 'srgb8-png', ...size, png: await drawn.convertToBlob({ type: PNG_MIME }) };
-    });
+    }));
   }
 
   async autoTone(recipe: Recipe): Promise<ToneValues> {
     this.setRecipe(recipe);
-    const answerJson = this.path === 'linear' ? await this.autoToneFromScene(recipe) : await this.autoToneFromHistogram(recipe);
+    const answerJson = this.path === 'linear'
+      ? await this.withHeldDocument(() => this.autoToneFromScene(recipe))
+      : await this.autoToneFromHistogram(recipe);
     if (answerJson === null) return recipe.tone;
     const answer: unknown = JSON.parse(answerJson);
     if (typeof answer !== 'object' || answer === null) return recipe.tone;
@@ -1958,6 +2236,7 @@ class PhotoEngine implements DevelopEngine {
         if (!(err instanceof DecodeAbortedError)) console.warn('Photonamous: the full-size image could not be loaded', err);
       });
     }
+    this.followDetail();
     this.pushViewport();
     for (const listener of this.viewListeners) listener(view);
   }
@@ -1965,6 +2244,13 @@ class PhotoEngine implements DevelopEngine {
   private pushViewport(): void {
     if (this.isDisposed) return;
     const r = this.pixelRatio;
+    if (this.detail) {
+      // The whole crop's viewport at the photo's own size: the engine shows the tile where it falls (setScreenRegion).
+      const own = this.ownView();
+      setViewport(this.engine, own.zoom, own.panX, own.panY, this.canvas.width, this.canvas.height);
+      this.invalidate();
+      return;
+    }
     setViewport(
       this.engine,
       this.view.zoom * r,
@@ -2032,10 +2318,12 @@ class PhotoEngine implements DevelopEngine {
 
   private invalidate(): void {
     this.isFrameCurrent = false;
-    if (this.frameRequest !== null || this.isDisposed) return;
+    if (this.frameRequest !== null || this.isDisposed || this.isTiling) return;
     this.frameRequest = requestAnimationFrame(() => {
       this.frameRequest = null;
       if (this.isDisposed) return;
+      // A detail set aside for a read of the held document comes back before the screen is drawn.
+      if (this.parkedDetail && this.heldReads === 0) this.resumeDetail();
       this.renderFor('screen');
     });
   }
@@ -2046,13 +2334,13 @@ class PhotoEngine implements DevelopEngine {
   }
 
   async exportImage(options: ExportOptions): Promise<Blob> {
-    // Exports and previews draw through the live path too: never with a screen-only view on.
-    return this.withScreenViewsOff(() => this.exportClean(options));
+    // Exports and previews draw through the live path too: never with a screen-only view on, and of the held document.
+    return this.withHeldDocument(() => this.withScreenViewsOff(() => this.exportClean(options)));
   }
 
   async renderPreviews(maxSizes: readonly number[], quality = 0.85, recipe?: Recipe): Promise<Blob[]> {
     renderCounts.previewEncodes += maxSizes.length;
-    return this.withScreenViewsOff(() =>
+    return this.withHeldDocument(() => this.withScreenViewsOff(() =>
       this.atSizeWith(Math.max(...maxSizes), recipe, () => {
         const image = this.imageSize();
         if (!image || this.isDisposed) throw new Error('No photo is loaded');
@@ -2063,11 +2351,722 @@ class PhotoEngine implements DevelopEngine {
           outs.map((out, i) => drawn[i]?.convertToBlob({ type: JPEG_MIME, quality }) ?? this.encodeFromPng16(out, JPEG_MIME, quality)),
         );
       }),
-    );
+    ));
   }
 
   private exportClean(options: ExportOptions): Promise<Blob> {
-    return this.atSizeWith(options.maxSize, options.recipe, () => this.encode(options));
+    return this.atSizeWith(options.maxSize, options.recipe, () => this.encodeTiledOrNot(options));
+  }
+
+  /**
+   * An export through tiles where this engine makes them and the output is
+   * larger than the held image (and, for an HDR file, the photo's own
+   * size, which only tiles can make); every other export as without tiles,
+   * at `reducedSize`, the size it would have been asked for. A tiled
+   * export that cannot be made (no workable tile, a tile that failed) is
+   * made that way too, and `onReduced` says so; one aborted stops.
+   */
+  private async encodeTiledOrNot(options: ExportOptions): Promise<Blob> {
+    const geometry = this.tiledExports ? this.ownGeometry() : null;
+    const budget = this.fullLoads.tileBudget();
+    const image = this.imageSize();
+    if (!geometry || budget === null || !image || this.tileSourceKind() === null) return this.encode(options);
+    const { size: ownSized, ...unsized } = options;
+    const reduced: ExportOptions =
+      options.reducedSize === undefined ? options : options.reducedSize === null ? unsized : { ...unsized, size: options.reducedSize };
+    const own = { width: geometry.crop.width, height: geometry.crop.height };
+    const out = options.format === 'tiff' ? own : (ownSized ?? limitSize(own, options.maxSize));
+    const isLarger = out.width > image.width || out.height > image.height;
+    const isHdr = options.format === 'hdr-png' || options.format === 'hdr-jpeg';
+    const isOwn = out.width === own.width && out.height === own.height;
+    if (!isLarger || (isHdr && (!isOwn || !this.isWorkingSpace))) return this.encode(reduced);
+    try {
+      return await this.encodeTiled(options, geometry, budget, out);
+    } catch (err) {
+      if (err instanceof DecodeAbortedError || options.signal?.aborted || this.isDisposed) throw err;
+      console.warn('Photonamous: the export could not be made in tiles', err);
+      const why = err instanceof NoWorkableTileError ? 'with these settings' : `(${err instanceof Error ? err.message : String(err)})`;
+      const made = reduced.size ?? limitSize(image, reduced.maxSize);
+      options.onReduced?.(
+        `This photo could not be exported at its full size of ${own.width} × ${own.height} a part at a time ${why}, so it was exported at ${made.width} × ${made.height}.`,
+      );
+      return this.encode(reduced);
+    }
+  }
+
+  tiledExportSize(): Size | null {
+    if (!this.tiledExports || this.fullLoads.tileBudget() === null || this.tileSourceKind() === null) return null;
+    const geometry = this.ownGeometry();
+    return geometry ? { width: geometry.crop.width, height: geometry.crop.height } : null;
+  }
+
+  // ---- the detail at 100 % ------------------------------------------------
+
+  /**
+   * Whether this engine may show a detail tile of its photo (detail-view.ts):
+   * the Edit view's engine, a photo larger than the GPU can edit with a full
+   * size loaded, a source tiles can read, the crop not being edited. False
+   * at once for a photo that fits: nothing of the detail runs for it.
+   */
+  private canShowDetail(): boolean {
+    return (
+      this.isScreen &&
+      !this.tiledExports &&
+      !this.isDisposed &&
+      this.fullLoads.isTooLarge() &&
+      this.fullLoads.tileBudget() !== null &&
+      !this.isCropEditing &&
+      this.tileSourceKind() !== null
+    );
+  }
+
+  /** The framing, straighten and crop as one key: a detail tile's pixels hold while it is the same. */
+  private geometryKeyOf(): string {
+    const geometry = this.ownGeometry();
+    return geometry ? JSON.stringify([geometry.framing, geometry.angle, geometry.crop]) : '';
+  }
+
+  /** The view at the photo's own size (detail-view.ts `ownViewport`). */
+  private ownView(): OwnViewport {
+    return ownViewport(this.view, this.pixelRatio, this.pixelScale);
+  }
+
+  /** What the view shows of the photo at its own size; null when it does not magnify the held image or shows nothing. */
+  private visibleOwn(geometry: OwnGeometry): PixelRect | null {
+    if (!magnifiesHeld(this.view, this.pixelRatio)) return null;
+    return visibleRect(this.ownView(), { width: this.canvas.width, height: this.canvas.height }, { width: geometry.crop.width, height: geometry.crop.height });
+  }
+
+  /**
+   * The apron the edit needs at the photo's own size: the size-scaled
+   * settings sent for it for a moment, the apron read, the held image's put
+   * back, in one task (no frame in between). In detail, the one sent.
+   */
+  private ownApron(geometry: OwnGeometry): number {
+    if (this.detail) return developApron(this.engine);
+    this.sizedFor = geometry;
+    this.forgetScaledSettings();
+    this.applyDetail();
+    this.applyFinish();
+    const apron = developApron(this.engine);
+    this.sizedFor = null;
+    this.forgetScaledSettings();
+    this.applyDetail();
+    this.applyFinish();
+    return apron;
+  }
+
+  /** Forgets what was sent of the settings that scale with the size, so they are sent again. */
+  private forgetScaledSettings(): void {
+    this.areasKey = null;
+    this.areaLayerKeys = this.areaLayerKeys.map(() => 'resend');
+    this.detailKeyApplied = null;
+    this.finishKeyApplied = null;
+  }
+
+  /** Whether `state` still holds what the view shows, at the edit's apron. */
+  private isDetailValid(state: DetailState): boolean {
+    if (!this.canShowDetail() || state.geometryKey !== this.geometryKeyOf()) return false;
+    const visible = this.visibleOwn(state.geometry);
+    if (!visible || !contains(state.tile.kept, visible)) return false;
+    return this.ownApron(state.geometry) <= state.apron;
+  }
+
+  /** Follows a change of the view or of the edit: the tile shown when it still holds the view, else the held image and a load when still. */
+  private followDetail(): void {
+    if (!this.detail && !this.parkedDetail && !this.canShowDetail()) return;
+    if (this.detail && !this.isDetailValid(this.detail)) this.hideDetail(false);
+    if (!this.detail) this.scheduleDetail();
+  }
+
+  /** A detail load once the view has been still for `DETAIL_STILL_MS`, and no drag or pointer is under way. */
+  private scheduleDetail(): void {
+    if (this.detailTimer !== null) clearTimeout(this.detailTimer);
+    this.detailTimer = null;
+    if (!this.canShowDetail()) return;
+    this.detailTimer = setTimeout(() => {
+      this.detailTimer = null;
+      if (this.isInteractive || this.isViewGesture) return;
+      this.whenStill();
+    }, DETAIL_STILL_MS);
+  }
+
+  private whenStill(): void {
+    if (this.isDisposed || this.detail || this.heldReads > 0 || !this.canShowDetail()) return;
+    const geometry = this.ownGeometry();
+    const visible = geometry ? this.visibleOwn(geometry) : null;
+    if (!geometry || !visible) return;
+    if (this.parkedDetail && this.isDetailValid(this.parkedDetail)) {
+      this.resumeDetail();
+      return;
+    }
+    const record = this.detailRecord();
+    if (record) record.requests += 1;
+    const budget = this.fullLoads.tileBudget() ?? 0;
+    const apron = Math.ceil(this.ownApron(geometry) / 2) * 2;
+    const tile = detailTile(visible, { width: geometry.crop.width, height: geometry.crop.height }, apron, (w, h) =>
+      tileFits(w, h, this.fullLoads.limit, budget, geometry.angle),
+    );
+    // No workable tile: the held image stays.
+    if (!tile) return;
+    void this.loadDetail({ geometry, geometryKey: this.geometryKeyOf(), tile, apron });
+  }
+
+  /** Loads `plan`'s tile into the detail layer, hidden, and shows it if the view still wants it. */
+  private async loadDetail(plan: Omit<DetailState, 'layerRect'>): Promise<void> {
+    this.detailLoad?.abort();
+    const abort = new AbortController();
+    this.detailLoad = abort;
+    this.notifyView();
+    const started = performance.now();
+    try {
+      const source = await this.detailTileSource();
+      if (abort.signal.aborted || this.isDisposed) return;
+      // The layer is filled anew: what was set aside in it is gone.
+      this.parkedDetail = null;
+      const layer = (this.detailLayer ??= this.addHiddenLayer(1, 1));
+      const layerRect = await this.fillTileLayer(layer, plan.tile, plan.geometry, source, false);
+      this.touchDetailSource();
+      if (abort.signal.aborted || this.isDisposed) return;
+      const state: DetailState = { ...plan, layerRect };
+      const record = this.detailRecord();
+      if (record) {
+        record.loads += 1;
+        record.loadMs = performance.now() - started;
+      }
+      this.parkedDetail = state;
+      if (this.heldReads === 0 && this.isDetailValid(state)) this.resumeDetail();
+    } catch (err) {
+      if (!(err instanceof DecodeAbortedError) && !abort.signal.aborted) console.warn('Photonamous: the detail could not be loaded', err);
+    } finally {
+      if (this.detailLoad === abort) {
+        this.detailLoad = null;
+        this.notifyView();
+      }
+    }
+  }
+
+  /** Shows the detail set aside, when it still holds the view; else drops it and loads when still. */
+  private resumeDetail(): void {
+    const parked = this.parkedDetail;
+    if (!parked) return;
+    if (this.isDetailValid(parked)) {
+      this.showDetail(parked);
+      return;
+    }
+    // Once: a tile that no longer holds the view is not tried on every frame.
+    this.parkedDetail = null;
+    this.scheduleDetail();
+  }
+
+  /**
+   * The detail document on screen, in one task: the held layer hidden, the
+   * document the tile's rectangle as a region of the whole crop
+   * (setDocumentRegion) shown within it (setScreenRegion), the tile's layer
+   * shown, the size-scaled settings for the photo's own size, and the
+   * whole crop's viewport.
+   */
+  private showDetail(state: DetailState): void {
+    const layer = this.detailLayer;
+    if (!layer || this.isDisposed) return;
+    const started = performance.now();
+    const held = this.layoutLayer;
+    if (held) updateLayer(this.engine, layerDesc(this.layerId, held.width, held.height, false, held.x, held.y));
+    const { rect } = state.tile;
+    setDocumentSize(this.engine, rect.width, rect.height);
+    setDocumentRegion(this.engine, rect.x, rect.y, state.geometry.crop.width, state.geometry.crop.height);
+    setScreenRegion(this.engine, true);
+    const r = state.layerRect;
+    updateLayer(this.engine, layerDesc(layer, r.width, r.height, true, r.x, r.y));
+    this.sizedFor = state.geometry;
+    this.forgetScaledSettings();
+    this.applyDetail();
+    this.applyFinish();
+    this.detail = state;
+    this.parkedDetail = null;
+    this.pushViewport();
+    const record = this.detailRecord();
+    if (record) {
+      record.shown = { kept: state.tile.kept, rect: state.tile.rect };
+      record.switchInMs = performance.now() - started;
+    }
+  }
+
+  /**
+   * The held document on screen again, in one task: the region gone, the
+   * layout and the size-scaled settings for the held image sent again. With
+   * `park`, the tile stays in its layer to come back (`resumeDetail`).
+   */
+  private hideDetail(park: boolean): void {
+    const state = this.detail;
+    if (!state || this.isDisposed) return;
+    const started = performance.now();
+    this.detail = null;
+    setScreenRegion(this.engine, false);
+    clearDocumentRegion(this.engine);
+    const r = state.layerRect;
+    if (this.detailLayer) updateLayer(this.engine, layerDesc(this.detailLayer, r.width, r.height, false, r.x, r.y));
+    this.sizedFor = null;
+    this.forgetScaledSettings();
+    this.layoutKey = null;
+    this.layout();
+    this.applyDetail();
+    this.applyFinish();
+    this.parkedDetail = park ? state : null;
+    this.pushViewport();
+    const record = this.detailRecord();
+    if (record) {
+      record.shown = null;
+      record.switchOutMs = performance.now() - started;
+    }
+  }
+
+  /** No detail: the held image shown, the tile's layer freed, any load stopped. */
+  private dropDetail(): void {
+    if (this.detailTimer !== null) clearTimeout(this.detailTimer);
+    this.detailTimer = null;
+    this.detailLoad?.abort();
+    if (!this.detail && !this.parkedDetail && !this.detailLayer) return;
+    this.hideDetail(false);
+    this.parkedDetail = null;
+    if (this.detailLayer && !this.isDisposed) removeLayer(this.engine, this.detailLayer);
+    this.detailLayer = null;
+  }
+
+  /**
+   * Runs `work` on the held document: the detail set aside first, the
+   * screen held meanwhile so no frame of the held image shows
+   * (`holdScreen`), and the detail back on the next frame after the last
+   * such read, unless another starts first. For a photo that fits, `work`
+   * alone.
+   */
+  private async withHeldDocument<T>(work: () => Promise<T>): Promise<T> {
+    if (!this.detail && !this.parkedDetail && !this.detailLoad && this.heldReads === 0) return work();
+    this.heldReads += 1;
+    if (this.detail) {
+      if (!this.isScreenHeld) {
+        holdScreen(this.engine, true);
+        this.isScreenHeld = true;
+      }
+      this.hideDetail(true);
+    }
+    try {
+      return await work();
+    } finally {
+      this.heldReads -= 1;
+      if (this.heldReads === 0 && !this.isDisposed) {
+        if (this.isScreenHeld) holdScreen(this.engine, false);
+        this.isScreenHeld = false;
+        this.invalidate();
+      }
+    }
+  }
+
+  /** The point of the detail tile under the held document's point (x, y); null outside it. */
+  private detailPoint(x: number, y: number, held: Size): { x: number; y: number } | null {
+    const state = this.detail;
+    if (!state) return null;
+    const own = { width: state.geometry.crop.width, height: state.geometry.crop.height };
+    // As the view maps the two: the same centre, own pixels a pixelScale apart.
+    const ox = Math.floor((x - held.width / 2) / this.pixelScale + own.width / 2);
+    const oy = Math.floor((y - held.height / 2) / this.pixelScale + own.height / 2);
+    const tx = ox - state.tile.rect.x;
+    const ty = oy - state.tile.rect.y;
+    if (tx < 0 || ty < 0 || tx >= state.tile.rect.width || ty >= state.tile.rect.height) return null;
+    return { x: tx, y: ty };
+  }
+
+  /** The tile source for detail loads, opened once and kept while it is used (`DETAIL_SOURCE_IDLE_MS`). */
+  private detailTileSource(): Promise<TileSource> {
+    if (!this.detailSource) {
+      // Not tied to one load's abort: a RAW file's prepare takes seconds, and a pan during it keeps it for the next tile.
+      const source = this.openTileSource(undefined);
+      this.detailSource = { source, idle: null };
+      source.catch(() => {
+        if (this.detailSource?.source === source) this.detailSource = null;
+      });
+    }
+    this.touchDetailSource();
+    return this.detailSource.source;
+  }
+
+  private touchDetailSource(): void {
+    const kept = this.detailSource;
+    if (!kept) return;
+    if (kept.idle !== null) clearTimeout(kept.idle);
+    kept.idle = setTimeout(() => this.closeDetailSource(), DETAIL_SOURCE_IDLE_MS);
+  }
+
+  private closeDetailSource(): void {
+    const kept = this.detailSource;
+    if (!kept) return;
+    this.detailSource = null;
+    if (kept.idle !== null) clearTimeout(kept.idle);
+    kept.source.then((source) => source.close()).catch(() => undefined);
+  }
+
+  /** Tells the view's listeners (the Edit view's loading badge) with a new view object. */
+  private notifyView(): void {
+    this.view = { ...this.view };
+    for (const listener of this.viewListeners) listener(this.view);
+  }
+
+  private detailRecord(): Window['__photonamousDetail'] | null {
+    if (!import.meta.env.DEV || !this.isScreen) return null;
+    return (window.__photonamousDetail ??= { requests: 0, loads: 0, shown: null, loadMs: null, switchInMs: null, switchOutMs: null });
+  }
+
+  // ---- tiles -------------------------------------------------------------
+
+  /**
+   * Where tiles' pixels can come from: 'raw', the RAW interface's bands
+   * (linear, on float targets); 'image', the browser's decode, which is how
+   * a JPEG, WebP or PNG larger than the GPU can edit is loaded (a 16-bit
+   * PNG too: the engine's PNG decoder takes only one that fits). Null for a
+   * layer from Lopsy, a RAW file the baked decode opened, and a GPU without
+   * float targets (tiles on 8-bit textures are not proven): those stay at
+   * the held size.
+   */
+  private tileSourceKind(): 'raw' | 'image' | null {
+    if (!this.loaded || !this.hasFloat) return null;
+    const { source, format } = this.loaded;
+    if (source.type === LOPSY_LAYER_MIME || format === 'lopsy') return null;
+    const path = rawLoadPath(format, this.hasFloat, rawRendersFinishedBands);
+    if (path === 'raw') return this.raw ? 'raw' : null;
+    return path === 'image' ? 'image' : null;
+  }
+
+  /** The photo at its own size as the recipe frames it: oriented, framed, turned and cropped. Null before its size is known. */
+  private ownGeometry(): OwnGeometry | null {
+    if (!this.fullSize) return null;
+    const framing = effectiveFraming(this.recipe.framing);
+    const framed = framedSize(this.fullSize.width, this.fullSize.height, framing.rotate);
+    const angle = framingAngle(this.recipe.framing);
+    // As layout() crops the held image, at the photo's own size.
+    const userCrop = this.recipe.framing.crop ? toFramed(this.recipe.framing.crop, framing) : null;
+    const crop = straightenedCrop(userCrop, angle, framed.width, framed.height);
+    const px = crop && !isFullCrop(crop) ? cropPixels(crop, framed.width, framed.height) : { x: 0, y: 0, ...framed };
+    return { oriented: this.fullSize, framing, framed, angle, crop: px };
+  }
+
+  private planFor(geometry: OwnGeometry, budget: number, apron: number): TilePlan | null {
+    return planTiles({
+      document: { width: geometry.crop.width, height: geometry.crop.height },
+      limit: this.fullLoads.limit,
+      maxTilePixels: budget,
+      apron,
+      angle: geometry.angle,
+    });
+  }
+
+  /**
+   * The size-scaled settings for the photo's own size: detail, local
+   * contrast and Finish at pixel scale 1, and the areas in the document's
+   * pixels at that size. Size-independent settings (the RAW stage, tone,
+   * colour, curves) are the held image's already. What was sent for the
+   * held image is forgotten, so putting it back sends it all again.
+   */
+  private sendOwnSizeSettings(geometry: OwnGeometry): void {
+    this.forgetSizedState();
+    const detail = detailValues(this.recipe, 1);
+    if (detail) setImageDetail(this.engine, detail);
+    else clearImageDetail(this.engine);
+    const local = localContrastValues(this.recipe, 1);
+    if (local) setImageLocalContrast(this.engine, local);
+    else clearImageLocalContrast(this.engine);
+    const finish = finishValues(this.recipe.finish, this.grainSeedValue, 1);
+    if (finish) setImageFinish(this.engine, finish);
+    else clearImageFinish(this.engine);
+    this.sendAreas(ownAreaFrame(geometry), 1);
+    this.forgetSizedState();
+  }
+
+  /** The tile source for the loaded photo: its RAW frame, prepared once, or the browser's decode of it, kept. */
+  private async openTileSource(signal: AbortSignal | undefined): Promise<TileSource> {
+    const kind = this.tileSourceKind();
+    const loaded = this.loaded;
+    const own = this.fullSize;
+    if (!kind || !loaded || !own) throw new Error('This photo cannot be exported in tiles');
+    if (kind === 'raw') {
+      const frame = await openRawFrame(new Uint8Array(await loaded.source.arrayBuffer()), signal);
+      if (frame.description.width !== own.width || frame.description.height !== own.height) {
+        frame.close();
+        throw new Error('The RAW file’s frame is not the size it was opened at');
+      }
+      return {
+        fill: async (layer, window, isVisible) => {
+          updateLayer(this.engine, layerDesc(layer, window.width, window.height, isVisible));
+          await frame.renderWindow(
+            window,
+            (band) => {
+              if (this.isDisposed) return;
+              uploadLayerPixelsF32Window(
+                this.engine, layer, window.x, window.y, window.width, window.height,
+                band.x, band.y, band.width, band.height, band.pixels,
+              );
+            },
+            signal,
+          );
+        },
+        close: () => frame.close(),
+      };
+    }
+    // The decode the held image was made from (decodeToCanvas), at its own size: each window is drawn from it at 1:1.
+    const bitmap = await createImageBitmap(loaded.source);
+    if (bitmap.width !== own.width || bitmap.height !== own.height) {
+      bitmap.close();
+      throw new Error('The browser decoded the photo at another size');
+    }
+    const canvas = document.createElement('canvas');
+    return {
+      fill: (layer, window, isVisible) => {
+        canvas.width = window.width;
+        canvas.height = window.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('The browser could not make a canvas for a part of the photo');
+        ctx.drawImage(bitmap, window.x, window.y, window.width, window.height, 0, 0, window.width, window.height);
+        updateLayer(this.engine, layerDesc(layer, window.width, window.height, isVisible));
+        uploadLayerPixelsFromCanvas(this.engine, layer, canvas, window.width, window.height);
+        return Promise.resolve();
+      },
+      close: () => {
+        bitmap.close();
+        canvas.width = 1;
+        canvas.height = 1;
+      },
+    };
+  }
+
+  /**
+   * Fills `layer` with what `tile` shows, placed at its rectangle in the
+   * document's (the whole crop's) pixels: the window of the oriented frame
+   * it comes from, framed with the recipe's Rotate and Flip as the whole
+   * image is (the same texture operations, on the window), and turned by
+   * straighten as `applyAngle` turns the whole, about the framed image's
+   * centre, from the window it is turned from.
+   */
+  private async fillTileLayer(layer: string, tile: Tile, geometry: OwnGeometry, source: TileSource, isVisible = true): Promise<PixelRect> {
+    const { crop, framing, framed, angle, oriented } = geometry;
+    const target: PixelRect = { x: tile.rect.x + crop.x, y: tile.rect.y + crop.y, width: tile.rect.width, height: tile.rect.height };
+    const window = turnedWindow(target, angle, framed);
+    await source.fill(layer, unframeRect(window, framing, oriented), isVisible);
+    for (const op of framingOps({ rotate: 0, flipH: false }, framing)) {
+      if (op.kind === 'flipH') flipLayer(this.engine, layer, true);
+      else rotateLayer90(this.engine, layer, op.clockwise);
+    }
+    if (angle === 0) {
+      updateLayer(this.engine, layerDesc(layer, target.width, target.height, isVisible, tile.rect.x, tile.rect.y));
+      return { x: tile.rect.x, y: tile.rect.y, width: target.width, height: target.height };
+    }
+    // The window is placed over the tile (moved by a whole number of pixels, with the source centre
+    // moved the same), so the layer the transform grows to holds both and stays within the limit.
+    const dx = Math.round(target.x + target.width / 2 - (window.x + window.width / 2));
+    const dy = Math.round(target.y + target.height / 2 - (window.y + window.height / 2));
+    updateLayer(this.engine, layerDesc(layer, window.width, window.height, isVisible, window.x + dx, window.y + dy));
+    beginLayerTransform(this.engine, layer, 0, 0, window.width, window.height);
+    try {
+      prepareLayerTransformTarget(this.engine, layer, target.x, target.y, target.width, target.height);
+      compositeLayerTransformAffine(this.engine, inverseRotation(angle), framed.width / 2 + dx, framed.height / 2 + dy, framed.width / 2, framed.height / 2);
+    } finally {
+      dropFloat(this.engine);
+    }
+    const [x = 0, y = 0, w = target.width, h = target.height] = getLayerEngineBounds(this.engine, layer);
+    updateLayer(this.engine, layerDesc(layer, w, h, isVisible, x - crop.x, y - crop.y));
+    return { x: x - crop.x, y: y - crop.y, width: w, height: h };
+  }
+
+  /**
+   * The export of `options` at the photo's own size, `out` (its own size,
+   * or for the canvas formats any other, resized once from it), tile by
+   * tile (plan section 10): the settings once at that size, the apron,
+   * then for each tile the document at the tile's rectangle as a region of
+   * the whole crop, its layer filled, and its kept part taken into each
+   * picture the file needs: the engine's assemblies for the 16-bit, HDR
+   * and 8-bit reads, a 2D canvas of the whole size for the canvas's draw.
+   * The held image stays in its layer, hidden, and is shown again however
+   * the run ends.
+   */
+  private async encodeTiled(options: ExportOptions, geometry: OwnGeometry, budget: number, out: Size): Promise<Blob> {
+    const signal = options.signal;
+    const whole = { width: geometry.crop.width, height: geometry.crop.height };
+    const space = spaceCode(options.colorSpace);
+    const isPng16 = options.format === 'png' && options.pngDepth !== 8 && out.width === whole.width && out.height === whole.height;
+    if (options.format === 'jpeg' || (options.format === 'png' && !isPng16)) {
+      // As without tiles: an 8-bit file in Rec. 2020 would band.
+      if (space === REC2020) throw new Error('Rec. 2020 is for 16-bit files (TIFF, 16-bit PNG)');
+    }
+    const checkAbort = () => {
+      if (signal?.aborted || this.isDisposed) throw new DecodeAbortedError();
+    };
+    const source = await this.openTileSource(signal);
+    let layer: string | null = null;
+    let canvas: TileCanvas | null = null;
+    this.isTiling = true;
+    if (this.frameRequest !== null) {
+      cancelAnimationFrame(this.frameRequest);
+      this.frameRequest = null;
+    }
+    try {
+      checkAbort();
+      this.sendOwnSizeSettings(geometry);
+      const plan = this.planFor(geometry, budget, developApron(this.engine));
+      const record = import.meta.env.DEV ? (window.__photonamousTiles ??= { plan: null, done: 0, finished: false, failAt: null }) : null;
+      if (record) Object.assign(record, { plan: plan && { columns: plan.columns, rows: plan.rows, apron: plan.apron, tiles: plan.tiles }, done: 0, finished: false });
+      if (!plan) throw new NoWorkableTileError();
+      const reads: { kind: number; value: number }[] = [];
+      const begin = (kind: number, value: number) => {
+        beginExportAssembly(this.engine, kind, value, whole.width, whole.height);
+        reads.push({ kind, value });
+      };
+      if (isPng16 || options.format === 'tiff') begin(ASSEMBLE_16, space);
+      if (options.format === 'hdr-png' || options.format === 'hdr-jpeg') begin(ASSEMBLE_HDR, HDR_PEAK);
+      if (options.format === 'hdr-jpeg') begin(ASSEMBLE_8, 0);
+      const usesCanvas = options.format === 'jpeg' || options.format === 'hdr-jpeg' || (options.format === 'png' && !isPng16);
+      if (usesCanvas) canvas = this.tileCanvas(whole, options.format === 'hdr-jpeg' || space !== DISPLAY_P3 ? 'srgb' : 'display-p3');
+      // The held image's layer is hidden, not taken out of the order: the order is the engine's list of layers.
+      const held = this.layoutLayer;
+      if (held) updateLayer(this.engine, layerDesc(this.layerId, held.width, held.height, false, held.x, held.y));
+      layer = this.nextLayerId();
+      addLayer(this.engine, layerDesc(layer, 1, 1, true));
+      for (const [index, tile] of plan.tiles.entries()) {
+        // A task of its own for each tile: on WebGL every read answers at once, and without this the run would
+        // hold the page until it ended, a cancel included.
+        await nextTask();
+        checkAbort();
+        if (record?.failAt === index) throw new Error(`tile ${index} failed (a development build's failAt)`);
+        setDocumentSize(this.engine, tile.rect.width, tile.rect.height);
+        setDocumentRegion(this.engine, tile.rect.x, tile.rect.y, whole.width, whole.height);
+        await this.fillTileLayer(layer, tile, geometry, source);
+        checkAbort();
+        const { kept } = tile;
+        for (const read of reads) {
+          await assembleExportTile(this.engine, read.kind, read.value, kept.x, kept.y, kept.width, kept.height);
+          checkAbort();
+        }
+        canvas?.draw(tile);
+        if (record) record.done = index + 1;
+      }
+      clearDocumentRegion(this.engine);
+      const file = await this.encodeAssembled(options, out, space, canvas);
+      if (record) record.finished = true;
+      return file;
+    } finally {
+      canvas?.close();
+      source.close();
+      this.isTiling = false;
+      if (!this.isDisposed) {
+        clearExportAssembly(this.engine);
+        clearDocumentRegion(this.engine);
+        if (layer !== null) removeLayer(this.engine, layer);
+        this.restoreAfterTiles();
+      }
+    }
+  }
+
+  /** The file from the pictures a tile run assembled. */
+  private async encodeAssembled(options: ExportOptions, out: Size, space: number, canvas: TileCanvas | null): Promise<Blob> {
+    if (options.format === 'tiff') return new Blob([encodeExportAssembly(this.engine, ASSEMBLED_TIFF16, 0) as BlobPart], { type: TIFF_MIME });
+    if (options.format === 'hdr-png') return new Blob([encodeExportAssembly(this.engine, ASSEMBLED_PQ_PNG, PQ_SDR_WHITE_NITS) as BlobPart], { type: PNG_MIME });
+    if (options.format === 'png' && !canvas) return new Blob([encodeExportAssembly(this.engine, ASSEMBLED_PNG16, 0) as BlobPart], { type: PNG_MIME });
+    if (!canvas) throw new Error('No picture was drawn');
+    const quality = options.format === 'hdr-jpeg' ? (options.quality ?? 0.9) : options.quality;
+    const mime = options.format === 'png' ? PNG_MIME : JPEG_MIME;
+    const drawn = await canvas.encode(out, mime, quality);
+    if (options.format !== 'hdr-jpeg') return tagColor(drawn, space);
+    // The gain map over the whole picture, its numbers from the whole; the base is the canvas's JPEG, as without tiles.
+    const base = await tagColor(drawn, SRGB);
+    const map = assembledGainMap(this.engine, SRGB, GAIN_MAP_SCALE);
+    let mapPng: Uint8Array;
+    let metadata: Float64Array;
+    let mapSize: Size;
+    try {
+      mapPng = map.toPng();
+      metadata = Float64Array.from(map.metadata);
+      mapSize = { width: map.width, height: map.height };
+    } finally {
+      map.free();
+    }
+    const mapJpeg = await encodeGreyJpeg(mapPng, mapSize, quality ?? 0.9);
+    const baseBytes = insertJpegExif(new Uint8Array(await base.arrayBuffer()), options.exif ?? null);
+    const file = assembleGainMapJpeg(baseBytes, mapJpeg, metadata, SRGB);
+    return new Blob([file as BlobPart], { type: JPEG_MIME });
+  }
+
+  /**
+   * A 2D canvas of the whole picture's size in `space`, into which each
+   * tile drawn on the engine's canvas (as `drawOne` draws an export, the
+   * canvas in the file's space, SDR, at the tile's own size) gives its kept
+   * part. Throws when the browser will not make a canvas that large.
+   */
+  private tileCanvas(whole: Size, space: CanvasSpace): TileCanvas {
+    const big = new OffscreenCanvas(whole.width, whole.height);
+    const ctx = big.getContext('2d', { colorSpace: space });
+    if (!ctx || big.width !== whole.width || big.height !== whole.height) {
+      throw new Error(`the browser could not make a ${whole.width} × ${whole.height} canvas`);
+    }
+    const { width: savedW, height: savedH } = this.canvas;
+    let isClosed = false;
+    const close = () => {
+      if (isClosed) return;
+      isClosed = true;
+      big.width = 1;
+      big.height = 1;
+      const hdr = this.wantsHdr(currentStatus().display);
+      if (this.canvasSpace !== this.screenSpace || this.isHdrCanvas !== hdr) {
+        this.setCanvasSpace(this.screenSpace, hdr);
+        this.noteScreen();
+      }
+      this.canvas.width = savedW;
+      this.canvas.height = savedH;
+      this.pushViewport();
+    };
+    // The canvas holds the file's space, in SDR, while tiles are drawn and copied, so each copy is exact.
+    if ((this.canvasSpace !== space || this.isHdrCanvas) && this.setCanvasSpace(space) !== space) {
+      close();
+      throw new Error(`the engine's canvas cannot be ${space}`);
+    }
+    return {
+      draw: (tile) => {
+        const { rect, kept } = tile;
+        if (!this.canDrawAt(rect)) throw new Error(`the engine cannot draw ${rect.width} × ${rect.height}`);
+        this.canvas.width = rect.width;
+        this.canvas.height = rect.height;
+        if (rendererName() === 'webgl') {
+          const gl = this.canvas.getContext('webgl2');
+          if (!gl || gl.drawingBufferWidth !== rect.width || gl.drawingBufferHeight !== rect.height) {
+            throw new Error(`WebGL gave a smaller drawing buffer than ${rect.width} × ${rect.height}`);
+          }
+        }
+        setViewport(this.engine, 1, 0, 0, rect.width, rect.height);
+        this.renderFor('offscreen');
+        // The same space as the canvas, so drawImage copies the numbers and converts nothing.
+        ctx.drawImage(this.canvas, kept.x - rect.x, kept.y - rect.y, kept.width, kept.height, kept.x, kept.y, kept.width, kept.height);
+      },
+      encode: async (out, mime, quality) => {
+        if (out.width === whole.width && out.height === whole.height) return big.convertToBlob({ type: mime, quality });
+        // Another size: the whole picture resized once by the browser, in the same space.
+        const sized = new OffscreenCanvas(out.width, out.height);
+        const sizedCtx = sized.getContext('2d', { colorSpace: space });
+        if (!sizedCtx) throw new Error(`the browser could not make a ${out.width} × ${out.height} canvas`);
+        sizedCtx.imageSmoothingQuality = 'high';
+        sizedCtx.drawImage(big, 0, 0, out.width, out.height);
+        return sized.convertToBlob({ type: mime, quality });
+      },
+      close,
+    };
+  }
+
+  /**
+   * After a tile run: the held image's layer back as the document, and
+   * everything sized for it sent again (the layout, detail, Finish, the
+   * areas), so the engine is as it was before the run.
+   */
+  private restoreAfterTiles(): void {
+    // layout() shows the held image's layer again, where it was.
+    this.forgetSizedState();
+    this.applyRecipe();
+    this.isFrameCurrent = false;
+    this.invalidate();
   }
 
   /**
@@ -2211,9 +3210,29 @@ class PhotoEngine implements DevelopEngine {
       }
       this.canvas.width = savedW;
       this.canvas.height = savedH;
+      this.restoreScreen();
+    }
+  }
+
+  /**
+   * The screen drawn again after the canvas was resized for a draw, which
+   * cleared it. While a read of the held document holds the screen, what
+   * the screen showed is drawn (the detail set aside, when there is one),
+   * the hold let go for that frame only, and the held document put back.
+   */
+  private restoreScreen(): void {
+    if (!this.isScreenHeld) {
       this.pushViewport();
       this.renderFor('restore');
+      return;
     }
+    const parked = this.parkedDetail && this.isDetailValid(this.parkedDetail) ? this.parkedDetail : null;
+    if (parked) this.showDetail(parked);
+    holdScreen(this.engine, false);
+    this.pushViewport();
+    this.renderFor('restore');
+    holdScreen(this.engine, true);
+    if (parked) this.hideDetail(true);
   }
 
   private drawOne(image: Size, size: Size, space: CanvasSpace): OffscreenCanvas | null {
@@ -2226,7 +3245,10 @@ class PhotoEngine implements DevelopEngine {
       if (!gl || gl.drawingBufferWidth !== size.width || gl.drawingBufferHeight !== size.height) return null;
     }
     setViewport(this.engine, size.width / image.width, 0, 0, size.width, size.height);
+    // A draw that is copied out of the canvas draws through a held screen.
+    if (this.isScreenHeld) holdScreen(this.engine, false);
     this.renderFor('offscreen');
+    if (this.isScreenHeld) holdScreen(this.engine, true);
     const out = new OffscreenCanvas(size.width, size.height);
     // The same space as the canvas, so drawImage copies the numbers and converts nothing.
     const ctx = out.getContext('2d', { colorSpace: space });
@@ -2303,6 +3325,9 @@ class PhotoEngine implements DevelopEngine {
     this.lostListeners.clear();
     this.loadAbort?.abort();
     this.upgrade.cancel();
+    this.detailLoad?.abort();
+    if (this.detailTimer !== null) clearTimeout(this.detailTimer);
+    this.closeDetailSource();
     this.resizeObserver.disconnect();
     if (this.frameRequest !== null) cancelAnimationFrame(this.frameRequest);
     this.viewListeners.clear();

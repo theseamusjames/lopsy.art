@@ -23,11 +23,15 @@ struct Params {
     u_gamma: f32,
     // Dither from end to end in encoded units; 0 for none.
     u_dither: f32,
+    // Where the document lies in a larger picture (include/region.wgsl):
+    // the dither is the whole's at each pixel.
+    u_region: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var u_tex: texture_2d<f32>;
 
 //#include working_space
+//#include region
 
 // lopsy_core::finish::hash, in exact integer arithmetic.
 fn hash(ix: u32, iy: u32, seed: u32) -> f32 {
@@ -129,7 +133,7 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let t = gamutMap(params.u_toTarget * rgb);
     var e = vec3<f32>(encode(t.r), encode(t.g), encode(t.b));
     if (params.u_dither > 0.0) {
-        let p = vec2<u32>(position.xy);
+        let p = vec2<u32>(wholePoint(position.xy, params.u_region));
         e = e + vec3<f32>((hash(p.x, p.y, 0x5d17u) - 0.5) * params.u_dither);
     }
     return vec4<f32>(e, c.a);

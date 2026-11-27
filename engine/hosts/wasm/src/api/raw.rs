@@ -159,6 +159,14 @@ pub fn raw_plan_bands(format: &str, params_json: &str, max_bands: u32) -> Result
     Ok(bands.into_iter().flat_map(|b| [b.y0, b.y1, b.src_y0, b.src_y1]).collect())
 }
 
+/// Bands that render the window (x, y, width, height) of the oriented
+/// frame at its own size, flattened as `rawPlanBands` gives them.
+#[wasm_bindgen(js_name = "rawPlanWindowBands")]
+pub fn raw_plan_window_bands(format: &str, params_json: &str, x: u32, y: u32, width: u32, height: u32, max_bands: u32) -> Result<Vec<u32>, JsError> {
+    let bands = raw::plan_window_bands(format_of(format)?, params_json, x, y, width, height, max_bands).map_err(err)?;
+    Ok(bands.into_iter().flat_map(|b| [b.y0, b.y1, b.src_y0, b.src_y1]).collect())
+}
+
 /// Render plane rows `[srcY0, srcY1)` (passed as `src`) into rows
 /// `[y0, y1)` of linear camera RGB at the as-shot white balance: oriented
 /// RGBA f32, unclamped, bit-identical to the same rows of the whole frame.

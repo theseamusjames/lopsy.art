@@ -169,6 +169,8 @@ export class RealBackend implements PhotosBackend {
         if (!session) return Promise.reject(new Error('No library is open'));
         return this.loadOriginal(session, asset, { signal });
       },
+      // A photo meant for tiles made at the held size instead: said once the Export dialog, which shows the result, has closed.
+      onNote: (note) => afterDialog('export', () => showToast(note, 12_000)),
     });
     return this.engineRenderer;
   }

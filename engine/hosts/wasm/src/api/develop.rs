@@ -7,7 +7,7 @@
 
 use wasm_bindgen::prelude::*;
 
-use crate::readback::{read, readback_export};
+use crate::readback::{read, readback_export, task};
 use crate::Engine;
 
 #[wasm_bindgen(js_name = "setRawDevelop")]
@@ -18,6 +18,63 @@ pub fn set_raw_develop(engine: &mut Engine, json: &str) -> Result<(), JsError> {
 #[wasm_bindgen(js_name = "clearRawDevelop")]
 pub fn clear_raw_develop(engine: &mut Engine) {
     lopsy_engine::commands::develop::clear_raw_develop(&mut engine.inner)
+}
+
+/// The document is the rectangle at (`x`, `y`) of a larger picture;
+/// `commands::develop::set_document_region`. Set it after the size.
+#[wasm_bindgen(js_name = "setDocumentRegion")]
+pub fn set_document_region(engine: &mut Engine, x: u32, y: u32, whole_width: u32, whole_height: u32) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::set_document_region(&mut engine.inner, x, y, whole_width, whole_height).map_err(|e| JsError::new(&e))
+}
+
+/// The document is the whole picture (the default).
+#[wasm_bindgen(js_name = "clearDocumentRegion")]
+pub fn clear_document_region(engine: &mut Engine) {
+    lopsy_engine::commands::develop::clear_document_region(&mut engine.inner)
+}
+
+/// The screen shows the region as part of the whole: `commands::develop::set_screen_region`.
+#[wasm_bindgen(js_name = "setScreenRegion")]
+pub fn set_screen_region(engine: &mut Engine, on: bool) {
+    lopsy_engine::commands::develop::set_screen_region(&mut engine.inner, on)
+}
+
+/// Keep the screen's frame while on: `commands::develop::hold_screen`.
+#[wasm_bindgen(js_name = "holdScreen")]
+pub fn hold_screen(engine: &mut Engine, on: bool) {
+    lopsy_engine::commands::develop::hold_screen(&mut engine.inner, on)
+}
+
+/// The apron in pixels a tile needs: `develop::tile::apron`.
+#[wasm_bindgen(js_name = "developApron")]
+pub fn develop_apron(engine: &Engine) -> u32 {
+    lopsy_engine::commands::develop::develop_apron(&engine.inner)
+}
+
+/// `commands::develop::begin_export_assembly`.
+#[wasm_bindgen(js_name = "beginExportAssembly")]
+pub fn begin_export_assembly(engine: &mut Engine, kind: u8, value: f32, width: u32, height: u32) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::begin_export_assembly(&mut engine.inner, kind, value, width, height).map_err(|e| JsError::new(&e))
+}
+
+readback_export! {
+    /// `commands::develop::assemble_export_tile`.
+    #[wasm_bindgen(js_name = "assembleExportTile")]
+    pub fn assemble_export_tile(engine, kind: u8, value: f32, x: i32, y: i32, width: u32, height: u32) -> Result<()> {
+        task(move |cx| lopsy_engine::commands::develop::assemble_export_tile(cx, kind, value, x, y, width, height))
+    }
+}
+
+/// `commands::develop::encode_export_assembly`.
+#[wasm_bindgen(js_name = "encodeExportAssembly")]
+pub fn encode_export_assembly(engine: &mut Engine, file: u8, sdr_white_nits: f32) -> Result<Vec<u8>, JsError> {
+    lopsy_engine::commands::develop::encode_export_assembly(&mut engine.inner, file, sdr_white_nits).map_err(|e| JsError::new(&e))
+}
+
+/// `commands::develop::clear_export_assembly`.
+#[wasm_bindgen(js_name = "clearExportAssembly")]
+pub fn clear_export_assembly(engine: &mut Engine) {
+    lopsy_engine::commands::develop::clear_export_assembly(&mut engine.inner)
 }
 
 /// Turn the develop working space on (`on`) or off. On, the image is held
