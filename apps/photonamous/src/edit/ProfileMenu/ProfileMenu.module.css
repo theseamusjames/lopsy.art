@@ -38,3 +38,10 @@
   outline: 2px solid var(--ph-focus-ring);
   outline-offset: 2px;
 }
+
+.note {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+  color: var(--ph-text-muted);
+}

@@ -231,8 +231,8 @@ is `docs/photonamous-spec.md`; running and setup are in
   **Show fewer** folds it again.
 - **Find photos**, one row under the toolbar: a text search over file
   names, titles, captions and keywords, then filters for rating, label (including *No label*), edits
-  (*Edited*, *Not edited*), file type (RAW (Fujifilm), RAW (DNG), JPEG,
-  PNG, WebP, Lopsy document), camera and lens, and at the right end the
+  (*Edited*, *Not edited*), file type (RAW (Fujifilm), RAW (DNG), RAW
+  (Sony), JPEG, PNG, WebP, Lopsy document), camera and lens, and at the right end the
   order. Where the row has not the room for all of that on one line (a
   small window, the details panel open, or filters whose buttons have
   grown with what they are set to), the filters are one **Filters** menu, opened by the button beside the search
@@ -277,9 +277,13 @@ is `docs/photonamous-spec.md`; running and setup are in
   (everything in it, including folders inside, where the browser can pick
   folders) or, in a Drive library, *Add from Google Drive…*; or drop files
   or folders on the window.
-- Reads **RAF, DNG, JPEG, PNG and WebP**. The sheet counts what it found,
-  says what it cannot read, and shows RAW+JPEG pairs as one photo (or
-  imports the RAW only).
+- Reads **RAF, DNG, ARW (Sony), JPEG, PNG and WebP**, each known by its
+  bytes, not its name. The sheet counts what it found, says what it cannot
+  read, and shows RAW+JPEG pairs as one photo (or imports the RAW only).
+  An ARW (lossy, uncompressed or lossless) shows in the library with the
+  camera's full-size embedded JPEG as its preview and the picture's size
+  (the camera's crop, not the sensor's). Sony's older SR2 and SRF files
+  are not read.
 - **Photos already in the library are skipped** (by SHA-256), and the
   picked files are never changed. Before importing, the sheet names the
   ones that look like photos already there (same name and size) and
@@ -349,10 +353,11 @@ edits or Reset from the grid passes it by, and its previews stay the ones
 the newer version made.
 
 - **Loading and working size.** RAF decodes on a pool of workers into the
-  engine's RAW develop stage; DNG through the engine's decoder; 16-bit PNG
+  engine's RAW develop stage; DNG and Sony ARW through the engine's
+  decoders; 16-bit PNG
   at full depth; JPEG and WebP through the browser. Editing starts on a
   *working image* sized to the view (at most 4096 px on its long edge),
-  so a large photo is editable quickly (DNG loads at full size); zooming
+  so a large photo is editable quickly (DNG and ARW load at full size); zooming
   to 50 % or closer loads the full resolution ("Loading full
   resolution…"), and Edit in Lopsy and Done always render from it. While it loads, the version's stored preview shows
   with "Loading…".
@@ -428,7 +433,11 @@ the newer version made.
   not listed a second time), then the engine's film looks with Provia
   shown as "Standard (Provia look)" (or "Camera (Provia look, Standard)"
   when the camera shot Provia), Neutral and Monochrome; for other photos,
-  Standard and Monochrome.
+  Standard and Monochrome. A Sony ARW opens as other photos do (Standard
+  and Monochrome) and its colour is only approximate (the file carries
+  part of the camera's colour, so it is less saturated than the camera's
+  JPEG): the decoder's sentence saying so sits in small text under the
+  Profile menu, which a screen reader reads with the menu.
 - **Straighten**: Angle, and **Level** (draw along something that should
   be level). The crop shrinks to the largest rectangle inside.
 - **White balance**: under its heading, a **Mode** menu (As shot; Auto,

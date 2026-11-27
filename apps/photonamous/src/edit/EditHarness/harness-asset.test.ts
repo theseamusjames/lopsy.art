@@ -5,6 +5,8 @@ import { formatOf, harnessAsset, harnessVersion } from './harness-asset';
 describe('formatOf', () => {
   it('reads the extension first, then the type', () => {
     expect(formatOf('DSCF0001.RAF', '')).toBe('raf');
+    expect(formatOf('DSC06677.ARW', '')).toBe('arw');
+    expect(formatOf('blob', 'image/x-sony-arw')).toBe('arw');
     expect(formatOf('photo.JPG', 'image/jpeg')).toBe('jpeg');
     expect(formatOf('blob', 'image/webp')).toBe('webp');
     expect(formatOf('notes.txt', 'text/plain')).toBeNull();

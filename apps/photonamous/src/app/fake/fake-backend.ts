@@ -38,6 +38,7 @@ const LABELS: Record<StorageChoice, string> = {
 const MIME: Record<string, string> = {
   raf: 'image/x-fuji-raf',
   dng: 'image/x-adobe-dng',
+  arw: 'image/x-sony-arw',
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
   png: 'image/png',
@@ -111,7 +112,7 @@ function fakeImport(files: readonly File[], session: FakeSession, options: Parti
           sha256: sha,
           fileName: file.name,
           byteSize: file.size,
-          format: ext === 'raf' ? 'raf' : ext === 'dng' ? 'dng' : ext === 'png' ? 'png' : ext === 'webp' ? 'webp' : 'jpeg',
+          format: ext === 'raf' ? 'raf' : ext === 'dng' ? 'dng' : ext === 'arw' ? 'arw' : ext === 'png' ? 'png' : ext === 'webp' ? 'webp' : 'jpeg',
           mimeType: MIME[ext] ?? 'application/octet-stream',
           capturedAt: null,
           importedAt: new Date().toISOString(),

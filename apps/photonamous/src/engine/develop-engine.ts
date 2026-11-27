@@ -9,9 +9,9 @@
  * loads the full size on demand; exports load the full size.
  *
  * Pixels never come into TypeScript. Decoded images go straight to the
- * layer texture (RAF bands from the worker pool, DNG and 16-bit PNG through
- * the engine's decoders, other formats from a canvas the browser decoded
- * into). Previews and exports are drawn by the engine into its own canvas at
+ * layer texture (RAF bands from the worker pool, DNG, Sony ARW and 16-bit
+ * PNG through the engine's decoders, other formats from a canvas the
+ * browser decoded into). Previews and exports are drawn by the engine into its own canvas at
  * the output size and handed to `OffscreenCanvas.convertToBlob`; full-size
  * PNG uses the engine's 16-bit encoder.
  *
@@ -67,6 +67,7 @@ import initWasm, {
   clearImageColorMixer,
   clearImageCurves,
   clearRawDevelop,
+  decodeAndUploadArw,
   decodeAndUploadDng,
   decodeAndUploadImage,
   flipLayer,
@@ -238,6 +239,12 @@ export interface PhotoInfo {
   readonly whiteBalancePresets: readonly WhiteBalancePresetValues[];
   /** How the relative Temperature reads in Kelvin (RAW); null otherwise. */
   readonly kelvin: KelvinScale | null;
+  /**
+   * The decoder's sentence when the photo's colour is only approximate (a
+   * Sony ARW carries part of the camera's colour); null when it is the
+   * camera's.
+   */
+  readonly colorNote: string | null;
 }
 
 export type ToneValues = Recipe['tone'];
@@ -497,6 +504,14 @@ function pushAdjustments(engine: Engine, adj: EngineAdjustments): void {
 }
 
 /** The browser's decode, drawn at most `maxLongEdge` on its long edge (the browser resamples). */
+/** The parts of `decodeAndUploadDng`'s and `decodeAndUploadArw`'s JSON the app reads. */
+interface TiffRawMeta {
+  readonly width: number;
+  readonly height: number;
+  readonly colorApproximate?: boolean;
+  readonly colorNote?: string;
+}
+
 async function decodeToCanvas(source: Blob, maxLongEdge: number | undefined): Promise<{ canvas: HTMLCanvasElement; fullWidth: number; fullHeight: number }> {
   const bitmap = await createImageBitmap(source);
   try {
@@ -682,6 +697,7 @@ class PhotoEngine implements DevelopEngine {
   private displaySize: Size | null = null;
   private autoWb: { temperature: number; tint: number } | null = null;
   private engineProfiles: DevelopProfile[] = [];
+  private colorNote: string | null = null;
   /** Oriented size, before framing. */
   private sourceSize: Size | null = null;
   private framing: Framing = { rotate: 0, flipH: false };
@@ -783,6 +799,7 @@ class PhotoEngine implements DevelopEngine {
     try {
       report('reading', null);
       this.setRawDefaults(null);
+      this.colorNote = null;
       this.pixelScale = 1;
       this.loaded = { source, format };
       this.fullSize = null;
@@ -840,7 +857,7 @@ class PhotoEngine implements DevelopEngine {
     // Photos sit on opaque black; only a Lopsy layer keeps its transparency.
     setBackgroundColor(this.engine, 0, 0, 0, 1);
     if (format === 'raf') return this.decodeRaf(source, signal, report, mode);
-    if (format === 'dng') return this.decodeDng(source, signal, report);
+    if (format === 'dng' || format === 'arw') return this.decodeTiffRaw(source, format, signal, report);
     if (format === 'png' && mode === 'full') {
       const sized = await this.decodePng16(source, signal, report);
       if (sized) return this.showImage(sized);
@@ -957,8 +974,14 @@ class PhotoEngine implements DevelopEngine {
     }
   }
 
-  private async decodeDng(
+  /**
+   * A DNG or a Sony ARW, decoded by the engine at full size into the
+   * layer, upright and cropped. The engine's errors are sentences meant to
+   * be shown as they are.
+   */
+  private async decodeTiffRaw(
     source: Blob,
+    format: 'dng' | 'arw',
     signal: AbortSignal,
     report: (stage: LoadProgress['stage'], fraction: number | null) => void,
   ): Promise<Size> {
@@ -970,8 +993,10 @@ class PhotoEngine implements DevelopEngine {
     await nextFrame();
     this.checkLive(signal);
     this.resetLayer(1, 1);
-    const meta = JSON.parse(decodeAndUploadDng(this.engine, this.layerId, data)) as { width: number; height: number };
-    if (!meta.width || !meta.height) throw new Error('The DNG file decoded to an empty image');
+    const decodeAndUpload = format === 'arw' ? decodeAndUploadArw : decodeAndUploadDng;
+    const meta = JSON.parse(decodeAndUpload(this.engine, this.layerId, data)) as TiffRawMeta;
+    if (!meta.width || !meta.height) throw new Error(`The ${format.toUpperCase()} file decoded to an empty image`);
+    this.colorNote = meta.colorApproximate === true && typeof meta.colorNote === 'string' && meta.colorNote !== '' ? meta.colorNote : null;
     this.sizeDocument(meta.width, meta.height);
     return this.showImage({ width: meta.width, height: meta.height });
   }
@@ -1531,6 +1556,7 @@ class PhotoEngine implements DevelopEngine {
       profiles: profilesFor(isRaw, this.engineProfiles),
       whiteBalancePresets: isRaw ? this.wbPresets : [],
       kelvin: isRaw ? this.kelvinScale : null,
+      colorNote: this.colorNote,
     };
   }
 

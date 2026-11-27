@@ -31,7 +31,7 @@ function previewRef(hash: string, blob: Blob): PreviewRef {
   return { fileId: `preview-${hash}-${blob.size}`, recipeHash: hash, pipeline: PIPELINE_VERSION, width: 0, height: 0 };
 }
 
-const OPENABLE = /\.(raf|dng|jpe?g|png|webp)$/i;
+const OPENABLE = /\.(raf|dng|arw|jpe?g|png|webp)$/i;
 
 /**
  * A page for developing the Edit view on its own: pick or drop files and
@@ -149,7 +149,7 @@ export function EditHarness() {
         className={styles.fileInput}
         data-testid="harness-file"
         onChange={handleInput}
-        accept=".raf,.dng,.jpg,.jpeg,.png,.webp"
+        accept=".raf,.dng,.arw,.jpg,.jpeg,.png,.webp"
       />
       <span>Open photos</span>
     </label>
@@ -230,7 +230,7 @@ export function EditHarness() {
       ) : (
         <main className={styles.empty}>
           <h1 className={styles.title}>Edit view harness</h1>
-          <p className={styles.hint}>Drop RAF, DNG, JPEG, PNG or WebP files here, or</p>
+          <p className={styles.hint}>Drop RAF, DNG, ARW, JPEG, PNG or WebP files here, or</p>
           {picker}
           {message && (
             <p className={styles.message} role="alert">

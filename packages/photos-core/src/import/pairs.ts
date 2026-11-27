@@ -5,9 +5,9 @@
 
 import type { ImageFormat } from '../library/types';
 
-export const RAW_FORMATS: ReadonlySet<ImageFormat> = new Set(['raf', 'dng']);
+export const RAW_FORMATS: ReadonlySet<ImageFormat> = new Set(['raf', 'dng', 'arw']);
 
-const RAW_EXTENSIONS = new Set(['raf', 'dng']);
+const RAW_EXTENSIONS = new Set(['raf', 'dng', 'arw']);
 const JPEG_EXTENSIONS = new Set(['jpg', 'jpeg']);
 const PAIR_WINDOW_MS = 2000;
 

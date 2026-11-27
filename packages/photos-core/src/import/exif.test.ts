@@ -4,7 +4,7 @@ import { formatExifDate, formatExposureTime, readMetadata } from './exif';
 import { inspectImage } from './inspect';
 import { remainingOrientation } from './orientation';
 import { buildJpeg, buildPng, buildTiff, buildWebp } from './test-support/builders';
-import type { IfdSpec } from './test-support/builders';
+import type { EntrySpec, IfdSpec } from './test-support/builders';
 
 function exifIfd0(orientation: number, littleEndian = true): Uint8Array {
   const spec: IfdSpec = {
@@ -67,6 +67,15 @@ describe('detectFormat', () => {
     expect(detectFormat(buildTiff({ entries: [{ tag: 0x0100, type: 4, values: [10] }] }))).toBeNull();
     expect(detectFormat(ascii('FUJIFILM'))).toBeNull();
     expect(detectFormat(ascii('LOPSY'))).toBeNull();
+  });
+
+  it('takes a Sony-made TIFF for an ARW only when it holds raw (CFA) data and is not a DNG', () => {
+    const sony: EntrySpec = { tag: 0x010f, ascii: 'SONY' };
+    // An ordinary RGB TIFF that names Sony (as software that copies the camera's EXIF writes) is not one.
+    const rgb: EntrySpec[] = [sony, { tag: 0x0100, type: 4, values: [10] }, { tag: 0x0101, type: 4, values: [10] }, { tag: 0x0106, type: 3, values: [2] }];
+    expect(detectFormat(buildTiff({ entries: rgb }))).toBeNull();
+    // A DNG that a Sony camera or Sony's software made stays a DNG.
+    expect(detectFormat(buildTiff({ entries: [sony, { tag: 0xc612, type: 1, values: [1, 4, 0, 0] }] }))).toBe('dng');
   });
 });
 

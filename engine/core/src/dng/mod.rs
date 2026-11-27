@@ -77,7 +77,7 @@
 //! - Test with non-Apple DNG files (Adobe DNG Converter output, other cameras).
 
 pub mod tiff;
-mod ljpeg;
+pub(crate) mod ljpeg;
 pub mod demosaic;
 pub mod color;
 pub mod camera_color;
@@ -354,12 +354,10 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         return Err(format!("Unsupported PhotometricInterpretation: {photo_interp}"));
     }
 
-    let ci = ((height / 2) as usize * width as usize + (width / 2) as usize) * 3;
+    let ci = centre_index(width, height);
     macro_rules! dbg_center {
         ($label:expr, $data:expr) => {
-            if ci + 2 < $data.len() {
-                debug_log.push(format!("[DNG step] {}: r={:.5} g={:.5} b={:.5}", $label, $data[ci], $data[ci+1], $data[ci+2]));
-            }
+            log_centre(&mut debug_log, ci, $label, &$data)
         };
     }
 
@@ -388,39 +386,29 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     // AsShotNeutral≈[1,1,1]. The WB + matrix pass is required for correct
     // color — omitting it leaves the image in camera native space (gray-green
     // cast). See module-level docs for the full rationale.
-    {
-        // Apply white balance
-        if as_shot_neutral.len() >= 3 {
-            let wb = color::white_balance_multipliers(&as_shot_neutral);
-            dng_log!("[DNG step] WB multipliers: [{:.4}, {:.4}, {:.4}]", wb[0], wb[1], wb[2]);
-            color::apply_white_balance(&mut rgb_f32, &wb);
-            dbg_center!("after WB", rgb_f32);
-        }
-
-        // Apply color matrix (camera RGB → XYZ → sRGB)
-        if !forward_matrix.is_empty() && forward_matrix.len() >= 9 {
-            // ForwardMatrix maps AsShotNeutral→D50 white by construction;
-            // it is neutral-preserving and must NOT be column-scaled.
-            let mat = color::forward_matrix_to_srgb(&forward_matrix);
-            dng_log!("[DNG step] fwd→sRGB matrix: [{:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}]",
-                mat[0],mat[1],mat[2],mat[3],mat[4],mat[5],mat[6],mat[7],mat[8]);
-            color::apply_matrix(&mut rgb_f32, &mat);
-            dbg_center!("after matrix", rgb_f32);
-        } else if !color_matrix.is_empty() && color_matrix.len() >= 9 {
-            let mut mat = color::color_matrix_to_srgb(&color_matrix);
-            // The inverse-ColorMatrix camera→sRGB does not preserve neutral
-            // (its row sums are far from 1), so a neutral gray maps to magenta.
-            // Column-scaling (neutralize) forces neutral→neutral while keeping
-            // the off-diagonal saturation structure — same fix as the RAF path.
-            mat = color::neutralize_matrix(&mat);
-            dng_log!("[DNG step] cm→sRGB matrix (neutralized): [{:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}]",
-                mat[0],mat[1],mat[2],mat[3],mat[4],mat[5],mat[6],mat[7],mat[8]);
-            color::apply_matrix(&mut rgb_f32, &mat);
-            dbg_center!("after matrix", rgb_f32);
-        } else {
-            dng_log!("[DNG step] WARNING: no color matrix found");
-        }
-    }
+    let wb = (as_shot_neutral.len() >= 3).then(|| color::white_balance_multipliers(&as_shot_neutral));
+    // Color matrix (camera RGB → XYZ → sRGB)
+    let matrix = if !forward_matrix.is_empty() && forward_matrix.len() >= 9 {
+        // ForwardMatrix maps AsShotNeutral→D50 white by construction;
+        // it is neutral-preserving and must NOT be column-scaled.
+        let mat = color::forward_matrix_to_srgb(&forward_matrix);
+        dng_log!("[DNG step] fwd→sRGB matrix: [{:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}]",
+            mat[0],mat[1],mat[2],mat[3],mat[4],mat[5],mat[6],mat[7],mat[8]);
+        Some(mat)
+    } else if !color_matrix.is_empty() && color_matrix.len() >= 9 {
+        let mut mat = color::color_matrix_to_srgb(&color_matrix);
+        // The inverse-ColorMatrix camera→sRGB does not preserve neutral
+        // (its row sums are far from 1), so a neutral gray maps to magenta.
+        // Column-scaling (neutralize) forces neutral→neutral while keeping
+        // the off-diagonal saturation structure — same fix as the RAF path.
+        mat = color::neutralize_matrix(&mat);
+        dng_log!("[DNG step] cm→sRGB matrix (neutralized): [{:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}]",
+            mat[0],mat[1],mat[2],mat[3],mat[4],mat[5],mat[6],mat[7],mat[8]);
+        Some(mat)
+    } else {
+        dng_log!("[DNG step] WARNING: no color matrix found");
+        None
+    };
 
     // ProfileGainTableMap — DNG 1.6 per-pixel local tone mapping.
     //
@@ -439,17 +427,9 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     //
     // BaselineExposure is NOT used in the gain-map weight formula (DNG spec).
 
-    // Apply BaselineExposure unconditionally so it runs exactly once regardless
-    // of whether the gain map is active.
-    if let Some(ev) = baseline_exposure {
-        if ev.abs() > 0.001 {
-            let scale = (2.0f64).powf(ev) as f32;
-            for v in &mut rgb_f32 {
-                *v *= scale;
-            }
-            dbg_center!("after baselineExposure", rgb_f32);
-        }
-    }
+    // White balance, the matrix, then BaselineExposure, unconditionally so
+    // it runs exactly once regardless of whether the gain map is active.
+    bake_colour(&mut rgb_f32, wb, matrix.as_ref(), baseline_exposure, &mut debug_log, ci);
 
     let gain_map_entry = main_ifd.iter().find(|e| e.tag == TagId::ProfileGainTableMap as u16);
     let has_gain_map = gain_map_entry.is_some()
@@ -534,59 +514,11 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         .map(|pair| (pair[0], pair[1]))
         .collect();
 
-    if tone_curve.len() >= 2 {
-        dng_log!("[DNG step] applying toneCurve ({} pts), first=({:.4},{:.4}) last=({:.4},{:.4})",
-            tone_curve.len(),
-            tone_curve[0].0, tone_curve[0].1,
-            tone_curve.last().unwrap().0, tone_curve.last().unwrap().1);
-        let lut = build_tone_lut(&tone_curve);
-        dng_log!("[DNG step] LUT samples: [0]={:.4} [1024]={:.4} [2048]={:.4} [3072]={:.4} [4095]={:.4}",
-            lut[0], lut[1024], lut[2048], lut[3072], lut[4095]);
-        color::apply_lut(&mut rgb_f32, &lut);
-        dbg_center!("after toneCurve", rgb_f32);
-    }
-
-    color::apply_srgb_gamma(&mut rgb_f32);
-    dbg_center!("after sRGB gamma (final)", rgb_f32);
-
-    // Spread the tonal range to fill [0,1]. Apple ships a near-linear
-    // ProfileToneCurve, expecting its own gain-map/HDR pass (which we disable —
-    // it mis-applies) to add contrast. Without it the render is flat: the
-    // histogram bunches in the middle with no true black/white. Derive a
-    // black/white point from luminance percentiles and stretch all channels by
-    // the same amount (preserving white balance, like a composite-RGB Levels
-    // move). This is adaptive normalization, not a fixed creative curve.
-    let (bp, wp) = auto_levels_points(&rgb_f32, AUTO_LEVELS_BLACK_CLIP, AUTO_LEVELS_WHITE_CLIP);
-    dng_log!("[DNG step] auto-levels: black={:.4} white={:.4} (clip {:.2}%/{:.2}%)",
-        bp, wp, AUTO_LEVELS_BLACK_CLIP * 100.0, AUTO_LEVELS_WHITE_CLIP * 100.0);
-    if wp - bp > 0.05 {
-        let scale = 1.0 / (wp - bp);
-        for v in &mut rgb_f32 {
-            *v = (((*v as f64 - bp) * scale).clamp(0.0, 1.0)) as f32;
-        }
-        dbg_center!("after auto-levels", rgb_f32);
-    }
-
-    // Convert RGB → RGBA f32
-    let pixel_count = (width * height) as usize;
-    let mut rgba = Vec::with_capacity(pixel_count * 4);
-    for i in 0..pixel_count {
-        rgba.push(rgb_f32[i * 3]);
-        rgba.push(rgb_f32[i * 3 + 1]);
-        rgba.push(rgb_f32[i * 3 + 2]);
-        rgba.push(1.0);
-    }
-
-    // Apply the TIFF Orientation tag (0x0112) so the image loads upright.
-    // The sensor scans landscape; the camera records the intended rotation
-    // here (commonly 6 = 90° CW or 8 = 90° CCW for portrait shots). For
-    // orientations 5..=8 the width and height swap. Orientation lives in IFD0.
+    // The TIFF Orientation tag (0x0112). Orientation lives in IFD0.
     let orientation = get_tag_u16(&ifd0, TagId::Orientation)
         .or_else(|_| get_tag_u16(&main_ifd, TagId::Orientation))
         .unwrap_or(1);
-    let (out_w, out_h, rgba) =
-        crate::orientation::apply_exif_orientation(width, height, &rgba, orientation);
-    dng_log!("[DNG step] EXIF orientation: {} → output {}x{}", orientation, out_w, out_h);
+    let (out_w, out_h, rgba) = bake_finish(rgb_f32, width, height, &tone_curve, orientation, &mut debug_log)?;
 
     Ok(DngImage {
         width: out_w,
@@ -596,6 +528,114 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         tone_curve,
         debug_log,
     })
+}
+
+/// The index of the centre pixel's red value in interleaved RGB, for the
+/// debug log's samples.
+pub(crate) fn centre_index(width: u32, height: u32) -> usize {
+    ((height / 2) as usize * width as usize + (width / 2) as usize) * 3
+}
+
+/// Log the centre pixel of interleaved RGB after a step.
+pub(crate) fn log_centre(debug_log: &mut Vec<String>, ci: usize, label: &str, rgb: &[f32]) {
+    if ci + 2 < rgb.len() {
+        debug_log.push(format!("[DNG step] {}: r={:.5} g={:.5} b={:.5}", label, rgb[ci], rgb[ci + 1], rgb[ci + 2]));
+    }
+}
+
+/// The baked decode's colour steps on demosaiced camera RGB (interleaved,
+/// 3 values a pixel), in this order: the white-balance multipliers, the
+/// camera → linear sRGB matrix, then `BaselineExposure` (when more than
+/// 0.001 EV). Each is skipped when absent. Shared by `read_dng` and the
+/// Sony ARW decode (`arw::read_arw`).
+pub(crate) fn bake_colour(
+    rgb: &mut [f32],
+    wb: Option<[f32; 3]>,
+    matrix: Option<&[f32; 9]>,
+    baseline_exposure: Option<f64>,
+    debug_log: &mut Vec<String>,
+    ci: usize,
+) {
+    if let Some(wb) = wb {
+        debug_log.push(format!("[DNG step] WB multipliers: [{:.4}, {:.4}, {:.4}]", wb[0], wb[1], wb[2]));
+        color::apply_white_balance(rgb, &wb);
+        log_centre(debug_log, ci, "after WB", rgb);
+    }
+    if let Some(mat) = matrix {
+        color::apply_matrix(rgb, mat);
+        log_centre(debug_log, ci, "after matrix", rgb);
+    }
+    if let Some(ev) = baseline_exposure {
+        if ev.abs() > 0.001 {
+            let scale = (2.0f64).powf(ev) as f32;
+            for v in rgb.iter_mut() {
+                *v *= scale;
+            }
+            log_centre(debug_log, ci, "after baselineExposure", rgb);
+        }
+    }
+}
+
+/// The baked decode's last steps on linear sRGB (interleaved, 3 values a
+/// pixel): the tone curve (when it has two points or more), the sRGB
+/// transfer, the auto-levels stretch, alpha, and the EXIF orientation so
+/// the image loads upright (orientations 5..=8 swap width and height).
+/// Returns the oriented `(width, height, RGBA f32)`. Shared by `read_dng`
+/// and `arw::read_arw`.
+pub(crate) fn bake_finish(
+    mut rgb_f32: Vec<f32>,
+    width: u32,
+    height: u32,
+    tone_curve: &[(f64, f64)],
+    orientation: u16,
+    debug_log: &mut Vec<String>,
+) -> Result<(u32, u32, Vec<f32>), String> {
+    let ci = centre_index(width, height);
+    if tone_curve.len() >= 2 {
+        debug_log.push(format!("[DNG step] applying toneCurve ({} pts), first=({:.4},{:.4}) last=({:.4},{:.4})",
+            tone_curve.len(),
+            tone_curve[0].0, tone_curve[0].1,
+            tone_curve[tone_curve.len() - 1].0, tone_curve[tone_curve.len() - 1].1));
+        let lut = build_tone_lut(tone_curve);
+        debug_log.push(format!("[DNG step] LUT samples: [0]={:.4} [1024]={:.4} [2048]={:.4} [3072]={:.4} [4095]={:.4}",
+            lut[0], lut[1024], lut[2048], lut[3072], lut[4095]));
+        color::apply_lut(&mut rgb_f32, &lut);
+        log_centre(debug_log, ci, "after toneCurve", &rgb_f32);
+    }
+
+    color::apply_srgb_gamma(&mut rgb_f32);
+    log_centre(debug_log, ci, "after sRGB gamma (final)", &rgb_f32);
+
+    // Spread the tonal range to fill [0,1]. Apple ships a near-linear
+    // ProfileToneCurve, expecting its own gain-map/HDR pass (which we disable —
+    // it mis-applies) to add contrast. Without it the render is flat: the
+    // histogram bunches in the middle with no true black/white. Derive a
+    // black/white point from luminance percentiles and stretch all channels by
+    // the same amount (preserving white balance, like a composite-RGB Levels
+    // move). This is adaptive normalization, not a fixed creative curve.
+    let (bp, wp) = auto_levels_points(&rgb_f32, AUTO_LEVELS_BLACK_CLIP, AUTO_LEVELS_WHITE_CLIP);
+    debug_log.push(format!("[DNG step] auto-levels: black={:.4} white={:.4} (clip {:.2}%/{:.2}%)",
+        bp, wp, AUTO_LEVELS_BLACK_CLIP * 100.0, AUTO_LEVELS_WHITE_CLIP * 100.0));
+    if wp - bp > 0.05 {
+        let scale = 1.0 / (wp - bp);
+        for v in &mut rgb_f32 {
+            *v = (((*v as f64 - bp) * scale).clamp(0.0, 1.0)) as f32;
+        }
+        log_centre(debug_log, ci, "after auto-levels", &rgb_f32);
+    }
+
+    // Convert RGB → RGBA f32
+    let pixel_count = (width as usize) * (height as usize);
+    let mut rgba: Vec<f32> = Vec::new();
+    rgba.try_reserve_exact(pixel_count * 4).map_err(|_| "not enough memory for the decoded image".to_string())?;
+    for px in rgb_f32[..pixel_count * 3].chunks_exact(3) {
+        rgba.extend_from_slice(&[px[0], px[1], px[2], 1.0]);
+    }
+    drop(rgb_f32);
+
+    let (out_w, out_h, rgba) = crate::orientation::apply_exif_orientation_owned(width, height, rgba, orientation);
+    debug_log.push(format!("[DNG step] EXIF orientation: {} → output {}x{}", orientation, out_w, out_h));
+    Ok((out_w, out_h, rgba))
 }
 
 /// Find black and white points for an auto-levels stretch from a luminance

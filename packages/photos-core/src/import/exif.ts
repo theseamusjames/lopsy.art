@@ -5,6 +5,7 @@ import {
   GpsTag,
   TiffTag,
   collectImageIfds,
+  findCfaImageIfd,
   getNumber,
   getNumbers,
   getRational,
@@ -153,16 +154,58 @@ export function swapsAxes(orientation: number): boolean {
   return orientation >= 5 && orientation <= 8;
 }
 
+/** An image IFD's picture size: its DefaultCropSize when present, else its stored size. */
+function croppedSize(tiff: TiffFile, ifd: TiffIfd): { width: number; height: number } | null {
+  const crop = getNumbers(tiff, ifd, TiffTag.DefaultCropSize);
+  const width = crop?.[0] ?? getNumber(tiff, ifd, TiffTag.ImageWidth);
+  const height = crop?.[1] ?? getNumber(tiff, ifd, TiffTag.ImageLength);
+  return width && height && width > 0 && height > 0 ? { width: Math.round(width), height: Math.round(height) } : null;
+}
+
 /** A DNG's main image size: the IFD with NewSubfileType 0, DefaultCropSize when present. */
 export function dngImageSize(tiff: TiffFile): { width: number; height: number } | null {
   for (const ifd of collectImageIfds(tiff)) {
     if ((getNumber(tiff, ifd, TiffTag.NewSubfileType) ?? 0) !== 0) continue;
-    const crop = getNumbers(tiff, ifd, TiffTag.DefaultCropSize);
-    const width = crop?.[0] ?? getNumber(tiff, ifd, TiffTag.ImageWidth);
-    const height = crop?.[1] ?? getNumber(tiff, ifd, TiffTag.ImageLength);
-    if (width && height && width > 0 && height > 0) return { width: Math.round(width), height: Math.round(height) };
+    const size = croppedSize(tiff, ifd);
+    if (size) return size;
   }
   return null;
+}
+
+/** How much of the stored sensor size a picture size may leave out and still be Sony's crop of it, not a smaller JPEG's. */
+const MIN_CROP_FRACTION = 0.95;
+
+/**
+ * The Exif IFD's PixelXDimension × PixelYDimension, in the stored image's
+ * axes, when it is a crop of `stored`: no larger on either axis, and no
+ * more than 5 % smaller. Older Sony bodies write no DefaultCropSize, and
+ * there this is the size the camera crops its sensor to.
+ */
+function exifCropOf(tiff: TiffFile, ifd0: TiffIfd, stored: { width: number; height: number }): { width: number; height: number } | null {
+  const exif = readPointedIfd(tiff, ifd0, TiffTag.ExifIfd);
+  const x = exif ? getNumber(tiff, exif, TiffTag.PixelXDimension) : null;
+  const y = exif ? getNumber(tiff, exif, TiffTag.PixelYDimension) : null;
+  if (!x || !y) return null;
+  const fits = (w: number, h: number) =>
+    w <= stored.width && h <= stored.height && w >= stored.width * MIN_CROP_FRACTION && h >= stored.height * MIN_CROP_FRACTION;
+  if (fits(x, y)) return { width: x, height: y };
+  return fits(y, x) ? { width: y, height: x } : null;
+}
+
+/**
+ * An ARW's picture size, the size the engine's decode gives (before
+ * orientation): the raw (CFA) image's DefaultCropSize; else, on older
+ * bodies that write none, the Exif pixel dimensions when they are a crop
+ * of the sensor; else the raw image's stored size.
+ */
+export function arwImageSize(tiff: TiffFile, ifd0: TiffIfd): { width: number; height: number } | null {
+  const raw = findCfaImageIfd(tiff);
+  if (!raw) return null;
+  if (raw.entries.has(TiffTag.DefaultCropSize)) return croppedSize(tiff, raw);
+  const width = getNumber(tiff, raw, TiffTag.ImageWidth);
+  const height = getNumber(tiff, raw, TiffTag.ImageLength);
+  if (!width || !height) return null;
+  return exifCropOf(tiff, ifd0, { width, height }) ?? { width, height };
 }
 
 function camera(make: string | null, model: string | null): CameraInfo | null {
@@ -209,6 +252,13 @@ function readFacts(bytes: Uint8Array, format: ImageFormat): Facts {
       const ifd0 = tiff ? readIfd(tiff, tiff.firstIfd) : null;
       if (!tiff || !ifd0) return { tags: EMPTY_TIFF_METADATA, width: null, height: null };
       const size = dngImageSize(tiff);
+      return { tags: readTiffMetadata(tiff, ifd0), width: size?.width ?? null, height: size?.height ?? null };
+    }
+    case 'arw': {
+      const tiff = openTiff(bytes);
+      const ifd0 = tiff ? readIfd(tiff, tiff.firstIfd) : null;
+      if (!tiff || !ifd0) return { tags: EMPTY_TIFF_METADATA, width: null, height: null };
+      const size = arwImageSize(tiff, ifd0);
       return { tags: readTiffMetadata(tiff, ifd0), width: size?.width ?? null, height: size?.height ?? null };
     }
     case 'lopsy':

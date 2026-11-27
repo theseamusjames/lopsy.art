@@ -93,7 +93,7 @@ export interface OpEnvelope {
 
 export type Rating = 0 | 1 | 2 | 3 | 4 | 5;
 export type ColorLabel = 'red' | 'yellow' | 'green' | 'blue' | 'purple';
-export type ImageFormat = 'raf' | 'dng' | 'jpeg' | 'png' | 'webp' | 'lopsy';
+export type ImageFormat = 'raf' | 'dng' | 'arw' | 'jpeg' | 'png' | 'webp' | 'lopsy';
 
 export interface CameraInfo {
   readonly make: string;

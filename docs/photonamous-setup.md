@@ -493,7 +493,15 @@ Lopsy's suite picks a port from the checkout's path.
 
 The RAF tests (editing, white balance, the HDR exports) read real camera files from `LOPSY_RAF_SAMPLES` and
 are skipped without it (samples:
-https://github.com/theseamusjames/sample-raf-images).
+https://github.com/theseamusjames/sample-raf-images). The ARW tests
+(photos-core's `import/arw.test.ts`, `e2e/import-arw.spec.ts` and
+`e2e/edit-arw.spec.ts`) read the Sony samples from raw.pixls.us (CC0) in
+the directory `LOPSY_ARW_SAMPLES` names: the A7 IV in three encodings
+(`ILCE-7M4_DSC06677_FullFrame-Raw-Compressed.ARW` and its uncompressed
+and lossless siblings), the A7 III, A6000 and RX100 III ARWs, and an SR2
+and an SRF that must be refused; and
+`arw.test.ts` checks that every `.dng` in `LOPSY_DNG_SAMPLES` is still
+taken for a DNG; each is skipped without its variable.
 
 ## 6. What needs a real Google account to verify
 

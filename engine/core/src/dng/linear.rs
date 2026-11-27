@@ -95,14 +95,12 @@ pub struct DngRenderParams {
 impl DngRenderParams {
     /// The final (displayed) size after orientation.
     pub fn oriented_size(&self) -> (u32, u32) {
-        match self.orientation {
-            5..=8 => (self.height, self.width),
-            _ => (self.width, self.height),
-        }
+        self.layout().oriented_size()
     }
 
+    #[cfg(test)]
     fn row_len(&self) -> usize {
-        self.width as usize * self.samples_per_pixel as usize
+        self.layout().row_len()
     }
 }
 
@@ -207,6 +205,118 @@ pub fn as_shot_gain(cal: &DngCalibration) -> Result<[f32; 3], String> {
     Ok(neutral.map(|n| (1.0 / n) as f32))
 }
 
+/// The stored samples a prepared plane is cut from: `width` × rows ×
+/// `samples` values, of which the `width_out` × `height_out` area from
+/// (`top`, `left`) is kept.
+pub(crate) struct StoredPlane<'a> {
+    pub values: &'a [u16],
+    pub width: usize,
+    pub samples: usize,
+    pub top: usize,
+    pub left: usize,
+    pub width_out: usize,
+    pub height_out: usize,
+}
+
+/// How stored values become the prepared plane's: the linearization
+/// table, the black level of each position (relative to the kept area's
+/// top-left), the scale of each sample plane (`plane_scales`), and the
+/// as-shot gain of each colour.
+pub(crate) struct PlaneMapping<'a> {
+    pub kind: DngKind,
+    /// The Bayer pattern from the kept area's top-left.
+    pub cfa: [u8; 4],
+    pub table: Option<&'a [u16]>,
+    pub black: &'a BlackLevels,
+    pub scales: &'a [f64],
+    pub gain: [f32; 3],
+}
+
+/// Each sample plane's scale, `1 / (white level − the plane's largest
+/// black level over the kept area)`, and that largest black level. An
+/// error when a white level is not above its black level.
+pub(crate) fn plane_scales(
+    black: &BlackLevels,
+    delta_h: &[f64],
+    delta_v: &[f64],
+    whites: &[u32],
+    w: usize,
+    h: usize,
+    spp: usize,
+) -> Result<(Vec<f64>, Vec<f64>), String> {
+    if whites.is_empty() {
+        return Err("there is no white level".into());
+    }
+    let white_of = |s: usize| f64::from(*whites.get(s).unwrap_or(&whites[0]));
+    // The largest black level of each sample plane over the active area.
+    let (br, bc) = black.period();
+    // A delta list shorter than the area leaves the rest of it at 0.
+    let max_delta = |d: &[f64], n: usize| {
+        let m = d.iter().take(n).copied().fold(f64::NEG_INFINITY, f64::max);
+        if d.len() < n { m.max(0.0) } else { m }
+    };
+    let plane_black_max: Vec<f64> = (0..spp)
+        .map(|s| {
+            let tile = (0..br).flat_map(|r| (0..bc).map(move |c| (r, c))).map(|(r, c)| black.at(r, c, s) - delta_h.get(c).copied().unwrap_or(0.0) - delta_v.get(r).copied().unwrap_or(0.0));
+            tile.fold(f64::MIN, f64::max) + max_delta(delta_h, w) + max_delta(delta_v, h)
+        })
+        .collect();
+    let scales: Vec<f64> = (0..spp)
+        .map(|s| {
+            let range = white_of(s) - plane_black_max[s];
+            if range > 0.0 && range.is_finite() {
+                Ok(1.0 / range)
+            } else {
+                Err(format!("the white level {} is not above the black level {}", white_of(s), plane_black_max[s]))
+            }
+        })
+        .collect::<Result<_, _>>()?;
+    Ok((scales, plane_black_max))
+}
+
+/// The prepared plane: each kept stored value through `raw_of` (what the
+/// file stores), the linearization table, minus its position's black
+/// level, times its plane's scale, clipped at 1 (values below 0 are kept),
+/// times its colour's as-shot gain. The DNG specification's mapping of raw
+/// values to linear reference values, shared by the DNG and the Sony ARW
+/// decodes.
+pub(crate) fn fill_plane(src: &StoredPlane, raw_of: impl Fn(u16) -> u16, m: &PlaneMapping) -> Result<Vec<f32>, String> {
+    let (w, h) = (src.width_out, src.height_out);
+    let spp = match m.kind {
+        DngKind::Linear => 3usize,
+        DngKind::Bayer => 1usize,
+    };
+    // Every index below stays inside the stored values.
+    let need = (src.top + h).checked_mul(src.width).and_then(|n| n.checked_mul(src.samples));
+    if src.left + w > src.width || spp > src.samples || need.is_none_or(|n| n > src.values.len()) || m.scales.len() < spp {
+        return Err(format!("the {w}×{h} area at {},{} is outside the stored image", src.left, src.top));
+    }
+    let mut plane: Vec<f32> = Vec::new();
+    plane.try_reserve_exact(w * h * spp).map_err(|_| "not enough memory for the raw pixels".to_string())?;
+    let colour_of = |row: usize, col: usize, s: usize| -> usize {
+        match m.kind {
+            DngKind::Linear => s,
+            DngKind::Bayer => m.cfa[(row & 1) * 2 + (col & 1)] as usize,
+        }
+    };
+    let last = m.table.map_or(0, |t| t.len().saturating_sub(1));
+    for row in 0..h {
+        for col in 0..w {
+            let i = ((row + src.top) * src.width + col + src.left) * src.samples;
+            for s in 0..spp {
+                let raw = raw_of(src.values[i + s]);
+                let lin = match m.table {
+                    Some(t) if !t.is_empty() => t[(raw as usize).min(last)],
+                    _ => raw,
+                };
+                let v = ((f64::from(lin) - m.black.at(row, col, s)) * m.scales[s]).min(1.0);
+                plane.push(v as f32 * m.gain[colour_of(row, col, s)]);
+            }
+        }
+    }
+    Ok(plane)
+}
+
 /// Decode a DNG to linear camera RGB for the develop chain. An error says
 /// why this DNG cannot take this path; the host then uses the baked decode
 /// (`dng::read_dng`).
@@ -288,62 +398,21 @@ pub fn prepare_dng(data: &[u8]) -> Result<DngPrepared, String> {
         .with_deltas(delta_h.clone(), delta_v.clone());
     let default_white = if stored.bits >= 1 && stored.bits <= 16 { (1u32 << stored.bits) - 1 } else { 65535 };
     let whites: Vec<u32> = u32s(ifd0, main, TagId::WhiteLevel).filter(|v| !v.is_empty()).unwrap_or_else(|| vec![default_white]);
-    let white_of = |s: usize| f64::from(*whites.get(s).unwrap_or(&whites[0]));
-    // The largest black level of each sample plane over the active area.
-    let (br, bc) = black.period();
-    // A delta list shorter than the area leaves the rest of it at 0.
-    let max_delta = |d: &[f64], n: usize| {
-        let m = d.iter().take(n).copied().fold(f64::NEG_INFINITY, f64::max);
-        if d.len() < n { m.max(0.0) } else { m }
-    };
-    let plane_black_max: Vec<f64> = (0..spp)
-        .map(|s| {
-            let tile = (0..br).flat_map(|r| (0..bc).map(move |c| (r, c))).map(|(r, c)| black.at(r, c, s) - delta_h.get(c).copied().unwrap_or(0.0) - delta_v.get(r).copied().unwrap_or(0.0));
-            tile.fold(f64::MIN, f64::max) + max_delta(&delta_h, w) + max_delta(&delta_v, h)
-        })
-        .collect();
-    let scales: Vec<f64> = (0..spp)
-        .map(|s| {
-            let range = white_of(s) - plane_black_max[s];
-            if range > 0.0 && range.is_finite() {
-                Ok(1.0 / range)
-            } else {
-                Err(format!("the white level {} is not above the black level {}", white_of(s), plane_black_max[s]))
-            }
-        })
-        .collect::<Result<_, _>>()?;
+    let (scales, plane_black_max) = plane_scales(&black, &delta_h, &delta_v, &whites, w, h, spp)?;
 
-    let mut plane: Vec<f32> = Vec::new();
-    plane.try_reserve_exact(w * h * spp).map_err(|_| "not enough memory for the DNG's pixels".to_string())?;
-    let colour_of = |row: usize, col: usize, s: usize| -> usize {
-        match kind {
-            DngKind::Linear => s,
-            DngKind::Bayer => cfa[(row & 1) * 2 + (col & 1)] as usize,
+    let (eight_bit_shifted, byte_swapped) = (stored.eight_bit_shifted, stored.byte_swapped);
+    let raw_of = |stored_value: u16| {
+        if eight_bit_shifted {
+            stored_value >> 8
+        } else if byte_swapped {
+            stored_value.swap_bytes()
+        } else {
+            stored_value
         }
     };
-    let stored_spp = stored.samples as usize;
-    let last = table.as_ref().map_or(0, |t| t.len() - 1);
-    for row in 0..h {
-        for col in 0..w {
-            let i = ((row + top) * sw + col + left) * stored_spp;
-            for s in 0..spp {
-                let stored_value = pixel_data[i + s];
-                let raw = if stored.eight_bit_shifted {
-                    stored_value >> 8
-                } else if stored.byte_swapped {
-                    stored_value.swap_bytes()
-                } else {
-                    stored_value
-                };
-                let lin = match &table {
-                    Some(t) => t[(raw as usize).min(last)],
-                    None => raw,
-                };
-                let v = ((f64::from(lin) - black.at(row, col, s)) * scales[s]).min(1.0);
-                plane.push(v as f32 * gain[colour_of(row, col, s)]);
-            }
-        }
-    }
+    let source = StoredPlane { values: &pixel_data, width: sw, samples: stored.samples as usize, top, left, width_out: w, height_out: h };
+    let mapping = PlaneMapping { kind, cfa, table: table.as_deref(), black: &black, scales: &scales, gain };
+    let plane = fill_plane(&source, raw_of, &mapping)?;
     drop(pixel_data);
 
     let orientation = get_tag_u16(ifd0, TagId::Orientation).ok().filter(|o| (1..=8).contains(o)).unwrap_or(1);
@@ -377,16 +446,69 @@ pub fn prepare_dng(data: &[u8]) -> Result<DngPrepared, String> {
     Ok(DngPrepared { params, plane, unhandled, debug_log })
 }
 
+/// What the band and binned renders need to know about a prepared plane:
+/// its size, what its samples are, its Bayer pattern and its orientation.
+/// The renders below take anything that has one ([`PlaneParams`]): a DNG's
+/// `DngRenderParams` or a Sony ARW's (`arw::ArwRenderParams`), so both
+/// formats render through the same code.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PlaneLayout {
+    pub width: u32,
+    pub height: u32,
+    pub kind: DngKind,
+    pub samples_per_pixel: u32,
+    pub cfa: [u8; 4],
+    pub orientation: u16,
+}
+
+impl PlaneLayout {
+    /// The final (displayed) size after orientation.
+    pub fn oriented_size(&self) -> (u32, u32) {
+        match self.orientation {
+            5..=8 => (self.height, self.width),
+            _ => (self.width, self.height),
+        }
+    }
+
+    fn row_len(&self) -> usize {
+        self.width as usize * self.samples_per_pixel as usize
+    }
+}
+
+/// Parameters of a prepared plane the shared renders can draw.
+pub trait PlaneParams {
+    fn layout(&self) -> PlaneLayout;
+}
+
+impl PlaneParams for PlaneLayout {
+    fn layout(&self) -> PlaneLayout {
+        *self
+    }
+}
+
+impl PlaneParams for DngRenderParams {
+    fn layout(&self) -> PlaneLayout {
+        PlaneLayout {
+            width: self.width,
+            height: self.height,
+            kind: self.kind,
+            samples_per_pixel: self.samples_per_pixel,
+            cfa: self.cfa,
+            orientation: self.orientation,
+        }
+    }
+}
+
 /// How far (in rows) a rendered pixel reaches into the plane: one row for
 /// the bilinear demosaic, none for LinearRaw.
-pub fn reach_rows(params: &DngRenderParams) -> u32 {
-    match params.kind {
+pub fn reach_rows<P: PlaneParams + ?Sized>(params: &P) -> u32 {
+    match params.layout().kind {
         DngKind::Linear => 0,
         DngKind::Bayer => 1,
     }
 }
 
-fn check_band(src: &[f32], params: &DngRenderParams, band: RafBand) -> Result<usize, String> {
+fn check_band(src: &[f32], params: &PlaneLayout, band: RafBand) -> Result<usize, String> {
     let phase_ok = params.kind == DngKind::Linear || band.src_y0 % 2 == 0;
     let valid = phase_ok && band.src_y0 <= band.y0 && band.y0 < band.y1 && band.y1 <= band.src_y1 && band.src_y1 <= params.height;
     if !valid {
@@ -408,7 +530,7 @@ fn check_band(src: &[f32], params: &DngRenderParams, band: RafBand) -> Result<us
 
 /// Orient a band's RGBA rows and place them in the oriented image, as the
 /// RAF renders do.
-fn orient_band(rgba: Vec<f32>, params: &DngRenderParams, band: RafBand) -> RafBandPixels {
+fn orient_band(rgba: Vec<f32>, params: &PlaneLayout, band: RafBand) -> RafBandPixels {
     let band_h = band.y1 - band.y0;
     let (ow, oh, pixels) = crate::orientation::apply_exif_orientation_owned(params.width, band_h, rgba, params.orientation);
     let (x, y) = match params.orientation {
@@ -425,7 +547,8 @@ fn orient_band(rgba: Vec<f32>, params: &DngRenderParams, band: RafBand) -> RafBa
 /// The result is oriented RGBA f32 (alpha 1), unclamped, and bit-identical
 /// to the same rows of a whole-frame render. Bands from
 /// `raf::plan_bands` have enough context for either kind.
-pub fn render_linear_band(src: &[f32], params: &DngRenderParams, band: RafBand) -> Result<RafBandPixels, String> {
+pub fn render_linear_band<P: PlaneParams + ?Sized>(src: &[f32], params: &P, band: RafBand) -> Result<RafBandPixels, String> {
+    let params = &params.layout();
     let src_h = check_band(src, params, band)?;
     let w = params.width as usize;
     let skip = (band.y0 - band.src_y0) as usize;
@@ -452,8 +575,8 @@ const MAX_BIN_FACTOR: u32 = 24;
 
 /// Whether a `factor`×`factor` block holds every colour: any factor for
 /// LinearRaw, an even one for Bayer.
-pub fn is_valid_bin_factor(params: &DngRenderParams, factor: u32) -> bool {
-    match params.kind {
+pub fn is_valid_bin_factor<P: PlaneParams + ?Sized>(params: &P, factor: u32) -> bool {
+    match params.layout().kind {
         DngKind::Linear => factor >= 1,
         DngKind::Bayer => factor >= 2 && factor % 2 == 0,
     }
@@ -461,7 +584,8 @@ pub fn is_valid_bin_factor(params: &DngRenderParams, factor: u32) -> bool {
 
 /// The coarsest valid factor that keeps the long edge at least
 /// `min_long_edge`, else the finest valid one.
-pub fn binned_factor_for(params: &DngRenderParams, min_long_edge: u32) -> u32 {
+pub fn binned_factor_for<P: PlaneParams + ?Sized>(params: &P, min_long_edge: u32) -> u32 {
+    let params = &params.layout();
     let long = params.width.max(params.height);
     let valid: Vec<u32> = (1..=MAX_BIN_FACTOR).filter(|&f| is_valid_bin_factor(params, f)).collect();
     valid.iter().copied().filter(|&f| long / f >= min_long_edge).max().or_else(|| valid.first().copied()).unwrap_or(2)
@@ -471,7 +595,8 @@ pub fn binned_factor_for(params: &DngRenderParams, min_long_edge: u32) -> u32 {
 /// colour, the mean of that colour's samples in its block. No demosaic.
 /// Oriented RGBA f32 in the same units as [`render_linear_band`]. Returns
 /// (width, height, pixels) after orientation.
-pub fn render_binned_linear(plane: &[f32], params: &DngRenderParams, factor: u32) -> Result<(u32, u32, Vec<f32>), String> {
+pub fn render_binned_linear<P: PlaneParams + ?Sized>(plane: &[f32], params: &P, factor: u32) -> Result<(u32, u32, Vec<f32>), String> {
+    let params = &params.layout();
     let (w, h) = (params.width as usize, params.height as usize);
     if plane.len() != params.row_len() * h {
         return Err(format!("DNG plane has {} values, expected {}", plane.len(), params.row_len() * h));
@@ -531,7 +656,7 @@ pub fn render_binned_linear(plane: &[f32], params: &DngRenderParams, factor: u32
 }
 
 /// [`render_binned_linear`] with the factor [`binned_factor_for`] picks.
-pub fn render_binned_linear_for(plane: &[f32], params: &DngRenderParams, min_long_edge: u32) -> Result<(u32, u32, Vec<f32>), String> {
+pub fn render_binned_linear_for<P: PlaneParams + ?Sized>(plane: &[f32], params: &P, min_long_edge: u32) -> Result<(u32, u32, Vec<f32>), String> {
     render_binned_linear(plane, params, binned_factor_for(params, min_long_edge))
 }
 

@@ -30,7 +30,7 @@ import type {
 } from './types';
 import { isRecord } from './validate';
 
-const FORMATS: ReadonlySet<string> = new Set<ImageFormat>(['raf', 'dng', 'jpeg', 'png', 'webp', 'lopsy']);
+const FORMATS: ReadonlySet<string> = new Set<ImageFormat>(['raf', 'dng', 'arw', 'jpeg', 'png', 'webp', 'lopsy']);
 const LABELS: ReadonlySet<string> = new Set<ColorLabel>(['red', 'yellow', 'green', 'blue', 'purple']);
 
 function field(record: EntityRecord, path: string): Json | undefined {

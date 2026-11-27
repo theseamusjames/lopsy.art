@@ -158,6 +158,54 @@ pub fn decode_and_upload_dng(
         .map_err(|e| format!("JSON serialize: {e}"))
 }
 
+/// Decode a Sony ARW and upload it to a layer texture as f32 RGBA, as
+/// `decode_and_upload_dng` does a DNG (`lopsy_core::arw::read_arw`: sRGB,
+/// upright, cropped). Returns JSON: `{ width, height, baselineExposure,
+/// toneCurve, cameraModel, colorApproximate, colorNote, notApplied }`,
+/// the first four as for a DNG (`baselineExposure` 0, `toneCurve` empty),
+/// `colorApproximate` true and `colorNote` the sentence to show when the
+/// file carries no full colour matrix (every ARW today), `notApplied` the
+/// corrections the file records that the decode does not apply. An error
+/// is a sentence a person can read (an unsupported Sony format or
+/// variant, a damaged file).
+pub fn decode_and_upload_arw(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    data: &[u8],
+) -> Result<String, String> {
+    let arw = lopsy_core::arw::read_arw(data)?;
+    let img = &arw.image;
+    layer_manager::upload_pixels_f32(&mut *engine, layer_id, &img.pixels, img.width, img.height)?;
+    for line in &img.debug_log {
+        crate::host::log(crate::host::LogLevel::Info, line);
+    }
+
+    #[derive(serde::Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct ArwMeta<'a> {
+        width: u32,
+        height: u32,
+        baseline_exposure: f64,
+        tone_curve: Vec<[f64; 2]>,
+        camera_model: &'a str,
+        color_approximate: bool,
+        color_note: &'a str,
+        not_applied: &'a [String],
+    }
+
+    let meta = ArwMeta {
+        width: img.width,
+        height: img.height,
+        baseline_exposure: img.baseline_exposure,
+        tone_curve: img.tone_curve.iter().map(|&(x, y)| [x, y]).collect(),
+        camera_model: &arw.camera_model,
+        color_approximate: true,
+        color_note: arw.colour.note(),
+        not_applied: &arw.not_applied,
+    };
+    serde_json::to_string(&meta).map_err(|e| format!("JSON serialize: {e}"))
+}
+
 /// Upload an RGBA f32 rectangle into a layer whose texture is (re)allocated
 /// at `texture_width`×`texture_height` if it isn't already that size. The
 /// rest of the texture is left as is, so a large image can be filled in
