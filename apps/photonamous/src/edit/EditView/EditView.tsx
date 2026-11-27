@@ -740,6 +740,7 @@ export function EditView({
     if (e.button !== 0 || !engine || e.target !== canvasRef.current) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     panPointer.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
+    engine.setViewGesture(true);
   };
 
   const handleStagePointerMove = (e: PointerEvent<HTMLDivElement>) => {
@@ -774,7 +775,9 @@ export function EditView({
   });
 
   const handleStagePointerUp = (e: PointerEvent<HTMLDivElement>) => {
-    if (panPointer.current?.id === e.pointerId) panPointer.current = null;
+    if (panPointer.current?.id !== e.pointerId) return;
+    panPointer.current = null;
+    engine?.setViewGesture(false);
   };
 
   // ---- export --------------------------------------------------------
@@ -897,6 +900,8 @@ export function EditView({
   const workingScale = engine?.workingScale() ?? 1;
   const zoomPercent = view ? Math.round(view.zoom * workingScale * 100) : 100;
   const isLoadingFull = engine?.isLoadingFullResolution() ?? false;
+  // The part on screen of a photo larger than the GPU, at its own size, once zoomed in: the same badge.
+  const isLoadingDetail = engine?.isLoadingDetail() ?? false;
   // Shown below its own size for this device's sake (its GPU's largest texture, or a full-size load that failed).
   const fullSizeNote = canEdit ? engine?.fullSizeNote() ?? null : null;
   const sizeNoteText = fullSizeNote ? fullSizeNoteText(fullSizeNote) : null;
@@ -938,6 +943,14 @@ export function EditView({
     if (sizeNoteText && saidSizeNote.current !== sizeNoteText) announce(sizeNoteText);
     saidSizeNote.current = sizeNoteText;
   }, [sizeNoteText, announce]);
+
+  // The detail's first load for a photo is said; later ones, on each pan, show the badge only.
+  const saidDetailFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isLoadingDetail || saidDetailFor.current === asset.id) return;
+    saidDetailFor.current = asset.id;
+    announce('Loading full resolution…');
+  }, [isLoadingDetail, asset.id, announce]);
 
   useEffect(() => {
     if (isPickingWb) announce('Click something in the photo that should be neutral grey, or press Escape. Temperature and Tint set the white balance by keyboard.');
@@ -1101,9 +1114,9 @@ export function EditView({
             {storedPreviewUrl && !canEdit && status.kind !== 'error' && (
               <img className={styles.storedPreview} src={storedPreviewUrl} alt="" data-testid="stored-preview" draggable={false} />
             )}
-            {(isLoadingFull || (storedPreviewUrl && !canEdit && status.kind !== 'error')) && (
+            {(isLoadingFull || isLoadingDetail || (storedPreviewUrl && !canEdit && status.kind !== 'error')) && (
               <span className={styles.loadingBadge} data-testid="loading-badge">
-                {isLoadingFull ? 'Loading full resolution…' : 'Loading…'}
+                {isLoadingFull || isLoadingDetail ? 'Loading full resolution…' : 'Loading…'}
               </span>
             )}
             {isPickingWb && wbPickBox && wbDocSize && (

@@ -75,6 +75,8 @@ export interface FullSizeNote {
    * 'settings': tiles could be made, but not with the edit's settings.
    */
   readonly exports: 'own' | 'shown' | 'settings';
+  /** With 'own': the view shows the part on screen at the photo's own size once zoomed in (detail-view.ts). */
+  readonly detail?: boolean;
 }
 
 const times = (size: Size) => `${size.width} × ${size.height}`;
@@ -88,6 +90,12 @@ export function fullSizeNoteText(note: FullSizeNote): string {
     return `This device ran short of graphics memory for this ${times(note.own)} photo, so it is shown and exported at ${times(note.shown)}.`;
   }
   const larger = `This photo is ${times(note.own)} pixels, larger than this device’s graphics can edit (${note.limit} on a side), `;
+  if (note.exports === 'own' && note.detail) {
+    return (
+      `${larger}so it is shown at ${times(note.shown)}; zoomed in, the part on screen is shown at its full size. ` +
+      'It is exported at its full size, a part at a time.'
+    );
+  }
   if (note.exports === 'own') return `${larger}so it is shown at ${times(note.shown)}. It is exported at its full size, a part at a time.`;
   if (note.exports === 'settings') {
     return `${larger}so it is shown at ${times(note.shown)}. With these settings it cannot be exported a part at a time, so it is exported at ${times(note.shown)} too.`;

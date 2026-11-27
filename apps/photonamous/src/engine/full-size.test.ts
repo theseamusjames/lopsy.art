@@ -130,6 +130,10 @@ describe('fullSizeNoteText', () => {
       'This photo is 8368 × 5584 pixels, larger than this device’s graphics can edit (8190 on a side), so it is shown at 8190 × 5465. ' +
         'It is exported at its full size, a part at a time.',
     );
+    expect(fullSizeNoteText({ kind: 'too-large', own: Q2, shown, limit: 8190, exports: 'own', detail: true })).toBe(
+      'This photo is 8368 × 5584 pixels, larger than this device’s graphics can edit (8190 on a side), so it is shown at 8190 × 5465; ' +
+        'zoomed in, the part on screen is shown at its full size. It is exported at its full size, a part at a time.',
+    );
     expect(fullSizeNoteText({ kind: 'too-large', own: Q2, shown, limit: 8190, exports: 'settings' })).toContain(
       'With these settings it cannot be exported a part at a time, so it is exported at 8190 × 5465 too.',
     );

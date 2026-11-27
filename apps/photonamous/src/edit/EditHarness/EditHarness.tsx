@@ -35,6 +35,8 @@ declare global {
     __photosHarnessExport?: (settings: Partial<ExportSettings>, recipe?: Recipe, abort?: { aborted: boolean }) => Promise<Blob>;
     /** The notes the harness's export renderer gave (`onNote`), in order. */
     __photosHarnessNotes?: string[];
+    /** Development: `recipe` as the open version's next step, for e2e tests. */
+    __photosHarnessStep?: (recipe: Recipe) => void;
   }
 }
 
@@ -159,6 +161,10 @@ export function EditHarness() {
     },
     [record],
   );
+
+  useEffect(() => {
+    window.__photosHarnessStep = (recipe) => step(recipe, 'Test edit');
+  }, [step]);
 
   const presentRecipe = current?.history.present ?? null;
   const handleEdit = useCallback(
