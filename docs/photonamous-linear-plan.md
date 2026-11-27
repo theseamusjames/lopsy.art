@@ -1189,6 +1189,58 @@ section 8's, for Seamus to review).
     scale of NaN, and gives none now. A gain map with gains of 0 gave
     clip levels of 0, and gives none now (the specification allows a
     gain of 0, so the map is not refused). No sample's rendering moved.
+72. **Leica needed no new format, and showed what the DNG reader
+    assumed.** Seamus asked for Leica's RAW as the test of this path.
+    Leica's M, Q, SL and CL bodies write DNG, so nothing was added to
+    `raw/`; four camera-written files from raw.pixls.us (CC0: Q2, M10-R,
+    M Typ 240, M9) went through the DNG reader as it was, and two of the
+    four were refused. The M10-R keeps its raw image in the file's first
+    directory with its previews in the SubIFDs, where the reader took
+    the largest SubIFD (a JPEG preview) for the picture: the main image
+    is now the largest directory that holds raw data and is not marked
+    as a preview. The Q2 stores 14 bits packed, where only 8 and 16 were
+    read: 9 to 15 bits are now unpacked, high bit first, each row on a
+    byte, as the DNG specification says. Both decodes take both fixes;
+    no existing sample's render moved. All four now open with their own
+    matrices, measured Kelvin and presets. They open at their
+    BaselineExposure, a third of a stop or so darker than the camera's
+    preview (medians 0.38 against 0.45 on the M10-R, 0.40 against 0.48
+    on the Q2): decision 62 matches a DNG's preview only when the file
+    has a gain map. **Open for Seamus**: whether a camera-written DNG
+    without one should be matched as an ARW is. Leica's D-Lux, V-Lux and
+    C-Lux compacts write RWL, which is Panasonic's RW2: a new decoder,
+    not started. Renders: `samples/linear-pipeline-review/leica/` and
+    `app-renders/raw-path/Leica-*`.
+73. **Camera colour for Fujifilm's X-Trans 4 and 5 sensors and for
+    three Sony bodies comes from matrices of our own**
+    (`engine/core/src/camera_colour.rs`), derived internally from
+    publicly available sources. They replace the Fujifilm table's entries
+    for those sensors and Sony's partial matrix on the A6000, A6700 and
+    RX100 III, which no longer carry the "colour is approximate" note.
+    Every RAF from those sensors renders with different colour, in
+    Lopsy's import too: the golden renders, the baked-decode hashes and
+    the parity fingerprints were recorded again. Against the camera's
+    own preview, chroma on ordinary photos goes from 0.70 to 1.02
+    (A6000), 0.68 to 1.01 (RX100 III) and, over seven X-E5 photos, from
+    a mean of 0.87 to 1.01. The matrices are stronger than the ones they
+    replace, so the binned working image differs more from the full
+    render on fine detail (about 30 % on an X100VI photo;
+    `engine/core/tests/raf_develop.rs` has the numbers). One matrix per
+    body: it does not follow the white balance. Other Fujifilm sensors
+    (X-Trans 3 and earlier, the X-H2S) keep the matrices they had.
+    Leica needed nothing: its DNGs carry their own calibration.
+74. **Fujifilm GFX files open.** Two faults in the RAF reader, found with
+    the first three GFX files it was given. A GFX 50S II's and a
+    GFX100RF's plain 16-bit strips were taken for compressed data and
+    refused, because the reader guessed from a strip's first bytes
+    (plain strips had always opened on zeroes; these open on picture
+    data): a strip of exactly two bytes a sample is now plain. And a
+    GFX 100 opened magenta, because a Bayer RAF's pattern was taken as
+    RGGB from the picture's corner, where it is the sensor's RGGB as the
+    crop finds it (GBRG when the crop starts on an odd row). The three
+    medium-format sensors have matrices in `camera_colour` too. No GFX
+    file is in the test samples: the two rules have unit tests, and the
+    three files were opened and measured by hand.
 
 ### Verified at the end
 
@@ -1228,14 +1280,31 @@ On the final tree (86ca279f4) and the engine built from it:
 
 - **A clipped glint under a moved white balance** takes the tint, and
   the lossy 5D3 file's glints keep a lavender halo (decision 70).
-- **Fujifilm's colour matrices** (`color_matrix_for_model`) are due to
-  be replaced.
+- **Fujifilm sensors other than X-Trans 4 and 5 and GFX** (X-Trans 3
+  and earlier, the X-H2S) keep the matrices they had (decision 73).
+- **A Bayer RAF is demosaiced bilinearly**, where an X-Trans one has a
+  better method: a GFX file is softer at 100 % than it could be.
 - **Standard as a profile on a RAF**: it would need its own opening
-  exposure. The film looks reach 0.81 to 0.83 of the camera JPEG's
-  chroma.
+  exposure. With the matrices of decision 73 the film looks sit at
+  0.87 to 1.23 of the camera JPEG's chroma over the eight samples, 1.02
+  on average.
 - **Sony**: lens corrections are not applied, and bodies without
   measured data use Sony's partial matrix.
 - **DNG**: JPEG XL tiles; a 48-megapixel ProRAW (untested);
-  `ProfileGainTableMap` in the baked decode; cameras that write DNG
-  natively (no sample: four Leica files were proposed, not downloaded).
+  `ProfileGainTableMap` in the baked decode.
+- **Lens corrections a DNG carries** (`OpcodeList3`). A Leica Q2's
+  file holds a `WarpRectilinear` for each colour plane, and without it
+  the picture is wider than the camera's with dark rounded corners
+  (the lens's image circle). The same step would serve Sony's and
+  Fujifilm's lens data. `OpcodeList1`'s bad-pixel repair is not applied
+  either. The M Monochroms (no colour filter) are untested.
+- **A picture wider or taller than the GPU's largest texture** (8368
+  pixels on the Q2, where SwiftShader and some integrated GPUs stop at
+  8192): the working image opens, but the full-size view fails, is
+  asked for again on every view change, and "Loading full resolution…"
+  never goes away; on the no-float way the photo does not open. Any
+  format, found with the Q2. This Mac's GPU takes 16384 and shows it.
+- **A Leica DNG's Kelvin readout** is high: 10200 to 11300 K for two
+  files shot under daylight-balanced light, where a Sony A7 III reads
+  5900 K. Not looked into.
 - **XMP export's Kelvin** still takes the RAF route only.

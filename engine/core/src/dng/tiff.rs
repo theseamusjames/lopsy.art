@@ -4,6 +4,7 @@
 #[repr(u16)]
 #[allow(dead_code)]
 pub enum TagId {
+    NewSubFileType = 254,
     ImageWidth = 256,
     ImageLength = 257,
     BitsPerSample = 258,

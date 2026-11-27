@@ -415,13 +415,8 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
     };
 
     // ── Compression detection ───────────────────────────────────
-    //
-    // Use both the TIFF-reported strip size and a structured-header
-    // check on the strip bytes themselves. Some compressed files have
-    // a strip_byte_count that matches the uncompressed size, so the
-    // TIFF check alone isn't reliable.
     let structured_compressed = compression::is_compressed_strip(pixel_data, raw_w as u32, raw_h as u32);
-    let is_compressed = cfa_meta.is_compressed || structured_compressed;
+    let is_compressed = strip_is_compressed(&cfa_meta, pixel_data, raw_w, raw_h);
 
     raf_log!("[RAF] compression: tiff_says={}, header_says={}, deciding={}",
         cfa_meta.is_compressed, structured_compressed, is_compressed);
@@ -524,7 +519,7 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
         raf_log!("[RAF] CFA phase auto-detected: row_shift={}, col_shift={}", rs, cs);
         shift_cfa(&base_pat, rs, cs)
     } else {
-        BAYER_RGGB_CFA
+        bayer_cfa(crop_top, crop_left)
     };
     let cfa_period = if is_xtrans { 6 } else { 2 };
 
@@ -554,8 +549,9 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
         }
     }
 
-    // Real per-camera camera→sRGB matrix derived from the DNG ColorMatrix1
-    // values in `color_matrix_for_model`. Column-scaled (neutralized) so
+    // The camera → sRGB matrix of `color_matrix_for_model`: the sensor's
+    // own from `camera_colour`, or one derived from an XYZ → camera
+    // matrix. Column-scaled (neutralized) so
     // that a neutral input (R=G=B, as produced by the as-shot WB) maps to
     // a neutral output — this preserves off-diagonal saturation structure
     // unlike per-row normalization, which scales each row independently and
@@ -781,8 +777,7 @@ pub fn debug_wb_mosaic(data: &[u8]) -> Result<(Vec<f32>, usize, usize, [u8; 36])
     };
 
     let base_pat_for_decompress = cfa_pattern.as_ref().copied().unwrap_or(DEFAULT_XTRANS_CFA);
-    let structured_compressed = compression::is_compressed_strip(pixel_data, raw_w as u32, raw_h as u32);
-    let is_compressed = cfa_meta.is_compressed || structured_compressed;
+    let is_compressed = strip_is_compressed(&cfa_meta, pixel_data, raw_w, raw_h);
 
     let raw_plane: Vec<u16> = if is_compressed {
         compression::decompress_fuji_strip(pixel_data, raw_w as u32, raw_h as u32, &base_pat_for_decompress)
@@ -827,7 +822,7 @@ pub fn debug_wb_mosaic(data: &[u8]) -> Result<(Vec<f32>, usize, usize, [u8; 36])
         let (rs, cs) = detect_cfa_shift(&normalized, w, h, &base_pat, crop_top as usize, crop_left as usize);
         shift_cfa(&base_pat, rs, cs)
     } else {
-        BAYER_RGGB_CFA
+        bayer_cfa(crop_top, crop_left)
     };
     let cfa_period = if is_xtrans { 6 } else { 2 };
 
@@ -909,8 +904,7 @@ pub fn debug_raw_mosaic(data: &[u8]) -> Result<(Vec<f32>, usize, usize, [u8; 36]
         u16::MAX
     };
 
-    let structured_compressed = compression::is_compressed_strip(pixel_data, raw_w as u32, raw_h as u32);
-    let is_compressed = cfa_meta.is_compressed || structured_compressed;
+    let is_compressed = strip_is_compressed(&cfa_meta, pixel_data, raw_w, raw_h);
 
     if is_compressed {
         return Err("debug_raw_mosaic: compressed RAF not supported — convert to uncompressed first".into());
@@ -1693,17 +1687,32 @@ impl UnitTables {
     }
 }
 
-/// A Bayer RAF's pattern, RGGB from the crop's top-left, repeated over the
-/// 36 entries `RafRenderParams::cfa` holds (Bayer uses the first four), 0 R,
-/// 1 G, 2 B. It is fixed rather than read from the CFA header's pattern
-/// (tag 0x0131): reading it needs a real Bayer RAF to check the pattern's
-/// phase against, and a wrong phase would swap red and blue in every
-/// Bayer RAF.
-const BAYER_RGGB_CFA: [u8; 36] = [
-    0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, //
-    0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, //
-    0, 1, 1, 2,
-];
+/// A Bayer RAF's pattern over the cropped picture, as the 36 entries
+/// `RafRenderParams::cfa` holds (Bayer uses the first four), 0 R, 1 G, 2 B.
+/// The sensor is RGGB from its own top-left corner, so the picture's
+/// pattern depends on whether the crop starts on an odd row or column: a
+/// GFX 100's starts on row 7 and its pattern is GBRG, a GFX 50S II's on
+/// row 8 and column 12 and its is RGGB. A Bayer RAF's CFA header has no
+/// pattern record of its own (X-Trans files have one, tag 0x0131).
+fn bayer_cfa(crop_top: u32, crop_left: u32) -> [u8; 36] {
+    const SENSOR: [[u8; 2]; 2] = [[0, 1], [1, 2]];
+    let at = |row: u32, col: u32| SENSOR[((row + crop_top) % 2) as usize][((col + crop_left) % 2) as usize];
+    let cell = [at(0, 0), at(0, 1), at(1, 0), at(1, 1)];
+    std::array::from_fn(|i| cell[i % 4])
+}
+
+/// Whether the strip holds Fujifilm-compressed data. A strip of exactly
+/// two bytes a sample is plain 16-bit data whatever it begins with: the
+/// guess from its first bytes (`compression::is_compressed_strip`, which
+/// expects an uncompressed strip to open on zeroes) took a GFX 50S II's
+/// and a GFX100RF's plain strips, which open on picture data, for
+/// compressed ones. The guess is kept for a strip of any other size.
+fn strip_is_compressed(cfa_meta: &CfaMeta, pixel_data: &[u8], raw_w: usize, raw_h: usize) -> bool {
+    if pixel_data.len() == raw_w * raw_h * 2 {
+        return false;
+    }
+    cfa_meta.is_compressed || compression::is_compressed_strip(pixel_data, raw_w as u32, raw_h as u32)
+}
 
 fn parse_cfa_tiff(cfa_section: &[u8]) -> Result<CfaMeta, String> {
     let reader = TiffReader::new(cfa_section)
@@ -1774,20 +1783,16 @@ fn camera_model_is_xtrans(model: &str) -> bool {
 // ── Color matrices ──────────────────────────────────────────────
 
 fn color_matrix_for_model(model: &str) -> [f32; 9] {
+    // A sensor with a matrix in `camera_colour` takes it. Its rows sum to
+    // 1, so the neutralizing and row-normalizing callers leave it as it is.
+    if let Some(matrix) = crate::camera_colour::fujifilm(model) {
+        return matrix;
+    }
+    // The other bodies: an XYZ → camera matrix each, inverted below.
     let m = model.to_uppercase();
 
-    let cm: [f64; 9] = if m.contains("X100VI") {
+    let cm: [f64; 9] = if m.contains("X-H2S") {
         [12662.0, -5961.0, -1025.0, -4129.0, 12025.0, 2399.0, -752.0, 1455.0, 6531.0]
-    } else if m.contains("X-T5") || m.contains("X-H2") || m.contains("X-S20") {
-        [12662.0, -5961.0, -1025.0, -4129.0, 12025.0, 2399.0, -752.0, 1455.0, 6531.0]
-    } else if m.contains("X-T4") || m.contains("X-T30") || m.contains("X-S10")
-        || m.contains("X-E4") || m.contains("X-PRO3") || m.contains("X100V")
-    {
-        [11434.0, -4948.0, -1210.0, -3746.0, 12042.0, 1903.0, -666.0, 1479.0, 6365.0]
-    } else if m.contains("X-T3") || m.contains("X-T20") || m.contains("X-E3")
-        || m.contains("X-H1") || m.contains("X-PRO2") || m.contains("X100F")
-    {
-        [11434.0, -4948.0, -1210.0, -3746.0, 12042.0, 1903.0, -666.0, 1479.0, 6365.0]
     } else if m.contains("X-T2") || m.contains("X-T1") || m.contains("X-T10")
         || m.contains("X-E2") || m.contains("X-PRO1") || m.contains("X100S")
         || m.contains("X100T")
@@ -1796,6 +1801,7 @@ fn color_matrix_for_model(model: &str) -> [f32; 9] {
     } else if m.contains("GFX") {
         [11771.0, -4689.0, -1322.0, -3625.0, 11999.0, 1830.0, -612.0, 1412.0, 6466.0]
     } else {
+        // X-Trans 3 (X-T20, X-E3, X-H1, X-Pro2, X100F) and anything unknown.
         [11434.0, -4948.0, -1210.0, -3746.0, 12042.0, 1903.0, -666.0, 1479.0, 6365.0]
     };
 
@@ -1839,12 +1845,28 @@ mod tests {
         assert_eq!(unit.at(2, 1)[600], 0.5, "(600 - 200) / (1000 - 200)");
     }
 
-    /// A Bayer RAF is RGGB, the pattern the decoder has always used for
-    /// one, whatever its CFA header says.
+    /// A Bayer RAF's pattern is the sensor's RGGB as the crop finds it.
     #[test]
-    fn a_bayer_raf_is_rggb() {
-        let rggb: [u8; 36] = std::array::from_fn(|i| [0u8, 1, 1, 2][i % 4]);
-        assert_eq!(BAYER_RGGB_CFA, rggb);
+    fn a_bayer_rafs_pattern_follows_its_crop() {
+        let cell = |top, left| bayer_cfa(top, left)[..4].to_vec();
+        assert_eq!(cell(0, 0), [0, 1, 1, 2], "RGGB");
+        assert_eq!(cell(8, 12), [0, 1, 1, 2], "a GFX 50S II: RGGB");
+        assert_eq!(cell(7, 8), [1, 2, 0, 1], "a GFX 100: GBRG");
+        assert_eq!(cell(0, 1), [1, 0, 2, 1], "GRBG");
+        assert_eq!(cell(1, 1), [2, 1, 1, 0], "BGGR");
+        let whole = bayer_cfa(7, 8);
+        assert!((0..36).all(|i| whole[i] == whole[i % 4]));
+    }
+
+    /// A strip of exactly two bytes a sample is plain, whatever it opens
+    /// with; the guess from the first bytes is for other sizes.
+    #[test]
+    fn a_strip_of_two_bytes_a_sample_is_not_compressed() {
+        let meta = |count: u32| CfaMeta { width: 16, height: 8, bits_per_sample: 14, strip_offset: 0, strip_byte_count: count, is_compressed: count < 16 * 8 * 2, black_level: None, as_shot_wb: None };
+        let busy = vec![0x7eu8; 16 * 8 * 2];
+        assert!(compression::is_compressed_strip(&busy, 16, 8), "the guess alone calls it compressed");
+        assert!(!strip_is_compressed(&meta(256), &busy, 16, 8));
+        assert!(strip_is_compressed(&meta(100), &busy[..100], 16, 8));
     }
 
     #[test]
@@ -2078,11 +2100,13 @@ mod tests {
     fn color_matrix_is_finite_and_sane() {
         // Diagonal-dominant, finite coefficients — a real cam→sRGB matrix,
         // not the degenerate identity returned on inversion failure.
-        let m = color_matrix_for_model("X-T5");
+        for model in ["X-T5", "X-T2"] {
+        let m = color_matrix_for_model(model);
         for v in m {
             assert!(v.is_finite());
         }
         assert!(m[0] > 0.0 && m[4] > 0.0 && m[8] > 0.0, "diagonal must be positive: {m:?}");
         assert_ne!(m, [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0], "matrix inversion failed");
+        }
     }
 }

@@ -355,8 +355,11 @@ the newer version made.
 - **Loading and working size.** RAF, DNG and Sony ARW decode on a pool of
   workers into the engine's RAW develop stage; an iPhone ProRAW's local
   tone map (its gain table map) is applied there. A DNG's data may be
-  uncompressed, lossless JPEG, lossy JPEG (Adobe's lossy conversions,
-  8-bit linear tiles) or deflate; one in JPEG XL is not read. A file the
+  uncompressed (8 to 16 bits a sample), lossless JPEG, lossy JPEG
+  (Adobe's lossy conversions, 8-bit linear tiles) or deflate; one in
+  JPEG XL is not read. DNGs written by a camera open the same way
+  (Leica's M, Q and SL bodies), without the lens corrections the file
+  carries. A file the
   RAW path cannot read, and DNG and ARW on a GPU without float targets,
   open as the engine's finished picture and are edited as an ordinary
   photo; when that cannot be read either, the Edit view says why. 16-bit
@@ -447,8 +450,9 @@ the newer version made.
   Standard and Monochrome. Each profile brings its own exposure, to which
   the Exposure slider adds. Eleven Sony bodies have colour computed from measured
   sensor data (RX100 IV, A6400, A7C II, A7 III, A7 IV, A7R II, A7R III,
-  A7R IV, A7S II, A7S III, A9). For any other body the colour is only
-  approximate (the file carries part of the camera's colour, so it is
+  A7R IV, A7S II, A7S III, A9), and three more have a colour matrix of
+  the engine's own (A6000, A6700, RX100 III). For any other body the
+  colour is only approximate (the file carries part of the camera's colour, so it is
   less saturated than the camera's JPEG): the decoder's sentence saying
   so sits in small text under the Profile menu, which a screen reader
   reads with the menu.

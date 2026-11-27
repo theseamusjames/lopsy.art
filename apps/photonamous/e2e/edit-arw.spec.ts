@@ -51,8 +51,8 @@ function samplePath(name: string): string | null {
 }
 
 const COLOR_NOTE = /^Colour is approximate/;
-/** Bodies the engine has no measured colour for: their decode says its colour is approximate. */
-const APPROXIMATE = new Set(['ILCE-6000_DSC01542.ARW', 'DSC-RX100M3_DSC00734.ARW']);
+/** Bodies without measured colour that have a matrix of the engine's own: one matrix, so no Kelvin and no presets, and nothing to say about the colour. Any other body's decode says its colour is approximate. */
+const OWN_MATRIX = new Set(['ILCE-6000_DSC01542.ARW', 'DSC-RX100M3_DSC00734.ARW']);
 
 /** Makes an edit and measures the screen preview rendered for it, once the edit has settled. */
 async function previewAfter(page: Page, edit: () => Promise<void>): Promise<ImageStats> {
@@ -222,9 +222,13 @@ test.describe('Every ARW sample opens on the RAW path, at the size the baked dec
         await mode.selectOption({ label: 'Daylight' });
         await expect.poll(() => lastStep(page)).toBe('White balance: Daylight');
       } else {
-        // No measured colour: Temperature in relative numbers, no presets, and the note, quietly under Profile and read with it.
-        await expect(note).toHaveText(COLOR_NOTE);
-        await expect(page.getByRole('combobox', { name: 'Profile' })).toHaveAccessibleDescription(COLOR_NOTE);
+        // No measured colour: Temperature in relative numbers and no presets. A body without a matrix of the engine's own also has the note, quietly under Profile and read with it.
+        if (OWN_MATRIX.has(name)) {
+          await expect(note).toHaveCount(0);
+        } else {
+          await expect(note).toHaveText(COLOR_NOTE);
+          await expect(page.getByRole('combobox', { name: 'Profile' })).toHaveAccessibleDescription(COLOR_NOTE);
+        }
         await expect(temperature).toHaveValue('0');
         await expect(mode.locator('option')).toHaveText(['As shot', 'Auto', 'Custom']);
       }

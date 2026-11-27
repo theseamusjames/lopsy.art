@@ -40,7 +40,11 @@ import { previewCount, settledPreview, waitForPreview, waitForReady } from './ha
  * four Sony bodies from LOPSY_ARW_SAMPLES, the four Canon DNGs (lossless
  * and lossy JPEG, mosaic and linear) from LOPSY_DNG_ADOBE_SAMPLES and the
  * two iPhone ProRAW files from
- * LOPSY_DNG_SAMPLES. In recipe 2 a DNG or ARW takes the first look after
+ * LOPSY_DNG_SAMPLES, and a DNG a camera wrote from
+ * LOPSY_DNG_CAMERA_SAMPLES (a Leica M10-R, whose raw image is in the
+ * file's first directory; the Leica Q2 is not here because its 8368
+ * pixels are wider than the 8192 SwiftShader's textures may be, which the
+ * no-float way's full-size upload needs). In recipe 2 a DNG or ARW takes the first look after
  * its camera's (Neutral, or a ProRAW's Standard).
  *
  * Needs LOPSY_RAF_SAMPLES (and the others for their files); each set is
@@ -52,7 +56,8 @@ const samples = process.env.LOPSY_RAF_SAMPLES;
 const arwSamples = process.env.LOPSY_ARW_SAMPLES;
 const dngSamples = process.env.LOPSY_DNG_ADOBE_SAMPLES;
 const prorawSamples = process.env.LOPSY_DNG_SAMPLES;
-/** The DNG and ARW samples fingerprinted: four Sony bodies (two with measured colour, two without), four Canon DNGs (a mosaic, a linear one and their lossy JPEG conversions) and two ProRAW files. */
+const cameraDngSamples = process.env.LOPSY_DNG_CAMERA_SAMPLES;
+/** The DNG and ARW samples fingerprinted: four Sony bodies (two with measured colour, two without), four Canon DNGs (a mosaic, a linear one and their lossy JPEG conversions), two ProRAW files and a Leica DNG. */
 const OTHER_RAW: readonly { readonly dir: string | undefined; readonly name: string }[] = [
   { dir: arwSamples, name: 'ILCE-7M3_DSC0009.ARW' },
   { dir: arwSamples, name: 'ILCE-7M4_DSC06677_FullFrame-Raw-Compressed.ARW' },
@@ -64,6 +69,7 @@ const OTHER_RAW: readonly { readonly dir: string | undefined; readonly name: str
   { dir: dngSamples, name: '5D3-adobe-lossy-rgb.dng' },
   { dir: prorawSamples, name: 'sample_dng_00.dng' },
   { dir: prorawSamples, name: 'sample_dng_01.dng' },
+  { dir: cameraDngSamples, name: 'Leica-M10-R-compressed.dng' },
 ];
 const isUpdate = process.env.LOPSY_RAW_PARITY_UPDATE === '1';
 const STORE = join(dirname(fileURLToPath(import.meta.url)), 'raw-parity');

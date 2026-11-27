@@ -5,7 +5,9 @@
 //!   the dispatch is bit-identical to `raf::develop::render_linear_band`'s,
 //!   the finished band to `raf::render_band`'s, and the description's
 //!   defaults and profiles are `raf::develop`'s.
-//! - DNG (`LOPSY_DNG_SAMPLES`, `LOPSY_DNG_ADOBE_SAMPLES`) and ARW
+//! - DNG (`LOPSY_DNG_SAMPLES`, `LOPSY_DNG_ADOBE_SAMPLES`, and
+//!   `LOPSY_DNG_CAMERA_SAMPLES`: any folder of DNGs a camera wrote, such
+//!   as Leica's) and ARW
 //!   (`LOPSY_ARW_SAMPLES`): bands through the dispatch are bit-identical to
 //!   the whole frame, the binned view works, and the lossy DNGs are refused
 //!   with "DNG cannot open as RAW:".
@@ -102,7 +104,7 @@ fn raf_through_the_interface_is_raf() {
 #[test]
 fn dng_and_arw_through_the_interface() {
     let mut all: Vec<(PathBuf, RawFormatId)> = Vec::new();
-    for var in ["LOPSY_DNG_SAMPLES", "LOPSY_DNG_ADOBE_SAMPLES"] {
+    for var in ["LOPSY_DNG_SAMPLES", "LOPSY_DNG_ADOBE_SAMPLES", "LOPSY_DNG_CAMERA_SAMPLES"] {
         all.extend(files(var, "dng").into_iter().map(|p| (p, RawFormatId::Dng)));
     }
     all.extend(files("LOPSY_ARW_SAMPLES", "arw").into_iter().map(|p| (p, RawFormatId::Arw)));
@@ -236,6 +238,7 @@ fn the_format_answers_finished_bands_as_its_descriptions_do() {
     let mut paths = files("LOPSY_RAF_SAMPLES", "raf");
     paths.extend(files("LOPSY_DNG_SAMPLES", "dng"));
     paths.extend(files("LOPSY_DNG_ADOBE_SAMPLES", "dng"));
+    paths.extend(files("LOPSY_DNG_CAMERA_SAMPLES", "dng"));
     paths.extend(files("LOPSY_ARW_SAMPLES", "arw"));
     let mut seen = 0;
     for path in paths {
