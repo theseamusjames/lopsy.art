@@ -40,8 +40,11 @@ function expectWithin(p: TilePlan, input: { limit: number; maxTilePixels: number
 }
 
 describe('planTiles', () => {
-  it('plans nothing for a document that fits', () => {
-    expect(planTiles({ document: { width: 8190, height: 5465 }, limit: 8190, maxTilePixels: HELD_Q2, apron: 466, angle: 0 })).toBeNull();
+  it('plans one tile, the document, for a document that fits', () => {
+    const document = { width: 8190, height: 5465 };
+    const p = plan({ document, apron: 466 });
+    expect([p.columns, p.rows, p.overdraw]).toEqual([1, 1, 1]);
+    expect(p.tiles).toEqual([{ kept: { x: 0, y: 0, ...document }, rect: { x: 0, y: 0, ...document } }]);
   });
 
   it('cuts a Leica Q2 in two on an 8192 GPU, with the largest apron of every stage', () => {

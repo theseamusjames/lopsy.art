@@ -150,8 +150,8 @@ function tilesOf(document: Size, xs: readonly number[], ys: readonly number[], a
 
 /**
  * The fewest tiles that make the document within the limits, and of those
- * the plan that renders the fewest pixels; null when the document needs
- * none (it fits as it is) or when no plan is workable (`MAX_OVERDRAW`,
+ * the plan that renders the fewest pixels: one, the document itself, when
+ * it fits as it is. Null when no plan is workable (`MAX_OVERDRAW`,
  * `MAX_TILES`).
  */
 export function planTiles(input: TilePlanInput): TilePlan | null {
@@ -163,8 +163,12 @@ export function planTiles(input: TilePlanInput): TilePlan | null {
     const window = turnedWindowSize(w, h, angle);
     return window.width <= limit && window.height <= limit;
   };
-  if (fits(document.width, document.height)) return null;
   const docPixels = document.width * document.height;
+  // One tile, the document itself: a crop that fits though the photo does not (a straightened one, a small crop).
+  if (fits(document.width, document.height)) {
+    const whole = { x: 0, y: 0, width: document.width, height: document.height };
+    return { tiles: [{ kept: whole, rect: whole }], columns: 1, rows: 1, apron, overdraw: 1 };
+  }
   let best: TilePlan | null = null;
   const maxPerAxis = Math.min(MAX_TILES, Math.ceil(Math.max(document.width, document.height) / 2));
   for (let count = 2; count <= MAX_TILES; count++) {
