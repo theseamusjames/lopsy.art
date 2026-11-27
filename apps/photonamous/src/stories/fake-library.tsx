@@ -12,6 +12,7 @@ import { FakeSession } from '../app/fake/fake-session';
 import { useUi } from '../app/store';
 
 let library: FakeSession | null = null;
+let driveLibrary: FakeSession | null = null;
 
 /** The story library: 24 seeded photos, made once. */
 export function fakeLibrary(): FakeSession {
@@ -33,6 +34,16 @@ export const withFakeLibrary: Decorator = (Story) => {
   const session = fakeLibrary();
   if (useUi.getState().connection?.session !== session) {
     useUi.getState().setConnection({ session, accountLabel: 'This browser' });
+  }
+  return <Story />;
+};
+
+/** Opens an empty Google Drive library in the store, for what Settings shows only for Drive. */
+export const withFakeDriveLibrary: Decorator = (Story) => {
+  fakeLibrary();
+  driveLibrary ??= new FakeSession('google-drive', 'Google Drive');
+  if (useUi.getState().connection?.session !== driveLibrary) {
+    useUi.getState().setConnection({ session: driveLibrary, accountLabel: 'Google Drive' });
   }
   return <Story />;
 };

@@ -1,65 +1,43 @@
-import { useEffect, useId, useRef, useState } from 'react';
-import type { RepairReport } from '@lopsy/photos-core/library/repair';
-import type { KeepOriginals } from '@lopsy/photos-core/cache/keep-originals';
+import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
+import { Cloud, Database, SlidersHorizontal, type LucideProps } from 'lucide-react';
 import { getBackend } from '../../app/backend-registry';
 import type { DeviceInfo } from '../../app/backend';
 import { useSession } from '../../app/hooks';
 import { useUi } from '../../app/store';
-import { clearPreviewCache } from '../../app/preview-cache';
-import { describeHealth, loadDriveAddMode, loadDrivePicker, saveDriveAddMode, saveDrivePicker, type DriveAddMode } from '../../app/device-settings';
-import { blocksCrossSiteCookies, chooseDrivePicker, type DrivePicker } from '../../import/drive-picker';
-import { formatBytes, plural } from '../../import/import-summary';
-import { Button } from '../Button/Button';
-import { CharacterKeysToggle } from '../CharacterKeysToggle/CharacterKeysToggle';
+import { useTabs } from '../../edit/tabs';
+import { CloudProviderSettings } from '../CloudProviderSettings/CloudProviderSettings';
+import { DataSettings } from '../DataSettings/DataSettings';
+import { GeneralSettings } from '../GeneralSettings/GeneralSettings';
 import { Modal } from '../Modal/Modal';
-import { focusedElement } from '@lopsy/ui/a11y/focus-trap';
-import { LeftoverAction } from '../LeftoverAction/LeftoverAction';
 import styles from './SettingsDialog.module.css';
 
-const KEEP_CHOICES: readonly { readonly mode: KeepOriginals; readonly label: string; readonly hint: string }[] = [
-  { mode: 'recent', label: 'Recent', hint: 'Up to 20 GB; the ones you opened longest ago go first.' },
-  { mode: 'all', label: 'All', hint: 'Downloads every original, for working without a connection. Shown in the sync panel.' },
-  { mode: 'none', label: 'None', hint: 'Only the photo you are editing.' },
+export type SettingsSectionId = 'general' | 'data' | 'cloud';
+
+const SECTIONS: readonly { readonly id: SettingsSectionId; readonly label: string; readonly icon: ComponentType<LucideProps> }[] = [
+  { id: 'general', label: 'General', icon: SlidersHorizontal },
+  { id: 'data', label: 'Data', icon: Database },
+  { id: 'cloud', label: 'Cloud provider', icon: Cloud },
 ];
+const SECTION_IDS = SECTIONS.map((s) => s.id);
+
+interface SettingsDialogProps {
+  /** The section it opens on. */
+  readonly initialSection?: SettingsSectionId;
+}
 
 /**
- * This device, adding from Drive, the library's health, and closing the
- * library. It opens on its first heading rather than on a button that
- * clears or changes something; Check library's progress and findings are
- * announced.
+ * Settings, in sections: a list of them on the left (a vertical tab list)
+ * and the chosen one's settings on the right. It opens on the chosen
+ * section's tab rather than on a control that clears or changes something.
+ * Every section stays mounted while the dialog is open, so a check under
+ * way, or its report, is still there after a look at another section.
  */
-export function SettingsDialog() {
+export function SettingsDialog({ initialSection = 'general' }: SettingsDialogProps) {
   const session = useSession();
   const openDialog = useUi((s) => s.openDialog);
-  const connection = useUi((s) => s.connection);
+  const [section, setSection] = useState<SettingsSectionId>(initialSection);
+  const { tabProps, panelProps } = useTabs(SECTION_IDS, section, setSection, 'vertical');
   const [device, setDevice] = useState<DeviceInfo | null>(null);
-  const [clearing, setClearing] = useState(false);
-  const [driveMode, setDriveMode] = useState<DriveAddMode>(loadDriveAddMode);
-  const [checking, setChecking] = useState(false);
-  const [report, setReport] = useState<RepairReport | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [cleared, setCleared] = useState('');
-  const checkRef = useRef<HTMLButtonElement>(null);
-  const driveHeadingId = useId();
-  const pickerHeadingId = useId();
-  const isDrive = session.adapter.kind === 'google-drive';
-  /** Offered only where there is a choice: a build that can show Google's Picker in the page. */
-  const canPickInPage = getBackend().canPickDriveInPage(session);
-  const [drivePicker, setDrivePicker] = useState<DrivePicker>(() =>
-    chooseDrivePicker({ pageAvailable: canPickInPage, remembered: loadDrivePicker(), blocksCrossSiteCookies: blocksCrossSiteCookies() }),
-  );
-  const choosePicker = (picker: DrivePicker) => {
-    setDrivePicker(picker);
-    saveDrivePicker(picker);
-  };
-  const [keep, setKeep] = useState<KeepOriginals | null>(() => getBackend().getKeepOriginals(session));
-  const chooseKeep = (mode: KeepOriginals) => {
-    setKeep(mode);
-    getBackend()
-      .setKeepOriginals(session, mode)
-      .then(refreshDevice)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-  };
 
   const refreshDevice = () => {
     getBackend()
@@ -69,198 +47,31 @@ export function SettingsDialog() {
   };
   useEffect(refreshDevice, [session]);
 
-  const check = async () => {
-    setChecking(true);
-    setError(null);
-    try {
-      setReport(await getBackend().checkLibrary(session));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setChecking(false);
-      // A Restore or Move button that had focus may have gone with what it fixed.
-      if (focusedElement() === null) checkRef.current?.focus();
-    }
-  };
-
-  const restore = async () => {
-    if (!report) return;
-    setChecking(true);
-    try {
-      await getBackend().restoreOriginals(session, report.trashed);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-    await check();
-  };
-
-  const addOrphans = () => {
-    if (!report) return;
-    useUi.getState().setImportJob(getBackend().addOrphans(session, report.orphans));
-    openDialog(null);
+  const panels: Record<SettingsSectionId, ReactNode> = {
+    general: <GeneralSettings deviceName={device?.deviceName ?? null} />,
+    data: <DataSettings device={device} onDeviceChange={refreshDevice} />,
+    cloud: <CloudProviderSettings />,
   };
 
   return (
-    <Modal title="Settings" width="md" onClose={() => openDialog(null)}>
-      <div className={styles.sections}>
-        <section className={styles.section}>
-          <h3 className={styles.heading} tabIndex={-1} data-autofocus>
-            This device
-          </h3>
-          <dl className={styles.facts}>
-            <dt>Name</dt>
-            <dd>{device?.deviceName ?? '…'}</dd>
-            <dt>Library</dt>
-            <dd>{connection?.accountLabel}</dd>
-            {device?.cacheBytes !== null && (
-              <>
-                <dt>Kept on this device</dt>
-                <dd>{device ? formatBytes(device.cacheBytes ?? 0) : '…'} of originals and previews</dd>
-              </>
-            )}
-          </dl>
-          {device?.cacheBytes !== null && (
-            <Button
-              size="sm"
-              aria-disabled={clearing || undefined}
-              onClick={async () => {
-                setClearing(true);
-                const isCleared = await getBackend()
-                  .clearDeviceCache(session)
-                  .then(
-                    () => true,
-                    (e: unknown) => {
-                      setError(e instanceof Error ? e.message : String(e));
-                      return false;
-                    },
-                  );
-                clearPreviewCache();
-                setClearing(false);
-                if (isCleared) setCleared('Cleared this device’s copies.');
-                refreshDevice();
-              }}
-            >
-              Clear this device’s copies
-            </Button>
-          )}
-          <p className={styles.srOnly} role="status">
-            {cleared}
-          </p>
-          {keep !== null && (
-            <fieldset className={styles.choices}>
-              <legend className={styles.legend}>Keep originals on this device</legend>
-              {KEEP_CHOICES.map((choice) => (
-                <label key={choice.mode} className={styles.option}>
-                  <input type="radio" name="keep-originals" checked={keep === choice.mode} onChange={() => chooseKeep(choice.mode)} />
-                  <span>
-                    {choice.label}
-                    <span className={styles.hint}>{choice.hint}</span>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
-          )}
-          <p className={styles.muted}>
-            {device?.cacheBytes === null
-              ? 'This library is stored in this browser, so there is nothing extra to clear.'
-              : 'Photos are fetched again when you open them. Changes not yet saved are kept.'}
-          </p>
-        </section>
-
-        {isDrive && (
-          <section className={styles.section}>
-            <h3 className={styles.heading} id={driveHeadingId}>
-              Adding from Google Drive
-            </h3>
-            <div className={styles.group} role="radiogroup" aria-labelledby={driveHeadingId}>
-              <label className={styles.option}>
-                <input
-                  type="radio"
-                  name="drive-add"
-                  checked={driveMode === 'move'}
-                  onChange={() => {
-                    setDriveMode('move');
-                    saveDriveAddMode('move');
-                  }}
-                />
-                Move them into the library’s Originals folder
-              </label>
-              <label className={styles.option}>
-                <input
-                  type="radio"
-                  name="drive-add"
-                  checked={driveMode === 'leave'}
-                  onChange={() => {
-                    setDriveMode('leave');
-                    saveDriveAddMode('leave');
-                  }}
-                />
-                Leave them where they are in Drive
-              </label>
+    <Modal title="Settings" width="lg" onClose={() => openDialog(null)}>
+      <div className={styles.layout}>
+        <div className={styles.nav} role="tablist" aria-label="Settings sections" aria-orientation="vertical">
+          {SECTIONS.map(({ id, label, icon: Icon }) => (
+            <button key={id} type="button" className={styles.tab} {...tabProps(id)} data-autofocus={id === initialSection ? '' : undefined}>
+              <Icon size={16} aria-hidden />
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className={styles.panel} {...panelProps}>
+          {SECTIONS.map(({ id, label }) => (
+            <div key={id} hidden={id !== section}>
+              <h3 className={styles.panelTitle}>{label}</h3>
+              {panels[id]}
             </div>
-            {canPickInPage && (
-              <>
-                <h4 className={styles.subheading} id={pickerHeadingId}>
-                  Google’s file picker opens
-                </h4>
-                <div className={styles.group} role="radiogroup" aria-labelledby={pickerHeadingId}>
-                  <label className={styles.option}>
-                    <input type="radio" name="drive-picker" checked={drivePicker === 'page'} onChange={() => choosePicker('page')} />
-                    Here, in the page
-                  </label>
-                  <label className={styles.option}>
-                    <input type="radio" name="drive-picker" checked={drivePicker === 'window'} onChange={() => choosePicker('window')} />
-                    In a Google window
-                  </label>
-                </div>
-                <p className={styles.muted}>
-                  In the page is quicker. If Google asks you to sign in there, your browser is blocking it: use a Google window, where
-                  you choose your account each time.
-                </p>
-              </>
-            )}
-          </section>
-        )}
-
-        <section className={styles.section}>
-          <h3 className={styles.heading}>Keyboard</h3>
-          <CharacterKeysToggle />
-        </section>
-
-        <section className={styles.section}>
-          <h3 className={styles.heading}>Library health</h3>
-          <p className={styles.muted}>Checks that every photo’s original is still in storage and unchanged.</p>
-          <Button ref={checkRef} size="sm" aria-disabled={checking || undefined} onClick={() => void check()}>
-            {checking ? 'Checking…' : 'Check library'}
-          </Button>
-          <div className={styles.reportRegion} role="status">
-            {report && (
-              <div className={styles.report}>
-                {describeHealth(report).map((line) => (
-                  <p key={line}>{line}</p>
-                ))}
-                <div className={styles.actions}>
-                  {report.trashed.length > 0 && (
-                    <Button size="sm" variant="primary" aria-disabled={checking || undefined} onClick={() => void restore()}>
-                      Restore {plural(report.trashed.length, 'original')} from the trash
-                    </Button>
-                  )}
-                  <LeftoverAction leftovers={report.leftovers} disabled={checking} onDone={() => void check()} />
-                  {report.orphans.length > 0 && (
-                    <Button size="sm" variant="primary" onClick={addOrphans}>
-                      Add {plural(report.orphans.length, 'photo')} back to the library
-                    </Button>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-          {error && (
-            <p className={styles.error} role="alert">
-              {error}
-            </p>
-          )}
-        </section>
+          ))}
+        </div>
       </div>
     </Modal>
   );

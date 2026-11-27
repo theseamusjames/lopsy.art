@@ -108,6 +108,7 @@ test("Google Drive: when the Picker in the page is stuck, Google's own window ta
 
   // Settings shows the choice, and gives the way back.
   await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('tab', { name: 'Cloud provider' }).click();
   await expect(page.getByRole('radio', { name: 'In a Google window' })).toBeChecked();
   expect(await axeViolations(page)).toEqual([]);
   await page.getByRole('radio', { name: 'Here, in the page' }).check();

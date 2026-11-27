@@ -35,6 +35,7 @@ test('delete, then Ctrl+Z: the photo and its original come back', async ({ page 
 
   // And nothing is left in the trash.
   await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('tab', { name: 'Data' }).click();
   await page.getByRole('button', { name: 'Check library' }).click();
   await expect(page.getByText('All 2 originals are where they should be.')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(/in the trash/)).toHaveCount(0);

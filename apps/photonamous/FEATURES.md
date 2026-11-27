@@ -83,7 +83,7 @@ is `docs/photonamous-spec.md`; running and setup are in
   you to sign in?", offers **Open in a Google window**: the same Picker
   in a window of Google's own, where the user chooses their account and
   agrees each time. Taking it is remembered on the device, Brave starts
-  with the window, and Settings > Adding from Google Drive has the
+  with the window, and Settings > Cloud provider has the
   choice. Photos picked in another Google account than the library's are
   refused with a message.
 - **Where the library lives** is named in the header, beside the
@@ -831,17 +831,22 @@ never talks to Google. Lopsy's side is in `apps/lopsy-web/FEATURES.md`
   and loads the photo again, and says "The graphics processor was
   reset"; if it cannot, it says so. The edit is never lost: it is in the
   library, not in the editor.
-- **Settings**:
-  - *This device*: its name, as other devices see it.
-  - *Kept on this device*: keep originals on this device (only the photo
-    being edited; up to 20 GB, oldest opened go first; or every
-    original, for working offline, shown in the sync panel), and clear
-    what is kept.
-  - *Adding from Google Drive* (Drive libraries).
-  - *Library health*: **Check library** verifies that every photo's
-    original is still in storage and unchanged, and marks the ones that
-    are not. When a delete left originals of deleted photos outside the
-    trash, it offers to move them there.
+- **Settings** lists its sections on the left and the chosen one's
+  settings on the right (below 600 px wide, the sections lie in a row
+  above them). A check under way, or its report, is still there after a
+  look at another section.
+  - *General*: this device's name, as other devices see it, and
+    *Keyboard* (single-key shortcuts).
+  - *Data*: what is *kept on this device* (keep originals: only the
+    photo being edited; up to 20 GB, oldest opened go first; or every
+    original, for working offline, shown in the sync panel; and clear
+    what is kept), and *Library health*: **Check library** verifies that
+    every photo's original is still in storage and unchanged, and marks
+    the ones that are not. When a delete left originals of deleted
+    photos outside the trash, it offers to move them there.
+  - *Cloud provider*: where the library is kept. Google Drive is the
+    only provider so far; a Drive library also has *Adding from Google
+    Drive* (move or leave) and where Google's file picker opens.
 
 ## Accessibility
 
@@ -858,7 +863,7 @@ best-practice rules at each step; the `a11y-*.spec.ts` and
   reached by keyboard. Animations stop when the system asks for reduced
   motion.
 - **Single-key shortcuts** (1–5, the label letters, X, R, J, ?…) can be
-  turned off in Settings > Keyboard, for speech input or stray key
+  turned off in Settings > General, for speech input or stray key
   presses. Shortcuts with Ctrl or ⌘, the arrow keys, Space, Enter and
   Escape keep working, and text fields get every key. The choice is kept
   on this device.
@@ -887,7 +892,8 @@ best-practice rules at each step; the `a11y-*.spec.ts` and
     column: header, sidebar, grid, details.
 - **Dialogs.** Tab and Shift+Tab stay inside the open dialog; Escape
   closes only the topmost dialog or popover, and focus goes back where it
-  was. Delete opens on Keep, Settings on its first heading.
+  was. Delete opens on Keep, Settings on its first section's tab (the
+  arrow keys move between sections).
 - **Popovers** (sync, keyboard shortcuts, filters): focus moves in when
   one opens and back when it closes; they close when focus moves out. The
   shortcut list scrolls with the arrow keys.
@@ -946,7 +952,7 @@ best-practice rules at each step; the `a11y-*.spec.ts` and
 ## Keyboard shortcuts
 
 Shown in the app with `?`. The one-key shortcuts below (digits, letters,
-`?`) can be turned off in Settings > Keyboard.
+`?`) can be turned off in Settings > General.
 
 | Keys | What |
 |---|---|

@@ -18,4 +18,10 @@ describe('nextTabIndex', () => {
     expect(nextTabIndex(0, 'Enter', 4)).toBeNull();
     expect(nextTabIndex(0, 'ArrowRight', 0)).toBeNull();
   });
+
+  it('takes Up and Down too in a vertical list', () => {
+    expect(nextTabIndex(0, 'ArrowDown', 3, 'vertical')).toBe(1);
+    expect(nextTabIndex(0, 'ArrowUp', 3, 'vertical')).toBe(2);
+    expect(nextTabIndex(2, 'ArrowRight', 3, 'vertical')).toBe(0);
+  });
 });

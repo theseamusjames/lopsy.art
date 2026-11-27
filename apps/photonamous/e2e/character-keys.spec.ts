@@ -2,7 +2,7 @@ import { expect, test } from './test';
 import { generatedJpeg, importFiles, tiles } from './library';
 
 /**
- * WCAG 2.1.4 Character Key Shortcuts: Settings > Keyboard turns the one-key
+ * WCAG 2.1.4 Character Key Shortcuts: Settings > General > Keyboard turns the one-key
  * shortcuts off, on this device. Ctrl and Cmd shortcuts, arrows and text
  * fields keep working.
  */
