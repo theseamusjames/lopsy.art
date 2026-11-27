@@ -510,8 +510,8 @@ taken for a DNG. The DNG tests (`e2e/edit-dng.spec.ts`,
 `e2e/white-balance-dng.spec.ts`) read the iPhone ProRAW files
 `sample_dng_00.dng` and `sample_dng_01.dng` from `LOPSY_DNG_SAMPLES`, and
 the Canon 5D Mark III DNGs from raw.pixls.us (`5D3-adobe-lossless.dng`,
-`5D3-adobe-lossless-rgb.dng`, `5D3-adobe-lossy.dng`) from
-`LOPSY_DNG_ADOBE_SAMPLES`. Each is skipped without its variable.
+`5D3-adobe-lossless-rgb.dng`, `5D3-adobe-lossy.dng`,
+`5D3-adobe-lossy-rgb.dng`) from `LOPSY_DNG_ADOBE_SAMPLES`. Each is skipped without its variable.
 
 **RAW parity.** `e2e/raw-parity.spec.ts` renders each RAF in
 `LOPSY_RAF_SAMPLES` in the Edit view at its working size under three
@@ -519,10 +519,11 @@ recipes, on the page's own develop path (linear), with `?develop=legacy`
 and with `?develop=no-float`, and compares a fingerprint of the exact
 render (a 64-bit hash, with a 12 × 8 grid of cell means to say where a
 change is) with the one stored in `e2e/raw-parity/<name>.txt`, keyed by
-browser, renderer and way. Four Sony ARWs (`LOPSY_ARW_SAMPLES`) and two
-Canon DNGs (`LOPSY_DNG_ADOBE_SAMPLES`) are fingerprinted the same way on
-the linear and no-float ways; the ProRAW samples are not yet. It runs in
-Chromium only, in about eleven minutes with four workers. A change that
+browser, renderer and way. Four Sony ARWs (`LOPSY_ARW_SAMPLES`), four
+Canon DNGs, lossless and lossy JPEG (`LOPSY_DNG_ADOBE_SAMPLES`), and the
+two ProRAW files (`LOPSY_DNG_SAMPLES`) are fingerprinted the same way on
+the linear and no-float ways. It runs in Chromium only, in about
+thirteen minutes with four workers. A change that
 is meant to move the RAW develop records new fingerprints for the
 renderer a run is on with `LOPSY_RAW_PARITY_UPDATE=1` (run it once per
 renderer, with `-g` to record only the samples meant to change); one

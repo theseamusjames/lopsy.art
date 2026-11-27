@@ -108,16 +108,41 @@ fn jpeg_ranges(data: &[u8]) -> Vec<(usize, usize)> {
     out
 }
 
-/// The camera's preview of the whole picture (`aspect` = width / height
-/// after orientation), its luminance median, or `None` (see the module
-/// notes). Never fails: a JPEG that does not decode is skipped.
-pub fn whole_picture_preview(data: &[u8], aspect: f64) -> Option<Preview> {
-    preview_of(data, &jpeg_ranges(data), &[aspect])
+/// The camera's preview of the whole picture (`width` × `height` after
+/// orientation), its luminance median, or `None` (see the module notes).
+/// Never fails: a JPEG that does not decode is skipped.
+pub fn whole_picture_preview(data: &[u8], width: u32, height: u32) -> Option<Preview> {
+    preview_of(data, &jpeg_ranges(data), &[f64::from(width) / f64::from(height.max(1))], width.max(height))
+}
+
+/// Whether a preview candidate's JPEG header (from `read_info`, before any
+/// pixel buffer is made) may be decoded: jpeg-decoder sizes its buffers
+/// from it. A camera's preview is rendered from the raw picture and is
+/// never larger than it, so each side is at most the picture's longer side
+/// (`picture_long`), and the pixel count within [`crate::decode::RAW_LIMITS`].
+/// A progressive JPEG keeps every coefficient of the full-size frame
+/// whatever scale it is decoded at (two bytes each, a 64-coefficient block
+/// per 8 × 8 of each component); its coefficients must fit the decode
+/// buffer cap ([`MAX_DECODE_BYTES`], 64 MB: a progressive RGB preview of up
+/// to about 10.6 MP), and a larger one is skipped. A baseline JPEG decoded
+/// at a reduced scale holds a row of blocks at a time.
+pub fn preview_header_fits(width: u16, height: u16, components: u32, progressive: bool, picture_long: u32) -> bool {
+    let (w, h) = (u32::from(width), u32::from(height));
+    if w == 0 || h == 0 || w.max(h) > picture_long || components == 0 {
+        return false;
+    }
+    if u64::from(w) * u64::from(h) > crate::decode::RAW_LIMITS.max_pixels {
+        return false;
+    }
+    let coefficients = u64::from(w.div_ceil(8)) * 8 * u64::from(h.div_ceil(8)) * 8 * u64::from(components) * 2;
+    !progressive || coefficients <= MAX_DECODE_BYTES as u64
 }
 
 /// [`whole_picture_preview`] over the JPEGs at `ranges` (offset, length,
-/// inside `data`), any of whose aspect is within 1 % of one of `aspects`.
-pub fn preview_of(data: &[u8], ranges: &[(usize, usize)], aspects: &[f64]) -> Option<Preview> {
+/// inside `data`), any of whose aspect is within 1 % of one of `aspects`,
+/// for a picture whose longer side is `picture_long`
+/// ([`preview_header_fits`]).
+pub fn preview_of(data: &[u8], ranges: &[(usize, usize)], aspects: &[f64], picture_long: u32) -> Option<Preview> {
     // Headers first, to choose without decoding every candidate.
     let mut candidates: Vec<(usize, usize, u32, u32)> = Vec::new();
     for &(o, n) in ranges {
@@ -129,8 +154,16 @@ pub fn preview_of(data: &[u8], ranges: &[(usize, usize)], aspects: &[f64]) -> Op
             continue;
         }
         let Some(info) = dec.info() else { continue };
+        let components = match info.pixel_format {
+            jpeg_decoder::PixelFormat::L8 | jpeg_decoder::PixelFormat::L16 => 1,
+            jpeg_decoder::PixelFormat::RGB24 => 3,
+            jpeg_decoder::PixelFormat::CMYK32 => 4,
+        };
+        if !preview_header_fits(info.width, info.height, components, info.coding_process == jpeg_decoder::CodingProcess::DctProgressive, picture_long) {
+            continue;
+        }
         let (w, h) = (u32::from(info.width), u32::from(info.height));
-        if w == 0 || h == 0 || !aspects.iter().any(|a| (f64::from(w) / f64::from(h) / a - 1.0).abs() <= 0.01) {
+        if !aspects.iter().any(|a| (f64::from(w) / f64::from(h) / a - 1.0).abs() <= 0.01) {
             continue;
         }
         candidates.push((o, n, w, h));
@@ -290,8 +323,27 @@ mod tests {
 
     #[test]
     fn no_preview_in_bytes_that_hold_none() {
-        assert!(whole_picture_preview(b"not a tiff", 1.5).is_none());
-        assert!(whole_picture_preview(&[], 1.5).is_none());
+        assert!(whole_picture_preview(b"not a tiff", 3, 2).is_none());
+        assert!(whole_picture_preview(&[], 3, 2).is_none());
+    }
+
+    #[test]
+    fn a_preview_header_larger_than_the_picture_or_too_costly_is_skipped() {
+        // A 6000 × 4000 picture: its 1616 × 1080 and full-size previews fit.
+        assert!(preview_header_fits(1616, 1080, 3, false, 6000));
+        assert!(preview_header_fits(6000, 4000, 3, false, 6000));
+        assert!(preview_header_fits(4000, 6000, 3, false, 6000), "either way round");
+        // A header claiming more than the picture, or nothing.
+        assert!(!preview_header_fits(60000, 40000, 3, false, 6000));
+        assert!(!preview_header_fits(6001, 4000, 3, false, 6000));
+        assert!(!preview_header_fits(0, 4000, 3, false, 6000));
+        assert!(!preview_header_fits(1616, 1080, 0, false, 6000));
+        // Progressive: its full-size coefficients must fit 64 MB.
+        assert!(preview_header_fits(1616, 1080, 3, true, 6000));
+        assert!(preview_header_fits(3264, 3264, 3, true, 65535), "3264 × 3264 × 3 × 2 = 63.9 MB");
+        assert!(!preview_header_fits(6000, 4000, 3, true, 6000), "144 MB of coefficients");
+        // The pixel budget, for a huge picture.
+        assert!(!preview_header_fits(65535, 65535, 1, false, 65535));
     }
 }
 
@@ -319,7 +371,7 @@ pub fn match_develop_exposure(data: &[u8], params: &super::linear::ArwRenderPara
 /// sRGB).
 pub fn match_develop_exposure_with(data: &[u8], params: &super::linear::ArwRenderParams, plane: &[f32], settings: &crate::raf::develop::RawDevelopSettings) -> Option<f32> {
     let (ow, oh) = params.oriented_size();
-    let preview = whole_picture_preview(data, f64::from(ow) / f64::from(oh))?;
+    let preview = whole_picture_preview(data, ow, oh)?;
     let (sw, sh, rgba) = preview_sized_view(plane, params, &preview)?;
     Some(match_rendered_median(&rgba, sw, sh, settings, preview.median, (MIN_EV, MAX_EV)))
 }

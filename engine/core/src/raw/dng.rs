@@ -23,7 +23,8 @@ fn preview_exposure(data: &[u8], params: &DngRenderParams, plane: &[f32], look: 
 /// The profiles of a file that opens with its own curve (its gain table
 /// map applied, its `ProfileToneCurve` usable): the camera look first,
 /// named "Camera" and standing for the maker's standard; then the
-/// Standard look, at the exposure that matches the camera's preview, when
+/// Standard look (id `standard-look`, not `standard`, which the app's
+/// recipe uses for the camera entry), at the exposure that matches the camera's preview, when
 /// there is one (at the BaselineExposure the Standard curve opens these
 /// files a stop or more too bright, so without a preview it is left out);
 /// then Neutral, and Monochrome as the camera look without colour.
@@ -36,7 +37,7 @@ fn camera_curve_profiles(defaults: &RawDevelopSettings, standard_ev: Option<f32>
     }
     if let Some(ev) = standard_ev {
         let standard = DevelopProfile {
-            id: "standard".into(),
+            id: "standard-look".into(),
             name: "Standard".into(),
             settings: ProfileSettings {
                 cam_to_rgb: defaults.cam_to_rgb,
@@ -129,5 +130,37 @@ impl RawFormat for Dng {
 
     fn temperature_for_kelvin(p: &DngRenderParams, kelvin: f32, tint: f32) -> Result<f32, String> {
         temperature_for_kelvin(&p.calibration, p.as_shot_gain, kelvin, tint)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn defaults() -> RawDevelopSettings {
+        RawDevelopSettings {
+            wb_ratio: [1.0; 3],
+            cam_to_rgb: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+            exposure_ev: 0.25,
+            saturation: 1.15,
+            highlight_desaturation: true,
+            base_curve: Some(vec![0.0, 0.5, 1.0]),
+            clip_levels: None,
+        }
+    }
+
+    /// DNG and ARW share `standard_profiles`; a gain-mapped DNG with its
+    /// own curve lists its Standard look as `standard-look`, with or
+    /// without the preview-matched entry.
+    #[test]
+    fn profile_ids_are_unique_and_none_is_the_apps_standard() {
+        let look = OpeningLook::default();
+        crate::raw::assert_profile_ids_are_safe(&standard_profiles(&defaults()));
+        let with = camera_curve_profiles(&defaults(), Some(-0.5), &look);
+        crate::raw::assert_profile_ids_are_safe(&with);
+        let ids: Vec<&str> = with.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(ids, ["camera", "standard-look", "neutral", "monochrome"]);
+        assert_eq!((with[1].name.as_str(), with[1].menu_name.as_str()), ("Standard", "Standard"));
+        crate::raw::assert_profile_ids_are_safe(&camera_curve_profiles(&defaults(), None, &look));
     }
 }

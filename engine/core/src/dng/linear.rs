@@ -41,7 +41,13 @@
 //! masks a border, a 2 × 2 black level, a white level of 15000 and a
 //! default crop to 5760 × 3840; and its LinearRaw variants. Each lines up
 //! with the file's own preview and macOS's decode at no shift, with hues
-//! within 1° of them. The lossy JPEG variants are refused (`read_dng`).
+//! within 1° of them. The lossy JPEG variants (compression 34892: 8-bit
+//! LinearRaw RGB in baseline JPEG tiles, stored through a curve) are read
+//! too, here and by the baked decode: their `OpcodeList2` `MapPolynomial` opcodes, applied to the linear
+//! reference values (0..1) before the as-shot gain as the specification
+//! orders (`dng::opcodes`), make them linear, and they open like their
+//! lossless siblings (`tests/dng_lossy.rs`). A lossy file whose
+//! `OpcodeList2` cannot be applied whole is refused with the reason.
 //!
 //! **The gain table map.** A LinearRaw file's `ProfileGainTableMap`
 //! (Apple's local tone map) is applied to the prepared plane in place,
@@ -345,6 +351,9 @@ pub(crate) struct PlaneMapping<'a> {
     pub black_origin: (usize, usize),
     pub scales: &'a [f64],
     pub gain: [f32; 3],
+    /// The file's `OpcodeList2` polynomials, applied to each linear
+    /// reference value (0..1) before the as-shot gain (`dng::opcodes`).
+    pub maps: Option<&'a super::opcodes::LinearMaps>,
 }
 
 /// Each sample plane's scale, `1 / (white level − the plane's largest
@@ -424,7 +433,10 @@ pub(crate) fn fill_plane(src: &StoredPlane, raw_of: impl Fn(u16) -> u16, m: &Pla
                     Some(t) if !t.is_empty() => t[(raw as usize).min(last)],
                     _ => raw,
                 };
-                let v = ((f64::from(lin) - m.black.at(row + m.black_origin.0, col + m.black_origin.1, s)) * m.scales[s]).min(1.0);
+                let mut v = ((f64::from(lin) - m.black.at(row + m.black_origin.0, col + m.black_origin.1, s)) * m.scales[s]).min(1.0);
+                if let Some(maps) = m.maps {
+                    v = maps.apply(s, v);
+                }
                 plane.push(v as f32 * m.gain[colour_of(row, col, s)]);
             }
         }
@@ -466,7 +478,7 @@ fn apply_gain_table_map(
     calibration: &DngCalibration,
     clip: [f32; 3],
     debug_log: &mut Vec<String>,
-) -> Result<[f32; 3], String> {
+) -> Result<Option<[f32; 3]>, String> {
     let refused = |why: String| format!("ProfileGainTableMap (local tone map; refused: {why})");
     let map = super::gain_map::parse(raw, big_endian).map_err(refused)?;
     let to_rimm = super::gain_map::camera_to_rimm(calibration, calibration.baseline_exposure)
@@ -579,13 +591,44 @@ pub fn prepare_dng_with(data: &[u8], options: PrepareOptions) -> Result<DngPrepa
         }
     };
     let source = StoredPlane { values: &pixel_data, width: sw, samples: stored.samples as usize, top, left, width_out: w, height_out: h };
-    let mapping = PlaneMapping { kind, cfa, table: table.as_deref(), black: &black, black_origin: area.from_active, scales: &scales, gain };
+    // OpcodeList2, when it can be applied whole (`dng::opcodes`): lossy
+    // data needs it to be linear, so a lossy file whose list cannot be
+    // applied is refused; a lossless one leaves it unapplied, as before.
+    let opcode_list2 = main.iter().find(|e| e.tag == TagId::OpcodeList2 as u16).or_else(|| ifd0.iter().find(|e| e.tag == TagId::OpcodeList2 as u16));
+    let maps = match opcode_list2.map(|e| super::opcodes::read_opcode_list2(&e.raw_bytes, stored.width, stored.height, spp)) {
+        Some(Ok(maps)) => {
+            unhandled.retain(|u| !u.starts_with("OpcodeList2"));
+            debug_log.push(format!("[DNG linear] OpcodeList2 applied: {} MapPolynomial", maps.polynomials.len()));
+            Some(maps)
+        }
+        Some(Err(why)) if stored.lossy => return Err(format!("{}: its OpcodeList2 cannot be applied ({why})", super::LOSSY_REFUSAL)),
+        Some(Err(why)) => {
+            debug_log.push(format!("[DNG linear] OpcodeList2 not applied: {why}"));
+            None
+        }
+        None if stored.lossy => return Err(format!("{}: it has no OpcodeList2 to make its samples linear", super::LOSSY_REFUSAL)),
+        None => None,
+    };
+    let mapping = PlaneMapping { kind, cfa, table: table.as_deref(), black: &black, black_origin: area.from_active, scales: &scales, gain, maps: maps.as_ref() };
     let mut plane = fill_plane(&source, raw_of, &mapping)?;
     drop(pixel_data);
 
+    // A LinearRaw pixel clipped in two channels or more, neutral
+    // (`neutral_clipped`), against the as-shot gains, which are the
+    // plane's clip levels; before the gain map, whose gain is the same for
+    // every channel of a pixel, so the pixel stays neutral. A Bayer
+    // plane's clipped pixels are made neutral after its reconstruction and
+    // demosaic, in the renders.
+    if kind == DngKind::Linear {
+        for px in plane.chunks_exact_mut(3) {
+            let c = neutral_clipped([px[0], px[1], px[2]], gain, 2);
+            px.copy_from_slice(&c);
+        }
+    }
+
     // The gain table map, on the prepared plane in place, so every band
     // and the binned view see it alike (`dng::gain_map`).
-    let mut clip_levels = gain;
+    let mut clip_levels = Some(gain);
     let mut map_applied = false;
     let map_entry = main.iter().chain(ifd0.iter()).find(|e| e.tag == TagId::ProfileGainTableMap as u16);
     if let (Some(entry), true) = (map_entry, options.apply_gain_table_map) {
@@ -647,7 +690,7 @@ pub fn prepare_dng_with(data: &[u8], options: PrepareOptions) -> Result<DngPrepa
         orientation,
         white_level,
         as_shot_gain: gain,
-        clip_levels: Some(clip_levels),
+        clip_levels,
         calibration,
         camera_model,
         highlight_chroma: None,
@@ -795,15 +838,70 @@ pub fn render_linear_band<P: PlaneParams + ?Sized>(src: &[f32], params: &P, band
         DngKind::Bayer => {
             // Clipped channels first, with the chroma at the rows' place in
             // the frame, as a RAF's are.
-            let reconstructed = grid.and_then(|g| g.reconstruct(src, w, src_h, band.src_y0 as usize, &params.cfa, 2));
+            let reconstructed = match grid {
+                Some(g) => g.try_reconstruct(src, w, src_h, band.src_y0 as usize, &params.cfa, 2)?,
+                None => None,
+            };
             let src = reconstructed.as_deref().unwrap_or(src);
             let rgb = super::demosaic::try_bilinear(src, params.width, src_h as u32, &params.cfa).ok_or(NO_MEMORY)?;
+            // Pixels clipped in every channel, neutral (`neutral_clipped`);
+            // without a chroma grid nothing came near its clip level.
+            let clip = grid.map(|g| g.clip);
             for px in rgb[skip * w * 3..(skip + rows) * w * 3].chunks_exact(3) {
-                rgba.extend_from_slice(&[px[0], px[1], px[2], 1.0]);
+                let c = clip.map_or([px[0], px[1], px[2]], |clip| neutral_clipped([px[0], px[1], px[2]], clip, 3));
+                rgba.extend_from_slice(&[c[0], c[1], c[2], 1.0]);
             }
         }
     }
     orient_band(rgba, params, band)
+}
+
+/// A pixel with `channels` (or more) of its channels at or near their clip
+/// levels, made neutral.
+///
+/// **Why it is not neutral already.** The plane is camera RGB times the
+/// as-shot gains, so channel `c` clips at `clip[c]`, the gain: unequal
+/// levels (1.65, 1, 2.17 on the 5D3 at about 3700 K). A clipped channel
+/// records only that the light was at least its clip level, so a glint
+/// clipped in every channel comes out at the clip levels themselves, the
+/// gains' colour: magenta at a tungsten white, pink at the RGB files'.
+///
+/// **What it is made instead.** A clipped channel is a lower bound, so a
+/// pixel clipped in every channel says nothing about its colour; what it
+/// most likely is, a specular reflection of the light the scene is lit by,
+/// is neutral at the as-shot white, the plane's white. The lowest neutral
+/// that meets every channel's bound is at the highest clip level (or at the
+/// pixel's largest channel, if reconstruction has put one higher), and the
+/// pixel is moved there, no further: the data says no more, and a neutral
+/// lifted above it would make the edge of a blown area climb as it reaches
+/// the clip and keep a blown sky white while Exposure is pulled down
+/// (measured, `tests/clipped_rim.rs`). The GPU applies the user's white
+/// balance after this, so a white balance moved off the as-shot one tints
+/// a clipped glint as it tints any neutral; keeping it white there is the
+/// RAW step's to do, after the white balance.
+///
+/// **Which pixels.** The move is weighted by how clipped the pixel's
+/// `channels`-th most clipped channel is (`raf::highlights::clip_weight`
+/// of its value/clip ratio: nothing below 90 %, all from 98 %, smoothstep
+/// between), so the change is continuous and a pixel with fewer channels
+/// near clip is untouched. A Bayer plane (whose renders reconstruct a
+/// partly clipped pixel from the colour around it first,
+/// `raf::highlights`) takes 3: only a pixel clipped everywhere, where there
+/// is nothing to reconstruct from. A LinearRaw plane (demosaiced before it
+/// reached us, nothing reconstructed) takes 2: its glints are ringed by
+/// pixels with two channels clipped and the third pulled down by the
+/// converter's demosaic, whose hue is the same artefact.
+#[inline]
+pub fn neutral_clipped(px: [f32; 3], clip: [f32; 3], channels: usize) -> [f32; 3] {
+    let mut ratio: [f32; 3] = std::array::from_fn(|c| px[c] / clip[c]);
+    ratio.sort_unstable_by(|a, b| b.total_cmp(a));
+    let governing = ratio[channels.clamp(1, 3) - 1];
+    if !(governing > crate::raf::highlights::RAMP_START) {
+        return px;
+    }
+    let w = crate::raf::highlights::clip_weight(governing, 1.0);
+    let top = px.iter().chain(clip.iter()).copied().fold(0.0f32, f32::max);
+    px.map(|v| v + w * (top - v))
 }
 
 /// Largest factor the binned view considers.
@@ -894,10 +992,14 @@ pub fn render_binned_linear<P: PlaneParams + ?Sized>(plane: &[f32], params: &P, 
         }
         for (bx, sum) in sums.iter().enumerate() {
             let o = (by * bw + bx) * 4;
-            rgba[o] = sum[0] / counts[0];
-            rgba[o + 1] = sum[1] / counts[1];
-            rgba[o + 2] = sum[2] / counts[2];
-            rgba[o + 3] = 1.0;
+            let mean = [sum[0] / counts[0], sum[1] / counts[1], sum[2] / counts[2]];
+            // A Bayer block clipped in every channel, neutral, as the band
+            // render makes its pixels (a LinearRaw plane already is).
+            let px = match (params.kind, grid) {
+                (DngKind::Bayer, Some(g)) => neutral_clipped(mean, g.clip, 3),
+                _ => mean,
+            };
+            rgba[o..o + 4].copy_from_slice(&[px[0], px[1], px[2], 1.0]);
         }
     }
     crate::orientation::try_apply_exif_orientation_owned(bw as u32, bh as u32, rgba, params.orientation).ok_or_else(|| NO_MEMORY.to_string())
@@ -1132,6 +1234,35 @@ mod tests {
 
     fn float_entry(tag: TagId, values: &[f32]) -> IfdEntry {
         IfdEntry { tag: tag as u16, typ: 11, count: values.len() as u32, raw_bytes: values.iter().flat_map(|v| v.to_ne_bytes()).collect() }
+    }
+
+    /// A pixel clipped in every channel becomes a neutral at the highest
+    /// clip level; one with a channel clearly under its clip is untouched;
+    /// in between the change is continuous; and with `channels` 2 two
+    /// clipped channels are enough.
+    #[test]
+    fn clipped_pixels_become_neutral_and_the_rest_do_not_move() {
+        let clip = [1.65f32, 1.0, 2.17];
+        let top = 2.17;
+        assert_eq!(neutral_clipped(clip, clip, 3), [top; 3]);
+        assert_eq!(neutral_clipped(clip.map(|c| c * 0.985), clip, 3), [top; 3]);
+        for px in [[0.2f32, 0.3, 0.4], [1.65, 0.85, 2.17], [1.65, 0.5, 0.3], [0.0, 0.0, 0.0], [-0.01, 0.2, 0.1]] {
+            assert_eq!(neutral_clipped(px, clip, 3), px, "{px:?}");
+        }
+        assert_eq!(neutral_clipped([1.65, 0.5, 0.3], clip, 2), [1.65, 0.5, 0.3]);
+        assert_eq!(neutral_clipped([1.65, 0.5, 2.17], clip, 2), [top; 3]);
+        // Continuous through the ramp: small steps of the input, small
+        // steps of the output.
+        let mut last = neutral_clipped(clip.map(|c| c * 0.89), clip, 3);
+        for i in 0..=100 {
+            let f = 0.89 + 0.1 * i as f32 / 100.0;
+            let now = neutral_clipped(clip.map(|c| c * f), clip, 3);
+            assert!(now.iter().zip(&last).all(|(a, b)| (a - b).abs() < 0.6), "{f}: {last:?} to {now:?}");
+            assert!(now.iter().zip(&last).all(|(a, b)| a >= b), "falls at {f}");
+            last = now;
+        }
+        // A reconstructed channel above the headroom sets the level.
+        assert_eq!(neutral_clipped([20.0, 1.0, 2.17], clip, 3), [20.0; 3]);
     }
 
     /// A `ProfileToneCurve` is used only when it is a curve the tone step

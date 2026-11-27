@@ -8,8 +8,8 @@
 //! files; the six of raw.pixls.us' Canon EOS 5D Mark III set: a Bayer
 //! mosaic uncompressed and lossless, the demosaiced "rgb" variants, and the
 //! two lossy ones). It is a variable of its own because `dng_develop.rs`
-//! expects every file in `LOPSY_DNG_SAMPLES` to take the linear path, and
-//! the lossy ones are refused. Without it the tests note that and pass.
+//! expects every file in `LOPSY_DNG_SAMPLES` to be a camera's own (the
+//! lossy ones are compared with their siblings in `dng_lossy.rs`). Without it the tests note that and pass.
 //! Full-size files: run with `--release`. With `LOPSY_DNG_ADOBE_REVIEW_DIR`,
 //! review images are written there.
 //!
@@ -34,8 +34,6 @@ use lopsy_core::working_space::Gamut;
 #[path = "support/raw_compare.rs"]
 mod raw_compare;
 use raw_compare::{best_shift, brightness, compare, embedded_jpeg, sips_reference, Picture};
-
-const LOSSY_REFUSAL: &str = "This DNG uses lossy JPEG compression, which is not supported yet";
 
 fn files() -> Vec<PathBuf> {
     let Some(dir) = std::env::var_os("LOPSY_DNG_ADOBE_SAMPLES") else { return Vec::new() };
@@ -84,10 +82,13 @@ fn adobe_dngs_load_and_match_their_references() {
         let t0 = std::time::Instant::now();
         let baked = lopsy_core::dng::read_dng(&data);
         let baked_ms = t0.elapsed().as_millis();
+        // The lossy files open on both paths; `dng_lossy.rs` compares
+        // them with their lossless siblings.
         if name.contains("lossy") {
-            assert_eq!(baked.err().as_deref(), Some(LOSSY_REFUSAL), "{name}");
-            assert_eq!(prepare_dng(&data).err().as_deref(), Some(LOSSY_REFUSAL), "{name}");
-            rows.push(format!("| {name} | refused: {LOSSY_REFUSAL} |"));
+            let img = baked.unwrap_or_else(|e| panic!("{name}: {e}"));
+            let prep = prepare_dng(&data).unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert_eq!((img.width, img.height), prep.params.oriented_size(), "{name}");
+            rows.push(format!("| {name} | lossy: linear and baked {}×{} (see dng_lossy.rs) |", img.width, img.height));
             continue;
         }
         let img = baked.unwrap_or_else(|e| panic!("{name}: {e}"));

@@ -5,7 +5,10 @@
  * image); `<stem>-edit-view.png`, the whole window; and
  * `<stem>-full-centre.png`, the canvas at 100 % (Full) on the middle of the
  * full-size picture, where the full-size bands meet. A file the app
- * refuses (the lossy DNGs) is captured with the Edit view saying why.
+ * refuses would be captured with the Edit view saying why (`isRefused`;
+ * none of today's samples is).
+ * A sample marked `isMinusTwo` is also captured with Exposure at −2
+ * (`<stem>-minus2-picture.png`), where clipped highlights show their colour.
  * `<stem>-menus.txt` lists what the Profile and White balance menus offer
  * and what Temperature reads (a native menu cannot be captured open), and
  * a file with more than one look to open with (a ProRAW: Camera and
@@ -30,6 +33,8 @@ interface Sample {
   readonly name: string;
   /** The Edit view refuses it: captured with its message. */
   readonly isRefused?: boolean;
+  /** Also captured with Exposure at −2 (`<stem>-minus2-picture.png`), to see what clipped highlights become when pulled down. */
+  readonly isMinusTwo?: boolean;
 }
 
 const arw = process.env.LOPSY_ARW_SAMPLES;
@@ -38,7 +43,7 @@ const adobe = process.env.LOPSY_DNG_ADOBE_SAMPLES;
 const raf = process.env.LOPSY_RAF_SAMPLES;
 
 const SAMPLES: readonly Sample[] = [
-  { dir: arw, name: 'ILCE-7M4_DSC06677_FullFrame-Raw-Compressed.ARW' },
+  { dir: arw, name: 'ILCE-7M4_DSC06677_FullFrame-Raw-Compressed.ARW', isMinusTwo: true },
   { dir: arw, name: 'ILCE-7M4_DSC06673_FullFrame-Raw-Uncompressed.ARW' },
   { dir: arw, name: 'ILCE-7M4_DSC06674_FullFrame-LossLess-Compressed-Large.ARW' },
   { dir: arw, name: 'ILCE-7M3_DSC0009.ARW' },
@@ -48,8 +53,8 @@ const SAMPLES: readonly Sample[] = [
   { dir: adobe, name: '5D3-adobe-uncompressed.dng' },
   { dir: adobe, name: '5D3-adobe-lossless-rgb.dng' },
   { dir: adobe, name: '5D3-adobe-uncompressed-rgb.dng' },
-  { dir: adobe, name: '5D3-adobe-lossy.dng', isRefused: true },
-  { dir: adobe, name: '5D3-adobe-lossy-rgb.dng', isRefused: true },
+  { dir: adobe, name: '5D3-adobe-lossy.dng', isMinusTwo: true },
+  { dir: adobe, name: '5D3-adobe-lossy-rgb.dng' },
   { dir: proraw, name: 'sample_dng_00.dng' },
   { dir: proraw, name: 'sample_dng_01.dng' },
   { dir: raf, name: 'DSCF8078.RAF' },
@@ -96,6 +101,20 @@ for (const sample of SAMPLES) {
         await settledPreview(page, from);
         await page.mouse.move(0, 0);
         await page.getByTestId('edit-canvas').screenshot({ path: join(outDir, `${stem}-${look.toLowerCase()}-picture.png`) });
+      }
+    }
+    if (sample.isMinusTwo) {
+      const exposure = page.getByLabel('Exposure value');
+      for (const value of ['-2', '0']) {
+        const from = await page.evaluate(() => window.__photosHarness?.previews.length ?? 0);
+        await exposure.fill(value);
+        await exposure.press('Enter');
+        await waitForPreview(page, from, 3 * 60_000);
+        await settledPreview(page, from);
+        if (value === '-2') {
+          await page.mouse.move(0, 0);
+          await page.getByTestId('edit-canvas').screenshot({ path: join(outDir, `${stem}-minus2-picture.png`) });
+        }
       }
     }
     // Full: the full-size picture, at 100 % on its middle.

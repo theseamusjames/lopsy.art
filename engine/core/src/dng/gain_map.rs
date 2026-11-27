@@ -246,7 +246,13 @@ impl GainTableMap {
     /// pixel with a channel near its level, still skips every clipped one
     /// (and some bright unclipped ones with them). A single level cannot
     /// say more: after the map the clip point differs from pixel to pixel.
-    pub fn clip_levels_after(&self, clip: [f32; 3], to_rimm: &[f32; 9]) -> [f32; 3] {
+    ///
+    /// `None` when that bound is 0 (or not a number): a map may hold gains
+    /// of 0 (the specification asks only that gains be non-negative), and
+    /// then a clipped channel can have become anything down to black, so
+    /// no level says where clipping is; without levels, the picker measures
+    /// every pixel, as it does for a file that records none.
+    pub fn clip_levels_after(&self, clip: [f32; 3], to_rimm: &[f32; 9]) -> Option<[f32; 3]> {
         // The largest input a pixel inside its clip levels can have: each
         // RIMM channel at most the sum of its positive terms, and the
         // input at most the weights' positive terms of those (any negative
@@ -256,7 +262,8 @@ impl GainTableMap {
         let w = &self.weights;
         let input_max = if w.iter().all(|&x| x >= 0.0) { w[0] * rimm_max[0] + w[1] * rimm_max[1] + w[2] * rimm_max[2] + (w[3] + w[4]) * peak } else { 1.0 };
         let g = self.smallest_gain_up_to(input_max);
-        clip.map(|c| c * g)
+        let levels = clip.map(|c| c * g);
+        levels.iter().all(|&l| l.is_finite() && l > 0.0).then_some(levels)
     }
 
     /// Multiply each pixel of an interleaved RGB plane (`width × height`,
@@ -451,7 +458,10 @@ mod tests {
         let m = parse(&raw, true).unwrap();
         // Clip 1: the input is at most 0.3, index 1.2, so entries 0..=2.
         let levels = m.clip_levels_after([1.0; 3], &identity());
-        assert_eq!(levels, [0.8; 3]);
+        assert_eq!(levels, Some([0.8; 3]));
+        // A gain of 0 within reach: no level, not a level of 0.
+        let zero = parse(&bytes(1, 1, 4, [1.0, 1.0], [0.0, 0.0], [0.1, 0.1, 0.1, 0.0, 0.0], &[3.0, 0.0, 1.0, 0.5], true), true).unwrap();
+        assert_eq!(zero.clip_levels_after([1.0; 3], &identity()), None);
     }
 
     #[test]

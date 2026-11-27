@@ -972,6 +972,10 @@ engine RFC may refine it before 1.0 ships.
 - Every recipe records its `pipeline` version.
 - The engine keeps every released version's code paths, so an old edit
   renders exactly as it did. Golden-image tests guard this (10).
+- Until the app has users to speak of (the owner's call, November
+  2026), a rendering change may ship without a new pipeline version, and
+  existing edits then render on the new path
+  (`docs/photonamous-linear-plan.md`, section 9, decision 63).
 - New edits use the newest version. **Update to the latest editing
   engine** is offered per photo or in bulk. It shows the before and
   after, and is itself a history step.

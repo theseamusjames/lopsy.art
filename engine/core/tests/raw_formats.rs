@@ -111,15 +111,7 @@ fn dng_and_arw_through_the_interface() {
         let data = std::fs::read(&path).unwrap();
         assert_eq!(raw::sniff(&data), Some(format), "{name}");
         let t0 = std::time::Instant::now();
-        let prep = match raw::prepare(&data) {
-            Ok(p) => p,
-            Err(e) if name.contains("lossy") => {
-                assert_eq!(e, "DNG cannot open as RAW: This DNG uses lossy JPEG compression, which is not supported yet", "{name}");
-                println!("{name}: refused: {e}");
-                continue;
-            }
-            Err(e) => panic!("{name}: {e}"),
-        };
+        let prep = raw::prepare(&data).unwrap_or_else(|e| panic!("{name}: {e}"));
         let prepare_ms = t0.elapsed().as_millis();
         let d = &prep.description;
         assert_eq!(d.format, format);

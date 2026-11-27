@@ -590,7 +590,7 @@ pub struct ArwImage {
 pub fn read_arw(data: &[u8]) -> Result<ArwImage, String> {
     let prep = linear::prepare_arw(data)?;
     let (ow, oh) = prep.params.oriented_size();
-    match exposure::whole_picture_preview(data, f64::from(ow) / f64::from(oh)) {
+    match exposure::whole_picture_preview(data, ow, oh) {
         Some(preview) => bake_matched(prep, &preview),
         None => bake_prepared(prep, 0.0),
     }

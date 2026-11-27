@@ -298,7 +298,7 @@ fn after_panel(prep: &PreparedRaw, label: &str) -> Panel {
 /// settings: the map with the Standard curve, matched to the preview.
 fn standard_profile_settings(prep: &PreparedRaw) -> RawDevelopSettings {
     let d = &prep.description.develop_defaults;
-    let s = &prep.description.profiles.iter().find(|p| p.id == "standard").expect("a Standard entry").settings;
+    let s = &prep.description.profiles.iter().find(|p| p.id == "standard-look").expect("a Standard entry").settings;
     RawDevelopSettings { cam_to_rgb: s.cam_to_rgb, exposure_ev: s.exposure_ev, saturation: s.saturation, highlight_desaturation: s.highlight_desaturation, base_curve: s.base_curve.clone(), ..d.clone() }
 }
 
@@ -542,7 +542,7 @@ fn a_prorav_lists_its_camera_look_first() {
         let d = &prep.description;
         assert!(!d.not_applied.iter().any(|u| u.starts_with("ProfileToneCurve") || u.starts_with("ProfileGainTableMap ")), "{name}: {:?}", d.not_applied);
         let ids: Vec<&str> = d.profiles.iter().map(|p| p.id.as_str()).collect();
-        assert_eq!(ids, ["camera", "standard", "neutral", "monochrome"], "{name}");
+        assert_eq!(ids, ["camera", "standard-look", "neutral", "monochrome"], "{name}");
         let camera = &d.profiles[0];
         assert_eq!((camera.name.as_str(), camera.menu_name.as_str(), camera.maker_standard, camera.listed), ("Camera", "Camera", true, true));
         assert_eq!(camera.role, lopsy_core::raf::develop::ProfileRole::Camera);

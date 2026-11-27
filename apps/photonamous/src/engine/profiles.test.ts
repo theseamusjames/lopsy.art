@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { IMAGE_PROFILES, RAW_FALLBACK_PROFILES, parseDevelopProfiles, profilesFor, recipeProfileId, selectedProfile } from './profiles';
+import { IMAGE_PROFILES, RAW_FALLBACK_PROFILES, parseDevelopProfiles, profilesFor, selectedProfile } from './profiles';
 
 describe('parseDevelopProfiles', () => {
   it('reads the engine list, with the camera look under the recipe id', () => {
@@ -60,10 +60,10 @@ describe('profilesFor', () => {
 });
 
 describe('profiles from the engine', () => {
-  it("keeps a look the engine calls standard apart from the camera's entry", () => {
+  it("reads a ProRAW's Camera under the recipe's standard, and its Standard look under its own id", () => {
     const json = JSON.stringify([
       { id: 'camera', name: 'Camera', settings: { exposureEv: -0.17 }, role: 'camera', menuName: 'Camera', listed: true, sameAs: null, makerStandard: true },
-      { id: 'standard', name: 'Standard', settings: { exposureEv: -0.78 }, role: 'look', menuName: 'Standard', listed: true, sameAs: null, makerStandard: false },
+      { id: 'standard-look', name: 'Standard', settings: { exposureEv: -0.78 }, role: 'look', menuName: 'Standard', listed: true, sameAs: null, makerStandard: false },
       { id: 'neutral', name: 'Neutral', role: 'neutral', menuName: 'Neutral', listed: true },
       { id: 'monochrome', name: 'Monochrome', role: 'monochrome', menuName: 'Monochrome', listed: true },
     ]);
@@ -71,9 +71,6 @@ describe('profiles from the engine', () => {
     expect(profiles.map((p) => p.id)).toEqual(['standard', 'standard-look', 'neutral', 'monochrome']);
     expect(profiles.find((p) => p.id === 'standard-look')?.settings?.exposureEv).toBe(-0.78);
     expect(profilesFor(true, profiles).map((p) => p.name)).toEqual(['Camera', 'Standard', 'Neutral', 'Monochrome']);
-    expect(recipeProfileId('camera')).toBe('standard');
-    expect(recipeProfileId('standard')).toBe('standard-look');
-    expect(recipeProfileId('velvia')).toBe('velvia');
   });
 
   it('reads the roles, menu names and listing of each entry', () => {

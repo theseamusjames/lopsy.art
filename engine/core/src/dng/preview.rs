@@ -108,13 +108,16 @@ fn preview_ranges(data: &[u8]) -> Vec<(usize, usize)> {
 }
 
 /// The camera's preview of a DNG whose opening exposure should be matched
-/// to it, or `None` (see the module notes). `aspect` is the picture's
-/// width over height, either orientation.
-pub fn camera_preview_for_exposure(data: &[u8], aspect: f64) -> Option<Preview> {
+/// to it, or `None` (see the module notes). `width` × `height` is the
+/// picture's size after orientation; a preview of either orientation is
+/// taken, and none larger than the picture
+/// (`arw::exposure::preview_header_fits`).
+pub fn camera_preview_for_exposure(data: &[u8], width: u32, height: u32) -> Option<Preview> {
     if !has_gain_map(data) || written_by_a_converter(data) {
         return None;
     }
-    preview_of(data, &preview_ranges(data), &[aspect, 1.0 / aspect])
+    let aspect = f64::from(width) / f64::from(height.max(1));
+    preview_of(data, &preview_ranges(data), &[aspect, 1.0 / aspect], width.max(height))
 }
 
 /// The opening exposure at which the develop chain's rendering with
@@ -131,7 +134,7 @@ pub fn matched_exposure(
 ) -> Option<f32> {
     use crate::arw::exposure::{match_rendered_median, preview_sized_view};
     let (ow, oh) = params.oriented_size();
-    let preview = camera_preview_for_exposure(data, f64::from(ow) / f64::from(oh))?;
+    let preview = camera_preview_for_exposure(data, ow, oh)?;
     let (sw, sh, rgba) = preview_sized_view(plane, params, &preview)?;
     let base = params.calibration.baseline_exposure as f32;
     Some(match_rendered_median(&rgba, sw, sh, settings, preview.median, (base - below, base + above)))
@@ -143,7 +146,7 @@ mod tests {
 
     #[test]
     fn bytes_that_are_not_a_dng_have_no_preview_and_no_gain_map() {
-        assert!(camera_preview_for_exposure(b"not a tiff", 1.5).is_none());
+        assert!(camera_preview_for_exposure(b"not a tiff", 3, 2).is_none());
         assert!(!has_gain_map(&[]));
         assert!(!written_by_a_converter(b"II*\0"));
     }

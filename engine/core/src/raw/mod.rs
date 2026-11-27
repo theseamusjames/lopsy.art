@@ -235,7 +235,9 @@ pub trait RawFormat {
 ///
 /// A DNG that opens with its own curve (its gain table map applied, its
 /// `ProfileToneCurve` used) lists its camera look first instead, "Camera",
-/// then Standard matched to the camera's preview (`raw::dng`).
+/// then Standard matched to the camera's preview (`raw::dng`), id
+/// `standard-look`: the app's recipe already calls the camera entry
+/// `standard`, so no other entry may.
 pub(crate) fn standard_profiles(defaults: &RawDevelopSettings) -> Vec<DevelopProfile> {
     let settings = |saturation: f32, base_curve: Option<Vec<f32>>| ProfileSettings {
         cam_to_rgb: defaults.cam_to_rgb,
@@ -399,4 +401,22 @@ pub fn white_for_recipe(format: RawFormatId, params_json: &str, temperature: f32
 /// The recipe temperature whose white reads `kelvin` at the recipe's tint.
 pub fn temperature_for_kelvin(format: RawFormatId, params_json: &str, kelvin: f32, tint: f32) -> Result<f32, String> {
     dispatch!(format, F => F::temperature_for_kelvin(&params_from::<<F as RawFormat>::Params>(format, params_json)?, kelvin, tint))
+}
+
+/// A profile list's ids are unique, the camera entry (and only it) is
+/// `camera`, and no entry is `standard`: the app reads the camera entry
+/// under its recipe id `standard`, so another entry with that id would
+/// collide with it.
+#[cfg(test)]
+pub(crate) fn assert_profile_ids_are_safe(list: &[crate::raf::develop::DevelopProfile]) {
+    use crate::raf::develop::ProfileRole;
+    let ids: Vec<&str> = list.iter().map(|p| p.id.as_str()).collect();
+    let mut unique = ids.clone();
+    unique.sort_unstable();
+    unique.dedup();
+    assert_eq!(unique.len(), ids.len(), "repeated ids: {ids:?}");
+    for p in list {
+        assert_ne!(p.id, "standard", "{ids:?}");
+        assert_eq!(p.id == "camera", p.role == ProfileRole::Camera, "{}: {:?}", p.id, p.role);
+    }
 }

@@ -256,14 +256,25 @@ pub fn recipe_temperature_tint(preset: [f32; 3], as_shot: [f32; 3]) -> (f32, f32
 pub fn recipe_presets(camera: &CameraWhiteBalance, as_shot: [f32; 3]) -> Vec<RecipeWbPreset> {
     let end = crate::scene_tone::WB_SLIDER_END;
     let slider = |v: f32| v.clamp(-end, end).round() + 0.0;
+    if !is_white(as_shot) {
+        return Vec::new();
+    }
     camera
         .presets
         .iter()
-        .map(|p| {
+        .filter(|p| is_white(p.multipliers))
+        .filter_map(|p| {
             let (t, m) = recipe_temperature_tint(p.multipliers, as_shot);
-            RecipeWbPreset { name: p.name.to_string(), temperature: slider(t), tint: slider(m) }
+            (t.is_finite() && m.is_finite()).then(|| RecipeWbPreset { name: p.name.to_string(), temperature: slider(t), tint: slider(m) })
         })
         .collect()
+}
+
+/// Whether white balance multipliers are a white: every channel a finite
+/// number above 0. A 0 (or a NaN) would make temperatures infinite and
+/// the fits below NaN.
+pub fn is_white(m: [f32; 3]) -> bool {
+    m.iter().all(|&v| v.is_finite() && v > 0.0)
 }
 
 /// How the recipe's temperature maps to a colour temperature for display:
@@ -286,11 +297,15 @@ pub struct KelvinScale {
 /// rises with it, as in other raw editors. `None` with fewer than two
 /// standard illuminants.
 pub fn kelvin_scale(camera: &CameraWhiteBalance, as_shot: [f32; 3]) -> Option<KelvinScale> {
+    if !is_white(as_shot) {
+        return None;
+    }
     let points: Vec<(f32, f32)> = camera
         .calibration
         .iter()
-        .filter(|(code, _)| standard_illuminant_xy(*code).is_some())
+        .filter(|(code, m)| standard_illuminant_xy(*code).is_some() && is_white(*m))
         .filter_map(|&(code, m)| Some((recipe_temperature_tint(m, as_shot).0, (1e6 / illuminant_kelvin(code)?) as f32)))
+        .filter(|p| p.0.is_finite() && p.1.is_finite())
         .collect();
     if points.len() < 2 {
         return None;
@@ -298,12 +313,13 @@ pub fn kelvin_scale(camera: &CameraWhiteBalance, as_shot: [f32; 3]) -> Option<Ke
     let n = points.len() as f32;
     let (mx, my) = (points.iter().map(|p| p.0).sum::<f32>() / n, points.iter().map(|p| p.1).sum::<f32>() / n);
     let sxx: f32 = points.iter().map(|p| (p.0 - mx) * (p.0 - mx)).sum();
-    if sxx < 1e-6 {
+    // Written so that a NaN fails them.
+    if !(sxx >= 1e-6) {
         return None;
     }
     let slope = points.iter().map(|p| (p.0 - mx) * (p.1 - my)).sum::<f32>() / sxx;
     let at_zero = my - slope * mx;
-    if at_zero <= 0.0 || slope >= 0.0 {
+    if !(at_zero > 0.0 && slope < 0.0 && (1e6 / at_zero).is_finite()) {
         return None;
     }
     Some(KelvinScale { mired_at_zero: at_zero, mired_per_unit: slope, as_shot_kelvin: 1e6 / at_zero })
@@ -416,6 +432,17 @@ mod tests {
     }
 
     #[test]
+    fn a_white_with_a_zero_or_nan_channel_gives_no_presets_and_no_nan() {
+        let cam = camera(&[("Daylight", [1.8, 1.0, 1.8]), ("Broken", [0.0, 1.0, 1.8])]);
+        for bad in [[0.0, 1.0, 1.5], [1.8, 1.0, 0.0], [f32::NAN, 1.0, 1.5]] {
+            assert!(recipe_presets(&cam, bad).is_empty(), "{bad:?}");
+        }
+        let ok = recipe_presets(&cam, [1.8, 1.0, 1.8]);
+        assert_eq!(ok.len(), 1, "the preset with a 0 channel is left out");
+        assert!(ok.iter().all(|p| p.temperature.is_finite() && p.tint.is_finite()));
+    }
+
+    #[test]
     fn kelvin_is_fitted_through_the_standard_illuminants() {
         let (a, d65) = ([1.2, 1.0, 2.8], [2.0, 1.0, 1.6]);
         let cam = CameraWhiteBalance { presets: Vec::new(), calibration: vec![(17, a), (21, d65)] };
@@ -433,6 +460,15 @@ mod tests {
         assert!((t_back - 30.0).abs() < 1e-2);
         // One illuminant, or codes without a standard illuminant: no scale.
         assert!(kelvin_scale(&CameraWhiteBalance { presets: Vec::new(), calibration: vec![(17, a)] }, d65).is_none());
+        // An as-shot or calibration white with a channel of 0 or NaN gives
+        // no scale and no presets, never NaN.
+        let cam = CameraWhiteBalance { presets: Vec::new(), calibration: vec![(17, a), (21, d65)] };
+        for bad in [[0.0, 1.0, 1.5], [1.8, 1.0, 0.0], [f32::NAN, 1.0, 1.5], [f32::INFINITY, 1.0, 1.5], [-1.0, 1.0, 1.5]] {
+            assert!(kelvin_scale(&cam, bad).is_none(), "{bad:?}");
+            assert!(!is_white(bad));
+        }
+        let half_bad = CameraWhiteBalance { presets: Vec::new(), calibration: vec![(17, [0.0, 1.0, 1.0]), (21, d65)] };
+        assert!(kelvin_scale(&half_bad, d65).is_none(), "one point left is no line");
         assert!(kelvin_scale(&CameraWhiteBalance { presets: Vec::new(), calibration: vec![(2, a), (12, d65)] }, d65).is_none());
     }
 

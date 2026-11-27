@@ -354,8 +354,10 @@ the newer version made.
 
 - **Loading and working size.** RAF, DNG and Sony ARW decode on a pool of
   workers into the engine's RAW develop stage; an iPhone ProRAW's local
-  tone map (its gain table map) is applied there. A DNG the RAW path cannot
-  read (a lossy one), and DNG and ARW on a GPU without float targets,
+  tone map (its gain table map) is applied there. A DNG's data may be
+  uncompressed, lossless JPEG, lossy JPEG (Adobe's lossy conversions,
+  8-bit linear tiles) or deflate; one in JPEG XL is not read. A file the
+  RAW path cannot read, and DNG and ARW on a GPU without float targets,
   open as the engine's finished picture and are edited as an ordinary
   photo; when that cannot be read either, the Edit view says why. 16-bit
   PNG at full depth; JPEG and WebP through the browser. Editing starts on
@@ -484,8 +486,10 @@ the newer version made.
   a range of screen values. Highlights pulled down brings back detail
   in highlights the default rendering shows as white, a RAW file's
   clipped highlights included (the decoder rebuilds those from the
-  channels that did not clip). Auto measures the photo's light the same
-  way.
+  channels that did not clip). On a DNG or a Sony ARW a highlight clipped
+  in every channel at the sensor renders neutral white, and grey when
+  Exposure is pulled down, not tinted by the white balance. Auto measures
+  the photo's light the same way.
 - **Color**: Vibrance, Saturation. Colour (these, Color by hue and Color
   Grading) is adjusted in a perceptual colour space (OkLab), so a change
   of saturation or hue keeps a colour's brightness.
