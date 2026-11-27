@@ -88,7 +88,7 @@ pub fn prepare_cr2(data: &[u8]) -> Result<Cr2Prepared, String> {
     let info = read_info(data)?;
     let mosaic = read_mosaic(data, &info)?;
     let preview = preview_rgb(data, info.crop);
-    let measured = levels::measure(&mosaic, info.width as usize, info.crop, info.bits, info.as_shot_gain, preview.as_ref())?;
+    let measured = levels::measure(&mosaic, info.width as usize, info.crop, info.bits, info.as_shot_gain, preview.as_ref(), &info.camera_model)?;
     let c = info.crop;
     let (top, left, w, h) = (c.top as usize, c.left as usize, c.width as usize, c.height as usize);
     // The pattern and the black levels from the crop's top-left.

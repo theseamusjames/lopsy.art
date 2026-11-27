@@ -23,9 +23,13 @@
 //! value in it is the pile seen on the 5D Mark III, so it is not used.
 //!
 //! **The colour filter.** Most bodies' sensors start red, green / green,
-//! blue at the top left, but not all: the 7D's starts with green. The two
-//! greens are the diagonal pair whose samples differ least from each other
-//! inside each 2×2 block. Which of the other two is red is read from the
+//! blue at the top left, but not all: the 7D's starts with green. A body
+//! whose layout its sample established is not measured again (`SAMPLED`).
+//! For any other, the two greens are the diagonal pair whose samples, less
+//! each position's black, differ least from each other inside each 2×2
+//! block; when the two pairs differ by too little to say (a dark or noisy
+//! frame), the layout every sampled body but one has is taken, and the
+//! debug log says so. Which of the other two is red is read from the
 //! camera's own preview: across a grid of cells, the log ratio of the two
 //! positions follows the preview's log ratio of red to blue, and runs
 //! against blue to red. A preview that says too little (a grey scene, or
@@ -115,21 +119,47 @@ fn cell_sums(mosaic: &[u16], width: usize, crop: Crop, black: &[f64; 4], gx: usi
 }
 
 /// The two diagonal pairs of the 2×2 pattern: (0, 3) and (1, 2). The
-/// greens are the pair whose samples differ least inside each block.
-fn greens_on_main_diagonal(mosaic: &[u16], width: usize, crop: Crop) -> bool {
-    let (mut main, mut anti) = (0u64, 0u64);
+/// greens are the pair whose samples, each less its position's black
+/// level, differ least inside each block. The margin is how much less the
+/// main diagonal's differ than the other's, from -1 to 1: positive when
+/// the greens are on the main diagonal.
+fn green_diagonal_margin(mosaic: &[u16], width: usize, crop: Crop, black: &[f64; 4]) -> f64 {
+    let (mut main, mut anti) = (0f64, 0f64);
     // Every other block each way is plenty.
     let (x0, y0) = ((crop.left & !1) as usize, (crop.top & !1) as usize);
+    let at = |y: usize, x: usize| f64::from(mosaic[y * width + x]) - black[(y & 1) * 2 + (x & 1)];
     for y in (y0..(crop.top + crop.height) as usize - 1).step_by(4) {
         for x in (x0..(crop.left + crop.width) as usize - 1).step_by(4) {
-            let (a, b) = (mosaic[y * width + x], mosaic[y * width + x + 1]);
-            let (c, d) = (mosaic[(y + 1) * width + x], mosaic[(y + 1) * width + x + 1]);
-            main += u64::from(a.abs_diff(d));
-            anti += u64::from(b.abs_diff(c));
+            main += (at(y, x) - at(y + 1, x + 1)).abs();
+            anti += (at(y, x + 1) - at(y + 1, x)).abs();
         }
     }
-    main < anti
+    if main + anti <= 0.0 {
+        0.0
+    } else {
+        (anti - main) / (anti + main)
+    }
 }
+
+/// The margin below which the greens' diagonal is not taken as measured.
+const MIN_GREEN_MARGIN: f64 = 0.1;
+
+/// The colour filter of each body whose layout our own samples established
+/// (measured on its sample file, the greens at a clear margin and red and
+/// blue from its preview), from the sensor's top-left corner, by IFD0's
+/// `Model`. Such a body is not measured again.
+const SAMPLED: &[(&str, [u8; 4])] = &[
+    ("Canon EOS 20D", [0, 1, 1, 2]),
+    ("Canon EOS 40D", [0, 1, 1, 2]),
+    ("Canon EOS 5D Mark III", [0, 1, 1, 2]),
+    ("Canon EOS 5D Mark IV", [0, 1, 1, 2]),
+    ("Canon EOS 7D", [1, 2, 0, 1]),
+    ("Canon PowerShot G16", [0, 1, 1, 2]),
+];
+
+/// The layout every sampled body but one (the 7D) has: what a body not
+/// sampled takes when its own data does not say clearly.
+const COMMON: [u8; 4] = [0, 1, 1, 2];
 
 /// Pearson correlation of two series.
 fn correlation(x: &[f64], y: &[f64]) -> f64 {
@@ -163,14 +193,27 @@ pub struct PreviewRgb {
 const MIN_CORRELATION: f64 = 0.3;
 
 /// Measure the black and white levels and the colour filter's layout.
-pub fn measure(mosaic: &[u16], width: usize, crop: Crop, bits: u8, gain: [f32; 3], preview: Option<&PreviewRgb>) -> Result<Measured, String> {
+///
+/// The colour filter of a body in [`SAMPLED`] is the table's. Any other's
+/// is measured: the greens' diagonal when its margin is clear (else the
+/// layout of [`COMMON`], and the log says so), then red and blue.
+pub fn measure(mosaic: &[u16], width: usize, crop: Crop, bits: u8, gain: [f32; 3], preview: Option<&PreviewRgb>, model: &str) -> Result<Measured, String> {
     let black = black_level(mosaic, width, crop)?;
     let (white, white_source) = white_level(mosaic, width, crop, bits);
     if black.iter().any(|&b| b.partial_cmp(&f64::from(white)) != Some(std::cmp::Ordering::Less)) {
         return Err(format!("This Canon RAW's black level {black:?} is not below its white level {white}"));
     }
+    let margin = green_diagonal_margin(mosaic, width, crop, &black);
+    if let Some((_, cfa)) = SAMPLED.iter().find(|(m, _)| *m == model) {
+        let cfa_source = format!("the layout sampled for the {model} (the greens' margin on this file {margin:+.3})");
+        return Ok(Measured { black, white, cfa: *cfa, white_source, cfa_source });
+    }
+    if margin.abs() < MIN_GREEN_MARGIN {
+        let cfa_source = format!("the layout every sampled body but one has: the greens' margin {margin:+.3} is not clear");
+        return Ok(Measured { black, white, cfa: COMMON, white_source, cfa_source });
+    }
     // The positions of green, and the other two (a, b) in order.
-    let (greens, (a, b)) = if greens_on_main_diagonal(mosaic, width, crop) { ([0usize, 3], (1usize, 2usize)) } else { ([1, 2], (0, 3)) };
+    let (greens, (a, b)) = if margin > 0.0 { ([0usize, 3], (1usize, 2usize)) } else { ([1, 2], (0, 3)) };
     let (gx, gy) = (48usize, 32usize);
     let cells = cell_sums(mosaic, width, crop, &black, gx, gy);
     // From the preview: a is red when ln(a / b) follows ln(R / B).
@@ -212,6 +255,7 @@ pub fn measure(mosaic: &[u16], width: usize, crop: Crop, bits: u8, gain: [f32; 3
     let mut cfa = [1u8; 4];
     cfa[a] = if a_is_red { 0 } else { 2 };
     cfa[b] = if a_is_red { 2 } else { 0 };
+    let cfa_source = format!("{cfa_source}, the greens' margin {margin:+.3}");
     Ok(Measured { black, white, cfa, white_source, cfa_source })
 }
 
@@ -253,7 +297,7 @@ mod tests {
         let crop = Crop { left: left as u32, top: 0, width: (w - left) as u32, height: h as u32 };
         for cfa in [[0, 1, 1, 2], [2, 1, 1, 0], [1, 0, 2, 1], [1, 2, 0, 1]] {
             let m = mosaic(cfa, 512, w, h, left);
-            let got = measure(&m, w, crop, 14, [1.0, 1.0, 1.0], Some(&preview(96, 48))).unwrap();
+            let got = measure(&m, w, crop, 14, [1.0, 1.0, 1.0], Some(&preview(96, 48)), "a body not sampled").unwrap();
             assert_eq!(got.cfa, cfa, "{}", got.cfa_source);
             assert!(got.cfa_source.contains("preview"));
             assert_eq!(got.black, [512.0; 4]);
@@ -283,5 +327,48 @@ mod tests {
         // No masked border: refused.
         let narrow = Crop { left: 6, top: 0, width: 48, height: 64 };
         assert!(black_level(&m, w, narrow).is_err());
+    }
+    /// A made-up dark, noisy mosaic (not a camera's) on red, green /
+    /// green, blue: a few counts of signal under noise of about ±12, on a
+    /// black level that differs by position by more than the signal.
+    fn dark_noisy(w: usize, h: usize, left: usize, black: [u16; 4]) -> Vec<u16> {
+        let mut seed = 0x2545_f491u32;
+        let mut noise = || {
+            seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            ((seed >> 16) % 25) as i32 - 12
+        };
+        let mut m = vec![0u16; w * h];
+        for y in 0..h {
+            for x in 0..w {
+                let p = (y & 1) * 2 + (x & 1);
+                let signal = if x < left { 0 } else { [3, 5, 5, 3][p] };
+                m[y * w + x] = (i32::from(black[p]) + signal + noise()) as u16;
+            }
+        }
+        m
+    }
+
+    #[test]
+    fn a_dark_noisy_frame_of_a_body_not_sampled_takes_the_common_layout_and_says_so() {
+        let (w, h, left) = (400, 200, 40);
+        let crop = Crop { left: left as u32, top: 0, width: (w - left) as u32, height: h as u32 };
+        // Compared with the black still in, the anti-diagonal's two positions
+        // differ by 120 and the main one's by none: the greens would be put on
+        // the wrong diagonal, a green or magenta picture.
+        let m = dark_noisy(w, h, left, [2048, 1990, 2110, 2048]);
+        let got = measure(&m, w, crop, 14, [2.0, 1.0, 1.5], None, "a body not sampled").unwrap();
+        assert_eq!(got.cfa, COMMON, "{}", got.cfa_source);
+        assert!(got.cfa_source.contains("not clear"), "{}", got.cfa_source);
+    }
+
+    #[test]
+    fn a_sampled_body_takes_its_layout_whatever_its_data_says() {
+        let (w, h, left) = (400, 200, 40);
+        let crop = Crop { left: left as u32, top: 0, width: (w - left) as u32, height: h as u32 };
+        // A frame laid out blue, green / green, red, as the 5D Mark III's is not.
+        let m = mosaic([2, 1, 1, 0], 512, w, h, left);
+        let got = measure(&m, w, crop, 14, [1.0, 1.0, 1.0], Some(&preview(96, 48)), "Canon EOS 5D Mark III").unwrap();
+        assert_eq!(got.cfa, [0, 1, 1, 2]);
+        assert!(got.cfa_source.contains("sampled"), "{}", got.cfa_source);
     }
 }
