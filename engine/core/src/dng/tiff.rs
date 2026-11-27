@@ -222,6 +222,11 @@ impl<'a> TiffReader<'a> {
         }
 
         let mut entries = Vec::with_capacity(count);
+        // What one parse may copy of values held outside the entries: the
+        // file's size. Real files' values do not overlap, so they fit; a
+        // hostile file whose entries all point at one large region would
+        // otherwise copy it once per entry.
+        let mut left = self.data.len();
         for i in 0..count {
             let entry_pos = pos + 2 + i * 12;
             let tag = self.read_u16(entry_pos);
@@ -244,9 +249,10 @@ impl<'a> TiffReader<'a> {
                 bytes
             } else {
                 let data_offset = self.read_u32(entry_pos + 8) as usize;
-                if data_offset.checked_add(value_size).is_none_or(|end| end > self.data.len()) {
+                if data_offset.checked_add(value_size).is_none_or(|end| end > self.data.len()) || value_size > left {
                     continue;
                 }
+                left -= value_size;
                 let mut bytes = self.data[data_offset..data_offset + value_size].to_vec();
                 if !self.le {
                     swap_endian_inline(&mut bytes, typ, count as usize);
@@ -336,5 +342,58 @@ fn swap_endian_inline(bytes: &mut [u8], typ: u16, count: usize) {
             }
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A little-endian TIFF whose IFD0 has `n` UNDEFINED entries of
+    /// `size` bytes each, all pointing at the same `size` bytes after it.
+    fn overlapping(n: usize, size: u32) -> Vec<u8> {
+        let mut d = b"II*\0".to_vec();
+        d.extend_from_slice(&8u32.to_le_bytes());
+        d.extend_from_slice(&(n as u16).to_le_bytes());
+        let values = (8 + 2 + n * 12 + 4) as u32;
+        for i in 0..n {
+            d.extend_from_slice(&(0x1000 + i as u16).to_le_bytes());
+            d.extend_from_slice(&7u16.to_le_bytes());
+            d.extend_from_slice(&size.to_le_bytes());
+            d.extend_from_slice(&values.to_le_bytes());
+        }
+        d.extend_from_slice(&0u32.to_le_bytes());
+        d.resize(d.len() + size as usize, 0);
+        d
+    }
+
+    #[test]
+    fn one_parse_copies_no_more_than_the_file_holds() {
+        // 4000 entries over one 256 KB region: about 1 GB if each were copied.
+        let d = overlapping(4000, 262_144);
+        let entries = TiffReader::new(&d).unwrap().read_ifd(0).unwrap();
+        let copied: usize = entries.iter().map(|e| e.raw_bytes.len()).sum();
+        assert!(copied <= d.len(), "{copied} bytes copied from a {}-byte file", d.len());
+        // The first entry's value is read as before.
+        assert_eq!(entries[0].raw_bytes.len(), 262_144);
+    }
+
+    #[test]
+    fn values_that_do_not_overlap_are_all_read() {
+        let mut d = b"II*\0".to_vec();
+        d.extend_from_slice(&8u32.to_le_bytes());
+        d.extend_from_slice(&2u16.to_le_bytes());
+        let values = 8 + 2 + 2 * 12 + 4;
+        for (i, at) in [values, values + 100].into_iter().enumerate() {
+            d.extend_from_slice(&(0x2000 + i as u16).to_le_bytes());
+            d.extend_from_slice(&7u16.to_le_bytes());
+            d.extend_from_slice(&100u32.to_le_bytes());
+            d.extend_from_slice(&(at as u32).to_le_bytes());
+        }
+        d.extend_from_slice(&0u32.to_le_bytes());
+        d.extend((0..200).map(|i| i as u8));
+        let entries = TiffReader::new(&d).unwrap().read_ifd(0).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[1].raw_bytes[0], 100);
     }
 }
