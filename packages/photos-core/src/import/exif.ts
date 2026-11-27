@@ -15,6 +15,7 @@ import {
   readPointedIfd,
 } from './tiff';
 import type { TiffFile, TiffIfd } from './tiff';
+import { findTiffPreview, jpegSliceIsDecodable } from './tiff-preview';
 import type { ImageMetadata } from './types';
 
 /** What the EXIF/TIFF tags say, before the container's own facts are merged in. */
@@ -208,6 +209,21 @@ export function arwImageSize(tiff: TiffFile, ifd0: TiffIfd): { width: number; he
   return exifCropOf(tiff, ifd0, { width, height }) ?? { width, height };
 }
 
+/**
+ * A CR2's or NEF's picture size, the size the engine's decode gives (before
+ * orientation): the Exif pixel dimensions where the camera wrote them (a
+ * CR2's are the crop of its sensor the engine keeps), else the camera's
+ * largest embedded JPEG, which is that crop on every Nikon body tried.
+ */
+export function makerRawImageSize(bytes: Uint8Array, tiff: TiffFile, ifd0: TiffIfd): { width: number; height: number } | null {
+  const exif = readPointedIfd(tiff, ifd0, TiffTag.ExifIfd);
+  const x = exif ? getNumber(tiff, exif, TiffTag.PixelXDimension) : null;
+  const y = exif ? getNumber(tiff, exif, TiffTag.PixelYDimension) : null;
+  if (x && y && x > 0 && y > 0) return { width: x, height: y };
+  const jpeg = findTiffPreview(bytes);
+  return jpeg ? jpegSliceIsDecodable(bytes, jpeg) : null;
+}
+
 function camera(make: string | null, model: string | null): CameraInfo | null {
   if (make === null && model === null) return null;
   return { make: make ?? '', model: model ?? '' };
@@ -259,6 +275,14 @@ function readFacts(bytes: Uint8Array, format: ImageFormat): Facts {
       const ifd0 = tiff ? readIfd(tiff, tiff.firstIfd) : null;
       if (!tiff || !ifd0) return { tags: EMPTY_TIFF_METADATA, width: null, height: null };
       const size = arwImageSize(tiff, ifd0);
+      return { tags: readTiffMetadata(tiff, ifd0), width: size?.width ?? null, height: size?.height ?? null };
+    }
+    case 'cr2':
+    case 'nef': {
+      const tiff = openTiff(bytes);
+      const ifd0 = tiff ? readIfd(tiff, tiff.firstIfd) : null;
+      if (!tiff || !ifd0) return { tags: EMPTY_TIFF_METADATA, width: null, height: null };
+      const size = makerRawImageSize(bytes, tiff, ifd0);
       return { tags: readTiffMetadata(tiff, ifd0), width: size?.width ?? null, height: size?.height ?? null };
     }
     case 'lopsy':

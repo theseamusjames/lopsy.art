@@ -16,6 +16,15 @@ describe('the MIME types a file picker is filtered to', () => {
     expect(IMPORTABLE_MIME_TYPES).toContain('image/x-sony-arw');
   });
 
+  it('names a Canon CR2 image/x-canon-cr2 and a Nikon NEF image/x-nikon-nef, so the picker offers them', () => {
+    expect(MIME_TYPES.cr2).toBe('image/x-canon-cr2');
+    expect(MIME_TYPES.nef).toBe('image/x-nikon-nef');
+    expect(IMPORTABLE_MIME_TYPES).toContain('image/x-canon-cr2');
+    expect(IMPORTABLE_MIME_TYPES).toContain('image/x-nikon-nef');
+    // A CR3 is not a format import reads: its codec is not decoded, so the picker does not offer one.
+    expect(IMPORTABLE_MIME_TYPES).not.toContain('image/x-canon-cr3');
+  });
+
   it('includes the type of a file whose uploader did not say what it is, and nothing twice', () => {
     expect(IMPORTABLE_MIME_TYPES).toContain('application/octet-stream');
     expect(new Set(IMPORTABLE_MIME_TYPES).size).toBe(IMPORTABLE_MIME_TYPES.length);
