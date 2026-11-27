@@ -43,6 +43,7 @@ fn orientation(prep: &PreparedRaw) -> u16 {
         Prepared::Dng(p) => p.params.orientation,
         Prepared::Arw(p) => p.params.orientation,
         Prepared::Cr2(p) => p.params.orientation,
+        Prepared::Nef(p) => p.params.orientation,
     }
 }
 

@@ -199,7 +199,7 @@ fn reconstruction_holds_highlight_hue() {
             raw::Prepared::Dng(p) => Bayer::Dng(p.params.clone()),
             raw::Prepared::Arw(p) => Bayer::Arw(p.params.clone()),
             raw::Prepared::Cr2(p) => Bayer::Cr2(p.params.clone()),
-            raw::Prepared::Raf(_) => continue,
+            raw::Prepared::Raf(_) | raw::Prepared::Nef(_) => continue,
         };
         let layout = params.layout();
         let Some(grid) = params.highlight_chroma() else {

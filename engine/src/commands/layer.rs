@@ -201,6 +201,26 @@ fn dng_meta_json(dng: &lopsy_core::dng::DngImage) -> Result<String, String> {
 }
 
 /// `decode_and_upload_arw`'s JSON for a decoded ARW.
+/// The baked NEF decode's metadata, in the fields `arw_meta_json` writes.
+fn nef_meta_json(nef: &lopsy_core::nef::NefImage) -> Result<String, String> {
+    let img = &nef.image;
+    let note = nef.colour.note();
+    let mut meta = serde_json::json!({
+        "width": img.width,
+        "height": img.height,
+        "baselineExposure": img.baseline_exposure,
+        "toneCurve": Vec::<[f64; 2]>::new(),
+        "cameraModel": nef.camera_model,
+        "colorApproximate": note.is_some(),
+        "notApplied": Vec::<String>::new(),
+        "previewExposureEv": nef.exposure_ev,
+    });
+    if let (Some(note), Some(obj)) = (note, meta.as_object_mut()) {
+        obj.insert("colorNote".into(), note.into());
+    }
+    serde_json::to_string(&meta).map_err(|e| format!("JSON serialize: {e}"))
+}
+
 fn arw_meta_json(arw: &lopsy_core::arw::ArwImage) -> Result<String, String> {
     let img = &arw.image;
     #[derive(serde::Serialize)]
@@ -331,6 +351,21 @@ pub fn decode_and_upload_raw_baked(engine: &mut EngineInner, layer_id: &str, dat
                 crate::host::log(crate::host::LogLevel::Info, line);
             }
             (cr2_meta_json(&cr2)?, reduced.then_some(full))
+        }
+        RawFormatId::Nef => {
+            let nef = lopsy_core::nef::read_nef(data)?;
+            let img = &nef.image;
+            let full = (img.width, img.height);
+            let reduced = full.0 > max || full.1 > max;
+            if reduced {
+                upload_reduced_f32(engine, layer_id, &img.pixels, full, max)?;
+            } else {
+                layer_manager::upload_pixels_f32(&mut *engine, layer_id, &img.pixels, img.width, img.height)?;
+            }
+            for line in &img.debug_log {
+                crate::host::log(crate::host::LogLevel::Info, line);
+            }
+            (nef_meta_json(&nef)?, reduced.then_some(full))
         }
         RawFormatId::Raf => {
             let img = lopsy_core::raf::read_raf(data).map_err(|e| format!("RAF decode failed: {e}"))?;
