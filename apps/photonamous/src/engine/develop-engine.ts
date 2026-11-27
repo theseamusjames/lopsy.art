@@ -159,7 +159,7 @@ import { LOPSY_LAYER_MIME } from './lopsy-layer';
 export { LOPSY_LAYER_MIME };
 import { areaLayerKey, areaLayerValues, areaValues, linearAreaLayerKey, linearAreaLayerValues, type AreaFrame } from './areas';
 import { developPathFor, developStages, type DevelopPath, type LegacyStages, type LinearStages } from './develop-stages';
-import { treatsAsFloat, usesWorkingSpace } from './develop-override';
+import { effectiveTextureLimit, treatsAsFloat, usesWorkingSpace } from './develop-override';
 import { NO_INSETS, clampZoom, fitView, limitSize, panBy, zoomAround, type Insets, type Size, type View } from './viewport';
 import { decodeRawInWorkers, DecodeAbortedError, RawPrepareError, type FrameSize } from './raw/raw-decode';
 import { rawLoadPath, type RawDescription } from './raw/raw-format';
@@ -686,7 +686,8 @@ export async function createDevelopEngine(canvas: HTMLCanvasElement, options: De
     setDevelopWorkingSpace(engine, isWorkingSpace, SRGB);
     // The status says what the edit can do: without the working space there are no HDR files, as on an 8-bit GPU.
     noteEngineStarted(isWorkingSpace);
-    const textureLimit = maxTextureSize(engine);
+    // A development build's `?texture-limit=` takes the GPU for a smaller one (develop-override.ts).
+    const textureLimit = effectiveTextureLimit(maxTextureSize(engine));
     noteTextureLimit(textureLimit);
     return new PhotoEngine(engine, canvas, hasFloat, isWorkingSpace, options.isScreen === true, textureLimit);
   } catch (err) {
