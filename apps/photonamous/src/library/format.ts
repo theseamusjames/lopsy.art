@@ -15,8 +15,10 @@ export function formatCaptureTime(value: string | null): string {
 
 export function formatCamera(camera: CameraInfo | null): string | null {
   if (camera === null) return null;
-  // Many cameras repeat the make in the model ("Canon EOS R5").
+  // Many cameras repeat the make in the model ("Canon EOS R5"), or its first word ("NIKON D850" by "NIKON CORPORATION").
   if (camera.model.toLowerCase().startsWith(camera.make.toLowerCase())) return camera.model;
+  const brand = camera.make.split(/\s+/)[0] ?? '';
+  if (brand.length > 1 && camera.model.toLowerCase().startsWith(`${brand.toLowerCase()} `)) return camera.model;
   const make = camera.make.length > 1 ? camera.make[0] + camera.make.slice(1).toLowerCase() : camera.make;
   return `${make} ${camera.model}`;
 }
