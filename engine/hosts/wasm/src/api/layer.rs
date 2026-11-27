@@ -105,6 +105,26 @@ pub fn upload_layer_pixels_f32_rect(
     lopsy_engine::commands::layer::upload_layer_pixels_f32_rect(&mut engine.inner, layer_id, texture_width, texture_height, x, y, width, height, data).map_err(|e| JsError::new(&e))
 }
 
+/// The part of a band inside a window of the frame, into a layer that is
+/// the window: `commands::layer::upload_layer_pixels_f32_window`.
+#[wasm_bindgen(js_name = "uploadLayerPixelsF32Window")]
+#[allow(clippy::too_many_arguments)]
+pub fn upload_layer_pixels_f32_window(
+    engine: &mut Engine,
+    layer_id: &str,
+    window_x: i32,
+    window_y: i32,
+    window_width: u32,
+    window_height: u32,
+    band_x: i32,
+    band_y: i32,
+    band_width: u32,
+    band_height: u32,
+    data: &[f32],
+) -> Result<(), JsError> {
+    lopsy_engine::commands::layer::upload_layer_pixels_f32_window(&mut engine.inner, layer_id, window_x, window_y, window_width, window_height, band_x, band_y, band_width, band_height, data).map_err(|e| JsError::new(&e))
+}
+
 #[wasm_bindgen(js_name = "uploadLayerSparsePixels")]
 pub fn upload_layer_sparse_pixels(
     engine: &mut Engine,

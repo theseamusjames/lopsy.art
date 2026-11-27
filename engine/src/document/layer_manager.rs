@@ -175,6 +175,55 @@ pub fn upload_pixels_f32_rect(
     })
 }
 
+/// Upload the part of a band of RGBA f32 rows that lies inside a window of
+/// the frame into a layer whose texture holds only that window
+/// (`window_width`×`window_height`, (re)allocated at that size if it is
+/// not). `band` is where `data` (`band.width × band.height × 4` floats, rows
+/// from the top) lies in the frame, and `window` where the texture does,
+/// both in frame pixels. Their intersection is written at its place in the
+/// texture; the rest of the texture is left as it is, so the window fills
+/// band by band. A band outside the window changes nothing, the texture
+/// included, and is not an error.
+pub fn upload_pixels_f32_window(engine: &mut EngineInner, layer_id: &str, window: Rect, band: Rect, data: &[f32]) -> Result<(), String> {
+    let expected = band.width as usize * band.height as usize * 4;
+    if data.len() != expected {
+        return Err(format!("Expected {expected} floats for a {}x{} band, got {}", band.width, band.height, data.len()));
+    }
+    if window.width == 0 || window.height == 0 {
+        return Err("The window is empty".to_string());
+    }
+    let span = |a: i32, a_len: u32, b: i32, b_len: u32| {
+        let start = i64::from(a).max(i64::from(b));
+        let end = (i64::from(a) + i64::from(a_len)).min(i64::from(b) + i64::from(b_len));
+        (start < end).then_some((start, end))
+    };
+    let (Some((x0, x1)), Some((y0, y1))) =
+        (span(window.x, window.width, band.x, band.width), span(window.y, window.height, band.y, band.height))
+    else {
+        return Ok(());
+    };
+    let (w, h) = ((x1 - x0) as u32, (y1 - y0) as u32);
+    let (band_col, band_row) = ((x0 - i64::from(band.x)) as usize, (y0 - i64::from(band.y)) as usize);
+    let row_floats = band.width as usize * 4;
+    // Whole rows of the band are already one run; otherwise each row's
+    // part inside the window is copied out.
+    let part: std::borrow::Cow<[f32]> = if w == band.width {
+        std::borrow::Cow::Borrowed(&data[band_row * row_floats..(band_row + h as usize) * row_floats])
+    } else {
+        let mut part = Vec::new();
+        part.try_reserve_exact(w as usize * h as usize * 4).map_err(|e| format!("No memory for the band's part: {e}"))?;
+        for row in band_row..band_row + h as usize {
+            let at = row * row_floats + band_col * 4;
+            part.extend_from_slice(&data[at..at + w as usize * 4]);
+        }
+        std::borrow::Cow::Owned(part)
+    };
+    let (tx, ty) = ((x0 - i64::from(window.x)) as i32, (y0 - i64::from(window.y)) as i32);
+    with_layer_texture(engine, layer_id, window.width, window.height, |eng, tex| {
+        eng.texture_pool.upload_rgba_f32(tex, tx, ty, w, h, &part)
+    })
+}
+
 /// Upload layer pixels directly from an HtmlCanvasElement, avoiding the
 /// getImageData unpremultiply round-trip that causes alpha precision loss.
 pub fn upload_pixels_from_canvas(

@@ -358,6 +358,32 @@ pub fn upload_layer_pixels_f32_rect(
     
 }
 
+/// Upload the part of a band (`band_x`, `band_y`, `band_width` ×
+/// `band_height`, in frame pixels; `data` its RGBA f32 rows) that lies
+/// inside a window of the frame (`window_x`, `window_y`, `window_width` ×
+/// `window_height`) into a layer whose texture is that window: the
+/// rectangle a tile of a picture larger than the GPU's textures reads. A
+/// band outside the window does nothing. See
+/// `layer_manager::upload_pixels_f32_window`.
+#[allow(clippy::too_many_arguments)]
+pub fn upload_layer_pixels_f32_window(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    window_x: i32,
+    window_y: i32,
+    window_width: u32,
+    window_height: u32,
+    band_x: i32,
+    band_y: i32,
+    band_width: u32,
+    band_height: u32,
+    data: &[f32],
+) -> Result<(), String> {
+    let window = lopsy_core::geometry::Rect::new(window_x, window_y, window_width, window_height);
+    let band = lopsy_core::geometry::Rect::new(band_x, band_y, band_width, band_height);
+    layer_manager::upload_pixels_f32_window(engine, layer_id, window, band, data)
+}
+
 pub fn upload_layer_sparse_pixels(
     engine: &mut EngineInner,
     layer_id: &str,
