@@ -1590,8 +1590,9 @@ numbered on from section 9's.
     tile starts in a task of its own, or on WebGL, where every read
     answers at once, the run would hold the page, a cancel included.
     The export's progress is per photo; nothing finer is reported.
-96. **Edit in Lopsy's PNG stays at the held size.** Lopsy edits on the
-    same device's GPU, which could not open the photo at its own size.
+96. *Replaced by 106.* **Edit in Lopsy's PNG stays at the held size.**
+    Lopsy edits on the same device's GPU, which could not open the photo
+    at its own size.
 97. **The texture-limit override is for development builds only**:
     `textureLimitOverride` is `import.meta.env.DEV ? … : null`, and Vite
     replaces `import.meta.env.DEV` with `false` in a production build, so
@@ -1675,6 +1676,24 @@ numbered on from section 9's.
     tile's; measured on this Mac's GPU, a histogram read with the
     detail shown (switch out, a held render, the read) takes 12 to 26 ms
     against 3 to 8 ms without it, which is no problem to fix.
+106. **A photo larger than the GPU can edit does not go to Lopsy at all**
+    (replaces 96, at the owner's word, in place of tiles in Lopsy). Lopsy
+    keeps each layer as one texture on the same device, so it cannot open
+    the photo at its own size, and a copy at the held size hid that it was
+    reduced. `lopsyRefusal` (`src/app/lopsy-handoff.ts`) says so in one
+    sentence, by the same threshold as everything else about oversized
+    photos (`editableLimit`): "This photo is W × H pixels, larger than
+    Lopsy can open on this device (N on a side)." An unknown size or limit
+    lets it through, and a Lopsy document goes as its `.lopsy` (Lopsy then
+    says itself if it cannot open it). `openInLopsy` refuses such a photo
+    with that sentence as an error toast, so no path hands one over; the
+    grid's More menu and the tile menu show the item off with the sentence
+    as its hint, and the Single view's and the Edit view's buttons are
+    drawn off but stay focusable (`aria-disabled`), with the sentence as
+    tooltip and accessible description, and do nothing when pressed.
+    `lopsyLongEdge` is gone: a photo that fits goes at its own size, as it
+    did before this section. Lopsy refuses an image too large for it on
+    its own side too, with a message over the canvas.
 
 ### Verified
 
@@ -1818,8 +1837,9 @@ commits:
 - **Left at the held size:** an HDR file between the held size and the
   photo's own (the sized HDR reads reduce on the tile's own grid), a
   layer from Lopsy, a RAW file the baked decode opens, a GPU without
-  float targets, a full size that failed for memory; Edit in Lopsy's PNG
-  (decision 96). A RAW file the RAW interface refuses is only known to
+  float targets, a full size that failed for memory. Edit in Lopsy is not
+  offered for such a photo at all, not even at the held size (decision
+  106). A RAW file the RAW interface refuses is only known to
   be refused when the export prepares it, so the Export dialog's line
   says it is exported a part at a time and the toast then says it was
   not. WebP and 16-bit PNG sources, and RAW orientations 5 to 8, have
