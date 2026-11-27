@@ -234,6 +234,10 @@ pub struct EngineInner {
     /// picture's, and the final blit shifts it to the region. Off (the
     /// default), a region is an export's tile.
     pub screen_region: bool,
+    /// The screen keeps the frame it shows (`commands::develop::hold_screen`):
+    /// renders draw everything but the final blit, which waits for the
+    /// first render after the hold ends. Off by default.
+    pub is_screen_held: bool,
     pub bg_color: [f32; 4],
     /// Document color mode: 0 = RGB (also grayscale/indexed, which are
     /// RGBA-constrained), 1 = Lab, 2 = CMYK. Drives the display-decode branch
@@ -425,6 +429,7 @@ impl EngineInner {
             document_region: None,
             export_assembly: Default::default(),
             screen_region: false,
+            is_screen_held: false,
             bg_color: [1.0, 1.0, 1.0, 1.0],
             doc_color_mode: 0,
             needs_recomposite: true,

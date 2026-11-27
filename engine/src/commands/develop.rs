@@ -117,6 +117,18 @@ pub fn set_screen_region(engine: &mut EngineInner, on: bool) {
     engine.needs_present = true;
 }
 
+/// Holds the screen's frame (`on`) or lets it go: while held, a render
+/// composites and keeps its rendered image (what the statistics read) but
+/// draws nothing on the screen, which keeps the frame it last showed; the
+/// first render after the hold draws the screen again. For reading one
+/// document while the screen shows another.
+pub fn hold_screen(engine: &mut EngineInner, on: bool) {
+    engine.is_screen_held = on;
+    if !on {
+        engine.needs_present = true;
+    }
+}
+
 /// The apron, in pixels, a tile needs on each side that is not an edge of
 /// the picture for its exports with the current settings to equal the
 /// whole picture's there: see `develop::tile::apron`.

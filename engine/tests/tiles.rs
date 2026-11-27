@@ -739,3 +739,17 @@ fn showing_a_region_on_the_screen_changes_no_export() {
     assert_eq!(all_exports(&mut engine), unset, "without a region the flag changes nothing");
     assert_no_gpu_errors();
 }
+
+#[test]
+fn a_held_screen_changes_no_export_and_keeps_rendering_what_statistics_read() {
+    let (w, h) = (160, 120);
+    let Some((mut engine, _)) = small_document(w, h) else { return };
+    let free = all_exports(&mut engine);
+    commands::develop::hold_screen(&mut engine, true);
+    compositor::render(&mut engine);
+    assert_eq!(all_exports(&mut engine), free);
+    commands::develop::hold_screen(&mut engine, false);
+    assert!(engine.needs_present, "the first render after the hold draws the screen");
+    assert_eq!(all_exports(&mut engine), free);
+    assert_no_gpu_errors();
+}

@@ -218,6 +218,9 @@
 //!   (`setViewport`) is the whole picture's and the screen shows the
 //!   region where the whole would be (the Edit view's detail at 100 %);
 //!   off, a region is an export's tile. Nothing without a region.
+//! - `holdScreen(engine, on)`: while on, renders keep the screen's frame
+//!   (no final blit), for reading one document while the screen shows
+//!   another; the first render after it draws the screen.
 //! - `rawPlanWindowBands(format, paramsJson, x, y, width, height,
 //!   maxBands)`: the bands that render a window of the oriented frame at
 //!   its own size (`lopsy_core::raw::window`).

@@ -39,6 +39,12 @@ pub fn set_screen_region(engine: &mut Engine, on: bool) {
     lopsy_engine::commands::develop::set_screen_region(&mut engine.inner, on)
 }
 
+/// Keep the screen's frame while on: `commands::develop::hold_screen`.
+#[wasm_bindgen(js_name = "holdScreen")]
+pub fn hold_screen(engine: &mut Engine, on: bool) {
+    lopsy_engine::commands::develop::hold_screen(&mut engine.inner, on)
+}
+
 /// The apron in pixels a tile needs: `develop::tile::apron`.
 #[wasm_bindgen(js_name = "developApron")]
 pub fn develop_apron(engine: &Engine) -> u32 {

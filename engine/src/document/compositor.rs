@@ -570,6 +570,11 @@ pub fn export_tiff_16(engine: &mut EngineInner, color_space: u8) -> Read<Vec<u8>
 /// composite texture is the frame, and what reads the live frame (the
 /// develop histogram, the screen-only views) reads that texture.
 pub fn present(engine: &mut EngineInner) -> Result<(), String> {
+    // A held screen keeps its frame; the first render after the hold draws it.
+    if engine.is_screen_held {
+        engine.needs_present = true;
+        return Ok(());
+    }
     if !engine.gpu().has_screen() {
         engine.needs_present = false;
         return Ok(());
