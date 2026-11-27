@@ -40,6 +40,8 @@ engine/
                       # from the sensor data) onto the DNG decode's plane, renders and baked finish
       cr3/            # Canon CR3: the container read (boxes, metadata, tracks); its codec is not
                       # decoded, so the RAW interface refuses a CR3 with a sentence
+      nef/            # Nikon NEF decode (uncompressed; compressed refused) onto the DNG decode's
+                      # plane, renders and baked finish; camera_colour's matrix or white balance only
       raw/            # One RAW interface over raf/, dng/ and arw/: sniff, prepare and describe,
                       # bands, binned view, white balance in recipe units (the raw… exports);
                       # scaled.rs: the frame reduced band by band, for a GPU whose textures are smaller;
