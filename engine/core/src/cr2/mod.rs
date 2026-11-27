@@ -420,8 +420,10 @@ pub fn preview_rgb(data: &[u8], crop: Crop) -> Option<levels::PreviewRgb> {
     let (o, n, w) = best?;
     let mut dec = jpeg_decoder::Decoder::new(&data[o..o + n]);
     dec.set_max_decoding_buffer_size(64 << 20);
-    let scale = 800.0 / f64::from(w);
+    // By the long side, as `arw::exposure::preview_of` scales: a crop
+    // taller than wide scaled by its width asks for a far larger decode.
     let h = (f64::from(w) / aspect).round();
+    let scale = 800.0 / f64::from(w).max(h);
     dec.scale((f64::from(w) * scale).ceil() as u16, (h * scale).ceil().max(1.0) as u16).ok()?;
     let rgb = dec.decode().ok()?;
     let info = dec.info()?;
@@ -495,6 +497,37 @@ pub fn read_cr2(data: &[u8]) -> Result<Cr2Image, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A TIFF whose IFD0 names one JPEG preview of `w` × `h` (made up,
+    /// grey), as a CR2's IFD0 names its full-size one.
+    fn tiff_with_preview(w: u16, h: u16) -> Vec<u8> {
+        let mut jpeg = Vec::new();
+        jpeg_encoder::Encoder::new(&mut jpeg, 50).encode(&vec![128u8; usize::from(w) * usize::from(h) * 3], w, h, jpeg_encoder::ColorType::Rgb).unwrap();
+        let at = 8 + 2 + 2 * 12 + 4;
+        let mut d = b"II*\0\x08\0\0\0".to_vec();
+        d.extend_from_slice(&2u16.to_le_bytes());
+        for (tag, value) in [(0x201u16, at as u32), (0x202, jpeg.len() as u32)] {
+            d.extend_from_slice(&tag.to_le_bytes());
+            d.extend_from_slice(&4u16.to_le_bytes());
+            d.extend_from_slice(&1u32.to_le_bytes());
+            d.extend_from_slice(&value.to_le_bytes());
+        }
+        d.extend_from_slice(&0u32.to_le_bytes());
+        d.extend_from_slice(&jpeg);
+        d
+    }
+
+    #[test]
+    fn a_preview_taller_than_wide_is_decoded_small_by_its_long_side() {
+        let d = tiff_with_preview(256, 4096);
+        let p = preview_rgb(&d, Crop { left: 0, top: 0, width: 256, height: 4096 }).expect("a preview");
+        // Scaled by its width it would be decoded whole, 4096 pixels tall.
+        assert!(p.width.max(p.height) <= 1600, "{} × {}", p.width, p.height);
+        // A landscape one is decoded at about 800 pixels across, as before.
+        let d = tiff_with_preview(2048, 1024);
+        let p = preview_rgb(&d, Crop { left: 0, top: 0, width: 2048, height: 1024 }).expect("a preview");
+        assert_eq!((p.width, p.height), (1024, 512));
+    }
 
     #[test]
     fn a_cr2_is_known_by_its_header() {
