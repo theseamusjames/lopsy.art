@@ -262,7 +262,11 @@ pub fn raw_temperature_for_kelvin(format: &str, params_json: &str, kelvin: f32, 
 
 /// Decode any RAW to its finished look, whole-frame, into a layer (the
 /// legacy path, and DNG versions edited before DNG took the RAW path).
-/// Returns that decode's JSON with `format` added.
+/// Returns that decode's JSON with `format` added. A picture wider or
+/// taller than an editable layer may be (the GPU's largest texture less
+/// two pixels, `commands::layer::TRANSFORM_BORDER`) is reduced to fit:
+/// `width` and `height` are then the layer's, and `fullWidth` and
+/// `fullHeight` the picture's own.
 #[wasm_bindgen(js_name = "decodeAndUploadRawBaked")]
 pub fn decode_and_upload_raw_baked(engine: &mut Engine, layer_id: &str, data: &[u8]) -> Result<String, JsError> {
     lopsy_engine::commands::layer::decode_and_upload_raw_baked(&mut engine.inner, layer_id, data).map_err(|e| JsError::new(&e))
