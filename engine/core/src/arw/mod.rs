@@ -624,7 +624,7 @@ pub fn bake_matched(prep: linear::ArwPrepared, preview: &exposure::Preview) -> R
     for v in plane.iter_mut() {
         *v = v.max(0.0);
     }
-    let mut rgb = crate::dng::demosaic::bilinear(&plane, params.width, params.height, &params.cfa);
+    let mut rgb = crate::dng::demosaic::try_bilinear(&plane, params.width, params.height, &params.cfa).ok_or("not enough memory for the Sony RAW's pixels")?;
     drop(plane);
     // A clipped channel carries its white-balance gain; clipped at the
     // lowest clip level, a clipped highlight is white before the matrix.
@@ -678,7 +678,7 @@ pub fn bake_prepared(prep: linear::ArwPrepared, exposure_ev: f32) -> Result<ArwI
             *v *= gain;
         }
     }
-    let mut rgb = crate::dng::demosaic::bilinear(&plane, params.width, params.height, &params.cfa);
+    let mut rgb = crate::dng::demosaic::try_bilinear(&plane, params.width, params.height, &params.cfa).ok_or("not enough memory for the Sony RAW's pixels")?;
     // A clipped channel carries its white-balance gain (R and B clip at
     // their gains, above green's 1), which a calibrated matrix turns into
     // magenta highlights. With measured colour or the engine's table,

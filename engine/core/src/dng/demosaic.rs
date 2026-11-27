@@ -107,6 +107,13 @@ fn avg_vert(raw: &[f32], w: usize, h: usize, row: usize, col: usize) -> f32 {
 mod tests {
     use super::*;
 
+    /// What the baked ARW, NEF and CR2 decodes rely on: a size that cannot
+    /// be allocated is `None`, not an abort, and the input is not read.
+    #[test]
+    fn the_fallible_demosaic_refuses_a_size_it_cannot_allocate() {
+        assert!(try_bilinear(&[], u32::MAX, u32::MAX, &[0, 1, 1, 2]).is_none());
+    }
+
     #[test]
     fn the_fallible_demosaic_is_the_same_demosaic() {
         let raw: Vec<f32> = (0..6 * 4).map(|i| ((i * 37) % 11) as f32 / 10.0).collect();
