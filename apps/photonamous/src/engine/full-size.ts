@@ -15,6 +15,12 @@
  * size is tried again smaller, at `STEP_DOWN` of the largest held size, and
  * what happened is remembered for the photo: once a size loaded, or every
  * size failed, nothing is asked for again until another photo loads.
+ *
+ * The same limit decides whether a photo needs tiles (`isTooLarge`): only a
+ * photo whose own long edge is larger than the GPU can edit is exported at
+ * its own size a tile at a time (tile-plan.ts), each tile no larger than
+ * the image that loaded. A photo that fits but failed to load for memory
+ * steps down and is never tiled.
  */
 
 import { limitSize, type Size } from './viewport';
@@ -155,6 +161,22 @@ export class FullSizeLoads {
   loadedSize(): Size | null {
     return this.loaded;
   }
+
+  /** Whether the photo's own long edge is larger than this device can edit: the one threshold for tiles. */
+  isTooLarge(): boolean {
+    return this.own !== null && longEdge(this.own) > this.limit;
+  }
+
+  /**
+   * The most pixels a tile of the photo may have: the image that loaded,
+   * which the device has shown it can hold. Null unless the photo is too
+   * large and a size loaded (a photo whose every load failed is not tiled).
+   */
+  tileBudget(): number | null {
+    if (!this.isTooLarge() || !this.loaded) return null;
+    return this.loaded.width * this.loaded.height;
+  }
+
 
   /** Why the photo is below its own size once settled; null when it is not (or nothing is settled yet). */
   outcome(): FullSizeOutcome | null {

@@ -124,3 +124,24 @@ describe('fullSizeNoteText', () => {
     expect(fullSizeNoteText({ kind: 'stepped-down', own: Q2, shown: { width: 6144, height: 4100 }, limit: 8192 })).toContain('6144 × 4100');
   });
 });
+
+describe('tiles', () => {
+  it('are for a photo larger than the GPU can edit, as large as the image that loaded', () => {
+    const loads = new FullSizeLoads(8192);
+    loads.reset(Q2);
+    expect(loads.isTooLarge()).toBe(true);
+    expect(loads.tileBudget()).toBeNull();
+    loads.noteLoaded({ width: 8190, height: 5465 });
+    expect(loads.tileBudget()).toBe(8190 * 5465);
+  });
+
+  it('are never for a photo that fits, even one that failed for memory and stepped down', () => {
+    const loads = new FullSizeLoads(16384);
+    loads.reset(Q2);
+    loads.noteFailed(Q2);
+    loads.noteLoaded({ width: 6276, height: 4188 });
+    expect(loads.outcome()).toBe('stepped-down');
+    expect(loads.isTooLarge()).toBe(false);
+    expect(loads.tileBudget()).toBeNull();
+  });
+});
