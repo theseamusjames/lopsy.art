@@ -436,7 +436,7 @@ the newer version made.
   not listed a second time), then the engine's film looks with Provia
   shown as "Standard (Provia look)" (or "Camera (Provia look, Standard)"
   when the camera shot Provia), Neutral and Monochrome; for a DNG or a
-  Sony ARW, Standard, Monochrome and Neutral; for other photos, Standard
+  Sony ARW, Standard, Neutral and Monochrome; for other photos, Standard
   and Monochrome. Eleven Sony bodies have colour computed from measured
   sensor data (RX100 IV, A6400, A7C II, A7 III, A7 IV, A7R II, A7R III,
   A7R IV, A7S II, A7S III, A9). For any other body the colour is only

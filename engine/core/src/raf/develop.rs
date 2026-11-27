@@ -128,20 +128,70 @@ pub struct ProfileSettings {
     pub base_curve: Option<Vec<f32>>,
 }
 
-/// One entry of the Profile control.
+/// One entry of the Profile control, for every format (RAF's list here,
+/// DNG and ARW's in `raw::standard_profiles`). The menu needs nothing but
+/// these fields: list the entries whose `listed` is true, in order, under
+/// `menuName`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DevelopProfile {
     /// Stable id: `camera`, `provia`, `velvia`, `astia`, `classic-chrome`,
     /// `pro-neg`, `neutral`, `monochrome`.
     pub id: String,
+    /// The entry's own name (a RAF look's "Velvia look"; the camera entry's
+    /// "Camera (Velvia look)").
     pub name: String,
     pub settings: ProfileSettings,
+    /// What the entry is.
+    #[serde(default)]
+    pub role: ProfileRole,
+    /// The name the menu shows, as given: `name`, or `name` with the
+    /// maker's standard noted ("Standard (Provia look)", "Camera (Provia
+    /// look, Standard)").
+    #[serde(default)]
+    pub menu_name: String,
+    /// Whether the menu lists the entry: false for a look the camera entry
+    /// already is (`sameAs`), so it is not listed twice.
+    #[serde(default = "listed_by_default")]
+    pub listed: bool,
+    /// For the `camera` entry, the id of the look entry it is (a RAF's
+    /// recorded film simulation, `velvia`); `null` otherwise, and for a
+    /// format whose camera entry is no other entry.
+    #[serde(default)]
+    pub same_as: Option<String>,
+    /// Whether the entry is, or (the camera entry) stands for, the maker's
+    /// standard look: Fujifilm's Provia; for DNG and ARW, Standard.
+    #[serde(default)]
+    pub maker_standard: bool,
+}
+
+fn listed_by_default() -> bool {
+    true
+}
+
+/// What a Profile entry is.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ProfileRole {
+    /// The look the file opens with, first in the list; the app's recipe
+    /// default (`standard`).
+    Camera,
+    /// A maker's look to choose instead (RAF's film looks).
+    #[default]
+    Look,
+    /// Near-linear, no added saturation: a flat start for grading.
+    Neutral,
+    /// No colour.
+    Monochrome,
 }
 
 /// The Fujifilm looks, by the FilmMode makernote value that selects their
 /// curve and saturation in `base_curves`. They are approximations of the
 /// camera's film simulations (a tone curve and a saturation factor), not
 /// Fujifilm's own processing, and the names say so.
+/// The film look Fujifilm calls its Standard.
+const STANDARD_LOOK: &str = "provia";
+
 const FILM_LOOKS: [(&str, &str, u16); 5] = [
     ("provia", "Provia look", 0x000),
     ("velvia", "Velvia look", 0x200),
@@ -182,6 +232,11 @@ pub fn develop_profiles(params: &RafRenderParams) -> Vec<DevelopProfile> {
         None => "Camera".to_string(),
     };
     let defaults = develop_defaults(params);
+    let recorded_standard = recorded.is_some_and(|look| look.0 == STANDARD_LOOK);
+    let camera_menu_name = match recorded {
+        Some(look) if recorded_standard => format!("Camera ({}, Standard)", look.1),
+        _ => camera_name.clone(),
+    };
     let mut out = vec![DevelopProfile {
         id: "camera".to_string(),
         name: camera_name,
@@ -192,8 +247,14 @@ pub fn develop_profiles(params: &RafRenderParams) -> Vec<DevelopProfile> {
             highlight_desaturation: defaults.highlight_desaturation,
             base_curve: defaults.base_curve,
         },
+        role: ProfileRole::Camera,
+        menu_name: camera_menu_name,
+        listed: true,
+        same_as: recorded.map(|look| look.0.to_string()),
+        maker_standard: recorded_standard,
     }];
     for (id, name, mode) in FILM_LOOKS {
+        let standard = id == STANDARD_LOOK;
         out.push(DevelopProfile {
             id: id.to_string(),
             name: name.to_string(),
@@ -202,18 +263,25 @@ pub fn develop_profiles(params: &RafRenderParams) -> Vec<DevelopProfile> {
                 base_curves::curve_for_film_mode(Some(mode)),
                 base_curves::saturation_for_film_mode(Some(mode)),
             ),
+            role: ProfileRole::Look,
+            menu_name: if standard { format!("Standard ({name})") } else { name.to_string() },
+            listed: recorded.is_none_or(|look| look.0 != id),
+            same_as: None,
+            maker_standard: standard,
         });
     }
-    out.push(DevelopProfile {
-        id: "neutral".to_string(),
-        name: "Neutral".to_string(),
-        settings: profile_settings(params, &base_curves::NEUTRAL, 1.0),
-    });
-    out.push(DevelopProfile {
-        id: "monochrome".to_string(),
-        name: "Monochrome".to_string(),
-        settings: profile_settings(params, &base_curves::NEUTRAL, 0.0),
-    });
+    let plain = |id: &str, name: &str, role: ProfileRole, saturation: f32| DevelopProfile {
+        id: id.to_string(),
+        name: name.to_string(),
+        settings: profile_settings(params, &base_curves::NEUTRAL, saturation),
+        role,
+        menu_name: name.to_string(),
+        listed: true,
+        same_as: None,
+        maker_standard: false,
+    };
+    out.push(plain("neutral", "Neutral", ProfileRole::Neutral, 1.0));
+    out.push(plain("monochrome", "Monochrome", ProfileRole::Monochrome, 0.0));
     out
 }
 
@@ -584,6 +652,49 @@ mod tests {
         }
         let looks: Vec<&str> = profiles[1..6].iter().map(|p| p.name.as_str()).collect();
         assert!(looks.iter().all(|n| n.ends_with(" look")), "{looks:?}");
+    }
+
+    /// The menu the roles give, as the app prints it: the listed entries'
+    /// `menuName`s in order.
+    fn menu(mode: Option<u16>) -> Vec<String> {
+        develop_profiles(&params_with_film_mode(mode)).into_iter().filter(|p| p.listed).map(|p| p.menu_name).collect()
+    }
+
+    #[test]
+    fn the_roles_say_what_the_menu_shows() {
+        // The camera's look is not listed twice, and Provia is called
+        // Fujifilm's Standard wherever it appears.
+        assert_eq!(menu(Some(0x200)), ["Camera (Velvia look)", "Standard (Provia look)", "Astia look", "Classic Chrome look", "Pro Neg look", "Neutral", "Monochrome"]);
+        assert_eq!(menu(Some(0x000)), ["Camera (Provia look, Standard)", "Velvia look", "Astia look", "Classic Chrome look", "Pro Neg look", "Neutral", "Monochrome"]);
+        assert_eq!(menu(None), ["Camera", "Standard (Provia look)", "Velvia look", "Astia look", "Classic Chrome look", "Pro Neg look", "Neutral", "Monochrome"]);
+        for mode in [None, Some(0x000), Some(0x100), Some(0x200), Some(0x400), Some(0x501), Some(0x600), Some(0x777)] {
+            let profiles = develop_profiles(&params_with_film_mode(mode));
+            let camera = &profiles[0];
+            assert_eq!(camera.role, ProfileRole::Camera);
+            assert_eq!(profiles.iter().filter(|p| p.role == ProfileRole::Camera).count(), 1);
+            // The entry the camera is has the camera's settings, and is the
+            // only one not listed.
+            let hidden: Vec<&str> = profiles.iter().filter(|p| !p.listed).map(|p| p.id.as_str()).collect();
+            match &camera.same_as {
+                Some(id) => {
+                    assert_eq!(hidden, [id.as_str()], "{mode:?}");
+                    let same = profiles.iter().find(|p| &p.id == id).unwrap();
+                    assert_eq!(same.settings, camera.settings, "{mode:?}");
+                    assert_eq!(camera.maker_standard, same.maker_standard, "{mode:?}");
+                }
+                None => assert!(hidden.is_empty(), "{mode:?}"),
+            }
+            // Exactly one listed entry is, or stands for, the maker's standard.
+            assert_eq!(profiles.iter().filter(|p| p.listed && p.maker_standard).count(), 1, "{mode:?}");
+            assert_eq!(profiles.iter().find(|p| p.id == "neutral").unwrap().role, ProfileRole::Neutral);
+            assert_eq!(profiles.iter().find(|p| p.id == "monochrome").unwrap().role, ProfileRole::Monochrome);
+            // The JSON the app reads: the fields it had, and the new ones.
+            let json = serde_json::to_value(camera).unwrap();
+            for key in ["id", "name", "settings", "role", "menuName", "listed", "sameAs", "makerStandard"] {
+                assert!(json.get(key).is_some(), "{key}");
+            }
+            assert_eq!(json["role"], "camera");
+        }
     }
 
     #[test]

@@ -519,11 +519,22 @@ recipes, on the page's own develop path (linear), with `?develop=legacy`
 and with `?develop=no-float`, and compares a fingerprint of the exact
 render (a 64-bit hash, with a 12 × 8 grid of cell means to say where a
 change is) with the one stored in `e2e/raw-parity/<name>.txt`, keyed by
-browser, renderer and way. It runs in Chromium only, in about four
-minutes with four workers. A change that is meant to move the RAW develop records new
-fingerprints for the renderer a run is on with
-`LOPSY_RAW_PARITY_UPDATE=1` (run it once per renderer); one that is not
-must leave them as they are.
+browser, renderer and way. Four Sony ARWs (`LOPSY_ARW_SAMPLES`) and two
+Canon DNGs (`LOPSY_DNG_ADOBE_SAMPLES`) are fingerprinted the same way on
+the linear and no-float ways; the ProRAW samples are not yet. It runs in
+Chromium only, in about eleven minutes with four workers. A change that
+is meant to move the RAW develop records new fingerprints for the
+renderer a run is on with `LOPSY_RAW_PARITY_UPDATE=1` (run it once per
+renderer, with `-g` to record only the samples meant to change); one
+that is not must leave them as they are.
+
+**Renders for review.** `e2e/raw-review.config.ts` (not part of the
+suite) opens every DNG and ARW sample, and one RAF, in the Edit view at
+its defaults and saves the picture at Fit, the whole Edit view and the
+picture at 100 % to `samples/linear-pipeline-review/app-renders/raw-path/`:
+`LOPSY_ARW_SAMPLES=… LOPSY_DNG_SAMPLES=… LOPSY_DNG_ADOBE_SAMPLES=…
+LOPSY_RAF_SAMPLES=… VITE_PORT=5186 npx playwright test -c
+e2e/raw-review.config.ts` from `apps/photonamous`.
 
 ## 6. What needs a real Google account to verify
 

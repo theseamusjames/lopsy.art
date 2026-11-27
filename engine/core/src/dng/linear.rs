@@ -48,7 +48,7 @@
 //! and vignette corrections, bad pixels), `ProfileGainTableMap` (Apple's
 //! local tone map), `ProfileHueSatMap` and `ProfileLookTable` (the
 //! profile's hue and saturation twists), `ProfileToneCurve` (the engine's
-//! neutral base curve is used instead), a `DefaultCrop` that is not whole
+//! Standard curve is used instead), a `DefaultCrop` that is not whole
 //! pixels or comes with a `DefaultScale` (the whole active area is kept
 //! then), semantic masks, a third calibration, and highlight
 //! reconstruction on a LinearRaw plane (its clipped channels stay
@@ -70,7 +70,7 @@ use super::{get_rational_array, get_rational_array_either, get_tag_u16, get_tag_
 use crate::black_level::BlackLevels;
 use crate::raf::develop::RawDevelopSettings;
 use crate::raf::highlights::ChromaGrid;
-use crate::raf::{base_curves, RafBand, RafBandPixels};
+use crate::raf::{RafBand, RafBandPixels};
 
 /// What a DNG's samples are.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -119,6 +119,12 @@ pub struct DngRenderParams {
     /// `prepare_dng` alone.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub highlight_chroma: Option<ChromaGrid>,
+    /// The exposure the develop chain opens with, in stops, when it is
+    /// matched to the camera's preview rather than the file's
+    /// BaselineExposure (`dng::preview`, an opening look's
+    /// `dng_preview_exposure`). `None` (and not written): the baseline.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_exposure_ev: Option<f32>,
 }
 
 impl DngRenderParams {
@@ -219,7 +225,7 @@ pub fn unhandled_features(ifd0: &[IfdEntry], main: &[IfdEntry]) -> Vec<String> {
         (TagId::ProfileGainTableMap, "ProfileGainTableMap (local tone map)"),
         (TagId::ProfileHueSatMapData1, "ProfileHueSatMap (the profile's hue and saturation corrections)"),
         (TagId::ProfileLookTableData, "ProfileLookTable (the profile's look)"),
-        (TagId::ProfileToneCurve, "ProfileToneCurve (the neutral base curve is used instead)"),
+        (TagId::ProfileToneCurve, "ProfileToneCurve (the Standard curve is used instead)"),
         (TagId::DefaultCropOrigin, "DefaultCrop (not whole pixels at scale 1, so the whole active area is kept)"),
         (TagId::SemanticName, "semantic masks"),
         (TagId::ColorMatrix3, "a third calibration (ColorMatrix3)"),
@@ -472,6 +478,7 @@ pub fn prepare_dng(data: &[u8]) -> Result<DngPrepared, String> {
         calibration,
         camera_model,
         highlight_chroma: None,
+        default_exposure_ev: None,
     };
     Ok(DngPrepared { params, plane, unhandled, debug_log })
 }
@@ -715,17 +722,24 @@ pub fn render_binned_linear_for<P: PlaneParams + ?Sized>(plane: &[f32], params: 
 
 /// The develop settings a DNG opens with: the as-shot white balance
 /// (`wbRatio` 1), the DNG method's matrix for it, the file's baseline
-/// exposure, no extra saturation, and the engine's neutral base curve (a
-/// DNG has no film simulation; its `ProfileToneCurve` is not used).
+/// exposure (or `default_exposure_ev` when the RAW interface matched one
+/// to the camera's preview), and the Standard look's base curve and
+/// saturation (`raw::OpeningLook::default`; a DNG has no film simulation,
+/// and its `ProfileToneCurve` is not used).
 pub fn develop_defaults(params: &DngRenderParams) -> Result<RawDevelopSettings, String> {
+    develop_defaults_with(params, &crate::raw::OpeningLook::default())
+}
+
+/// [`develop_defaults`] with the base curve and saturation of `look`.
+pub fn develop_defaults_with(params: &DngRenderParams, look: &crate::raw::OpeningLook) -> Result<RawDevelopSettings, String> {
     let wb = white_balance_for_ratio(params, [1.0, 1.0, 1.0])?;
     Ok(RawDevelopSettings {
         wb_ratio: wb.wb_ratio,
         cam_to_rgb: wb.cam_to_rgb,
-        exposure_ev: params.calibration.baseline_exposure as f32,
-        saturation: 1.0,
+        exposure_ev: params.default_exposure_ev.unwrap_or(params.calibration.baseline_exposure as f32),
+        saturation: look.saturation,
         highlight_desaturation: true,
-        base_curve: Some(base_curves::curve_lut(&base_curves::NEUTRAL).to_vec()),
+        base_curve: Some(look.curve.lut()),
         clip_levels: params.clip_levels,
     })
 }
@@ -791,6 +805,7 @@ mod tests {
             calibration: cal,
             camera_model: "Test".into(),
             highlight_chroma: None,
+            default_exposure_ev: None,
         }
     }
 

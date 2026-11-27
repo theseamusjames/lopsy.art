@@ -57,9 +57,13 @@ fn linear_hash(data: &[u8]) -> u64 {
 }
 
 /// (file, baked decode, linear plane and parameters) at commit 682471f19.
+/// The linear hashes were re-recorded when DNG began to open with the
+/// Standard curve: only the wording of the ProfileToneCurve note in the
+/// not-applied list changed ("the Standard curve is used instead"); the
+/// plane and parameters hashed the same with the old wording.
 const EXPECTED: [(&str, u64, u64); 2] = [
-    ("sample_dng_00.dng", 0x3e370f9742a8521a, 0xba39620613161734),
-    ("sample_dng_01.dng", 0x9bc594c8f822e0b5, 0x46859cc6f3517d3b),
+    ("sample_dng_00.dng", 0x3e370f9742a8521a, 0x362fbac48dda4a8f),
+    ("sample_dng_01.dng", 0x9bc594c8f822e0b5, 0xf8319c3b76fb6480),
 ];
 
 #[test]

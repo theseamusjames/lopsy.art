@@ -1,8 +1,9 @@
 /**
  * The Profile menu (spec 5.4). RAW files list the engine's profiles (the
  * RAW description's `profiles`: the camera's look, the format's own looks
- * where it has some, Neutral, Monochrome); without them, the camera's
- * look, Neutral and Monochrome.
+ * where it has some, Neutral, Monochrome) as the engine orders and names
+ * them, each entry saying its role, its menu name and whether it is
+ * listed; without them, the camera's look, Neutral and Monochrome.
  * JPEG, PNG and WebP offer Standard and Monochrome only (spec 5.4).
  *
  * The recipe's default profile id is 'standard'. On a RAW file that is the
@@ -15,13 +16,27 @@ import type { RawDevelopSettings } from './raw-develop';
 /** A profile's develop settings: everything but the white balance, with the baseline exposure. */
 export type ProfileSettings = Partial<Omit<RawDevelopSettings, 'wbRatio'>>;
 
+/** What an engine profile is: the camera's own look, one of the format's looks, flat, or without colour. */
+export type ProfileRole = 'camera' | 'look' | 'neutral' | 'monochrome';
+
 export interface DevelopProfile {
   readonly id: string;
-  /** As the menu shows it. */
+  /** The entry's name; `profilesFor` gives the menu's (`menuName`) here. */
   readonly name: string;
   /** What the develop stage takes for this profile, when the engine gives it. */
   readonly settings?: ProfileSettings;
+  readonly role?: ProfileRole;
+  /** The name the menu prints, as the engine gives it. */
+  readonly menuName?: string;
+  /** False for the look the camera entry already is, so the menu lists it once. */
+  readonly listed?: boolean;
+  /** For the camera entry, the id of the look it is. */
+  readonly sameAs?: string | null;
+  /** Whether the entry is, or stands for, the maker's standard look. */
+  readonly makerStandard?: boolean;
 }
+
+const ROLES: ReadonlySet<string> = new Set<ProfileRole>(['camera', 'look', 'neutral', 'monochrome']);
 
 const CAMERA_LOOK: DevelopProfile = { id: 'standard', name: 'Camera look' };
 /** The engine's id for the camera's own look. */
@@ -67,7 +82,16 @@ function readProfile(value: unknown): DevelopProfile | null {
   if (typeof rawId !== 'string' || rawId === '' || name === null) return null;
   const id = rawId === ENGINE_CAMERA_ID ? CAMERA_LOOK.id : rawId;
   const settings = readSettings(v.settings);
-  return settings ? { id, name, settings } : { id, name };
+  return {
+    id,
+    name,
+    ...(settings ? { settings } : {}),
+    ...(typeof v.role === 'string' && ROLES.has(v.role) ? { role: v.role as ProfileRole } : {}),
+    ...(typeof v.menuName === 'string' && v.menuName !== '' ? { menuName: v.menuName } : {}),
+    ...(typeof v.listed === 'boolean' ? { listed: v.listed } : {}),
+    ...(typeof v.sameAs === 'string' || v.sameAs === null ? { sameAs: v.sameAs } : {}),
+    ...(typeof v.makerStandard === 'boolean' ? { makerStandard: v.makerStandard } : {}),
+  };
 }
 
 /**
@@ -100,35 +124,18 @@ export function readDevelopProfiles(raw: unknown): DevelopProfile[] {
   return out;
 }
 
-/** The engine's id of the look Fujifilm calls Standard. */
-const STANDARD_LOOK_ID = 'provia';
-
 /**
- * The menu for a photo. A RAW file with engine profiles gets those, with
- * the camera's look first, and Neutral and Monochrome added when the
- * engine left them out.
- *
- * The camera's look is one of the film looks ("Camera (Velvia look)"), so
- * that look is not listed a second time. Provia is Fujifilm's Standard and
- * is called so; when it is the camera's own look, the camera entry says it.
+ * The menu for a photo. A RAW file with engine profiles gets the engine's
+ * list, in its order, without the entries it marks as not listed (the
+ * look the camera entry already is), each under the engine's menu name.
+ * The engine's entries keep their settings for the develop stage whether
+ * listed or not (`rawSettingsFor` finds a recipe's profile among all of
+ * them).
  */
 export function profilesFor(isRaw: boolean, engineProfiles: readonly DevelopProfile[]): DevelopProfile[] {
   if (!isRaw) return [...IMAGE_PROFILES];
   if (engineProfiles.length === 0) return [...RAW_FALLBACK_PROFILES];
-  const byId = new Map(engineProfiles.map((p) => [p.id, p]));
-  let camera = byId.get(CAMERA_LOOK.id) ?? CAMERA_LOOK;
-  const recorded = /^Camera \((.+)\)$/.exec(camera.name)?.[1] ?? null;
-  const out: DevelopProfile[] = [];
-  for (const p of engineProfiles) {
-    if (p.id === CAMERA_LOOK.id) continue;
-    if (recorded !== null && p.name === recorded) {
-      if (p.id === STANDARD_LOOK_ID) camera = { ...camera, name: `Camera (${recorded}, Standard)` };
-      continue;
-    }
-    out.push(p.id === STANDARD_LOOK_ID ? { ...p, name: `Standard (${p.name})` } : p);
-  }
-  for (const p of RAW_FALLBACK_PROFILES) if (!byId.has(p.id) && p.id !== CAMERA_LOOK.id) out.push(p);
-  return [camera, ...out];
+  return engineProfiles.filter((p) => p.listed !== false).map((p) => ({ ...p, name: p.menuName ?? p.name }));
 }
 
 /** The menu entry the recipe's profile id selects; an unknown id shows as the first entry. */

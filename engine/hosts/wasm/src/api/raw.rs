@@ -4,17 +4,17 @@
 //! `rawRenderFinishedBand`, RAF's legacy look) from rows of the plane,
 //! planned with `rawPlanBands`; the main thread asks `rawWhiteBalance` and
 //! `rawTemperatureForKelvin` for the RAW step's white balance in recipe
-//! units. Every call after `rawPrepare` takes the format id (`"raf"`,
-//! `"dng"`, `"arw"`) and that format's own params string, which for a RAF
-//! is byte for byte `rafPrepare`'s. None of these touch the GPU except
-//! `decodeAndUploadRawBaked`. The `raf…`, `dng…` and `arw…` exports stay.
+//! units, and `rawAutoWhiteBalance` for Auto. Every call after
+//! `rawPrepare` takes the format id (`"raf"`, `"dng"`, `"arw"`) and that
+//! format's own params string, which for a RAF is byte for byte
+//! `rafPrepare`'s. Rendered rows come back as a [`RawRenderedBand`]. None
+//! of these touch the GPU except `decodeAndUploadRawBaked`. The `raf…`,
+//! `dng…` and `arw…` exports stay.
 
 use wasm_bindgen::prelude::*;
 
-use lopsy_core::raf::RafBand;
-use lopsy_core::raw::{self, RawFormatId};
+use lopsy_core::raw::{self, RawBand, RawBandPixels, RawFormatId};
 
-use super::raf::RafRenderedBand;
 use crate::Engine;
 
 fn err(e: String) -> JsError {
@@ -31,6 +31,55 @@ fn format_of(format: &str) -> Result<RawFormatId, JsError> {
 #[wasm_bindgen(js_name = "rawFormatOf")]
 pub fn raw_format_of(data: &[u8]) -> Option<String> {
     raw::sniff(data).map(|f| f.as_str().to_string())
+}
+
+/// Rows of a rendered RAW picture, from `rawRenderLinearBand`,
+/// `rawRenderFinishedBand` or `RawPrepared.binnedLinear`: where they go in
+/// the oriented frame (`x`, `y`), their size, and RGBA f32 pixels, moved
+/// out once with `takePixels`. The same fields and getters as the RAF
+/// exports' `RafRenderedBand`.
+#[wasm_bindgen]
+pub struct RawRenderedBand {
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+    pixels: Vec<f32>,
+}
+
+impl From<RawBandPixels> for RawRenderedBand {
+    fn from(b: RawBandPixels) -> Self {
+        RawRenderedBand { x: b.x, y: b.y, width: b.width, height: b.height, pixels: b.pixels }
+    }
+}
+
+#[wasm_bindgen]
+impl RawRenderedBand {
+    #[wasm_bindgen(getter)]
+    pub fn x(&self) -> u32 {
+        self.x
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn y(&self) -> u32 {
+        self.y
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    /// Moves the RGBA f32 pixels out.
+    #[wasm_bindgen(js_name = "takePixels")]
+    pub fn take_pixels(&mut self) -> Vec<f32> {
+        std::mem::take(&mut self.pixels)
+    }
 }
 
 /// Result of `rawPrepare`.
@@ -52,7 +101,10 @@ impl RawPrepared {
     /// planeHeight, samplesPerPixel, clipLevels, cameraModel, colorNote,
     /// notApplied, developDefaults, profiles, whiteBalance: { matrix,
     /// kelvin, presetSource, presets }, finishedBands }` (see
-    /// `lopsy_core::raw::RawDescription`).
+    /// `lopsy_core::raw::RawDescription`). Each profile is `{ id, name,
+    /// settings, role, menuName, listed, sameAs, makerStandard }`: a menu
+    /// lists the entries whose `listed` is true, in order, under `menuName`
+    /// (`lopsy_core::raf::develop::DevelopProfile`).
     #[wasm_bindgen(getter, js_name = "describeJson")]
     pub fn describe_json(&self) -> String {
         self.describe_json.clone()
@@ -68,12 +120,12 @@ impl RawPrepared {
     /// The binned first view of the plane this still holds (call it before
     /// `takePlane`): linear camera RGB, oriented, x = y = 0.
     #[wasm_bindgen(js_name = "binnedLinear")]
-    pub fn binned_linear(&self, min_long_edge: u32) -> Result<RafRenderedBand, JsError> {
+    pub fn binned_linear(&self, min_long_edge: u32) -> Result<RawRenderedBand, JsError> {
         if self.inner.plane().is_empty() {
             return Err(JsError::new("The plane was already taken; call binnedLinear before takePlane"));
         }
         let (width, height, pixels) = self.inner.binned_linear(min_long_edge).map_err(err)?;
-        Ok(RafRenderedBand { x: 0, y: 0, width, height, pixels })
+        Ok(RawRenderedBand { x: 0, y: 0, width, height, pixels })
     }
 
     /// Moves the plane out: `planeWidth × planeHeight × samplesPerPixel`
@@ -109,18 +161,41 @@ pub fn raw_plan_bands(format: &str, params_json: &str, max_bands: u32) -> Result
 /// `[y0, y1)` of linear camera RGB at the as-shot white balance: oriented
 /// RGBA f32, unclamped, bit-identical to the same rows of the whole frame.
 #[wasm_bindgen(js_name = "rawRenderLinearBand")]
-pub fn raw_render_linear_band(format: &str, src: &[f32], params_json: &str, y0: u32, y1: u32, src_y0: u32, src_y1: u32) -> Result<RafRenderedBand, JsError> {
-    let out = raw::render_linear_band(format_of(format)?, src, params_json, RafBand { y0, y1, src_y0, src_y1 }).map_err(err)?;
-    Ok(RafRenderedBand { x: out.x, y: out.y, width: out.width, height: out.height, pixels: out.pixels })
+pub fn raw_render_linear_band(format: &str, src: &[f32], params_json: &str, y0: u32, y1: u32, src_y0: u32, src_y1: u32) -> Result<RawRenderedBand, JsError> {
+    let out = raw::render_linear_band(format_of(format)?, src, params_json, RawBand { y0, y1, src_y0, src_y1 }).map_err(err)?;
+    Ok(out.into())
+}
+
+/// Whether a format renders finished bands (`rawRenderFinishedBand`, RAF's
+/// legacy look), from its id alone, before a file is prepared: what that
+/// format's description says in `finishedBands`. An error for an id that
+/// is not `"raf"`, `"dng"` or `"arw"`.
+#[wasm_bindgen(js_name = "rawRendersFinishedBands")]
+pub fn raw_renders_finished_bands(format: &str) -> Result<bool, JsError> {
+    Ok(raw::renders_finished_bands(format_of(format)?))
 }
 
 /// The finished look of a band, for a format whose description has
 /// `finishedBands` (RAF); an error for the others, which use
 /// `decodeAndUploadRawBaked`.
 #[wasm_bindgen(js_name = "rawRenderFinishedBand")]
-pub fn raw_render_finished_band(format: &str, src: &[f32], params_json: &str, y0: u32, y1: u32, src_y0: u32, src_y1: u32) -> Result<RafRenderedBand, JsError> {
-    let out = raw::render_finished_band(format_of(format)?, src, params_json, RafBand { y0, y1, src_y0, src_y1 }).map_err(err)?;
-    Ok(RafRenderedBand { x: out.x, y: out.y, width: out.width, height: out.height, pixels: out.pixels })
+pub fn raw_render_finished_band(format: &str, src: &[f32], params_json: &str, y0: u32, y1: u32, src_y0: u32, src_y1: u32) -> Result<RawRenderedBand, JsError> {
+    let out = raw::render_finished_band(format_of(format)?, src, params_json, RawBand { y0, y1, src_y0, src_y1 }).map_err(err)?;
+    Ok(out.into())
+}
+
+/// Auto white balance of linear camera RGB of any format (RGBA f32 from
+/// `binnedLinear` or `rawRenderLinearBand`): `[r, g, b]` wbRatio
+/// multipliers relative to as shot, green = 1. Pixels with a channel at or
+/// above 90 % of its clip level are left out (clipped and reconstructed
+/// highlights are not measurements of a neutral): `clipLevels` is the
+/// description's `clipLevels`, three floats; any other length (or `null`
+/// passed as an empty array) measures every pixel. Bit for bit what
+/// `rafAutoWhiteBalanceClipped` gives (`lopsy_core::develop_stats`).
+#[wasm_bindgen(js_name = "rawAutoWhiteBalance")]
+pub fn raw_auto_white_balance(linear_rgba: &[f32], clip_levels: &[f32]) -> Vec<f32> {
+    let clip = <[f32; 3]>::try_from(clip_levels).ok();
+    lopsy_core::develop_stats::auto_white_balance_clipped(linear_rgba, clip).to_vec()
 }
 
 /// The RAW step's white balance for the recipe's Temperature and Tint
@@ -150,4 +225,61 @@ pub fn raw_temperature_for_kelvin(format: &str, params_json: &str, kelvin: f32, 
 #[wasm_bindgen(js_name = "decodeAndUploadRawBaked")]
 pub fn decode_and_upload_raw_baked(engine: &mut Engine, layer_id: &str, data: &[u8]) -> Result<String, JsError> {
     lopsy_engine::commands::layer::decode_and_upload_raw_baked(&mut engine.inner, layer_id, data).map_err(|e| JsError::new(&e))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A frame with a cast, near-neutral greys, saturated colours, noise
+    /// and a clipped highlight, all deterministic.
+    fn frame() -> Vec<f32> {
+        let mut seed = 0x2545_f491u32;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            (seed as f32) / (u32::MAX as f32)
+        };
+        (0..4096)
+            .flat_map(|i| {
+                let v = next();
+                let px = match i % 5 {
+                    0 => [0.30 * v + 0.05, 0.25 * v + 0.05, 0.18 * v + 0.04],
+                    1 => [0.9 * v, 0.2 * v, 0.1 * v],
+                    2 => [1.8, 1.95, 1.4],
+                    3 => [0.002 * v, 0.003 * v, 0.001 * v],
+                    _ => [0.2 + 0.01 * v, 0.17 + 0.01 * v, 0.12 + 0.01 * v],
+                };
+                [px[0], px[1], px[2], 1.0]
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_neutral_auto_white_balance_is_the_raf_one_bit_for_bit() {
+        let px = frame();
+        for clip in [&[1.9f32, 2.0, 1.5][..], &[], &[1.0, 1.0]] {
+            let ours = raw_auto_white_balance(&px, clip);
+            let raf = super::super::develop::raf_auto_white_balance_clipped(&px, clip);
+            assert_eq!(ours.iter().map(|v| v.to_bits()).collect::<Vec<_>>(), raf.iter().map(|v| v.to_bits()).collect::<Vec<_>>(), "{clip:?}");
+            assert_eq!(ours.len(), 3);
+        }
+    }
+
+    #[test]
+    fn only_raf_renders_finished_bands() {
+        // (An unknown id is an error, which only a wasm target can build.)
+        assert!(raw_renders_finished_bands("raf").ok() == Some(true));
+        assert!(raw_renders_finished_bands("dng").ok() == Some(false));
+        assert!(raw_renders_finished_bands("arw").ok() == Some(false));
+    }
+
+    #[test]
+    fn a_rendered_band_keeps_its_place_size_and_pixels() {
+        let mut band = RawRenderedBand::from(RawBandPixels { x: 3, y: 7, width: 2, height: 1, pixels: vec![0.5; 8] });
+        assert_eq!((band.x(), band.y(), band.width(), band.height()), (3, 7, 2, 1));
+        assert_eq!(band.take_pixels(), vec![0.5; 8]);
+        assert!(band.take_pixels().is_empty());
+    }
 }

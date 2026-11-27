@@ -278,3 +278,54 @@ fn the_matrices_are_plausible() {
         }
     }
 }
+
+/// How much chroma the fitted camera → XYZ reproduces for the training
+/// colours, against their true values (CIELAB C*ab under the fit's own
+/// white), under the daylight fit: Σ C*ab fitted / Σ C*ab true, over all
+/// 190 patches and over the most saturated quarter, with the mean ΔE*ab
+/// and the largest error of a near-neutral patch (true C*ab < 5). Prints;
+/// fails only if the fit loses more than a tenth of the chroma.
+#[test]
+fn the_fit_keeps_the_training_colours_chroma() {
+    let s = load_common();
+    let light = planck(DAYLIGHT_KELVIN);
+    let ls: Vec<f64> = wavelengths().iter().map(|&w| light(f64::from(w))).collect();
+    for model in MODELS {
+        let sens = camera(model);
+        let f = fit(&sens, &s, &light);
+        let n = s.training[0].len();
+        let respond = |i: Option<usize>| -> ([f64; 3], [f64; 3]) {
+            let (mut cam, mut xyz) = ([0.0; 3], [0.0; 3]);
+            for (j, l) in ls.iter().enumerate() {
+                let e = i.map_or(1.0, |i| s.training[j][i]) * l;
+                for c in 0..3 {
+                    cam[c] += e * sens[j][c];
+                    xyz[c] += e * s.cmf[j][c];
+                }
+            }
+            (cam, xyz)
+        };
+        let (w_cam, w_xyz) = respond(None);
+        let white = w_xyz.map(|v| v / w_xyz[1]);
+        let cm: Mat3 = std::array::from_fn(|r| std::array::from_fn(|c| f.color_matrix[r * 3 + c]));
+        let k = mat_mul(&mat_inverse(&cm), &[[f.neutral[0], 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, f.neutral[2]]]);
+        let mut rows: Vec<(f64, f64, f64)> = (0..n)
+            .map(|i| {
+                let (c, x) = respond(Some(i));
+                let b: [f64; 3] = std::array::from_fn(|q| c[q] / w_cam[q]);
+                let (got, want) = (lab(mat_vec(&k, &b), white), lab(x.map(|v| v / w_xyz[1]), white));
+                let ch = |l: [f64; 3]| l[1].hypot(l[2]);
+                let de = ((got[0] - want[0]).powi(2) + (got[1] - want[1]).powi(2) + (got[2] - want[2]).powi(2)).sqrt();
+                (ch(want), ch(got), de)
+            })
+            .collect();
+        let ratio = |r: &[(f64, f64, f64)]| r.iter().map(|v| v.1).sum::<f64>() / r.iter().map(|v| v.0).sum::<f64>();
+        let all = ratio(&rows);
+        rows.sort_by(|a, b| b.0.total_cmp(&a.0));
+        let top = ratio(&rows[..n / 4]);
+        let neutral_err = rows.iter().filter(|v| v.0 < 5.0).map(|v| v.2).fold(0.0, f64::max);
+        let mean_de = rows.iter().map(|v| v.2).sum::<f64>() / n as f64;
+        println!("{model}: chroma fitted/true {all:.3} (saturated quarter {top:.3}), mean ΔE*ab {mean_de:.2}, worst near-neutral ΔE*ab {neutral_err:.2}");
+        assert!(all > 0.9, "{model}: the fit keeps only {all} of the chroma");
+    }
+}

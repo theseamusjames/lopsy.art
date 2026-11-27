@@ -20,6 +20,7 @@ pub mod base_curves;
 pub mod compression;
 pub mod dcp;
 pub mod develop;
+pub mod standard_curve;
 pub mod highlights;
 mod markesteijn;
 pub mod wb_presets;

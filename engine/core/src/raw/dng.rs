@@ -3,26 +3,47 @@
 //! the matrix per white, measured Kelvin, CIE illuminant presets.
 
 use super::white_balance::{illuminant_presets, measured_white, temperature_for_kelvin};
-use super::{camera_and_monochrome, KelvinModel, MatrixModel, PresetSource, RawDescription, RawFormat, RawFormatId, RawPlane, RawWhite, WhiteBalanceModel};
+use super::{standard_profiles, KelvinModel, MatrixModel, OpeningLook, PresetSource, RawDescription, RawFormat, RawFormatId, RawPlane, RawWhite, WhiteBalanceModel};
 use crate::dng::linear::{self, DngRenderParams, PlaneParams};
 use crate::raf::{RafBand, RafBandPixels};
 
 pub struct Dng;
 
+/// The opening exposure matched to the camera's preview (`dng::preview`),
+/// or `None` when the file does not qualify or has no usable preview.
+fn preview_exposure(data: &[u8], params: &DngRenderParams, plane: &[f32], look: &OpeningLook) -> Option<f32> {
+    use crate::arw::exposure::{match_rendered_median, preview_sized_view};
+    use crate::dng::preview::{camera_preview_for_exposure, MAX_ABOVE_BASELINE, MIN_BELOW_BASELINE};
+    let (ow, oh) = params.oriented_size();
+    let preview = camera_preview_for_exposure(data, f64::from(ow) / f64::from(oh))?;
+    let (sw, sh, rgba) = preview_sized_view(plane, params, &preview)?;
+    let settings = linear::develop_defaults_with(params, look).ok()?;
+    let base = params.calibration.baseline_exposure as f32;
+    Some(match_rendered_median(&rgba, sw, sh, &settings, preview.median, (base - MIN_BELOW_BASELINE, base + MAX_ABOVE_BASELINE)))
+}
+
 impl RawFormat for Dng {
     const ID: RawFormatId = RawFormatId::Dng;
     type Params = DngRenderParams;
 
-    fn prepare(data: &[u8]) -> Result<RawPlane<DngRenderParams>, String> {
+    fn prepare(data: &[u8], look: &OpeningLook) -> Result<RawPlane<DngRenderParams>, String> {
         let mut prep = linear::prepare_dng(data).map_err(|e| format!("DNG cannot open as RAW: {e}"))?;
         // Clipped channels of a Bayer plane are reconstructed, as a RAF's.
         prep.params.highlight_chroma = linear::measure_highlight_chroma(&prep.plane, &prep.params.layout(), prep.params.clip_levels);
+        // A prototype, off by default: a file that relies on a gain map
+        // opens as bright as the camera's preview, through the curve.
+        if look.dng_preview_exposure {
+            if let Some(ev) = preview_exposure(data, &prep.params, &prep.plane, look) {
+                prep.params.default_exposure_ev = Some(ev);
+                prep.debug_log.push(format!("[DNG] develop exposure {ev:+.3} EV, matched to the camera's preview (baseline {:+.3})", prep.params.calibration.baseline_exposure));
+            }
+        }
         Ok(RawPlane { params: prep.params, plane: prep.plane, not_applied: prep.unhandled, debug_log: prep.debug_log })
     }
 
-    fn describe(_data: &[u8], prep: &RawPlane<DngRenderParams>) -> Result<RawDescription, String> {
+    fn describe(_data: &[u8], prep: &RawPlane<DngRenderParams>, look: &OpeningLook) -> Result<RawDescription, String> {
         let p = &prep.params;
-        let defaults = linear::develop_defaults(p).map_err(|e| format!("DNG cannot open as RAW: {e}"))?;
+        let defaults = linear::develop_defaults_with(p, look).map_err(|e| format!("DNG cannot open as RAW: {e}"))?;
         let as_shot = measured_white(&p.calibration, p.as_shot_gain, 0.0, 0.0).map_err(|e| format!("DNG cannot open as RAW: {e}"))?;
         let (width, height) = p.oriented_size();
         Ok(RawDescription {
@@ -36,7 +57,7 @@ impl RawFormat for Dng {
             camera_model: p.camera_model.clone(),
             color_note: None,
             not_applied: prep.not_applied.clone(),
-            profiles: camera_and_monochrome(&defaults),
+            profiles: standard_profiles(&defaults),
             develop_defaults: defaults,
             white_balance: WhiteBalanceModel {
                 matrix: MatrixModel::PerWhite,
@@ -44,7 +65,7 @@ impl RawFormat for Dng {
                 preset_source: PresetSource::Illuminants,
                 presets: illuminant_presets(&p.calibration, p.as_shot_gain),
             },
-            finished_bands: false,
+            finished_bands: Self::FINISHED_BANDS,
         })
     }
 

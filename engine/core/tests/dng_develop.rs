@@ -163,8 +163,11 @@ fn real_dngs_take_the_linear_path() {
         let differing = whole.pixels.iter().zip(&banded).filter(|(a, b)| a.to_bits() != b.to_bits()).count();
         assert_eq!(differing, 0, "{name}: banded render differs from the whole frame");
 
-        // The default develop, working space on, output for sRGB.
-        let settings = develop_defaults(p).unwrap();
+        // The default develop, working space on, output for sRGB, without
+        // the Standard look's saturation: the colour compared with the
+        // baked decode below is the colorimetric one, which the look then
+        // deliberately makes more colourful.
+        let settings = lopsy_core::raf::develop::RawDevelopSettings { saturation: 1.0, ..develop_defaults(p).unwrap() };
         let scene = scene_reference(&whole.pixels, &settings);
         let rendered = lopsy_core::tone::tone_reference(&scene, &tone_settings(&settings));
         let new = output_reference(&rendered, ow, &OutputSettings::sdr(OutputTarget::Srgb, Gamut::Rec2020, false));

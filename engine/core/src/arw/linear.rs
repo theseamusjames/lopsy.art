@@ -18,7 +18,6 @@ use serde::{Deserialize, Serialize};
 use super::{read_info, read_mosaic, ArwColour};
 use crate::black_level::BlackLevels;
 use crate::dng::linear::{fill_plane, plane_scales, DngKind, PlaneLayout, PlaneMapping, PlaneParams, StoredPlane};
-use crate::raf::base_curves;
 use crate::dng::camera_color::{DngCalibration, DngWhiteBalance};
 use crate::raf::develop::RawDevelopSettings;
 
@@ -130,15 +129,21 @@ pub fn prepare_arw(data: &[u8]) -> Result<ArwPrepared, String> {
 /// (`wbRatio` 1), the file's matrix, `default_exposure_ev` (an ARW records
 /// no baseline exposure: the RAW interface matches it to the camera's
 /// preview, `exposure::match_develop_exposure`; 0 from `prepare_arw` alone),
-/// no extra saturation, and the engine's neutral base curve.
+/// and the Standard look's base curve and saturation
+/// (`raw::OpeningLook::default`).
 pub fn develop_defaults(params: &ArwRenderParams) -> RawDevelopSettings {
+    develop_defaults_with(params, &crate::raw::OpeningLook::default())
+}
+
+/// [`develop_defaults`] with the base curve and saturation of `look`.
+pub fn develop_defaults_with(params: &ArwRenderParams, look: &crate::raw::OpeningLook) -> RawDevelopSettings {
     RawDevelopSettings {
         wb_ratio: [1.0, 1.0, 1.0],
         cam_to_rgb: params.cam_to_rgb,
         exposure_ev: params.default_exposure_ev,
-        saturation: 1.0,
+        saturation: look.saturation,
         highlight_desaturation: true,
-        base_curve: Some(base_curves::curve_lut(&base_curves::NEUTRAL).to_vec()),
+        base_curve: Some(look.curve.lut()),
         clip_levels: params.clip_levels,
     }
 }

@@ -112,16 +112,25 @@ fn jpeg_ranges(data: &[u8]) -> Vec<(usize, usize)> {
 /// after orientation), its luminance median, or `None` (see the module
 /// notes). Never fails: a JPEG that does not decode is skipped.
 pub fn whole_picture_preview(data: &[u8], aspect: f64) -> Option<Preview> {
+    preview_of(data, &jpeg_ranges(data), &[aspect])
+}
+
+/// [`whole_picture_preview`] over the JPEGs at `ranges` (offset, length,
+/// inside `data`), any of whose aspect is within 1 % of one of `aspects`.
+pub fn preview_of(data: &[u8], ranges: &[(usize, usize)], aspects: &[f64]) -> Option<Preview> {
     // Headers first, to choose without decoding every candidate.
     let mut candidates: Vec<(usize, usize, u32, u32)> = Vec::new();
-    for (o, n) in jpeg_ranges(data) {
+    for &(o, n) in ranges {
+        if n == 0 || n > MAX_PREVIEW_BYTES || o.checked_add(n).is_none_or(|end| end > data.len()) {
+            continue;
+        }
         let mut dec = jpeg_decoder::Decoder::new(&data[o..o + n]);
         if dec.read_info().is_err() {
             continue;
         }
         let Some(info) = dec.info() else { continue };
         let (w, h) = (u32::from(info.width), u32::from(info.height));
-        if w == 0 || h == 0 || (f64::from(w) / f64::from(h) / aspect - 1.0).abs() > 0.01 {
+        if w == 0 || h == 0 || !aspects.iter().any(|a| (f64::from(w) / f64::from(h) / a - 1.0).abs() <= 0.01) {
             continue;
         }
         candidates.push((o, n, w, h));
@@ -288,27 +297,53 @@ mod tests {
 
 /// The exposure (stops) at which the develop chain's default rendering of a
 /// prepared ARW has the median brightness of the camera's embedded preview,
-/// or `None` without a usable preview. The rendering is the chain's CPU
-/// references with `develop_defaults` at that exposure: `scene_reference`
-/// (white balance, matrix, exposure into linear Rec. 2020), the scene tone
-/// step with every slider at 0, the tone step (the neutral base curve and
-/// its shoulder) and the SDR output step for sRGB. It is rendered on the
-/// binned view of the plane at the preview's long edge, reduced to the
-/// preview's pixel count (a quarter of it moved the median by 0.011), and
-/// bisected over [`MIN_EV`]..[`MAX_EV`] in 16
-/// steps; the median is the one [`whole_picture_preview`] takes (encoded
-/// Rec. 709 luminance of linear sRGB).
+/// or `None` without a usable preview: [`match_develop_exposure_with`] and
+/// `develop_defaults`.
 pub fn match_develop_exposure(data: &[u8], params: &super::linear::ArwRenderParams, plane: &[f32]) -> Option<f32> {
-    use crate::output::{output_reference, OutputSettings, OutputTarget};
-    use crate::raf::develop::{scene_reference, tone_settings};
+    match_develop_exposure_with(data, params, plane, &super::linear::develop_defaults(params))
+}
+
+/// The exposure (stops) at which the develop chain's rendering of a
+/// prepared ARW with `settings` (its exposure replaced) has the median
+/// brightness of the camera's embedded preview, or `None` without a usable
+/// preview. The rendering is the chain's CPU references at that exposure:
+/// `scene_reference` (white balance, matrix, exposure into linear Rec.
+/// 2020), the scene tone step with every slider at 0, the tone step (the
+/// settings' base curve and its shoulder) and the SDR output step for sRGB,
+/// so the median is matched after the curve, whatever the curve. It is
+/// rendered on the binned view of the plane at the preview's long edge,
+/// reduced to the preview's pixel count (a quarter of it moved the median
+/// by 0.011), and bisected over [`MIN_EV`]..[`MAX_EV`] in 16 steps
+/// ([`match_rendered_median`]); the median is the one
+/// [`whole_picture_preview`] takes (encoded Rec. 709 luminance of linear
+/// sRGB).
+pub fn match_develop_exposure_with(data: &[u8], params: &super::linear::ArwRenderParams, plane: &[f32], settings: &crate::raf::develop::RawDevelopSettings) -> Option<f32> {
     let (ow, oh) = params.oriented_size();
     let preview = whole_picture_preview(data, f64::from(ow) / f64::from(oh))?;
+    let (sw, sh, rgba) = preview_sized_view(plane, params, &preview)?;
+    Some(match_rendered_median(&rgba, sw, sh, settings, preview.median, (MIN_EV, MAX_EV)))
+}
+
+/// The binned view of `plane` at `preview`'s long edge, box-reduced in
+/// linear light to its pixel count: (width, height, RGBA).
+pub fn preview_sized_view<P: crate::dng::linear::PlaneParams + ?Sized>(plane: &[f32], params: &P, preview: &Preview) -> Option<(usize, usize, Vec<f32>)> {
     let long = preview.width.max(preview.height);
     let (bw, bh, binned) = crate::dng::linear::render_binned_linear_for(plane, params, long).ok()?;
     let rgb: Vec<f32> = binned.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
     let (sw, sh, small) = downscale(&rgb, bw as usize, bh as usize, (preview.width * preview.height) as usize);
     let rgba: Vec<f32> = small.chunks_exact(3).flat_map(|c| [c[0], c[1], c[2], 1.0]).collect();
-    let mut settings = super::linear::develop_defaults(params);
+    Some((sw, sh, rgba))
+}
+
+/// The exposure in `bounds` (stops) at which the develop chain renders
+/// `rgba` (linear camera RGB, `sw` × `sh`) with `settings` to an encoded
+/// median luminance of `target`: the CPU references as
+/// [`match_develop_exposure_with`] describes, bisected in 16 steps (the
+/// median rises with the exposure). A bound when the target is outside.
+pub fn match_rendered_median(rgba: &[f32], sw: usize, sh: usize, settings: &crate::raf::develop::RawDevelopSettings, target: f32, bounds: (f32, f32)) -> f32 {
+    use crate::output::{output_reference, OutputSettings, OutputTarget};
+    use crate::raf::develop::{scene_reference, tone_settings};
+    let mut settings = settings.clone();
     let sliders = crate::scene_tone::ToneSliders::default();
     let output = OutputSettings::sdr(OutputTarget::Srgb, Gamut::Rec2020, false);
     let median_at = |ev: f32, settings: &mut crate::raf::develop::RawDevelopSettings| -> f32 {
@@ -320,20 +355,20 @@ pub fn match_develop_exposure(data: &[u8], params: &super::linear::ArwRenderPara
         let mut lum: Vec<f32> = out.chunks_exact(4).map(|c| encoded_luma([srgb_decode(c[0]), srgb_decode(c[1]), srgb_decode(c[2])])).collect();
         median(&mut lum).unwrap_or(0.0)
     };
-    let (mut lo, mut hi) = (MIN_EV, MAX_EV);
-    if median_at(lo, &mut settings) >= preview.median {
-        return Some(lo);
+    let (mut lo, mut hi) = bounds;
+    if median_at(lo, &mut settings) >= target {
+        return lo;
     }
-    if median_at(hi, &mut settings) <= preview.median {
-        return Some(hi);
+    if median_at(hi, &mut settings) <= target {
+        return hi;
     }
     for _ in 0..16 {
         let mid = (lo + hi) / 2.0;
-        if median_at(mid, &mut settings) < preview.median {
+        if median_at(mid, &mut settings) < target {
             lo = mid;
         } else {
             hi = mid;
         }
     }
-    Some((lo + hi) / 2.0)
+    (lo + hi) / 2.0
 }

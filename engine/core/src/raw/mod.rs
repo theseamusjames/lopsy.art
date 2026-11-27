@@ -25,15 +25,26 @@
 
 pub mod arw;
 pub mod dng;
+pub mod look;
 pub mod raf;
 pub mod white_balance;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-use crate::raf::develop::{DevelopProfile, ProfileSettings, RawDevelopSettings};
+use crate::raf::develop::{DevelopProfile, ProfileRole, ProfileSettings, RawDevelopSettings};
+pub use look::{OpeningCurve, OpeningLook, STANDARD_SATURATION};
 use crate::raf::wb_presets::RecipeWbPreset;
 use crate::raf::{RafBand, RafBandPixels};
+
+/// Rows of a plane to render: output rows `[y0, y1)` from plane rows
+/// `[src_y0, src_y1)` (the halo included). Every format's bands are this
+/// type, which RAF introduced.
+pub type RawBand = RafBand;
+
+/// Rendered rows: where they go in the oriented frame, their size and RGBA
+/// f32 pixels. Every format's renders are this type, which RAF introduced.
+pub type RawBandPixels = RafBandPixels;
 
 /// The formats the RAW interface knows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -130,7 +141,8 @@ pub struct WhiteBalanceModel {
     pub matrix: MatrixModel,
     pub kelvin: KelvinModel,
     pub preset_source: PresetSource,
-    /// In the recipe's units, in menu order, as `rafWhiteBalancePresets`.
+    /// In the recipe's units, in menu order (for a RAF, what
+    /// `rafWhiteBalancePresets` gives).
     pub presets: Vec<RecipeWbPreset>,
 }
 
@@ -159,7 +171,9 @@ pub struct RawDescription {
     pub profiles: Vec<DevelopProfile>,
     pub white_balance: WhiteBalanceModel,
     /// Whether `render_finished_band` renders the finished look (RAF's
-    /// legacy path); for the others the host uses the baked decode.
+    /// legacy path); for the others the host uses the baked decode. Always
+    /// the format's [`RawFormat::FINISHED_BANDS`], which
+    /// [`renders_finished_bands`] answers before a file is prepared.
     pub finished_bands: bool,
 }
 
@@ -178,21 +192,27 @@ pub struct RawWhite {
 /// One format on the RAW interface.
 pub trait RawFormat {
     const ID: RawFormatId;
+    /// Whether the format renders finished bands
+    /// ([`RawFormat::render_finished_band`] gives `Some`), which its
+    /// description's `finished_bands` repeats.
+    const FINISHED_BANDS: bool = false;
     type Params: Serialize + DeserializeOwned;
 
-    fn prepare(data: &[u8]) -> Result<RawPlane<Self::Params>, String>;
+    /// `look` is what a format without film looks opens with (RAF ignores
+    /// it); [`OpeningLook::default`] is today's.
+    fn prepare(data: &[u8], look: &OpeningLook) -> Result<RawPlane<Self::Params>, String>;
     /// Needs the bytes: RAF's presets and Kelvin scale come from its
-    /// makernote.
-    fn describe(data: &[u8], prep: &RawPlane<Self::Params>) -> Result<RawDescription, String>;
+    /// makernote. `look` as for `prepare`.
+    fn describe(data: &[u8], prep: &RawPlane<Self::Params>, look: &OpeningLook) -> Result<RawDescription, String>;
     /// The plane's height, which bands are planned over.
     fn plane_height(p: &Self::Params) -> u32;
-    fn plan_bands(p: &Self::Params, max_bands: u32) -> Vec<RafBand> {
+    fn plan_bands(p: &Self::Params, max_bands: u32) -> Vec<RawBand> {
         crate::raf::plan_bands(Self::plane_height(p), max_bands)
     }
-    fn render_linear_band(src: &[f32], p: &Self::Params, band: RafBand) -> Result<RafBandPixels, String>;
+    fn render_linear_band(src: &[f32], p: &Self::Params, band: RawBand) -> Result<RawBandPixels, String>;
     fn render_binned_linear(plane: &[f32], p: &Self::Params, min_long_edge: u32) -> Result<(u32, u32, Vec<f32>), String>;
     /// The finished look of a band, for formats that have one (RAF).
-    fn render_finished_band(_src: &[f32], _p: &Self::Params, _band: RafBand) -> Option<Result<RafBandPixels, String>> {
+    fn render_finished_band(_src: &[f32], _p: &Self::Params, _band: RawBand) -> Option<Result<RawBandPixels, String>> {
         None
     }
     /// The RAW step's white balance for the recipe's temperature and tint.
@@ -202,19 +222,38 @@ pub trait RawFormat {
     fn temperature_for_kelvin(p: &Self::Params, kelvin: f32, tint: f32) -> Result<f32, String>;
 }
 
-/// The Camera look and Monochrome for a format without film looks: the
-/// develop defaults as they are, and the same with no colour.
-pub(crate) fn camera_and_monochrome(defaults: &RawDevelopSettings) -> Vec<DevelopProfile> {
-    let settings = |saturation: f32| ProfileSettings {
+/// The Profile control of a format without film looks (DNG, ARW), with
+/// the same fields as RAF's (`raf::develop::DevelopProfile`): the camera
+/// entry is the maker-neutral standard look and stands for no other entry.
+/// - `camera`, "Standard": the develop defaults, the Standard look
+///   (`look::OpeningLook::default`). The app reads the engine's `camera`
+///   entry as its recipe's default profile, `standard`.
+/// - `neutral`, "Neutral": the near-linear `NEUTRAL` curve and no added
+///   saturation, the look these formats opened with before Standard: a flat
+///   start for grading. Same exposure as Standard.
+/// - `monochrome`, "Monochrome": Standard with no colour.
+pub(crate) fn standard_profiles(defaults: &RawDevelopSettings) -> Vec<DevelopProfile> {
+    let settings = |saturation: f32, base_curve: Option<Vec<f32>>| ProfileSettings {
         cam_to_rgb: defaults.cam_to_rgb,
         exposure_ev: defaults.exposure_ev,
         saturation,
         highlight_desaturation: defaults.highlight_desaturation,
-        base_curve: defaults.base_curve.clone(),
+        base_curve,
+    };
+    let entry = |id: &str, name: &str, role: ProfileRole, settings: ProfileSettings| DevelopProfile {
+        id: id.into(),
+        name: name.into(),
+        settings,
+        role,
+        menu_name: name.into(),
+        listed: true,
+        same_as: None,
+        maker_standard: role == ProfileRole::Camera,
     };
     vec![
-        DevelopProfile { id: "camera".into(), name: "Standard".into(), settings: settings(defaults.saturation) },
-        DevelopProfile { id: "monochrome".into(), name: "Monochrome".into(), settings: settings(0.0) },
+        entry("camera", "Standard", ProfileRole::Camera, settings(defaults.saturation, defaults.base_curve.clone())),
+        entry("neutral", "Neutral", ProfileRole::Neutral, settings(1.0, Some(OpeningCurve::Neutral.lut()))),
+        entry("monochrome", "Monochrome", ProfileRole::Monochrome, settings(0.0, defaults.base_curve.clone())),
     ]
 }
 
@@ -293,8 +332,9 @@ impl PreparedRaw {
     }
 }
 
-fn finish<F: RawFormat>(data: &[u8], prep: RawPlane<F::Params>, wrap: fn(RawPlane<F::Params>) -> Prepared) -> Result<PreparedRaw, String> {
-    let description = F::describe(data, &prep)?;
+fn finish<F: RawFormat>(data: &[u8], look: &OpeningLook, wrap: fn(RawPlane<F::Params>) -> Prepared) -> Result<PreparedRaw, String> {
+    let prep = F::prepare(data, look)?;
+    let description = F::describe(data, &prep, look)?;
     let params_json = serde_json::to_string(&prep.params).map_err(|e| format!("JSON serialize: {e}"))?;
     Ok(PreparedRaw { format: F::ID, description, params_json, prepared: wrap(prep) })
 }
@@ -303,21 +343,27 @@ fn finish<F: RawFormat>(data: &[u8], prep: RawPlane<F::Params>, wrap: fn(RawPlan
 /// sentence; a DNG's starts "DNG cannot open as RAW:" (the host then uses
 /// the baked decode).
 pub fn prepare(data: &[u8]) -> Result<PreparedRaw, String> {
+    prepare_with(data, &OpeningLook::default())
+}
+
+/// [`prepare`] with an opening look other than today's (`look`), for
+/// comparing the Standard candidates.
+pub fn prepare_with(data: &[u8], look: &OpeningLook) -> Result<PreparedRaw, String> {
     match sniff(data).ok_or("This file is not a RAW format this app reads")? {
-        RawFormatId::Raf => finish::<raf::Raf>(data, raf::Raf::prepare(data)?, Prepared::Raf),
-        RawFormatId::Dng => finish::<dng::Dng>(data, dng::Dng::prepare(data)?, Prepared::Dng),
-        RawFormatId::Arw => finish::<arw::Arw>(data, arw::Arw::prepare(data)?, Prepared::Arw),
+        RawFormatId::Raf => finish::<raf::Raf>(data, look, Prepared::Raf),
+        RawFormatId::Dng => finish::<dng::Dng>(data, look, Prepared::Dng),
+        RawFormatId::Arw => finish::<arw::Arw>(data, look, Prepared::Arw),
     }
 }
 
 /// Bands for the plane of a prepared file.
-pub fn plan_bands(format: RawFormatId, params_json: &str, max_bands: u32) -> Result<Vec<RafBand>, String> {
+pub fn plan_bands(format: RawFormatId, params_json: &str, max_bands: u32) -> Result<Vec<RawBand>, String> {
     dispatch!(format, F => Ok(F::plan_bands(&params_from::<<F as RawFormat>::Params>(format, params_json)?, max_bands)))
 }
 
 /// Render plane rows `[band.src_y0, band.src_y1)` (`src`) to linear camera
 /// RGB: oriented RGBA f32, bit-identical to the same rows of the whole frame.
-pub fn render_linear_band(format: RawFormatId, src: &[f32], params_json: &str, band: RafBand) -> Result<RafBandPixels, String> {
+pub fn render_linear_band(format: RawFormatId, src: &[f32], params_json: &str, band: RawBand) -> Result<RawBandPixels, String> {
     dispatch!(format, F => F::render_linear_band(src, &params_from::<<F as RawFormat>::Params>(format, params_json)?, band))
 }
 
@@ -326,8 +372,15 @@ pub fn render_binned_linear(format: RawFormatId, plane: &[f32], params_json: &st
     dispatch!(format, F => F::render_binned_linear(plane, &params_from::<<F as RawFormat>::Params>(format, params_json)?, min_long_edge))
 }
 
+/// Whether `format` renders finished bands (RAF's legacy look), from the
+/// format alone, before any file is prepared: what every description of
+/// that format says in `finished_bands`.
+pub fn renders_finished_bands(format: RawFormatId) -> bool {
+    dispatch!(format, F => F::FINISHED_BANDS)
+}
+
 /// The finished look of a band (RAF); an error for a format without one.
-pub fn render_finished_band(format: RawFormatId, src: &[f32], params_json: &str, band: RafBand) -> Result<RafBandPixels, String> {
+pub fn render_finished_band(format: RawFormatId, src: &[f32], params_json: &str, band: RawBand) -> Result<RawBandPixels, String> {
     dispatch!(format, F => {
         let p = params_from::<<F as RawFormat>::Params>(format, params_json)?;
         F::render_finished_band(src, &p, band).unwrap_or_else(|| Err(format!("{} has no finished bands: use the baked decode", format.as_str().to_uppercase())))

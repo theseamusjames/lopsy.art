@@ -38,45 +38,39 @@ describe('profilesFor', () => {
     expect(profilesFor(true, [])).toEqual(RAW_FALLBACK_PROFILES);
   });
 
-  it('puts the camera look first and keeps Neutral and Monochrome', () => {
-    const ids = profilesFor(true, [
-      { id: 'velvia', name: 'Velvia' },
-      { id: 'standard', name: 'Camera (Provia)' },
-      { id: 'neutral', name: 'Flat' },
-    ]).map((p) => `${p.id}:${p.name}`);
-    expect(ids).toEqual(['standard:Camera (Provia)', 'velvia:Velvia', 'neutral:Flat', 'monochrome:Monochrome']);
+  it("lists the engine's entries in its order, under its menu names, leaving out the unlisted", () => {
+    const menu = profilesFor(true, [
+      { id: 'standard', name: 'Camera (Velvia look)', role: 'camera', menuName: 'Camera (Velvia look)', listed: true, sameAs: 'velvia' },
+      { id: 'provia', name: 'Provia look', role: 'look', menuName: 'Standard (Provia look)', listed: true, makerStandard: true },
+      { id: 'velvia', name: 'Velvia look', role: 'look', menuName: 'Velvia look', listed: false },
+      { id: 'neutral', name: 'Neutral', role: 'neutral', menuName: 'Neutral', listed: true },
+      { id: 'monochrome', name: 'Monochrome', role: 'monochrome', menuName: 'Monochrome', listed: true },
+    ]);
+    expect(menu.map((p) => `${p.id}:${p.name}`)).toEqual([
+      'standard:Camera (Velvia look)',
+      'provia:Standard (Provia look)',
+      'neutral:Neutral',
+      'monochrome:Monochrome',
+    ]);
+  });
+
+  it('adds nothing the engine did not give, and prints the name where there is no menu name', () => {
+    expect(profilesFor(true, [{ id: 'standard', name: 'Standard' }, { id: 'monochrome', name: 'Monochrome' }]).map((p) => p.name)).toEqual(['Standard', 'Monochrome']);
   });
 });
 
-describe('profilesFor on a Fujifilm RAW', () => {
-  const engine = [
-    { id: 'standard', name: 'Camera (Velvia look)' },
-    { id: 'provia', name: 'Provia look' },
-    { id: 'velvia', name: 'Velvia look' },
-    { id: 'astia', name: 'Astia look' },
-    { id: 'neutral', name: 'Neutral' },
-    { id: 'monochrome', name: 'Monochrome' },
-  ];
-
-  it('does not list the camera look twice, and calls Provia Standard', () => {
-    expect(profilesFor(true, engine).map((p) => p.name)).toEqual([
-      'Camera (Velvia look)',
-      'Standard (Provia look)',
-      'Astia look',
-      'Neutral',
-      'Monochrome',
+describe('profiles from the engine', () => {
+  it('reads the roles, menu names and listing of each entry', () => {
+    const json = JSON.stringify([
+      { id: 'camera', name: 'Camera (Provia look)', settings: { saturation: 1.2 }, role: 'camera', menuName: 'Camera (Provia look, Standard)', listed: true, sameAs: 'provia', makerStandard: true },
+      { id: 'provia', name: 'Provia look', settings: { saturation: 1.2 }, role: 'look', menuName: 'Standard (Provia look)', listed: false, sameAs: null, makerStandard: true },
+      { id: 'x', name: 'X', role: 'nonsense', listed: 'yes' },
     ]);
-  });
-
-  it('says Standard on the camera entry when the camera shot Provia', () => {
-    const provia = engine.map((p) => (p.id === 'standard' ? { ...p, name: 'Camera (Provia look)' } : p));
-    expect(profilesFor(true, provia).map((p) => p.name)).toEqual([
-      'Camera (Provia look, Standard)',
-      'Velvia look',
-      'Astia look',
-      'Neutral',
-      'Monochrome',
-    ]);
+    const [camera, provia, x] = parseDevelopProfiles(json);
+    expect(camera).toMatchObject({ id: 'standard', role: 'camera', menuName: 'Camera (Provia look, Standard)', listed: true, sameAs: 'provia', makerStandard: true });
+    expect(provia).toMatchObject({ id: 'provia', listed: false, sameAs: null });
+    expect(x).toEqual({ id: 'x', name: 'X' });
+    expect(profilesFor(true, parseDevelopProfiles(json)).map((p) => p.name)).toEqual(['Camera (Provia look, Standard)', 'X']);
   });
 });
 
