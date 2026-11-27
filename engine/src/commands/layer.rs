@@ -29,6 +29,15 @@ pub fn add_layer(engine: &mut EngineInner, layer_desc_json: &str) -> Result<(), 
     layer_manager::add_layer(&mut *engine, desc)
 }
 
+/// The largest width and height of a texture this engine's GPU accepts:
+/// what a layer, the document and every texture of the develop chain may
+/// be at most. On wgpu the adapter's limit (the device is asked for it);
+/// on WebGL `MAX_TEXTURE_SIZE`, or `u32::MAX` where the context does not
+/// say.
+pub fn max_texture_size(engine: &EngineInner) -> u32 {
+    engine.texture_pool.max_size()
+}
+
 pub fn remove_layer(engine: &mut EngineInner, layer_id: &str) {
     layer_manager::remove_layer(&mut *engine, layer_id);
 }
