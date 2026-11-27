@@ -26,7 +26,7 @@ pub struct ScaledBand {
 
 /// Bands of the reduced frame are never shorter than this, so the halo
 /// rows each renders stay a modest share of its work.
-const MIN_BAND_LENGTH: u32 = 64;
+pub(super) const MIN_BAND_LENGTH: u32 = 64;
 
 /// Where a band of plane rows lands in the oriented frame.
 struct Layout {
@@ -107,7 +107,7 @@ pub fn render<F: RawFormat>(src: &[f32], p: &F::Params, scaled: ScaledBand, dst_
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
     use crate::dng::linear::{DngKind, PlaneLayout, PlaneParams};
     use crate::raf::RafBandPixels;
@@ -116,11 +116,11 @@ mod tests {
 
     /// A plane of this size and orientation: a Bayer mosaic, or linear RGB.
     #[derive(Clone, Copy, Serialize, Deserialize)]
-    struct TestPlane {
-        width: u32,
-        height: u32,
-        orientation: u16,
-        is_bayer: bool,
+    pub(in crate::raw) struct TestPlane {
+        pub width: u32,
+        pub height: u32,
+        pub orientation: u16,
+        pub is_bayer: bool,
     }
 
     impl PlaneParams for TestPlane {
@@ -132,7 +132,7 @@ mod tests {
 
     /// A format over a synthetic plane whose renders are the DNG decode's own
     /// (`dng::linear`), to test the planning in every orientation without a file.
-    struct Plane;
+    pub(in crate::raw) struct Plane;
 
     impl RawFormat for Plane {
         const ID: RawFormatId = RawFormatId::Dng;
@@ -167,7 +167,7 @@ mod tests {
         }
     }
 
-    fn plane(p: &TestPlane) -> Vec<f32> {
+    pub(in crate::raw) fn plane(p: &TestPlane) -> Vec<f32> {
         (0..p.width * p.height * p.layout().samples_per_pixel).map(|i| (i.wrapping_mul(2_654_435_761) >> 8) as f32 / 16_777_216.0 + (i % 7) as f32 * 0.25).collect()
     }
 
