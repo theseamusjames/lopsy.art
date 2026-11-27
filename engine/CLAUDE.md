@@ -38,7 +38,8 @@ engine/
                       # the bodies with data, camera_colour's matrix or Sony's (approximate) otherwise
       raw/            # One RAW interface over raf/, dng/ and arw/: sniff, prepare and describe,
                       # bands, binned view, white balance in recipe units (the raw… exports);
-                      # scaled.rs: the frame reduced band by band, for a GPU whose textures are smaller
+                      # scaled.rs: the frame reduced band by band, for a GPU whose textures are smaller;
+                      # window.rs: the bands for one window of the frame at its own size (tiles)
       area_resample.rs # Area (box) downscale of RGBA f32 at any scale, band by band, bit-identical to whole
       tone.rs         # The develop tone step (scene to rendered) and its curve's shoulder
       scene_tone.rs   # Tone on scene data: the tone sliders and masks, a monotone map in stops
@@ -212,7 +213,10 @@ JS API, and the deviations from `docs/photonamous-spec.md` 6.10. Rules:
   `linear_detail`) and to `develop::tile::apron`. With no region the
   shaders take the branch that is today's arithmetic: keep new
   arithmetic behind that branch. `tests/tiles.rs` assembles tiles and
-  compares them with the whole bit for bit.
+  compares them with the whole bit for bit. An encoder that takes a
+  whole picture runs on one the engine assembles from the tiles' kept
+  parts (`develop::assembly`), read straight into it, so the pixels
+  never cross into the host.
 - Screen-only views (overlays, clipping warning, mask view) run only in the
   live `compositor::composite`, never on an export path, and a test checks
   that exports are byte-identical with them on.

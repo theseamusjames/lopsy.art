@@ -120,8 +120,13 @@
 //! render's own coordinate (`blurUv`). Every stage still clamps at the
 //! tile's edge, so a tile carries an apron of real pixels, the sum of the
 //! reaches of the neighbourhood stages that run (`tile::apron`,
-//! `developApron`), and ends exactly at a picture edge. With no region
-//! every shader takes the branch that is the arithmetic it always had.
+//! `developApron`), and ends exactly at a picture edge. The final blit
+//! dithers a tile drawn at its own size (an 8-bit export's draw) at its
+//! pixels' places in the whole too (`final_blit.wgsl`'s
+//! `u_ditherRegion`). The encoders that take whole pictures run on one
+//! assembled in the engine from the tiles' kept parts
+//! (`develop::assembly`). With no region every shader takes the branch
+//! that is the arithmetic it always had.
 //!
 //! **Statistics.** With the working space, the live frame keeps its
 //! rendered image (after D′, before 11) in the working space's own texture,
@@ -197,6 +202,18 @@
 //!   pixels)`: the part of a band (frame pixels, RGBA f32 rows as
 //!   `uploadLayerPixelsF32Rect` takes) inside a window of the frame, into
 //!   a layer texture that is the window; a band outside it does nothing.
+//! - `beginExportAssembly(engine, kind, value, width, height)`: a whole
+//!   picture to assemble (kind 0 the 16-bit export in colour space
+//!   `value`, 1 the HDR picture at peak `value`, 2 the 8-bit sRGB export);
+//!   `assembleExportTile(engine, kind, value, x, y, width, height)`
+//!   (readback): the tile's export read at the kept rectangle, in whole
+//!   pixels, written into it; `encodeExportAssembly(engine, file, nits)`
+//!   (0 the 16-bit PNG, 1 the TIFF, 2 the PQ PNG) and
+//!   `assembledGainMap(engine, sdrSpace, scale)`, each freeing what it
+//!   encodes; `clearExportAssembly(engine)`.
+//! - `rawPlanWindowBands(format, paramsJson, x, y, width, height,
+//!   maxBands)`: the bands that render a window of the oriented frame at
+//!   its own size (`lopsy_core::raw::window`).
 //!
 //! White balance and statistics:
 //! - `rafAutoWhiteBalance(linearRgba)`: near-neutral-pixel white balance, as `wbRatio`.

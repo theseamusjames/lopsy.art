@@ -1350,11 +1350,13 @@ On the final tree (86ca279f4) and the engine built from it:
 A photo whose long edge is larger than the GPU's largest texture (8192 on
 some GPUs; a Leica Q2 frame is 8368 wide, a GFX 100 frame 11648) opens
 and exports reduced (decision 75), because every texture of the develop
-chain is the document's size. This section records the first phase of
-rendering such a photo at its own size one tile at a time: the engine's
-half, proved against whole renders. The app phase, which plans the tiles,
-loads each tile's pixels and assembles files, is not done. Decisions are
-numbered on from section 9's.
+chain is the document's size. This section records rendering such a
+photo at its own size one tile at a time: first the engine's half,
+proved against whole renders (decisions 76 to 84), then the app's, which
+plans the tiles, loads each tile's pixels and assembles the files, so
+every export of such a photo can be made at its own size (85 on). The
+Edit view still shows it reduced. Decisions are numbered on from
+section 9's.
 
 ### Done
 
@@ -1392,6 +1394,39 @@ numbered on from section 9's.
   `area_layer_reference_at`, `finish_reference_at`,
   `output_reference_at`, `look_reference_at`,
   `scene_tone_reference_at`).
+- **Exports at the photo's own size, in tiles** (the app phase). The
+  export renderer's engine (`createDevelopEngine(…, { tiledExports:
+  true })`) makes every export of a photo larger than the GPU can edit
+  that is larger than the image it holds in tiles
+  (`develop-engine.ts` `encodeTiledOrNot`, `encodeTiled`): the settings
+  that scale with the size once at the photo's own size, the apron,
+  the plan (`tile-plan.ts` `planTiles`), and for each tile
+  `setDocumentSize`, `setDocumentRegion`, a layer of its own filled with
+  the window of the frame it shows (`fillTileLayer`), the reads, the
+  kept parts. Every format: the 16-bit PNG and TIFF, the PQ PNG and the
+  gain-map JPEG from whole pictures the engine assembles
+  (`develop::assembly`; `beginExportAssembly`, `assembleExportTile`,
+  `encodeExportAssembly`, `assembledGainMap`), the JPEG and 8-bit PNG
+  from a 2D canvas of the photo's size (`tileCanvas`), resized once for
+  a size between the held image's and the photo's own.
+- **A tile's pixels.** A RAW file's: the bands of plane rows that cover
+  the window (`lopsy_core::raw::window`, `rawPlanWindowBands`), from
+  workers that keep the prepared plane between tiles (`raw-decode.ts`
+  `openRawFrame`), through `uploadLayerPixelsF32Window`. A JPEG, WebP or
+  PNG's: the browser's decode at its own size, kept, each window drawn
+  from it at 1:1. Rotate and Flip are the same texture operations on the
+  window (`unframeRect` finds it); straighten turns the tile from the
+  window it comes from (`turnedWindow`), about the framed image's centre.
+- **The final blit dithers a tile at its place in the whole**
+  (`final_blit.wgsl` `u_ditherRegion`), so the canvas formats' tiles are
+  the whole draw's.
+- **What people are told:** the Edit view's line under the view bar
+  (`fullSizeNoteText`, the note's `exports`) and the Export dialog's
+  line under Size (`deviceSizeNote`, `canTile`); a toast when an export
+  meant for tiles was made at the held size.
+- **`?texture-limit=N`** in development builds (`develop-override.ts`),
+  and the e2e spec `export-tiles.spec.ts`; `edit-oversize.spec.ts`
+  updated (a Leica Q2 in tiles on SwiftShader, no override).
 
 ### Decided
 
@@ -1458,6 +1493,114 @@ numbered on from section 9's.
     measures +1.76 % against here); their doc comments, which
     wasm-bindgen copies into the glue, were shortened to point at the
     commands, which brought it to +2.72 %. The budget was not raised.
+85. **Tiles run on the export renderer's engine, never the Edit view's.**
+    Every export the app makes already goes through it (the Export
+    dialog, from the library and from the Edit view, and Edit in
+    Lopsy's PNG); its canvas is never shown, so a tile run cannot put a
+    tile on screen, and it is the engine that already holds the photo
+    for exports. A second engine for tiles would double the GPU memory on
+    exactly the devices that have least. The Edit view's engine keeps
+    today's path for what it exports itself (the Edit harness's Export
+    button, and Done for a layer from Lopsy). While a run holds the
+    document no frame of the screen is drawn (`isTiling`).
+86. **The held image stays in its layer, hidden, while tiles render**,
+    and the layout and everything sized for it are sent again afterwards,
+    so the engine is as it was with no second decode. Hidden, not taken
+    out of the layer order: `setLayerOrder` is the engine's list of
+    layers and drops any it is not given. Its memory stays allocated
+    meanwhile, which is why a tile is no larger in area than it (87).
+87. **The plan:** kept parts on even pixels; every tile its kept part
+    and the engine's apron (rounded up to even) within the crop, no side
+    over `editableLimit`, no more pixels than the image that loaded (the
+    device has shown it can hold that; tiles of the Q2 on an 8192 GPU are
+    two of 4184 + apron by 5584), and for a straightened photo small
+    enough that the window it is turned from, the bounding box of the
+    turned tile with two pixels each side, fits the limit. The fewest
+    tiles, then the fewest pixels rendered; every tile but the last in a
+    row or column the same size (at most four sizes, for the pool's two
+    free textures a size). A crop that fits is one tile. No plan when it
+    would render more than four pixels for each pixel of the crop
+    (`MAX_OVERDRAW`): an export taking that many times a whole render
+    is not worth making, and every apron up to a quarter of the limit
+    meets it (466, every stage at once, against 8190). Then the export
+    is made at the held size and the person told.
+88. **A turned tile's window is placed over the tile**, moved by a whole
+    number of pixels with the transform's source centre moved the same,
+    so the layer the transform grows to cover its target holds both and
+    stays within the limit; in place, a tile far from the centre would
+    be turned from a window up to a sixth of the photo away, and the
+    layer would grow to both. A turned tile reads the window with the
+    transform's bilinear filter at coordinates computed from other
+    numbers than the whole's: within a few 8-bit steps (Verified).
+89. **A RAW file is prepared again for a tile run** (the held image's
+    decode reduced it as it went and kept nothing at its own size), once
+    for the run: the plane and the workers stay until it ends. Each
+    window renders only the plane rows (or, turned a quarter, columns)
+    it needs and their halo.
+90. **A JPEG, WebP or PNG is decoded once by the browser at its own size**
+    and each window drawn from that decode at 1:1, which is the decode
+    the held image was made from. A 16-bit PNG larger than the GPU can
+    edit was already decoded this way (the engine's PNG decoder takes the
+    whole file at once, at a size that fits), so it exports at its own
+    size with the browser's 8 bits, the depth its held image had: this
+    phase leaves no PNG reduced. The browsers decode a picture wider
+    than the GPU's textures (8400 × 600 on SwiftShader's 8192, in
+    Chromium); a decode that fails falls back (95).
+91. **The assembly is the engine's**, one picture of each element type
+    at a time (16-bit, HDR f32, 8-bit), so a tile's read is written into
+    it by the command that made the read and the pixels never cross into
+    JavaScript; each read is of the kept part only (the composite reads
+    take a rectangle, the whole document's for every existing export).
+    Its memory is reserved with `try_reserve_exact`; a part written twice
+    or one missing is refused, so no file is made with a wrong tile. The
+    encoders run on the assembled picture unchanged, and the gain map's
+    minimum and maximum come from the whole.
+92. **The final blit dithers a tile drawn at its own size at its pixels'
+    places in the whole** (`u_ditherRegion`, rows counted from the bottom
+    as the shader counts them): a whole number plus a half, exact, so the
+    JPEG and 8-bit PNG can be the whole's too. Without a region the
+    shader takes a branch that is the old seed, `pixel`, unchanged.
+93. **Sizes:** the export renderer works an export's size out from the
+    photo's own size (`tiledExportSize`, the crop at that size) and, for
+    an export that is not made in tiles, from the held image as before
+    (`reducedSize`): an export no larger than the held image, and every
+    fallback, is asked for exactly as without tiles. An HDR file between
+    the held size and the photo's own is made from the held image as
+    today (the engine reduces the HDR picture on its own grid, which is
+    not region-aware); only the photo's own size is made in tiles.
+94. **No tiles without float targets.** The 8-bit pool is the fallback
+    to be deleted, and tiles on it are unproven; such a GPU exports at
+    the held size and says so as before. A layer from Lopsy and a RAW
+    file the baked decode opened stay at the held size too (the baked
+    decode takes the whole file at once).
+95. **A run that cannot be made falls back to today's export**, at the
+    held size, after freeing what it took and putting the held image
+    back: no workable plan, a refused canvas, memory for an assembly, a
+    decode error, a tile that fails. The export renderer says so in a
+    sentence (`onNote`), shown as a toast once the Export dialog has
+    closed. An abort is checked between tiles and stops the run. Each
+    tile starts in a task of its own, or on WebGL, where every read
+    answers at once, the run would hold the page, a cancel included.
+    The export's progress is per photo; nothing finer is reported.
+96. **Edit in Lopsy's PNG stays at the held size.** Lopsy edits on the
+    same device's GPU, which could not open the photo at its own size.
+97. **The texture-limit override is for development builds only**:
+    `textureLimitOverride` is `import.meta.env.DEV ? … : null`, and Vite
+    replaces `import.meta.env.DEV` with `false` in a production build, so
+    there it is the constant null and the query is never read.
+98. **Exact where the GPU lands each read on its texel.** On this Mac's
+    GPU, in Chromium on WebGPU and on WebGL, every file made in tiles is
+    the whole render's byte for byte, the JPEG and the gain-map JPEG
+    included; straightened, within a few 8-bit steps. On SwiftShader,
+    the suite's GPU, they are not: each full-screen pass reads its source
+    at an interpolated coordinate the rasterizer rounds differently for
+    a tile's viewport than for the whole's, and its sampler then gives a
+    neighbouring texel a weight of 1/256 now and then, in the whole as
+    in a tile. That is no seam (the difference along tiles' edges is no
+    larger than elsewhere), and it cannot be taken out of the tiles
+    alone: the whole render reads the same way, and changing it would
+    move today's pixels. The e2e spec holds SwiftShader to its measured
+    difference and the machine's GPU to the same bytes.
 
 ### Verified
 
@@ -1500,48 +1643,94 @@ commits:
   (SwiftShader). Both wasm builds; the bundle check passes (wasm +0.91 %
   gzip, glue +2.72 %). Lint (no errors) and type-check.
 
+**The app phase**, with the tree of its commits:
+
+- `export-tiles.spec.ts`: the same photo and edit exported whole (no
+  override) and in tiles (`?texture-limit=`) through the export
+  renderer, the files compared. On this Mac's GPU (Chromium,
+  `PHOTONAMOUS_GPU=hardware`), on WebGPU and on WebGL alike, every file
+  is the whole's byte for byte: every stage at once with a crop and two
+  areas, one with its own sharpening and noise reduction (3000 × 2000 at
+  2048: 2 × 2 tiles, apron 466; the 16-bit PNG, the JPEG, the HDR PNG);
+  per pixel and by position in a 3 × 3 grid (1500 × 1500 at 640; the
+  Display P3 TIFF, the Display P3 8-bit PNG, the HDR JPEG); Rotate 90
+  and Flip with noise reduction and sharpening (1 × 3, apron 30); a RAW
+  file (an X-T5 RAF, cropped to 42 % × 44 % of its frame, at 2048: 2 × 3,
+  apron 466). Straightened by 7° (2 × 2): the 16-bit PNG differs by at
+  most 512 of 65535 and 0.55 on average, the JPEG by at most 10 and
+  0.086 on average, no more along the tiles' edges (128, 5) than
+  elsewhere. On SwiftShader (the suite's GPU; the numbers are the same
+  on its WebGPU and its WebGL), in 16-bit steps unless said: every
+  stage, the 16-bit PNG at most 1280 (where sharpening steepens an
+  edge), 0.034 on average, 64 along the edges; the JPEG at most 11 8-bit
+  steps, 0.006 on average; the HDR PNG at most 650, 0.023. The 3 × 3
+  grid: the TIFF at most 32, 0.005; the 8-bit PNG one step at 126 of
+  6.0 million values; the HDR JPEG's base at most 6 8-bit steps, 0.0008.
+  Rotate and Flip at most 128, 0.023. Straightened, 384 and 0.40, the
+  JPEG 9 and 0.062. The RAW file at most 240, 0.063. The fallbacks: an
+  apron that leaves no workable tile, a tile made to fail
+  (`__photonamousTiles.failAt`), and a cancel after the first tile each
+  leave a small export from the held image exactly as it was before the
+  run, the first two say so and export at the held size, the third
+  stops with no file and no note.
+- A Leica Q2 (8368 × 5584) on SwiftShader's 8192 (`edit-oversize.spec.ts`,
+  no override): two tiles of 4184 × 5584 with no edit (4620 × 5584 with
+  every stage, apron 436); straightened by 10°, one tile, the crop at its
+  own size (6722 × 4486). Through the export renderer in the Edit
+  harness, the first export loading the held image: with no edit, the
+  JPEG 6.6 s, the 16-bit PNG 6.5 s, the TIFF 6.3 s, the HDR PNG 5.7 s,
+  the HDR JPEG 8.6 s; with every stage 20.7, 19.5, 20.6, 19.2 and
+  36.4 s, against 11.9, 10.5, —, 18.4 and 32.6 s for the same files at
+  the held size, without tiles. The peak resident memory of the test's
+  Chromium processes (the Edit view's engine holding the held image
+  too): 9.7 GiB in tiles with every stage, 8.8 GiB at the held size.
+- Without a region nothing moved: the engine's tests (tiles.rs now 15,
+  with the assembly's files the whole's, byte for byte, and its
+  refusals), render.rs 63, hdr.rs 17, the golden renders with the RAF
+  samples, and `raw-parity.spec.ts` (not run in this phase's commits;
+  the owner runs it). The composite reads that take a rectangle are
+  called with the whole document's by every existing export; the final
+  blit's no-region branch is its old seed.
+
 ### Not done
 
-- **The app phase:** planning tiles, loading each tile's window of the
-  frame, assembling the files, the HDR gain map's min and max over the
-  whole (`gain_map`, whose 2 × 2 blocks want the kept parts on even
-  coordinates), and the steps for one tile: `setDocumentSize` to the
-  tile, `setDocumentRegion`, the layer at the tile's place in whole
-  coordinates and of its size, `uploadLayerPixelsF32Window` for each
-  band, the export read, the kept part; settings once, in whole
-  coordinates, and `developApron` after them.
-- **Rotate 90, flip and straighten on a tile** are untested. The layer
-  transform works in the layer's own coordinates and assumes nothing
-  about the document's size, so its centres and the layer's position
-  are passed in whole coordinates; but the affine shader computes
-  positions from `uv · layerSize + layerOffset`, which rounds
-  differently for a tile's offsets than for the whole's, and it treats
-  the source window's edge as the picture's (a transparent border, and
-  exact coverage on an axis-aligned map). The source window must reach
-  at least two pixels past what the tile's rectangle maps from, except
-  at the frame's edge, and a tile of a turned photo may differ from the
-  whole's by a bilinear weight's rounding. Only a layer exactly the
-  tile's rectangle is proven exact; a layer at another offset samples
-  `blend.wgsl` at a coordinate computed from different numbers.
-- **WebGL** was not run with tiles (the native tests run wgpu). The
-  shaders are the same, translated; the parity fingerprints check that
-  nothing moved without a region.
-- **Another GPU's sampler.** The blurs up to σ 4 are read bilinearly at
-  the pixel's centre in a tile-sized texture, as the whole reads them in
-  a whole-sized one; on Metal both land exactly on the texel. A GPU
-  whose sampler leaves a weight of a fraction of a step on a neighbour
-  at a centre that rounded a hair low would make the two differ by that
-  much. Not seen; not ruled out on a software GPU.
+- **The 100 % view through a tile of the visible area.** The Edit view
+  still shows a photo larger than the GPU reduced; only exports are
+  made at its own size.
+- **Straighten is not exact in tiles** (decision 88): the affine
+  transform reads the window at coordinates computed from other numbers
+  than the whole's. Making it exact would need the transform to compute
+  a tile's positions as the whole's would, which its no-region path
+  must not change.
+- **Other GPUs' samplers.** Exact on this Mac's GPU, on WebGPU and on
+  WebGL; SwiftShader leaks a 1/256 weight now and then (decision 98).
+  No other hardware GPU has been run.
+- **Left at the held size:** an HDR file between the held size and the
+  photo's own (the sized HDR reads reduce on the tile's own grid), a
+  layer from Lopsy, a RAW file the baked decode opens, a GPU without
+  float targets, a full size that failed for memory; Edit in Lopsy's PNG
+  (decision 96). A RAW file the RAW interface refuses is only known to
+  be refused when the export prepares it, so the Export dialog's line
+  says it is exported a part at a time and the toast then says it was
+  not. WebP and 16-bit PNG sources, and RAW orientations 5 to 8, have
+  no e2e case (the window plan is unit-tested in every orientation).
+- **A photo whose whole-picture blur image does not fit.** A blur
+  through a smaller image builds it at the whole picture's size
+  (decision 78): noise reduction's at a third, so a crop wider than
+  about three times the GPU's limit fails that tile, and the export
+  falls back to the held size.
 - **Stages Photonamous does not use are not region-aware:** Lopsy's
   image adjustments' vignette (`filters/vignette.wgsl`, working space
   off), layer effects (glow, shadow, stroke: moved with the layer, but
   their reach is not in the apron), and the sized exports
   (`compositeForExportSized`, `readHdrOutputF32Sized`), which reduce the
   tile on its own grid. Tiles on 8-bit (no float) textures are untested.
-- **Memory per tile** was not measured on a GPU. A tile holds the
+- **Memory per tile** was not measured on a GPU, only as the resident
+  memory of SwiftShader's processes (Verified). A tile holds the
   composite and two scratch textures, its layer, an area layer's copy of
   the composite while it runs, and a blur's two tile-sized textures (or
   the whole's smaller image, decision 78): about eight tile-sized
-  half-float textures at the peak. The pool keeps two free textures of
-  each size it has seen, so tiles of many sizes keep more memory than
-  tiles of one size.
+  half-float textures at the peak, with the held image's layer beside
+  them (decision 86), and in the module the assembled pictures (8 bytes
+  a pixel for the 16-bit files, 16 for HDR, 4 more for the gain map's
+  SDR picture) and the RAW plane.

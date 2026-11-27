@@ -382,11 +382,39 @@ the newer version made.
   quarters and then half of that size; when none loads the working image
   stays. Either way it is not asked for again for that photo, and
   "Loading full resolution…" goes. A line under the view bar then says
-  the photo's own size and the size it is shown and exported at, and is
-  read out once. The status bar keeps the photo's own size; exports at
-  full size are made at the reduced size. Straighten keeps the turned
+  the photo's own size and the size it is shown at, and is read out once.
+  The status bar keeps the photo's own size. Straighten keeps the turned
   picture inside the frame when its turned bounds would be larger than
   the GPU's textures, which shows the same.
+- **Exporting such a photo at its own size, a part at a time** (tiles):
+  where the GPU renders in floating point, an export from the Export
+  dialog larger than the reduced image is made at the photo's own size
+  in every format. The export renderer renders it in rectangles no
+  larger than the GPU can edit, each with enough of its neighbours
+  around it that sharpening, noise reduction, the details, haze and the
+  areas' own effects come out as on one render of the whole, and puts
+  their middles together (the 16-bit PNG, TIFF and HDR files in the
+  engine, the JPEG and 8-bit PNG on a canvas the photo's size, resized
+  once for any other size). A RAW file's rectangles come from its frame
+  at its own size, a JPEG, WebP or PNG's (16-bit too, which the browser
+  decodes in 8 bits at this size) from the browser's decode; Rotate,
+  Flip, Straighten and the crop all apply. The line under the view bar
+  says the photo "is exported at its full size, a part at a time".
+  Exports are made at the reduced size as before, and the line says
+  "shown and exported at", on a GPU without float targets, for a RAW
+  file opened as the finished picture, a layer from Lopsy and a full
+  size that failed for memory. An HDR file smaller than the photo's own
+  size, and Edit in Lopsy's PNG (Lopsy edits on the same GPU), are made
+  from the reduced image too. An edit whose effects reach so far that
+  the rectangles would be mostly overlap is exported at the reduced size
+  and the line says "With these settings it cannot be exported a part at
+  a time"; a rectangle that fails (memory, a canvas the browser refuses)
+  makes the export at the reduced size, and a message says so once the
+  Export dialog closes. Cancelling stops between rectangles and leaves
+  the photo as it was. On this Mac's GPU the files are the ones a single
+  render would make, byte for byte (but for Straighten, within a few
+  8-bit steps); on a software GPU they differ by its rounding, far less
+  than a step in 8 bits on average, with no seam.
 - **Left column**: **Presets** (apply one, delete one, or **Save
   preset…** from this edit, choosing its groups), **Versions** (switch, rename, **New
   version**) and **History** (every step; clicking one goes back to it).
@@ -689,10 +717,14 @@ the newer version made.
   files are never enlarged: Don't enlarge is not offered for them, and a
   photo smaller than the size asked for is made at its own size. When a
   photo chosen is larger than this device's GPU can edit and the size
-  asked for would need more, a line under Size says so and gives the
+  asked for would need more, a line under Size says so: where the GPU
+  renders in floating point, that it is exported a part at a time, at
+  its full size when that is the size asked for (an HDR file smaller
+  than its own size is made at most the largest size the device can
+  edit, which the line gives); on a GPU without float targets, the
   largest size this device can export of it (several photos: how many,
-  and the long edge they stop at); each is then made at that size, a
-  crop smaller in proportion, in every format (with enlarging allowed, a
+  and the long edge they stop at), at which each is then made, a crop
+  smaller in proportion, in every format (with enlarging allowed, a
   larger size is enlarged from it).
 - **Details in the file**: all (with **Remove location**, on by default;
   "Location will be kept" shows when it is off), copyright and contact
