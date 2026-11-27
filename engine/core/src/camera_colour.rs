@@ -45,6 +45,15 @@ pub fn canon(model: &str) -> Option<CamToSrgb> {
     CANON.iter().find(|(m, _)| *m == model).map(|(_, matrix)| *matrix)
 }
 
+/// Nikon bodies, by the exact `Model` string of IFD0. None yet: a NEF
+/// without one is developed with its white balance alone (`nef`).
+const NIKON: &[(&str, CamToSrgb)] = &[];
+
+/// The matrix of a Nikon body, or `None` for one with none here.
+pub fn nikon(model: &str) -> Option<CamToSrgb> {
+    NIKON.iter().find(|(m, _)| *m == model).map(|(_, matrix)| *matrix)
+}
+
 /// The matrix of a Fujifilm body, by its sensor: the bodies that share a
 /// sensor share its colour filters. `None` for a sensor with none here
 /// (the X-H2S's stacked sensor, X-Trans 3 and earlier, and the X-A and

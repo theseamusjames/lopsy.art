@@ -33,6 +33,7 @@ pub mod cmyk;
 pub mod decode;
 pub mod dng;
 pub mod arw;
+pub mod nef;
 pub mod raw;
 pub mod raf;
 pub mod cr2;
