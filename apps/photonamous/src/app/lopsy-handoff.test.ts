@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { HandoffError } from '@lopsy/handoff/channel';
-import { handoffFailureMessage, isReceivePage, receiverMessage, savedMessage } from './lopsy-handoff';
+import { handoffFailureMessage, isReceivePage, lopsyLongEdge, receiverMessage, savedMessage } from './lopsy-handoff';
 
 const stored = (outcome: 'created' | 'updated' | 'copied') => ({ revision: 'r', documentId: 'd', outcome, fileName: 'x.lopsy' });
 
@@ -25,5 +25,12 @@ describe('Lopsy handoff words', () => {
   it('knows a receive page', () => {
     expect(isReceivePage('?receive=abc')).toBe(true);
     expect(isReceivePage('?backend=fake')).toBe(false);
+  });
+
+  it('hands Lopsy a photo larger than the GPU at the largest size the GPU can edit, and any other at its own', () => {
+    expect(lopsyLongEdge({ width: 8368, height: 5584 }, 8192)).toBe(8190);
+    expect(lopsyLongEdge({ width: 6000, height: 4000 }, 8192)).toBeNull();
+    expect(lopsyLongEdge({ width: 8368, height: 5584 }, null)).toBeNull();
+    expect(lopsyLongEdge({ width: null, height: null }, 8192)).toBeNull();
   });
 });
