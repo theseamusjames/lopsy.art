@@ -8,6 +8,7 @@ import { importDngFile } from '../../io/dng';
 import { importRafFile } from '../../io/raf';
 import { loadProject } from '../../io/project-load';
 import { describeError, notifyError } from '../notifications-store';
+import { reportOpenFailure } from '../report-open-failure';
 
 /** What to do with a user-supplied file based on its name. Pure: no IO.
  *  Drives both the file-picker handlers below and the drag-and-drop path. */
@@ -57,24 +58,24 @@ export function useDocumentOpenHandlers(): DocumentOpenHandlers {
         file
           .arrayBuffer()
           .then((buffer) => importPsdFile(new Uint8Array(buffer), name).then(close))
-          .catch((err) => notifyError(`Failed to import PSD: ${describeError(err)}`));
+          .catch((err) => reportOpenFailure(err, { kind: 'image', name: file.name }, `Failed to import PSD: ${describeError(err)}`));
         return;
       case 'dng':
         file
           .arrayBuffer()
           .then((buffer) => importDngFile(new Uint8Array(buffer), name).then(close))
-          .catch((err) => notifyError(`Failed to import DNG: ${describeError(err)}`));
+          .catch((err) => reportOpenFailure(err, { kind: 'image', name: file.name }, `Failed to import DNG: ${describeError(err)}`));
         return;
       case 'raf':
         file
           .arrayBuffer()
           .then((buffer) => importRafFile(new Uint8Array(buffer), name).then(close))
-          .catch((err) => notifyError(`Failed to import RAF: ${describeError(err)}`));
+          .catch((err) => reportOpenFailure(err, { kind: 'image', name: file.name }, `Failed to import RAF: ${describeError(err)}`));
         return;
       case 'image':
         pasteOrOpenBlob(file, name)
           .then(close)
-          .catch((err) => notifyError(`Failed to open file: ${describeError(err)}`));
+          .catch((err) => reportOpenFailure(err, { kind: 'image', name: file.name }, `Failed to open file: ${describeError(err)}`));
         return;
       case 'unsupported':
         return;
@@ -104,19 +105,19 @@ export function useDocumentOpenHandlers(): DocumentOpenHandlers {
           .arrayBuffer()
           .then((buffer) => importPsdFile(new Uint8Array(buffer), name))
           .then(close)
-          .catch((err) => notifyError(`Failed to import PSD: ${describeError(err)}`));
+          .catch((err) => reportOpenFailure(err, { kind: 'image', name: file.name }, `Failed to import PSD: ${describeError(err)}`));
         return;
       case 'dng':
         file
           .arrayBuffer()
           .then((buffer) => importDngFile(new Uint8Array(buffer), name).then(close))
-          .catch((err) => notifyError(`Failed to import DNG: ${describeError(err)}`));
+          .catch((err) => reportOpenFailure(err, { kind: 'image', name: file.name }, `Failed to import DNG: ${describeError(err)}`));
         return;
       case 'raf':
         file
           .arrayBuffer()
           .then((buffer) => importRafFile(new Uint8Array(buffer), name).then(close))
-          .catch((err) => notifyError(`Failed to import RAF: ${describeError(err)}`));
+          .catch((err) => reportOpenFailure(err, { kind: 'image', name: file.name }, `Failed to import RAF: ${describeError(err)}`));
         return;
       case 'image':
       case 'unsupported':
@@ -124,7 +125,7 @@ export function useDocumentOpenHandlers(): DocumentOpenHandlers {
         // genuinely unsupported types.
         pasteOrOpenBlob(file, name)
           .then(close)
-          .catch((err) => notifyError(`Failed to open file: ${describeError(err)}`));
+          .catch((err) => reportOpenFailure(err, { kind: 'image', name: file.name }, `Failed to open file: ${describeError(err)}`));
         return;
     }
   }, [closeModal]);
@@ -133,7 +134,7 @@ export function useDocumentOpenHandlers(): DocumentOpenHandlers {
     (blob: Blob) => {
       pasteOrOpenBlob(blob, 'Copied File')
         .then(() => closeModal())
-        .catch((err) => notifyError(`Failed to paste image: ${describeError(err)}`));
+        .catch((err) => reportOpenFailure(err, { kind: 'paste', name: null }, `Failed to paste image: ${describeError(err)}`));
     },
     [closeModal],
   );

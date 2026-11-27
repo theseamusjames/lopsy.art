@@ -1,0 +1,55 @@
+/*
+ * Centred in its positioned parent, the canvas area. Under the menus'
+ * popovers, so a menu opened while it shows draws over it.
+ */
+.message {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: var(--z-canvas-popover);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  box-sizing: border-box;
+  width: min(440px, calc(100% - 2 * var(--space-4)));
+  max-height: calc(100% - 2 * var(--space-4));
+  overflow-y: auto;
+  padding: var(--space-5);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  font-family: var(--font-ui);
+  text-align: center;
+}
+
+/* Over the start screen, which is a modal of its own, before there is a canvas. */
+.overWindow {
+  position: fixed;
+  z-index: var(--z-tooltip);
+}
+
+.icon {
+  color: var(--color-text-secondary);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-ui);
+}
+
+.body {
+  margin: 0;
+  font-size: var(--font-size-md);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.ok {
+  min-width: 96px;
+  margin-top: var(--space-1);
+}

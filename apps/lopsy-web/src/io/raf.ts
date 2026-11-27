@@ -15,6 +15,8 @@ import { resetTrackedState } from '../engine-wasm/engine-sync';
 import { pixelDataManager } from '../engine/pixel-data-manager';
 import { notifyError } from '../app/notifications-store';
 import { decodeRafInWorkers } from './raf-decode';
+import { getDocumentSizeLimit } from '../engine-wasm/gpu-limits';
+import { assertFitsDocument } from './image-too-large';
 
 export async function importRafFile(data: Uint8Array, name: string): Promise<void> {
   const ui = useUIStore.getState();
@@ -30,35 +32,28 @@ export async function importRafFile(data: Uint8Array, name: string): Promise<voi
 async function importRafFileInner(data: Uint8Array, name: string): Promise<void> {
   await initWasm();
 
-  useEditorStore.getState().createDocument(1, 1, true);
+  /** The engine and layer the bands go into, once the document is made. */
+  const into: { target: DecodeTarget | null } = { target: null };
 
-  const engine = await waitForEngine();
-  if (!engine) {
-    notifyError('Engine not ready');
-    return;
-  }
-
-  const activeLayerId = useEditorStore.getState().document.activeLayerId;
-  if (!activeLayerId) {
-    notifyError('No active layer');
-    return;
-  }
-
-  // Yield a frame so the render loop syncs the new 1x1 document before the
-  // decode starts uploading into its layer texture.
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-
-  // The decode uploads straight into the GPU texture. Drop the 1x1
-  // placeholder pixels first so engine-sync treats the texture as the
-  // source of truth and never re-uploads the placeholder over it.
-  pixelDataManager.remove(activeLayerId);
-
-  const meta = await decodeRafInWorkers(data, (full, band) => {
-    uploadLayerPixelsF32Rect(
-      engine, activeLayerId, full.width, full.height,
-      band.x, band.y, band.width, band.height, band.pixels,
-    );
-  });
+  const meta = await decodeRafInWorkers(
+    data,
+    (full, band) => {
+      if (!into.target) return;
+      uploadLayerPixelsF32Rect(
+        into.target.engine, into.target.layerId, full.width, full.height,
+        band.x, band.y, band.width, band.height, band.pixels,
+      );
+    },
+    // The frame's size is known once it is prepared: a RAF larger than a layer
+    // can be here is refused then, before the open document is replaced.
+    async (prepared) => {
+      assertFitsDocument(prepared.width, prepared.height, getDocumentSizeLimit());
+      into.target = await startDocument();
+    },
+  );
+  const { target } = into;
+  if (!target) return;
+  const { layerId: activeLayerId } = target;
 
   if (meta.width === 0 || meta.height === 0) {
     notifyError('RAF decode returned empty image');
@@ -86,8 +81,43 @@ async function importRafFileInner(data: Uint8Array, name: string): Promise<void>
   // subscribers (the layer thumbnail) to read it back.
   pixelDataManager.bumpVersion(activeLayerId);
 
-  resetTrackedState(engine);
+  resetTrackedState(target.engine);
   useEditorStore.getState().fitToView();
+}
+
+interface DecodeTarget {
+  readonly engine: NonNullable<ReturnType<typeof getEngine>>;
+  readonly layerId: string;
+}
+
+/**
+ * A 1x1 document to decode into, its engine and its layer; null (with a
+ * toast) when the engine does not start.
+ */
+async function startDocument(): Promise<DecodeTarget | null> {
+  useEditorStore.getState().createDocument(1, 1, true);
+
+  const engine = await waitForEngine();
+  if (!engine) {
+    notifyError('Engine not ready');
+    return null;
+  }
+
+  const layerId = useEditorStore.getState().document.activeLayerId;
+  if (!layerId) {
+    notifyError('No active layer');
+    return null;
+  }
+
+  // Yield a frame so the render loop syncs the new 1x1 document before the
+  // decode starts uploading into its layer texture.
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+  // The decode uploads straight into the GPU texture. Drop the 1x1
+  // placeholder pixels first so engine-sync treats the texture as the
+  // source of truth and never re-uploads the placeholder over it.
+  pixelDataManager.remove(layerId);
+  return { engine, layerId };
 }
 
 async function waitForEngine(maxFrames = 60): Promise<ReturnType<typeof getEngine>> {

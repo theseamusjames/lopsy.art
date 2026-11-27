@@ -10,6 +10,9 @@ import { importPsdFile } from './psd';
 import { importDngFile } from './dng';
 import { importRafFile } from './raf';
 import { loadProjectOrThrow } from './project-load';
+import { assertFitsDocument, type TooLargeKind } from './image-too-large';
+import { getDocumentSizeLimit } from '../engine-wasm/gpu-limits';
+import { showIfTooLarge } from '../app/report-open-failure';
 
 /**
  * Mixing `image/*` with bare extensions causes Chrome on macOS to
@@ -41,6 +44,8 @@ export class ImageDecodeError extends Error {
 }
 
 function placeDecodedImage(img: HTMLImageElement, file: File): void {
+  // Before the canvas and its pixels: an image this device cannot hold is refused with nothing made.
+  assertFitsDocument(img.naturalWidth, img.naturalHeight, getDocumentSizeLimit());
   const canvas = document.createElement('canvas');
   canvas.width = img.width;
   canvas.height = img.height;
@@ -103,17 +108,21 @@ function importBytes(file: File, extension: RegExp, importer: Importer): Promise
 }
 
 interface OpenRoute {
+  /** What the message over the canvas calls the file when it is too large. */
+  readonly kind: TooLargeKind;
   open(file: File): Promise<OpenedFile>;
   /** The toast File > Open... shows when `open` fails; null for a failure it does not toast. */
   failure(err: unknown, file: File): string | null;
 }
 
 const PROJECT: OpenRoute = {
+  kind: 'project',
   open: (file) => loadProjectOrThrow(file),
   failure: (err) => `Failed to load project: ${describeError(err)}`,
 };
 
 const importRoute = (label: string, extension: RegExp, importer: Importer): OpenRoute => ({
+  kind: 'image',
   open: (file) => importBytes(file, extension, importer),
   failure: (err) => `Failed to import ${label}: ${describeError(err)}`,
 });
@@ -123,6 +132,7 @@ const DNG = importRoute('DNG', /\.dng$/i, importDngFile);
 const RAF = importRoute('RAF', /\.raf$/i, importRafFile);
 
 const IMAGE: OpenRoute = {
+  kind: 'image',
   open: openImageFile,
   // Only a decode error is toasted: anything else thrown while placing the image escaped the load handler uncaught.
   failure: (err) => (err instanceof ImageDecodeError ? err.message : null),
@@ -141,12 +151,22 @@ export function openFileOrThrow(file: File): Promise<OpenedFile> {
   return routeFor(file).open(file);
 }
 
-/** File > Open...'s handling of the picked file: a failure is toasted, once. */
+/** What a file is called in the message over the canvas when it is too large: a project, or an image. */
+export function openKindFor(file: File): TooLargeKind {
+  return routeFor(file).kind;
+}
+
+/**
+ * File > Open...'s handling of the picked file: a failure is reported once,
+ * as the message over the canvas when the file is too large for this
+ * device, else as a toast.
+ */
 export function openFile(file: File): Promise<void> {
   const route = routeFor(file);
   return route.open(file).then(
     () => undefined,
     (err: unknown) => {
+      if (showIfTooLarge(err, { kind: route.kind, name: file.name })) return;
       const message = route.failure(err, file);
       if (message === null) throw err;
       notifyError(message);

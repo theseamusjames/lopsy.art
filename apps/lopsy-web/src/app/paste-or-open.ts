@@ -16,6 +16,8 @@ import { flushLayerSync } from '../engine-wasm/engine-sync';
 import { getEngine } from '../engine-wasm/engine-state';
 import { scaleLayerTexture } from '../engine-wasm/wasm-bridge';
 import { computeFit } from '../tools/move/move';
+import { getDocumentSizeLimit } from '../engine-wasm/gpu-limits';
+import { assertFitsDocument } from '../io/image-too-large';
 import type { Layer } from '../types';
 
 function fitPastedLayerIfOversized(): void {
@@ -80,6 +82,10 @@ export interface PasteOrOpenOutcome {
   readonly selected: Promise<void> | null;
 }
 
+/**
+ * Rejects with `ImageTooLargeError`, the open document (or the start
+ * screen) untouched, for an image larger than a layer can be here.
+ */
 export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNewDocument = false): Promise<PasteOrOpenOutcome> {
   const store = useEditorStore.getState();
   let selected: Promise<void> | null = null;
@@ -88,6 +94,8 @@ export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNew
     const bitmap = await createImageBitmap(blob);
     const { width, height } = bitmap;
     bitmap.close();
+    // Refused before the open document is replaced (ImageTooLargeError).
+    assertFitsDocument(width, height, getDocumentSizeLimit());
     store.createDocument(width, height, true);
     const bgLayerId = useEditorStore.getState().document.layerOrder[0];
     if (bgLayerId) store.removeLayer(bgLayerId);

@@ -32,6 +32,7 @@ import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import { useCanvasCursor } from './useCanvasCursor';
 import { useContextMenu } from './useContextMenu';
 import { ContextMenu } from '../components/ContextMenu/ContextMenu';
+import { CanvasMessage } from '../components/CanvasMessage/CanvasMessage';
 import { Toasts } from '../components/Toasts/Toasts';
 import { TextActionButtons } from '../components/TextActionButtons/TextActionButtons';
 import { TextInputSink } from '../components/TextInputSink/TextInputSink';
@@ -235,6 +236,7 @@ export function App({ hasWebGL2 }: AppProps) {
           onOpenFile={handlePreDocOpenFile}
           onPasteClipboard={handlePreDocPasteClipboard}
         />
+        <CanvasMessage placement="window" />
         {loadingMessage && <LoadingOverlay message={loadingMessage} />}
         <Toasts />
       </div>
@@ -276,6 +278,7 @@ export function App({ hasWebGL2 }: AppProps) {
             <TextInputSink containerRef={containerRef} />
             <TiltShiftControls />
             <CanvasRenderer canvasRef={canvasRef} containerRef={containerRef} overlayCanvasRef={overlayCanvasRef} />
+            <CanvasMessage />
           </main>
         </DockHost>
         {contextMenu.visible && (

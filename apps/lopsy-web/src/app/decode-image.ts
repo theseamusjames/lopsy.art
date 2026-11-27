@@ -8,10 +8,17 @@
  * On success via WASM, pixels are already uploaded to the GPU for the given
  * layerId. The returned object indicates which path was used so the caller
  * knows whether to upload pixels from JS.
+ *
+ * An image larger than a layer can be here is refused with
+ * `ImageTooLargeError` before it is decoded into a layer or a canvas: a PNG
+ * from its header, anything else from the browser's decode's size.
  */
 import { getEngine } from '../engine-wasm/engine-state';
 import { decodeAndUploadImage } from '../engine-wasm/wasm-bridge';
 import { contextOptions } from '../engine/color-space';
+import { getDocumentSizeLimit } from '../engine-wasm/gpu-limits';
+import { assertFitsDocument } from '../io/image-too-large';
+import { pngSize } from '../io/image-header-size';
 
 export interface DecodeResult {
   width: number;
@@ -32,6 +39,8 @@ export async function decodeImageBlob(
   if (engine) {
     const arrayBuffer = await blob.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
+    const header = pngSize(bytes);
+    if (header) assertFitsDocument(header.width, header.height, getDocumentSizeLimit());
     const result = decodeAndUploadImage(engine, layerId, bytes);
     if (result.length >= 2) {
       return { width: result[0]!, height: result[1]!, gpuUploaded: true };
@@ -40,6 +49,12 @@ export async function decodeImageBlob(
 
   // Fallback: browser decode via canvas 2D (8-bit per channel)
   const bitmap = await createImageBitmap(blob);
+  try {
+    assertFitsDocument(bitmap.width, bitmap.height, getDocumentSizeLimit());
+  } catch (err) {
+    bitmap.close();
+    throw err;
+  }
   const canvas = document.createElement('canvas');
   canvas.width = bitmap.width;
   canvas.height = bitmap.height;

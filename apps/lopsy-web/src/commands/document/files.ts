@@ -7,7 +7,8 @@ import { describeError } from '../../app/notifications-store';
 import { encodeDocumentImage, type EncodedImage } from '../../io/export-image';
 import { serializeProject } from '../../io/project-save';
 import { encodePsdFile } from '../../io/psd';
-import { ImageDecodeError, isOpenableFileName, OPEN_FILE_ACCEPT, openFileOrThrow } from '../../io/open-file';
+import { ImageDecodeError, isOpenableFileName, OPEN_FILE_ACCEPT, openFileOrThrow, openKindFor } from '../../io/open-file';
+import { tooLargeFrom, tooLargeMessage } from '../../io/image-too-large';
 import { isLossyFormat, type ExportFormat } from '../../app/MenuBar/export-logic';
 
 /** The Export dialog's Quality slider: 1-100, 92 when it opens. */
@@ -118,7 +119,13 @@ export const docExportPsd = defineCommand({
   },
 });
 
-function openFailure(name: string, err: unknown): CommandError {
+function openFailure(name: string, file: File, err: unknown): CommandError {
+  // Too large for this device: the reason the UI's message over the canvas gives, and nothing shown there.
+  const tooLarge = tooLargeFrom(err);
+  if (tooLarge) {
+    const { title, body } = tooLargeMessage({ kind: openKindFor(file), name, width: tooLarge.width, height: tooLarge.height }, tooLarge.limit);
+    return new CommandError('refused', `doc.open: ${title}: ${body}`);
+  }
   const reason = err instanceof ImageDecodeError ? 'the browser could not decode it as an image' : describeError(err);
   return new CommandError('invalid', `doc.open: could not open ${JSON.stringify(name)}: ${reason}`);
 }
@@ -136,7 +143,7 @@ async function openedDocument(name: string, documentVersion: number, fonts: Prom
 export const docOpen = defineCommand({
   id: 'doc.open',
   summary:
-    'Opens a file as the document, replacing the open one without asking, as File > Open... does with the file its picker returns: a .lopsy project, a PSD, a DNG or RAF raw, or a PNG, JPEG, GIF, BMP or WebP image. Waits for the text layers\' fonts. Returns its size, colour mode, layers (bottom to top) and the active layer id.',
+    'Opens a file as the document, replacing the open one without asking, as File > Open... does with the file its picker returns: a .lopsy project, a PSD, a DNG or RAF raw, or a PNG, JPEG, GIF, BMP or WebP image. Waits for the text layers\' fonts. A file larger than this device can hold is refused (\'refused\'), saying its size and the largest side allowed, with the open document unchanged. Returns its size, colour mode, layers (bottom to top) and the active layer id.',
   surface: 'document',
   params: {
     base64: base64Spec('The file\'s bytes'),
@@ -156,7 +163,7 @@ export const docOpen = defineCommand({
     return openFileOrThrow(file).then(
       ({ fonts }) => openedDocument(name, documentVersion, fonts),
       (err: unknown) => {
-        throw openFailure(name, err);
+        throw openFailure(name, file, err);
       },
     );
   },
