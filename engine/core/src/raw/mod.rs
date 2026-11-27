@@ -384,6 +384,11 @@ pub fn prepare(data: &[u8]) -> Result<PreparedRaw, String> {
 /// [`prepare`] with an opening look other than today's (`look`), for
 /// comparing the Standard candidates.
 pub fn prepare_with(data: &[u8], look: &OpeningLook) -> Result<PreparedRaw, String> {
+    // A Canon CR3's container is read, but not its codec: refused with
+    // why (`cr3`).
+    if crate::cr3::is_canon_cr3(data) {
+        return Err(crate::cr3::refusal(data));
+    }
     match sniff(data).ok_or("This file is not a RAW format this app reads")? {
         RawFormatId::Raf => finish::<raf::Raf>(data, look, Prepared::Raf),
         RawFormatId::Dng => finish::<dng::Dng>(data, look, Prepared::Dng),

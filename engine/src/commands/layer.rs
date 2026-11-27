@@ -282,6 +282,9 @@ fn cr2_meta_json(cr2: &lopsy_core::cr2::Cr2Image) -> Result<String, String> {
 /// as it always was.
 pub fn decode_and_upload_raw_baked(engine: &mut EngineInner, layer_id: &str, data: &[u8]) -> Result<String, String> {
     use lopsy_core::raw::RawFormatId;
+    if lopsy_core::cr3::is_canon_cr3(data) {
+        return Err(lopsy_core::cr3::refusal(data));
+    }
     let format = lopsy_core::raw::sniff(data).ok_or("This file is not a RAW format this app reads")?;
     let max = engine.texture_pool.max_size().saturating_sub(TRANSFORM_BORDER).max(1);
     let (json, full) = match format {
