@@ -250,24 +250,30 @@ fn sub_ifds(reader: &TiffReader, ifd0: &[IfdEntry]) -> Vec<Vec<IfdEntry>> {
     u32s(ifd0, TagId::SubIFDs as u16).unwrap_or_default().iter().take(MAX_SUB_IFDS).filter_map(|&o| reader.read_ifd_at(o).ok()).collect()
 }
 
-/// The strips of the raw IFD, each inside the file.
+/// The strips of the raw IFD, each inside the file, in increasing order
+/// and not overlapping: the summed length the layout is decided from is
+/// then never more than the file holds.
 fn strips<'a>(data: &'a [u8], raw_ifd: &[IfdEntry]) -> Result<Vec<&'a [u8]>, String> {
     let offsets = u32s(raw_ifd, TagId::StripOffsets as u16).unwrap_or_default();
     let counts = u32s(raw_ifd, TagId::StripByteCounts as u16).unwrap_or_default();
     if offsets.is_empty() || offsets.len() != counts.len() {
         return Err("This Nikon RAW's strip table is damaged".into());
     }
-    offsets
-        .iter()
-        .zip(&counts)
-        .map(|(&o, &c)| {
-            (o as usize)
-                .checked_add(c as usize)
-                .filter(|&end| end <= data.len())
-                .map(|end| &data[o as usize..end])
-                .ok_or_else(|| "This Nikon RAW is cut short: its sensor data runs past the end of the file".to_string())
-        })
-        .collect()
+    let mut next = 0usize;
+    let mut out = Vec::with_capacity(offsets.len());
+    for (&o, &c) in offsets.iter().zip(&counts) {
+        let o = o as usize;
+        let end = o
+            .checked_add(c as usize)
+            .filter(|&end| end <= data.len())
+            .ok_or("This Nikon RAW is cut short: its sensor data runs past the end of the file")?;
+        if o < next {
+            return Err("This Nikon RAW's strip table is damaged: its strips overlap or are out of order".into());
+        }
+        next = end;
+        out.push(&data[o..end]);
+    }
+    Ok(out)
 }
 
 /// The layout of an uncompressed mosaic of `total` bytes, from its size
@@ -504,7 +510,7 @@ pub fn read_nef(data: &[u8]) -> Result<NefImage, String> {
     for v in plane.iter_mut() {
         *v = v.max(0.0);
     }
-    let mut rgb = crate::dng::demosaic::bilinear(&plane, params.width, params.height, &params.cfa);
+    let mut rgb = crate::dng::demosaic::try_bilinear(&plane, params.width, params.height, &params.cfa).ok_or("not enough memory for the Nikon RAW's pixels")?;
     drop(plane);
     // A clipped channel carries its white-balance gain; with a calibrated
     // matrix (or with the preview's roll-off) every channel is clipped at
@@ -605,5 +611,28 @@ mod tests {
         for cut in 0..d.len() {
             let _ = read_info(&d[..cut]);
         }
+    }
+    fn strip_table(offsets: &[u32], counts: &[u32]) -> Vec<IfdEntry> {
+        let longs = |v: &[u32]| v.iter().flat_map(|x| x.to_ne_bytes()).collect::<Vec<u8>>();
+        vec![
+            IfdEntry { tag: TagId::StripOffsets as u16, typ: 4, count: offsets.len() as u32, raw_bytes: longs(offsets) },
+            IfdEntry { tag: TagId::StripByteCounts as u16, typ: 4, count: counts.len() as u32, raw_bytes: longs(counts) },
+        ]
+    }
+
+    /// 64 strips all at the same 512 KB of a 0.5 MB file would sum to
+    /// 32 MB, enough for a 4096 × 4096 mosaic of 16-bit words.
+    #[test]
+    fn strips_that_overlap_or_go_back_are_refused() {
+        let data = vec![0u8; 512 * 1024 + 16];
+        let same = strip_table(&[16; 64], &[512 * 1024; 64]);
+        let e = strips(&data, &same).err().expect("refused");
+        assert!(e.contains("overlap"), "{e}");
+        let backwards = strip_table(&[1000, 16], &[100, 100]);
+        assert!(strips(&data, &backwards).is_err());
+        // Strips that follow each other, touching or not, are read.
+        let ok = strip_table(&[16, 116, 400], &[100, 200, 50]);
+        let parts = strips(&data, &ok).unwrap();
+        assert_eq!(parts.iter().map(|p| p.len()).collect::<Vec<_>>(), vec![100, 200, 50]);
     }
 }
