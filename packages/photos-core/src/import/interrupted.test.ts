@@ -104,6 +104,22 @@ describe('an import a reload interrupted', () => {
     // Not a job to resume.
     expect(await resumeImports({ session, previewRenderer: renderer, queueStore, staging, now: later, locks: new InProcessImportLocks() })).toBeNull();
 
+    // One upload the old page had sent reached storage after all, though the page never heard back.
+    const record = [...queueStore.jobs.values()].find((j) => j.interrupted);
+    const landed = record?.items.find((i) => i.needsFile && i.sha256 !== null);
+    const landedFile = files.find((f) => f.name === landed?.fileName);
+    if (!landed?.sha256 || !landedFile) throw new Error('no missing item with a checksum');
+    const folderId = originalsOf()[0]?.parentId ?? '';
+    await adapter.createFile(
+      {
+        parentId: folderId,
+        name: landed.fileName,
+        mimeType: 'image/jpeg',
+        properties: { 'lp.lib': session.libraryId, 'lp.role': 'original', 'lp.asset': landed.plannedAssetId, 'lp.sha': landed.sha256 },
+      },
+      landedFile,
+    );
+
     // The person chooses all six again.
     const chosen = files.map(again);
     const repick = await startImport(chosen, { session, previewRenderer: renderer, now: later, queueStore, staging }).finished;
@@ -112,7 +128,10 @@ describe('an import a reload interrupted', () => {
     // What was already in the library was not read again, let alone hashed or uploaded.
     for (const file of chosen) if (!missingNames.includes(file.name)) expect(file.reads).toBe(0);
     expect(session.getView().assets.size).toBe(6);
+    // The one that had landed is taken as it is: no second copy, no "(2)" in its name.
     expect(originalsOf()).toHaveLength(6);
+    expect(new Set(originalsOf().map((f) => f.name))).toEqual(new Set(files.map((f) => f.name)));
+    expect(session.getView().assets.get(landed.plannedAssetId)?.fileName).toBe(landed.fileName);
     // Every file is accounted for: the summary is gone.
     expect(await readInterruptedImports(queueStore, session.libraryId, session.getView())).toBeNull();
     expect([...queueStore.jobs.values()].filter((j) => j.interrupted)).toHaveLength(0);

@@ -166,7 +166,9 @@ interface WorkSpec {
   readonly skipReason: string | null;
 }
 
-interface Work extends WorkSpec {
+interface Work extends Omit<WorkSpec, 'assetId'> {
+  /** Generated up front; a file chosen again for an interrupted import takes the id that import planned for it. */
+  assetId: AssetId;
   readonly index: number;
   /** What pairing needs once the file is read; null when it could not be read. */
   readonly read: Deferred<PairableFile | null>;
@@ -836,6 +838,15 @@ function runJob(setup: JobSetup): ImportJob {
       }
       work.interruptedMatch = match;
       work.pairHint = match?.pairedWith ?? null;
+      const planned = match?.item.plannedAssetId;
+      if (planned !== undefined && !session.getView().assets.has(planned) && !worksByAssetId.has(planned)) {
+        // The interrupted import's own id: an upload of it that reached Drive after all is found by its tags
+        // (findStoredOriginal), and one Drive holds part of goes on from there (the resume key), never a second copy.
+        worksByAssetId.delete(work.assetId);
+        work.assetId = planned;
+        worksByAssetId.set(planned, work);
+        persist(index, { plannedAssetId: planned });
+      }
     }
     patch(index, { state: 'reading', error: null });
 
@@ -966,7 +977,7 @@ function runJob(setup: JobSetup): ImportJob {
       'lp.lib': session.libraryId,
     });
     checkStopped();
-    let stored = work.settled || work.attempts > 0 || work.signInWaits > 0 ? await findStoredOriginal(work, sha) : null;
+    let stored = work.settled || work.attempts > 0 || work.signInWaits > 0 || work.interruptedMatch !== null ? await findStoredOriginal(work, sha) : null;
     if (!stored) {
       let name = work.destinationName;
       if (name === null) name = await reserveName(folderId, work.fileName);
