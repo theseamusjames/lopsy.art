@@ -410,7 +410,8 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
   let pairOf = new Map<string, string>();
 
   const getProgress = (): ImportProgress => {
-    if (!snapshot) snapshot = { items: items.slice(), finished };
+    // Adopting files already in storage does not wait for sign-in: a refused token fails the file, which can be added again.
+    if (!snapshot) snapshot = { items: items.slice(), finished, needsSignIn: false };
     return snapshot;
   };
 

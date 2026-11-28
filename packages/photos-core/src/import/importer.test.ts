@@ -329,6 +329,6 @@ describe('startImport', () => {
   it('finishes at once with no files', async () => {
     const { ctx } = await setup();
     const result = await startImport([], ctx()).finished;
-    expect(result).toEqual({ items: [], finished: true });
+    expect(result).toEqual({ items: [], finished: true, needsSignIn: false });
   });
 });

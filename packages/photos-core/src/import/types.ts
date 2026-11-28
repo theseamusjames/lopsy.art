@@ -81,6 +81,18 @@ export interface ImportItem {
 export interface ImportProgress {
   readonly items: readonly ImportItem[];
   readonly finished: boolean;
+  /**
+   * The storage refused the sign-in (an expired or refused token) and no
+   * new one can be had without the person: the job waits, nothing failed,
+   * and it carries on by itself once `ImportContext.authorization` says a
+   * new token was taken (the UI's Reconnect). Absent means false.
+   */
+  readonly needsSignIn?: boolean;
+}
+
+/** Says when the storage's sign-in has a new token; a job waiting for sign-in then carries on. */
+export interface AuthorizationSignal {
+  subscribe(listener: () => void): () => void;
 }
 
 export interface ImportOptions {
@@ -116,6 +128,10 @@ export interface ImportJob {
    * 'Paused'). Without a queue store it is the same as `cancel`.
    */
   pause(): void;
-  /** Resolves when every item has finished, failed or been skipped, or the job was paused. */
+  /**
+   * Resolves when every item has finished, failed or been skipped, or the
+   * job was paused. A job waiting for sign-in (`needsSignIn`) has not
+   * finished: it waits, however long, for a token or for pause or cancel.
+   */
   readonly finished: Promise<ImportProgress>;
 }

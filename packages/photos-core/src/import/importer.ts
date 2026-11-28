@@ -4,6 +4,10 @@
  * into its date folder, verified against the adapter's checksum and only
  * then added to the library. Failures are per file and never stop the job.
  *
+ * A refused or expired sign-in is not a failure: the upload stage waits
+ * (`needsSignIn`) until `authorization` says a new token was taken, then
+ * tries the same work again, a resumable upload from where Drive has it.
+ *
  * With a queue store and a staging store, a job survives a reload:
  * `resumeImports` rebuilds it from the queue and continues each unfinished
  * file from its staged copy. Without them it runs from the `File`s alone.
@@ -29,6 +33,7 @@ import type { ImportItemRecord, ImportJobRecord, ImportQueueStore } from './queu
 import type { StagingStore } from './staging';
 import { applySidecarFile, applySidecarToExisting, isSidecarName, matchSidecars } from '../xmp/sidecars';
 import type {
+  AuthorizationSignal,
   EmbeddedPreview,
   ImageMetadata,
   ImportItem,
@@ -70,6 +75,8 @@ export interface ImportContext {
   readonly ownerId?: string;
   /** Who runs which job; this page's Web Locks (or in-process locks) by default. */
   readonly locks?: ImportLocks;
+  /** When the storage's sign-in has a new token: a job waiting for sign-in carries on. */
+  readonly authorization?: AuthorizationSignal;
 }
 
 export interface ResumeContext {
@@ -84,6 +91,8 @@ export interface ResumeContext {
   readonly leaseMs?: number;
   /** Who runs which job; this page's Web Locks (or in-process locks) by default. */
   readonly locks?: ImportLocks;
+  /** When the storage's sign-in has a new token: a job waiting for sign-in carries on. */
+  readonly authorization?: AuthorizationSignal;
 }
 
 export const DEFAULT_RETRY_DELAYS_MS: readonly number[] = [2_000, 5_000, 15_000, 30_000, 60_000];
@@ -172,6 +181,8 @@ interface Work extends WorkSpec {
   destinationName: string | null;
   /** Upload attempts that failed and were retried. */
   attempts: number;
+  /** Upload attempts the storage refused for sign-in, retried once there was a new token. */
+  signInWaits: number;
 }
 
 /** What the prepare stage settled for the upload stage. */
@@ -219,6 +230,7 @@ interface JobSetup {
   readonly staging: StagingStore | null;
   readonly retryDelaysMs: readonly number[];
   readonly ownerId: string;
+  readonly authorization: AuthorizationSignal | null;
   readonly specs: readonly WorkSpec[];
   /** Persisting the job record; work waits for it. */
   readonly saved: Promise<void>;
@@ -310,6 +322,7 @@ export function startImport(files: readonly File[], ctx: ImportContext): ImportJ
     staging: ctx.staging ?? null,
     retryDelaysMs: ctx.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS,
     ownerId: ctx.ownerId ?? THIS_TAB,
+    authorization: ctx.authorization ?? null,
     specs,
   };
   const store = base.queueStore && specs.length > 0 ? base.queueStore : null;
@@ -444,6 +457,7 @@ async function claimRecords(
     staging: ctx.staging ?? null,
     retryDelaysMs: ctx.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS,
     ownerId: ctx.ownerId ?? THIS_TAB,
+    authorization: ctx.authorization ?? null,
     specs,
   };
   const release = await locks.tryAcquire(importLockName(base.jobId));
@@ -485,6 +499,7 @@ function runJob(setup: JobSetup): ImportJob {
     sidecarKey: spec.settled && spec.content && spec.sidecar ? sidecarStagingKey(spec.settled.stagingKey) : null,
     destinationName: spec.settled?.destinationName ?? null,
     attempts: 0,
+    signInWaits: 0,
   }));
   const worksByAssetId = new Map(works.map((w) => [w.assetId, w]));
 
@@ -541,6 +556,37 @@ function runJob(setup: JobSetup): ImportJob {
 
   const stateOf = (index: number): ImportItemState => items[index]?.state ?? 'failed';
   const isTerminal = (index: number) => TERMINAL.has(stateOf(index));
+
+  // Sign-in. A refused or expired token never fails a file: the work waits
+  // until the storage's sign-in has a new token, and is then tried again.
+  let needsSignIn = false;
+  /** Counts the tokens taken since the job started, so work refused with an older one retries at once. */
+  let authEpoch = 0;
+  let signedIn = deferred<void>();
+  const jobStopped = new Promise<void>((resolve) => abort.signal.addEventListener('abort', () => resolve(), { once: true }));
+  const unsubscribeAuth =
+    setup.authorization?.subscribe(() => {
+      authEpoch++;
+      const waiting = signedIn;
+      signedIn = deferred<void>();
+      waiting.resolve();
+      if (needsSignIn) {
+        needsSignIn = false;
+        snapshot = null;
+        notify();
+      }
+    }) ?? null;
+  const isSignInRefused = (error: unknown) => isStorageError(error) && error.code === 'auth';
+  /** Waits for a token newer than `since` (at once when one came meanwhile), or for the job to stop. */
+  const waitForSignIn = async (since: number): Promise<void> => {
+    if (authEpoch !== since) return;
+    if (!needsSignIn) {
+      needsSignIn = true;
+      snapshot = null;
+      notify();
+    }
+    await Promise.race([signedIn.promise, jobStopped]);
+  };
 
   const unstage = async (work: Work) => {
     if (!staging) return;
@@ -843,7 +889,7 @@ function runJob(setup: JobSetup): ImportJob {
       'lp.lib': session.libraryId,
     });
     checkStopped();
-    let stored = work.settled || work.attempts > 0 ? await findStoredOriginal(work, sha) : null;
+    let stored = work.settled || work.attempts > 0 || work.signInWaits > 0 ? await findStoredOriginal(work, sha) : null;
     if (!stored) {
       let name = work.destinationName;
       if (name === null) name = await reserveName(folderId, work.fileName);
@@ -894,14 +940,23 @@ function runJob(setup: JobSetup): ImportJob {
       const applied = await applySidecarFile(session, assetId, versionId, work.sidecar, metadata.orientation).catch(() => null);
       if (!applied) note = 'Its XMP sidecar could not be read';
     }
-    if (!stopping) {
-      for (const size of ['thumb', 'screen'] as const) {
-        const preview = previews[size];
-        if (!preview) continue;
+    for (const size of ['thumb', 'screen'] as const) {
+      const preview = previews[size];
+      if (!preview) continue;
+      // A preview refused for sign-in waits for the new token like the original did.
+      for (;;) {
+        if (stopping) break;
+        const epoch = authEpoch;
         try {
           await uploadPreview(assetId, versionId, size, preview);
+          break;
         } catch (error) {
+          if (isSignInRefused(error)) {
+            await waitForSignIn(epoch);
+            continue;
+          }
           note = `Preview not uploaded: ${errorMessage(error)}`;
+          break;
         }
       }
     }
@@ -931,9 +986,8 @@ function runJob(setup: JobSetup): ImportJob {
     persist(work.index, { state: 'queued', error: note });
   };
 
-  /** Worth retrying soon: dropped connections, rate limits, server errors, expired sign-in, a bad checksum. */
-  const retryable = (error: unknown) =>
-    error instanceof RetryableUpload || (isStorageError(error) && (error.retryable || error.code === 'auth'));
+  /** Worth retrying soon: dropped connections, rate limits, server errors, a bad checksum. (Sign-in waits for a token instead.) */
+  const retryable = (error: unknown) => error instanceof RetryableUpload || (isStorageError(error) && error.retryable);
 
   const sleep = (ms: number) =>
     new Promise<void>((resolve) => {
@@ -995,11 +1049,20 @@ function runJob(setup: JobSetup): ImportJob {
         if (isTerminal(work.index)) continue;
         for (;;) {
           if (stopping) throw new Stopped();
+          const epoch = authEpoch;
           try {
             outcome = await upload(work, prep);
             break;
           } catch (error) {
             if (isStopped(error)) throw error;
+            if (isSignInRefused(error)) {
+              // Not a failure and not an attempt: the item waits for a token, then goes on from where it
+              // stood (a resumable upload continues from Drive's offset; a finished one is found by its tags).
+              work.signInWaits++;
+              patch(work.index, { state: work.stagedKey !== null ? 'staged' : 'queued', sentBytes: 0, error: null });
+              await waitForSignIn(epoch);
+              continue;
+            }
             const delay = setup.retryDelaysMs[work.attempts];
             if (!retryable(error) || delay === undefined) {
               park(work, error);
@@ -1019,7 +1082,7 @@ function runJob(setup: JobSetup): ImportJob {
   };
 
   const getProgress = (): ImportProgress => {
-    if (!snapshot) snapshot = { items: items.slice(), finished };
+    if (!snapshot) snapshot = { items: items.slice(), finished, needsSignIn: needsSignIn && !finished };
     return snapshot;
   };
 
@@ -1033,6 +1096,7 @@ function runJob(setup: JobSetup): ImportJob {
   const uploaders = Promise.all(Array.from({ length: workerCount }, uploader));
   const done = Promise.all([preparers, uploaders]).then(async () => {
     if (heartbeat !== null) clearInterval(heartbeat);
+    unsubscribeAuth?.();
     await persisted;
     if (queueStore && works.length > 0) {
       if (works.every((w) => isTerminal(w.index))) await queueStore.deleteJob(jobId).catch(warn('clearing the queue'));
