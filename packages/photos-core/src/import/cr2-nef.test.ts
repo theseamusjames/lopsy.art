@@ -24,7 +24,8 @@ function read(dir: string | undefined, name: string): Uint8Array {
  * The size import records for each full-size sample is the one the
  * engine's decode gives (before orientation): for a CR2 the Exif pixel
  * dimensions, which are the crop of the sensor it keeps; for a NEF the
- * camera's largest embedded JPEG.
+ * camera's largest embedded JPEG. Every NEF the engine opens is pinned,
+ * compressed ones included.
  */
 const CR2_SIZES: readonly (readonly [string, string, number, number])[] = [
   ['EOS-20D_RAW.CR2', 'Canon EOS 20D', 3504, 2336],
@@ -38,13 +39,21 @@ const CR2_SIZES: readonly (readonly [string, string, number, number])[] = [
 
 const NEF_SIZES: readonly (readonly [string, string, number, number])[] = [
   ['D200_12bit_uncompressed.NEF', 'NIKON D200', 3872, 2592],
+  ['D3_12bit_lossless.NEF', 'NIKON D3', 4256, 2832],
   ['D3_12bit_uncompressed.NEF', 'NIKON D3', 4256, 2832],
+  ['D3_14bit_lossy_type2.NEF', 'NIKON D3', 4256, 2832],
   ['D3_14bit_uncompressed.NEF', 'NIKON D3', 4256, 2832],
   ['D500_12bit_compression6.NEF', 'NIKON D500', 5568, 3712],
   ['D6_14bit_compression10.NEF', 'NIKON D6', 5568, 3712],
+  ['D7000_12bit_lossy_type2.NEF', 'NIKON D7000', 4928, 3264],
+  ['D850_12bit_lossy_type2.NEF', 'NIKON D850', 8256, 5504],
   ['D850_14bit_uncompressed.NEF', 'NIKON D850', 8256, 5504],
+  // Portrait: stored landscape with the orientation tag, recorded upright.
+  ['Z30_14bit_lossless.NEF', 'NIKON Z 30', 3712, 5568],
   ['Z6_12bit_uncompressed.NEF', 'NIKON Z 6', 6048, 4024],
+  ['Z6_14bit_lossless.NEF', 'NIKON Z 6', 6048, 4024],
   ['Z6_14bit_uncompressed.NEF', 'NIKON Z 6', 6048, 4024],
+  ['Z7II_12bit_lossy_type2.NEF', 'NIKON Z 7_2', 8256, 5504],
 ];
 
 describe.skipIf(!cr2Dir)('the real CR2 samples (LOPSY_CR2_SAMPLES)', () => {
@@ -96,7 +105,7 @@ describe.skipIf(!nefDir)('the real NEF samples (LOPSY_NEF_SAMPLES)', () => {
     expect(files.filter((f) => pinned.includes(f))).toEqual([...pinned].sort());
   });
 
-  // Compressed, High Efficiency and Small NEFs are NEFs too: import cannot tell them apart, and the engine says why it cannot open one.
+  // High Efficiency and Small NEFs, and the D70's, are NEFs too: import cannot tell them from those that open, and the engine says why it cannot open one.
   it.each(files.filter((f) => /\.nef$/i.test(f)))('%s is a NEF, by its bytes', (name: string) => {
     expect(detectFormat(read(nefDir, name))).toBe('nef');
   });
@@ -110,7 +119,9 @@ describe.skipIf(!nefDir)('the real NEF samples (LOPSY_NEF_SAMPLES)', () => {
     const inspected = inspectImage(read(nefDir, name));
     expect(inspected?.metadata).toMatchObject({ format: 'nef', mimeType: 'image/x-nikon-nef', width, height, camera: { make: 'NIKON CORPORATION', model } });
     expect(inspected?.metadata.capturedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
-    expect(inspected?.preview).toMatchObject({ width, height });
+    // The camera's full-size JPEG, stored unturned (a portrait one is landscape, its orientation left to apply).
+    const preview = inspected?.preview;
+    expect([preview?.width, preview?.height].sort()).toEqual([width, height].sort());
   });
 
   it('imports a NEF end to end on the test doubles', async () => {
