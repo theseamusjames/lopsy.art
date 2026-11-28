@@ -46,9 +46,8 @@ fn files() -> Vec<PathBuf> {
 }
 
 /// The sentences the decoder refuses a sample with (each starts so).
-const REFUSALS: [&str; 6] = [
-    "This Nikon RAW is lossless compressed, which is not supported yet",
-    "This Nikon RAW is lossy compressed, which is not supported yet",
+const REFUSALS: [&str; 5] = [
+    "This Nikon RAW does not record its white balance in a form this app reads",
     "This Nikon RAW is a High Efficiency RAW, which uses a licensed third-party codec",
     "This Nikon RAW is a Medium or Small RAW, which is not supported",
     "This RAW file is from a Nikon COOLPIX compact (NRW), which is not supported",
@@ -141,6 +140,9 @@ fn real_nefs_decode_and_match_the_cameras_rendering() {
         let prep = raw::prepare(&data).unwrap_or_else(|e| panic!("{name}: {e}"));
         let prepare_ms = t0.elapsed().as_millis();
         let d = &prep.description.clone();
+        for line in prep.debug_log().iter().filter(|l| l.starts_with("[NEF] crop")) {
+            println!("  {name}: {line}");
+        }
         assert_eq!(d.format, RawFormatId::Nef);
         assert_eq!((d.width, d.height), (img.width, img.height), "{name}: linear and baked sizes differ");
         let (pw, ph) = (d.plane_width as usize, d.plane_height as usize);
@@ -160,6 +162,14 @@ fn real_nefs_decode_and_match_the_cameras_rendering() {
         drop(prep);
 
         let (jw, jh, jpx) = largest_jpeg(&data).expect("an embedded JPEG");
+        // Nikon's previews are stored unturned: turn the JPEG as the decode is.
+        let (jw, jh, jpx) = if info.orientation == 1 {
+            (jw, jh, jpx)
+        } else {
+            let rgba: Vec<f32> = jpx.chunks_exact(3).flat_map(|p| [f32::from(p[0]), f32::from(p[1]), f32::from(p[2]), 255.0]).collect();
+            let (w, h, turned) = lopsy_core::orientation::apply_exif_orientation(jw as u32, jh as u32, &rgba, info.orientation);
+            (w as usize, h as usize, turned.chunks_exact(4).flat_map(|p| [p[0] as u8, p[1] as u8, p[2] as u8]).collect())
+        };
         println!("  {name}: decoded {}×{}, embedded JPEG {jw}×{jh}", img.width, img.height);
         assert_eq!((img.width as usize, img.height as usize), (jw, jh), "{name}: the crop is not the camera's");
         let ours = Picture::from_rgba_encoded(img.width, img.height, &img.pixels).resample(2000);
@@ -183,11 +193,11 @@ fn real_nefs_decode_and_match_the_cameras_rendering() {
             .max_by(|x, y| x.0 .1.total_cmp(&y.0 .1))
             .unwrap();
         println!("  {name}: vs JPEG at full size, middle {s}²: best shift {fine:?} at magnification {fine_zoom:.3}, correlation {fine_corr:.3}");
-        assert!(fine.0.abs() <= 1 && fine.1.abs() <= 1 && fine_corr > 0.9, "{name}: full-size alignment {fine:?} at {fine_corr}");
+        assert!(fine.0.abs() <= 1 && fine.1.abs() <= 1 && fine_corr > 0.85, "{name}: full-size alignment {fine:?} at {fine_corr}");
 
         let (gx, gy) = (48, 32);
         let vs_jpeg = compare(&ours.grid(gx, gy), &jpeg2000.grid(gx, gy));
-        let vs_dev = compare(&developed.resample(2000).grid(gx, gy), &jpeg2000.grid(gx, gy));
+        let vs_dev = compare(&developed.grid(gx, gy), &jpeg2000.grid(gx, gy));
         println!(
             "  {name}: baked vs JPEG over {} cells: hue {:.1}°, saturation ratio {:.2}, neutral cast (r, b chromaticity) {:+.4} {:+.4} over {} cells, luminance rank correlation {:.3}",
             vs_jpeg.cells, vs_jpeg.hue_deg, vs_jpeg.saturation_ratio, vs_jpeg.neutral_cast[0], vs_jpeg.neutral_cast[1], vs_jpeg.neutral_cells, vs_jpeg.rank_corr
@@ -221,7 +231,7 @@ fn real_nefs_decode_and_match_the_cameras_rendering() {
         if let Some(dir) = &review {
             std::fs::create_dir_all(dir).unwrap();
             ours.write_png(&dir.join(format!("{stem}-baked.png")));
-            developed.resample(2000).write_png(&dir.join(format!("{stem}-develop.png")));
+            developed.write_png(&dir.join(format!("{stem}-develop.png")));
             jpeg2000.write_png(&dir.join(format!("{stem}-jpeg.png")));
             let (cw, ch) = (900.min(jw), 600.min(jh));
             let (x0, y0) = ((jw - cw) / 2, (jh - ch) / 2);

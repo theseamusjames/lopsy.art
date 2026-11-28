@@ -61,17 +61,26 @@ fn linear_hash(data: &[u8]) -> u64 {
 }
 
 /// (body, layout and depth; baked decode; linear plane and defaults),
-/// recorded when the NEF decoder was written; the D850's again when it
-/// took a matrix of the engine's own.
-const EXPECTED: [(&str, u64, u64); 8] = [
+/// recorded when the NEF decoder was written, and again when the crop of
+/// a file without one came to be placed where the camera's JPEG is (the
+/// two D3 files moved by one column) and compressed files came to open;
+/// both D850 files' with the matrix of the engine's own the D850 takes.
+const EXPECTED: [(&str, u64, u64); 15] = [
     ("NIKON D200 Packed { bits: 12, row_bytes: 5856, msb_first: true } 12-bit", 0xbcd76d0162bdde60, 0x3716b1fd36e83ca5),
-    ("NIKON D3 Packed { bits: 12, row_bytes: 6432, msb_first: true } 12-bit", 0xd890187c04dc0b4d, 0x4c1e18ea82349865),
-    ("NIKON D3 Words { big_endian: true } 14-bit", 0x06553df1986db6ca, 0x338cca83ecbfb2f3),
+    ("NIKON D3 Compressed { lossless: true } 12-bit", 0xe0859daa1241bb05, 0x229c5b78e3f35a4d),
+    ("NIKON D3 Packed { bits: 12, row_bytes: 6432, msb_first: true } 12-bit", 0x3d49a6f1c9b3f3b5, 0xc20bb4251b41788f),
+    ("NIKON D3 Compressed { lossless: false } 14-bit", 0x473483a27af8bf20, 0xf697ab8934228d23),
+    ("NIKON D3 Words { big_endian: true } 14-bit", 0x9e75e060360302ac, 0x666dd55136ee7075),
     ("NIKON D500 Packed { bits: 12, row_bytes: 8400, msb_first: false } 12-bit", 0xaf3bd89792db43af, 0xd0de66b78dcce734),
     ("NIKON D6 Packed { bits: 14, row_bytes: 9776, msb_first: false } 14-bit", 0xf62d749b25818c3b, 0xae3b47b3864481e7),
+    ("NIKON D7000 Compressed { lossless: false } 12-bit", 0x5f77affd51727592, 0x4de893c298d03bf3),
+    ("NIKON D850 Compressed { lossless: false } 12-bit", 0xb3112090f5d19bbf, 0x5fd6bca77919099c),
     ("NIKON D850 Words { big_endian: false } 14-bit", 0x158a96d94be0c820, 0x9b06fe73b0531b1d),
+    ("NIKON Z 30 Compressed { lossless: true } 14-bit", 0x8d11179c665099cf, 0x96371b0f856baa38),
     ("NIKON Z 6 Packed { bits: 12, row_bytes: 9104, msb_first: false } 12-bit", 0xfe0ef3c1a3ff6a85, 0xda7fdb18c758e65f),
+    ("NIKON Z 6 Compressed { lossless: true } 14-bit", 0xb0737fc0d2b42850, 0x151d6cee1cbde762),
     ("NIKON Z 6 Packed { bits: 14, row_bytes: 10624, msb_first: false } 14-bit", 0x6b07c70c369f8417, 0x1fa2b6a9882016e8),
+    ("NIKON Z 7_2 Compressed { lossless: false } 12-bit", 0x40aa95bb128c9826, 0xaeea3391abad1f66),
 ];
 
 #[test]
