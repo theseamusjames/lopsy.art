@@ -67,8 +67,11 @@ export function InterruptedImport() {
         <div className={styles.row}>
           <TriangleAlert size={16} className={styles.warn} aria-hidden />
           <span className={styles.headline}>{interruptedHeadline(summary)}</span>
-          <span className={styles.muted}>{INTERRUPTED_REMEDY}</span>
           <span className={styles.spacer} />
+          <IconButton size="sm" label="Dismiss the interrupted import" icon={<X size={14} />} onClick={dismiss} />
+        </div>
+        <p className={styles.muted}>{INTERRUPTED_REMEDY}</p>
+        <div className={styles.row}>
           <Button size="sm" variant="primary" onClick={() => filesRef.current?.click()}>
             <Images size={14} />
             Choose photos again…
@@ -82,7 +85,6 @@ export function InterruptedImport() {
           <Button size="sm" variant="ghost" aria-expanded={showList} aria-controls={listId} onClick={() => setShowList((s) => !s)}>
             {showList ? 'Hide the list' : `List the ${plural(summary.missing.length, 'photo')} not imported`}
           </Button>
-          <IconButton size="sm" label="Dismiss the interrupted import" icon={<X size={14} />} onClick={dismiss} />
         </div>
         {showList && (
           <div id={listId} className={styles.list}>
