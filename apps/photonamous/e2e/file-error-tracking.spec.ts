@@ -113,7 +113,8 @@ test('a photo larger than the GPU reports Edit in Lopsy refused and the Edit vie
   const full = page.getByRole('button', { name: 'Full', exact: true });
   await expect(full).toBeEnabled({ timeout: 60_000 });
   await full.click();
-  await expect(page.getByText(/larger than this device’s graphics can edit \(510 on a side\)/)).toBeVisible({ timeout: 60_000 });
+  // By its id: the same sentence is also in the live region while it is announced.
+  await expect(page.getByTestId('size-note')).toHaveText(/larger than this device’s graphics can edit \(510 on a side\)/, { timeout: 60_000 });
   await page.screenshot({ path: 'test-results/file-error-edit-oversize.png' });
   const shownSmaller = {
     name: 'file_error',
