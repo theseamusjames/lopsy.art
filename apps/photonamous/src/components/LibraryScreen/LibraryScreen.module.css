@@ -35,6 +35,34 @@
   overflow: hidden;
 }
 
+/* The grid, and Single or Compare over it in its place. */
+.views {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.grid {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Kept laid out under the view, so its scroll and rows stay; hidden, it is out of reach of the pointer, Tab and screen readers. */
+.grid[data-covered='true'] {
+  visibility: hidden;
+}
+
+.view {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .main:focus-visible {
   outline: 2px solid var(--ph-focus-ring);
   outline-offset: -2px;

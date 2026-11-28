@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PAN_LARGE_STEP, PAN_STEP, ZOOM_STEP, isPreviewStale, isTypingTarget, neighbourId, shortcutFor, splitAfterKey, splitValueText, stageKeyAction, type KeyInfo } from './edit-keys';
+import { PAN_LARGE_STEP, PAN_STEP, ZOOM_STEP, isPreviewStale, isTypingTarget, neighbourId, shortcutFor, splitAfterKey, splitSidesText, splitValueText, stageKeyAction, type KeyInfo } from './edit-keys';
 
 function key(k: string, mods: Partial<KeyInfo> = {}): KeyInfo {
   return { key: k, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, ...mods };
@@ -80,6 +80,12 @@ describe('splitAfterKey', () => {
 
   it('reads both sides', () => {
     expect(splitValueText(0.3)).toBe('30 % before, 70 % after');
+  });
+
+  it('reads the left side first when the sides are swapped', () => {
+    expect(splitValueText(0.3, true)).toBe('30 % after, 70 % before');
+    expect(splitSidesText(false)).toBe('Before on the left, after on the right');
+    expect(splitSidesText(true)).toBe('After on the left, before on the right');
   });
 });
 
