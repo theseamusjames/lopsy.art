@@ -13,6 +13,7 @@ import { IconButton } from '../IconButton/IconButton';
 import { announceImport, type Announced, type ImportFacts } from './import-announcer';
 import { importFileErrors } from '../../app/file-error-events';
 import { track } from '../../app/track';
+import { refreshInterruptedImport } from '../../import/interrupted-refresh';
 import styles from './ImportStrip.module.css';
 
 /** The imports whose refused files have been reported: once each, when it ends. */
@@ -69,6 +70,13 @@ export function ImportStrip() {
       })
       .finally(() => setReconnecting(false));
   };
+
+  // An import that ends may finish an interrupted one (the same files chosen again): its summary is read again.
+  const ended = progress?.finished === true;
+  useEffect(() => {
+    const session = useUi.getState().connection?.session;
+    if (ended && session) refreshInterruptedImport(session);
+  }, [job, ended]);
 
   const stats = useMemo(() => (progress ? importStats(progress) : null), [progress]);
   // The files the import refused (it lists them under "could not be imported"), reported once it ends, one event per reason.
@@ -174,7 +182,7 @@ export function ImportStrip() {
             <IconButton size="sm" label="Dismiss" icon={<X size={14} />} onClick={() => setImportJob(null)} />
           ) : needsSignIn ? (
             <>
-              <Button size="sm" variant="primary" disabled={reconnecting} onClick={reconnect}>
+              <Button size="sm" variant="primary" aria-disabled={reconnecting} onClick={reconnect}>
                 Reconnect to Google Drive
               </Button>
               <Button size="sm" variant="ghost" onClick={() => job.cancel()}>

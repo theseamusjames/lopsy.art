@@ -21,6 +21,7 @@ import { FilterBar } from '../FilterBar/FilterBar';
 import { Header } from '../Header/Header';
 import { ImportSheet } from '../ImportSheet/ImportSheet';
 import { ImportStrip } from '../ImportStrip/ImportStrip';
+import { InterruptedImport } from '../InterruptedImport/InterruptedImport';
 import { InfoPanel } from '../InfoPanel/InfoPanel';
 import { PhotoGrid } from '../PhotoGrid/PhotoGrid';
 import { Sidebar } from '../Sidebar/Sidebar';
@@ -171,6 +172,7 @@ export function LibraryScreen() {
               {orderedIds.length > 0 && <ViewBar orderedIds={orderedIds} />}
             </>
           )}
+          <InterruptedImport />
           <ImportStrip />
         </main>
         {infoOpen && <InfoPanel />}

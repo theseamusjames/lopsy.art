@@ -19,6 +19,7 @@ import { isStorageError } from '@lopsy/photos-core/storage/errors';
 import { resumeImports, startImport } from '@lopsy/photos-core/import/importer';
 import { OpfsStagingStore, type StagingStore } from '@lopsy/photos-core/import/staging';
 import { IndexedDbImportQueueStore, type ImportQueueStore } from '@lopsy/photos-core/import/queue-store';
+import { dismissInterruptedImports, readInterruptedImports, type InterruptedImport } from '@lopsy/photos-core/import/interrupted';
 import { openAccountCaches, type AccountCaches } from '@lopsy/photos-core/cache/account-caches';
 import { LibraryBusyError } from '@lopsy/photos-core/library/lock';
 import type { PhotosLibrarySession } from '@lopsy/photos-core/library/session';
@@ -365,6 +366,16 @@ export class RealBackend implements PhotosBackend {
       ...(extras.staging ? { staging: extras.staging } : {}),
       ...(extras.tokenSource ? { authorization: extras.tokenSource } : {}),
     });
+  }
+
+  async getInterruptedImport(session: LibrarySession): Promise<InterruptedImport | null> {
+    const queue = this.extras.get(session)?.queue;
+    return queue ? readInterruptedImports(queue, session.libraryId, session.getView()) : null;
+  }
+
+  async dismissInterruptedImport(session: LibrarySession): Promise<void> {
+    const queue = this.extras.get(session)?.queue;
+    if (queue) await dismissInterruptedImports(queue, session.libraryId);
   }
 
   canAddFromDrive(session: LibrarySession): boolean {

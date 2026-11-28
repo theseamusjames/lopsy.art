@@ -10,6 +10,7 @@ import { StartScreen } from './components/StartScreen/StartScreen';
 import { LibraryScreen } from './components/LibraryScreen/LibraryScreen';
 import { EditSlot } from './app/EditSlot/EditSlot';
 import { AppStatusBar } from './components/AppStatusBar/AppStatusBar';
+import { refreshInterruptedImport } from './import/interrupted-refresh';
 import styles from './App.module.css';
 
 /** The browser's own storage reopens by itself once per page load; after "Close" it waits for a click. */
@@ -46,6 +47,8 @@ export function App() {
           .resumeImports(c.session)
           .then((job) => {
             if (job) useUi.getState().setImportJob(job);
+            // And what could not carry on: one summary, for choosing those files again.
+            refreshInterruptedImport(c.session);
           })
           .catch((error: unknown) => console.warn('Unfinished imports could not be resumed', error));
       })

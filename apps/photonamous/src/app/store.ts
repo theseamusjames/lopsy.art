@@ -7,6 +7,7 @@
 import { create } from 'zustand';
 import type { AssetId, VersionId } from '@lopsy/photos-core/library/types';
 import type { ImportJob } from '@lopsy/photos-core/import/types';
+import type { InterruptedImport } from '@lopsy/photos-core/import/interrupted';
 import type { Connection, ExportJob, StorageChoice } from './backend';
 import { EMPTY_SELECTION, type Selection } from '../library/selection';
 import type { Collection, SortOrder } from '../library/asset-query';
@@ -52,6 +53,8 @@ export interface UiState {
   /** Files waiting on the import sheet. Kept here, never passed as props. */
   readonly pendingImport: readonly File[] | null;
   readonly importJob: ImportJob | null;
+  /** What a reload left of imports, files to choose again (backend getInterruptedImport); null when nothing is missing. */
+  readonly interruptedImport: InterruptedImport | null;
   readonly exportJob: ExportJob | null;
   /** What the delete confirmation will delete. */
   readonly deleteIds: readonly AssetId[];
@@ -77,6 +80,7 @@ export interface UiState {
   setGridColumns(columns: number): void;
   setPendingImport(files: readonly File[] | null): void;
   setImportJob(job: ImportJob | null): void;
+  setInterruptedImport(interrupted: InterruptedImport | null): void;
   setExportJob(job: ExportJob | null): void;
   askDelete(ids: readonly AssetId[]): void;
   setCopiedEdits(copied: CopiedEdits | null): void;
@@ -113,6 +117,7 @@ export const useUi = create<UiState>()((set) => ({
   gridColumns: 1,
   pendingImport: null,
   importJob: null,
+  interruptedImport: null,
   exportJob: null,
   deleteIds: [],
   copiedEdits: null,
@@ -130,6 +135,7 @@ export const useUi = create<UiState>()((set) => ({
       editing: null,
       editSizes: null,
       importJob: null,
+      interruptedImport: null,
       exportJob: null,
       pendingImport: null,
     }),
@@ -156,6 +162,7 @@ export const useUi = create<UiState>()((set) => ({
   setGridColumns: (gridColumns) => set({ gridColumns }),
   setPendingImport: (pendingImport) => set({ pendingImport, dialog: pendingImport ? 'import' : null }),
   setImportJob: (importJob) => set({ importJob }),
+  setInterruptedImport: (interruptedImport) => set({ interruptedImport }),
   setExportJob: (exportJob) => set({ exportJob }),
   setCopiedEdits: (copiedEdits) => set({ copiedEdits }),
   askDelete: (deleteIds) => set({ deleteIds, dialog: deleteIds.length > 0 ? 'delete' : null }),
