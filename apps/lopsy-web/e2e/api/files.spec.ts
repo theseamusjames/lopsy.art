@@ -441,4 +441,47 @@ test.describe('the file commands', () => {
       expect(await snapshot(page)).toEqual(before);
     });
   });
+
+  test.describe('an image too large for this device', () => {
+    /** The largest document side here: the GPU's largest texture (8,192 on SwiftShader), at most 16,384. */
+    async function documentLimit(page: Page): Promise<number> {
+      const gpu = await page.evaluate(async (wgpu) => {
+        if (wgpu) {
+          const nav = navigator as unknown as { gpu: { requestAdapter: () => Promise<{ limits: { maxTextureDimension2D: number } } | null> } };
+          return (await nav.gpu.requestAdapter())?.limits.maxTextureDimension2D ?? 0;
+        }
+        const gl = document.createElement('canvas').getContext('webgl2');
+        return (gl?.getParameter(gl.MAX_TEXTURE_SIZE) as number | undefined) ?? 0;
+      }, process.env.LOPSY_RENDERER === 'wgpu');
+      expect(gpu).toBeGreaterThan(0);
+      return Math.min(gpu, 16384);
+    }
+
+    const reason = (name: string, width: number, height: number, limit: number) =>
+      `${name} is ${width.toLocaleString('en-US')} × ${height.toLocaleString('en-US')} pixels. Lopsy keeps each layer as one image in this device's graphics memory, ` +
+      `and the largest this device allows is ${limit.toLocaleString('en-US')} pixels on a side. Make the image smaller and open it again.`;
+
+    test('doc.open and layer.add-image refuse it with the reason, change nothing and show nothing', async ({ page }) => {
+      await newDocument(page);
+      await paintTwoLayers(page);
+      const limit = await documentLimit(page);
+      const before = await snapshot(page);
+      const png = (await makePngInPage(page, limit + 8, 16, [])).toString('base64');
+
+      expect(await runError(page, { op: 'doc.open', base64: png, name: 'wide.png' })).toEqual({
+        code: 'refused',
+        message: `doc.open: This image is too large to open: ${reason('wide.png', limit + 8, 16, limit)}`,
+      });
+      expect(await runError(page, { op: 'layer.add-image', base64: png, name: 'wide.png' })).toEqual({
+        code: 'refused',
+        message: `layer.add-image: This image is too large to open: ${reason('wide.png', limit + 8, 16, limit)}`,
+      });
+
+      expect(await snapshot(page)).toEqual(before);
+      expect(await toasts(page)).toEqual([]);
+      // The API caller has the reason; the canvas shows no message for it.
+      await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    });
+  });
 });
+

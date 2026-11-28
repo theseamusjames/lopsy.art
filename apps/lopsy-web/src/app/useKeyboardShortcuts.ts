@@ -17,7 +17,8 @@ import {
   invalidateInternalClipboardPriority,
   isInternalClipboardNewer,
 } from './store/system-clipboard-sync';
-import { describeError, notifyError } from './notifications-store';
+import { describeError } from './notifications-store';
+import { reportOpenFailure, showIfTooLarge } from './report-open-failure';
 import {
   processTextKey,
   moveVertical,
@@ -323,7 +324,7 @@ export function useKeyboardShortcuts({
           e.preventDefault();
           const name = file.name.replace(/\.[^.]+$/, '') || 'Copied File';
           pasteImageBlob(file, name).catch((err) =>
-            notifyError(`Failed to paste image: ${describeError(err)}`),
+            reportOpenFailure(err, { kind: 'paste', name: file.name || null }, `Failed to paste image: ${describeError(err)}`),
           );
           return;
         }
@@ -340,7 +341,7 @@ export function useKeyboardShortcuts({
             if (blob) {
               e.preventDefault();
               pasteImageBlob(blob, 'Copied File').catch((err) =>
-                notifyError(`Failed to paste image: ${describeError(err)}`),
+                reportOpenFailure(err, { kind: 'paste', name: null }, `Failed to paste image: ${describeError(err)}`),
               );
               return;
             }
@@ -363,8 +364,9 @@ export function useKeyboardShortcuts({
           }
           // No external image — fall back to internal clipboard
           pasteInternalClipboard();
-        }).catch(() => {
-          pasteInternalClipboard();
+        }).catch((err: unknown) => {
+          // An image too large to paste says so; any other failure falls back to the internal clipboard, as before.
+          if (!showIfTooLarge(err, { kind: 'paste', name: null })) pasteInternalClipboard();
         });
       } else {
         // Browser doesn't support clipboard.read() — use internal clipboard

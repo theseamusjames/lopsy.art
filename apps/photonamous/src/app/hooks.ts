@@ -15,6 +15,9 @@ import { parseTextQuery, TextIndex } from '@lopsy/photos-core/search/text';
 import { readSavedSearches, type SavedSearch } from '@lopsy/photos-core/search/rules';
 import { pairPartners, versionCounts, type Collection, type SortOrder } from '../library/asset-query';
 import { loadPreviewUrl, peekPreviewUrl } from './preview-cache';
+import { lopsyRefusalHere } from './lopsy-handoff';
+import { parseItem } from '../library/items';
+import { targetIds } from '../library/selection';
 
 /** The library last open, kept for a component that renders once more while the library closes. */
 let lastSession: LibrarySession | null = null;
@@ -53,6 +56,18 @@ export function useSyncStatus(): SyncStatus {
 export function useAsset(id: AssetId | null): Asset | null {
   const view = useLibraryView();
   return id === null ? null : (view.assets.get(id) ?? null);
+}
+
+/**
+ * Why Edit in Lopsy cannot take the photo the one-photo commands act on
+ * (commands.ts `currentItems`: in the grid the first selected tile, else
+ * the one in focus), or null when it can or there is none.
+ */
+export function useLopsyRefusal(): string | null {
+  const view = useLibraryView();
+  const target = useUi((s) => (s.mode !== 'grid' && s.selection.focus !== null ? s.selection.focus : (targetIds(s.selection)[0] ?? null)));
+  const asset = target === null ? undefined : view.assets.get(parseItem(target).assetId);
+  return asset ? lopsyRefusalHere(asset) : null;
 }
 
 export function usePrimaryVersion(asset: Asset | null): Version | null {

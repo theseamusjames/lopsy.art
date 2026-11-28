@@ -6,6 +6,7 @@ import { useUi } from '../../app/store';
 import { isDevelopable } from '../../library/develop-source';
 import { parseItem } from '../../library/items';
 import { backOut, openEdit, openFocusedInLopsy, runCommand, setLabel, setRating, toggleSetAside } from '../../app/commands';
+import { lopsyRefusalHere } from '../../app/lopsy-handoff';
 import { ImageX } from '../../icons/ImageX';
 import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
@@ -82,6 +83,7 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
               size="sm"
               label={asset.kind === 'document' ? 'Open in Lopsy' : 'Edit in Lopsy'}
               icon={<Paintbrush size={16} />}
+              unavailable={lopsyRefusalHere(asset) ?? undefined}
               onClick={openFocusedInLopsy}
             />
             {isDevelopable(asset) ? (

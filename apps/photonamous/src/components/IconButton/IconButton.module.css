@@ -11,7 +11,7 @@
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 
-.button:hover {
+.button:hover:not([aria-disabled='true']) {
   background: var(--color-bg-hover);
 }
 
@@ -23,6 +23,12 @@
 .button:disabled {
   opacity: 0.4;
   pointer-events: none;
+}
+
+/* Off but focusable, with its reason as the tooltip: the pointer still reaches it. */
+.button[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .sm {

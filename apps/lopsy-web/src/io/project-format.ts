@@ -11,6 +11,7 @@
 
 import { PIXEL_FORMAT_RGBA16_LZ4, isRgba16Layer, type LopsyManifest, type SerializedLayer } from './project-save';
 import type { LayerPixelFormat } from './layer-pixel-format';
+import { ImageTooLargeError } from './image-too-large';
 
 const LAYER_PIXEL_FORMATS: readonly LayerPixelFormat[] = ['rgba8-gzip', 'rgba16-lz4'];
 
@@ -127,10 +128,17 @@ function checkLayer(value: unknown, i: number, maxSide: number, pixelCount: numb
 /**
  * The manifest, checked. `pixelBlobCount` and `maskBlobCount` are how many
  * blobs of each kind the blob table holds, so every index can be checked.
+ * A document of whole, positive sides larger than `maxSide` is a project too
+ * large to open here, not a corrupt one: `ImageTooLargeError`, with
+ * `isDeviceLimit` saying whether the GPU sets `maxSide` (else Lopsy's cap).
  */
-export function validateManifest(value: unknown, maxSide: number, blobCount: number): LopsyManifest {
+export function validateManifest(value: unknown, maxSide: number, blobCount: number, isDeviceLimit = false): LopsyManifest {
   if (!isRecord(value)) fail('the manifest is not an object.');
   checkOptional(value, 'documentName', 'string', 'the document');
+  const { documentWidth: width, documentHeight: height } = value;
+  if (isInt(width) && isInt(height) && width >= 1 && height >= 1 && (width > maxSide || height > maxSide)) {
+    throw new ImageTooLargeError(width, height, { side: maxSide, isDevice: isDeviceLimit }, 'project');
+  }
   checkSide(value.documentWidth, 'the document width', maxSide);
   checkSide(value.documentHeight, 'the document height', maxSide);
   if (value.backgroundColor !== undefined) checkColor(value.backgroundColor, 'the background colour');
@@ -185,9 +193,13 @@ export interface ProjectContainer {
 /**
  * Parses and checks a whole `.lopsy` file without decompressing anything.
  * Throws `ProjectFormatError` (or the newer-version error) with a message
- * for the "Failed to load project" toast.
+ * for the "Failed to load project" toast, or `ImageTooLargeError` for a
+ * document larger than `maxSide`.
  */
-export function readProjectContainer(buffer: ArrayBuffer, options: { maxSide: number; supportedVersion: number }): ProjectContainer {
+export function readProjectContainer(
+  buffer: ArrayBuffer,
+  options: { maxSide: number; isDeviceLimit?: boolean; supportedVersion: number },
+): ProjectContainer {
   const view = new DataView(buffer);
   if (view.byteLength < HEADER_BYTES || LOPSY_MAGIC.some((b, i) => view.getUint8(i) !== b)) {
     throw new ProjectFormatError('Not a valid .lopsy file — missing magic bytes.');
@@ -223,7 +235,7 @@ export function readProjectContainer(buffer: ArrayBuffer, options: { maxSide: nu
     offset += size;
   }
 
-  const manifest = validateManifest(manifestJson, options.maxSide, blobCount);
+  const manifest = validateManifest(manifestJson, options.maxSide, blobCount, options.isDeviceLimit);
   const pixelBlobCount = manifest.layers.filter((l) => l.pixelDataIndex >= 0).length;
   for (const layer of manifest.layers) checkLayerBlobs(manifest, layer, blobs, pixelBlobCount);
   return { version, manifest, blobs, pixelBlobCount };

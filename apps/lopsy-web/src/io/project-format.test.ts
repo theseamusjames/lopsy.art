@@ -7,6 +7,7 @@ import {
   readProjectContainer,
   validateManifest,
 } from './project-format';
+import { ImageTooLargeError } from './image-too-large';
 
 const MAX_SIDE = 16384;
 
@@ -117,12 +118,18 @@ describe('readProjectContainer', () => {
     expect(() => read(buffer)).toThrow(/not valid JSON/);
   });
 
-  it('refuses a document larger than the texture limit', () => {
-    expect(() => read(container(manifest({ documentWidth: 1e6 }), [new Uint8Array(10)]))).toThrow(/document width/);
-    expect(() =>
-      readProjectContainer(container(manifest({ documentHeight: 4096 }), [new Uint8Array(10)]), { maxSide: 2048, supportedVersion: 3 }),
-    ).toThrow(/document height/);
+  it('refuses a document larger than the texture limit as too large to open, saying whose limit it is', () => {
+    const tooWide = () => read(container(manifest({ documentWidth: 1e6 }), [new Uint8Array(10)]));
+    expect(tooWide).toThrow(ImageTooLargeError);
+    expect(tooWide).toThrow(/^The project is 1,000,000 × 2 pixels\. Lopsy keeps each layer as one image, and the largest it allows/);
+    const tooTall = () =>
+      readProjectContainer(container(manifest({ documentHeight: 4096 }), [new Uint8Array(10)]), { maxSide: 2048, isDeviceLimit: true, supportedVersion: 3 });
+    expect(tooTall).toThrow(/^The project is 4 × 4,096 pixels\. .*the largest this device allows is 2,048 pixels on a side/);
+  });
+
+  it('refuses a document side that is not a whole positive number as corrupt', () => {
     expect(() => read(container(manifest({ documentWidth: 2.5 }), [new Uint8Array(10)]))).toThrow(/document width/);
+    expect(() => read(container(manifest({ documentHeight: 0 }), [new Uint8Array(10)]))).toThrow(/document height/);
   });
 
   it('refuses layers whose pixel or mask sizes are out of range or disagree with their blobs', () => {

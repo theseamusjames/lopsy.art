@@ -58,15 +58,26 @@ export function receiverMessage(state: ReceiverState): string | null {
 }
 
 /**
- * The long edge Lopsy is handed a photo at: none (its full size) unless the
- * photo is larger than this device's GPU can edit, which Lopsy edits on
- * too; then the largest size the GPU can edit, the held image's, never
- * the photo's own size the export renderer could make in tiles.
+ * Why this photo cannot go to Lopsy on this device, or null when it can.
+ * Lopsy keeps each layer as one texture on the same GPU, so a photo larger
+ * than the GPU can edit (`editableLimit`, the one threshold for oversized
+ * photos) would not open there; handing it over smaller would hide that it
+ * was reduced. An unknown size or limit is let through, and a Lopsy
+ * document goes as its .lopsy (Lopsy says itself if it cannot open it).
  */
-export function lopsyLongEdge(photo: { readonly width: number | null; readonly height: number | null }, gpuTextureLimit: number | null): number | null {
-  if (gpuTextureLimit === null || !photo.width || !photo.height) return null;
+export function lopsyRefusal(
+  photo: { readonly kind: 'original' | 'document'; readonly width: number | null; readonly height: number | null },
+  gpuTextureLimit: number | null,
+): string | null {
+  if (photo.kind === 'document' || gpuTextureLimit === null || !photo.width || !photo.height) return null;
   const limit = editableLimit(gpuTextureLimit);
-  return Math.max(photo.width, photo.height) > limit ? limit : null;
+  if (Math.max(photo.width, photo.height) <= limit) return null;
+  return `This photo is ${photo.width} × ${photo.height} pixels, larger than Lopsy can open on this device (${limit} on a side).`;
+}
+
+/** `lopsyRefusal` on this page's GPU. */
+export function lopsyRefusalHere(photo: Parameters<typeof lopsyRefusal>[0]): string | null {
+  return lopsyRefusal(photo, textureLimit());
 }
 
 /** The full-size 16-bit PNG of a version, through the export renderer (the engine). */
@@ -80,16 +91,25 @@ async function renderPng16(session: LibrarySession, assetId: AssetId, versionId:
   const blob = await renderer.render(
     asset,
     version,
-    { ...DEFAULT_EXPORT_SETTINGS, format: 'png', quality: 1, maxLongEdge: lopsyLongEdge(asset, textureLimit()), metadata: 'none' },
+    { ...DEFAULT_EXPORT_SETTINGS, format: 'png', quality: 1, maxLongEdge: null, metadata: 'none' },
     new AbortController().signal,
   );
   return blob.arrayBuffer();
 }
 
-/** "Edit in Lopsy" for one photo. Call from a click: Lopsy's tab opens before this returns. */
+/**
+ * "Edit in Lopsy" for one photo. Call from a click: Lopsy's tab opens
+ * before this returns. A photo Lopsy cannot open on this device
+ * (`lopsyRefusal`) is not handed over; the reason is shown instead.
+ */
 export function openInLopsy(session: LibrarySession, assetId: AssetId, chosenVersion: string | null = null): void {
   const asset = session.getView().assets.get(assetId);
   if (!asset) return;
+  const refusal = lopsyRefusalHere(asset);
+  if (refusal !== null) {
+    showErrorToast(refusal);
+    return;
+  }
   const versionId = chosenVersion ?? asset.primaryVersionId;
   let handoff;
   try {

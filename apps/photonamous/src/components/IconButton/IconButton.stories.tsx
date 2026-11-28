@@ -21,3 +21,9 @@ export const Toggle: Story = {
 };
 export const Small: Story = { args: { size: 'sm' } };
 export const Disabled: Story = { args: { disabled: true } };
+export const Unavailable: Story = {
+  args: {
+    label: 'Edit in Lopsy',
+    unavailable: 'This photo is 17504 × 3440 pixels, larger than Lopsy can open on this device (16382 on a side).',
+  },
+};

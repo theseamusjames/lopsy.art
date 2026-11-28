@@ -5,6 +5,7 @@ import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { describeError } from '../../app/notifications-store';
 import { pasteOrOpenBlob, type PasteOrOpenOutcome } from '../../app/paste-or-open';
+import { tooLargeFrom, tooLargeMessage } from '../../io/image-too-large';
 
 function addedLayerId(before: ReadonlySet<string>): string {
   const added = useEditorStore.getState().document.layers.find((layer) => !before.has(layer.id));
@@ -15,7 +16,7 @@ function addedLayerId(before: ReadonlySet<string>): string {
 export const layerAddImage = defineCommand({
   id: 'layer.add-image',
   summary:
-    'Adds an image file to the open document as a new "Pasted Layer", as dropping the file on the canvas does ("Paste"): it goes above the active layer, shrinks to fit when larger than the canvas, its pixels become the selection and the Move tool is chosen. Returns the new layer\'s id.',
+    'Adds an image file to the open document as a new "Pasted Layer", as dropping the file on the canvas does ("Paste"): it goes above the active layer, shrinks to fit when larger than the canvas, its pixels become the selection and the Move tool is chosen. An image larger than this device can hold is refused (\'refused\'), saying its size and the largest side allowed, with nothing added. Returns the new layer\'s id.',
   surface: 'document',
   params: {
     base64: base64Spec('The image file\'s bytes (PNG, JPEG, GIF, BMP or WebP)'),
@@ -39,6 +40,12 @@ export const layerAddImage = defineCommand({
         return { id };
       },
       (err: unknown) => {
+        // Too large for this device: the reason the UI's message over the canvas gives, and nothing shown there.
+        const tooLarge = tooLargeFrom(err);
+        if (tooLarge) {
+          const { title, body } = tooLargeMessage({ kind: 'image', name, width: tooLarge.width, height: tooLarge.height }, tooLarge.limit);
+          throw new CommandError('refused', `layer.add-image: ${title}: ${body}`);
+        }
         throw new CommandError('invalid', `layer.add-image: could not decode ${JSON.stringify(name)} as an image: ${describeError(err)}`);
       },
     );
