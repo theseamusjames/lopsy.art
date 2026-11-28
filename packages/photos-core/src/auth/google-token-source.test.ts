@@ -1,7 +1,30 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createFakeDrive } from '../storage/google-drive/fake-drive';
-import { AccountMismatchError, GESTURE_REFRESH_AGE_MS, GESTURE_RETRY_MS, GOOGLE_SCOPES, GoogleTokenSource, fetchDriveAccountId, revokeToken } from './google-token-source';
+import {
+  AccountMismatchError,
+  GESTURE_REFRESH_AGE_MS,
+  GESTURE_RETRY_MS,
+  GOOGLE_SCOPES,
+  GoogleTokenSource,
+  SILENT_RENEWAL_KEY,
+  SILENT_RENEWAL_MEMORY_MS,
+  fetchDriveAccountId,
+  revokeToken,
+} from './google-token-source';
 import { StaticTokenSource } from './static-token-source';
+
+/** The browser's memory of silent renewals, for one test. */
+function noMemory(): { read(key: string): string | null; write(key: string, value: string | null): void; readonly values: Map<string, string> } {
+  const values = new Map<string, string>();
+  return {
+    values,
+    read: (key) => values.get(key) ?? null,
+    write: (key, value) => {
+      if (value === null) values.delete(key);
+      else values.set(key, value);
+    },
+  };
+}
 
 describe('fetchDriveAccountId', () => {
   it("reads Drive's ID for the account, and asks for nothing else about it", async () => {
@@ -86,27 +109,30 @@ describe('GoogleTokenSource with an expected account', () => {
 
   it('keeps a token for the expected account', async () => {
     installGis(['token-for-alice']);
-    const source = new GoogleTokenSource({ clientId: 'c', expectedAccountId: 'alice', fetch: about });
+    const source = new GoogleTokenSource({ clientId: 'c', memory: noMemory(), expectedAccountId: 'alice', fetch: about });
     expect(await source.requestInteractive()).toBe('token-for-alice');
     expect(await source.getToken()).toBe('token-for-alice');
   });
 
   it('refuses a grant for another account and keeps no token', async () => {
     installGis(['token-for-mallory']);
-    const source = new GoogleTokenSource({ clientId: 'c', expectedAccountId: 'alice', fetch: about });
+    const source = new GoogleTokenSource({ clientId: 'c', memory: noMemory(), expectedAccountId: 'alice', fetch: about });
     const error = await source.requestInteractive().catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(AccountMismatchError);
     expect(error).toMatchObject({ code: 'auth', actualAccountId: 'mallory' });
     await expect(source.getToken()).rejects.toMatchObject({ code: 'auth' });
   });
 
-  it('refuses a silent refresh that comes back for another account', async () => {
+  it('refuses a Reconnect that comes back for another account, and says sign-in is still needed', async () => {
     installGis(['token-for-alice', 'token-for-mallory']);
     let clock = 0;
-    const source = new GoogleTokenSource({ clientId: 'c', expectedAccountId: 'alice', fetch: about, now: () => clock });
+    const source = new GoogleTokenSource({ clientId: 'c', memory: noMemory(), expectedAccountId: 'alice', fetch: about, now: () => clock });
     await source.requestInteractive();
-    clock = 3600_000 - 2 * 60_000;
-    await expect(source.getToken()).rejects.toBeInstanceOf(AccountMismatchError);
+    clock = 61 * 60_000;
+    await expect(source.getToken()).rejects.toMatchObject({ code: 'auth' });
+    expect(source.signInState()).toBe('needed');
+    await expect(source.requestInteractive()).rejects.toBeInstanceOf(AccountMismatchError);
+    expect(source.signInState()).toBe('needed');
     await expect(source.getToken()).rejects.toMatchObject({ code: 'auth' });
   });
 
@@ -125,8 +151,8 @@ describe('GoogleTokenSource with an expected account', () => {
       hasGrantedAllScopes: () => true,
     };
     Reflect.set(globalThis, 'google', { accounts: { oauth2 } });
-    await new GoogleTokenSource({ clientId: 'c', expectedAccountId: 'alice', fetch: about }).requestInteractive();
-    await new GoogleTokenSource({ clientId: 'c', fetch: about }).requestInteractive();
+    await new GoogleTokenSource({ clientId: 'c', memory: noMemory(), expectedAccountId: 'alice', fetch: about }).requestInteractive();
+    await new GoogleTokenSource({ clientId: 'c', memory: noMemory(), fetch: about }).requestInteractive();
     const [knownConfig, knownRequest, newConfig, newRequest] = seen;
     expect(knownConfig).toMatchObject({ scope: 'https://www.googleapis.com/auth/drive.file' });
     expect(knownConfig).not.toHaveProperty('login_hint');
@@ -201,7 +227,7 @@ describe('GoogleTokenSource renewing from a click', () => {
   it('does nothing until the token is 45 minutes old, then renews it without showing anything', async () => {
     const gis = installGis([{ token: 'first' }, { token: 'second' }]);
     let clock = 0;
-    const source = new GoogleTokenSource({ clientId: 'c', now: () => clock });
+    const source = new GoogleTokenSource({ clientId: 'c', memory: noMemory(), now: () => clock });
     await source.requestInteractive();
 
     clock = 44 * MINUTE;
@@ -222,7 +248,7 @@ describe('GoogleTokenSource renewing from a click', () => {
   it('does nothing before sign-in, or once the token has run out', async () => {
     const gis = installGis([{ token: 'first' }]);
     let clock = 0;
-    const source = new GoogleTokenSource({ clientId: 'c', now: () => clock });
+    const source = new GoogleTokenSource({ clientId: 'c', memory: noMemory(), now: () => clock });
     expect(await source.refreshOnGesture()).toBe(false);
     await source.requestInteractive();
     clock = 61 * MINUTE;
@@ -230,42 +256,61 @@ describe('GoogleTokenSource renewing from a click', () => {
     expect(gis.prompts).toEqual(['consent']);
   });
 
-  it('lets the next click show Google’s window when Google has to ask, and stops if that is closed', async () => {
-    const gis = installGis([{ token: 'first' }, { error: 'interaction_required' }, { failure: 'popup_closed' }]);
+  it('opens no window of its own: getToken gives the token while a minute is left, then says sign-in is needed', async () => {
+    const gis = installGis([{ token: 'first' }]);
     let clock = 0;
-    const source = new GoogleTokenSource({ clientId: 'c', now: () => clock });
+    const source = new GoogleTokenSource({ clientId: 'c', memory: noMemory(), now: () => clock });
     await source.requestInteractive();
-
-    clock = 46 * MINUTE;
-    expect(await source.refreshOnGesture()).toBe(false);
-    expect(await source.refreshOnGesture()).toBe(false);
-    expect(gis.prompts).toEqual(['consent', 'none', '']);
-
-    // Closed by the user: no more windows from clicks, and the token in use still works.
-    expect(await source.refreshOnGesture()).toBe(false);
-    expect(gis.prompts).toHaveLength(3);
+    clock = 58 * MINUTE;
     expect(await source.getToken()).toBe('first');
+    expect(source.signInState()).toBe('ok');
+    clock = 59.5 * MINUTE;
+    await expect(source.getToken()).rejects.toMatchObject({ code: 'auth' });
+    expect(source.signInState()).toBe('needed');
+    expect(gis.prompts).toEqual(['consent']);
   });
 
-  it('takes the token when the window Google needed is answered, and renews silently again after', async () => {
-    const gis = installGis([{ token: 'first' }, { error: 'interaction_required' }, { token: 'second' }, { token: 'third' }]);
+  it('after a silent renewal gives nothing, clicks open no more windows in this browser, and Reconnect is offered', async () => {
+    const gis = installGis([{ token: 'first' }, { error: 'interaction_required' }, { token: 'second' }, { token: 'third' }, { token: 'fourth' }]);
     let clock = 0;
-    const source = new GoogleTokenSource({ clientId: 'c', now: () => clock });
+    const memory = noMemory();
+    const source = new GoogleTokenSource({ clientId: 'c', memory, now: () => clock });
+    const changes: string[] = [];
+    source.subscribeSignIn(() => changes.push(source.signInState()));
     await source.requestInteractive();
+
     clock = 46 * MINUTE;
     expect(await source.refreshOnGesture()).toBe(false);
-    expect(await source.refreshOnGesture()).toBe(true);
-    expect(await source.getToken()).toBe('second');
+    expect(source.signInState()).toBe('renew');
+    expect(memory.values.get(SILENT_RENEWAL_KEY)).toBe(`fails:${46 * MINUTE}`);
+    expect(await source.refreshOnGesture()).toBe(false);
+    expect(gis.prompts).toEqual(['consent', 'none']);
+    // The token in use still works until its hour is up.
+    expect(await source.getToken()).toBe('first');
 
+    // Reconnect: a new token, and the state is ok until that one is old.
+    expect(await source.requestInteractive()).toBe('second');
+    expect(source.signInState()).toBe('ok');
     clock += 46 * MINUTE;
-    expect(await source.refreshOnGesture()).toBe(true);
-    expect(gis.prompts).toEqual(['consent', 'none', '', 'none']);
+    // This browser is known not to renew silently: the click opens nothing, Reconnect is offered at once.
+    expect(await source.refreshOnGesture()).toBe(false);
+    expect(source.signInState()).toBe('renew');
+    expect(gis.prompts).toEqual(['consent', 'none', '']);
+    expect(changes).toEqual(['renew', 'ok', 'renew']);
+
+    // A month on, clicks try again.
+    const later = new GoogleTokenSource({ clientId: 'c', memory, now: () => clock + SILENT_RENEWAL_MEMORY_MS });
+    clock = 0;
+    await later.requestInteractive();
+    clock = 46 * MINUTE;
+    expect(await later.refreshOnGesture()).toBe(true);
+    expect(memory.values.has(SILENT_RENEWAL_KEY)).toBe(false);
   });
 
   it('waits a little after a click whose popup the browser refused, then tries again', async () => {
     const gis = installGis([{ token: 'first' }, { failure: 'popup_failed_to_open' }, { token: 'second' }]);
     let clock = 0;
-    const source = new GoogleTokenSource({ clientId: 'c', now: () => clock });
+    const source = new GoogleTokenSource({ clientId: 'c', memory: noMemory(), now: () => clock });
     await source.requestInteractive();
 
     clock = 46 * MINUTE;
@@ -282,7 +327,7 @@ describe('GoogleTokenSource renewing from a click', () => {
   it('keeps the token in use when a renewal comes back for another account', async () => {
     const gis = installGis([{ token: 'token-for-alice' }, { token: 'token-for-mallory' }]);
     let clock = 0;
-    const source = new GoogleTokenSource({ clientId: 'c', expectedAccountId: 'alice', fetch: about, now: () => clock });
+    const source = new GoogleTokenSource({ clientId: 'c', memory: noMemory(), expectedAccountId: 'alice', fetch: about, now: () => clock });
     await source.requestInteractive();
     clock = 46 * MINUTE;
     expect(await source.refreshOnGesture()).toBe(false);
@@ -294,25 +339,24 @@ describe('GoogleTokenSource renewing from a click', () => {
 
   const quick = { silent: 20, interactive: 20 };
 
-  it('gives up a window that never answers, so the token in use and later clicks still work', async () => {
-    const gis = installGis([{ token: 'first' }, { never: true }, { never: true }, { token: 'second' }]);
+  it('gives up a window that never answers: the token in use works, and Reconnect is offered', async () => {
+    const gis = installGis([{ token: 'first' }, { never: true }, { token: 'second' }]);
     let clock = 0;
-    const source = new GoogleTokenSource({ clientId: 'c', now: () => clock, requestTimeoutMs: quick });
+    const source = new GoogleTokenSource({ clientId: 'c', memory: noMemory(), now: () => clock, requestTimeoutMs: quick });
     await source.requestInteractive();
     clock = 46 * MINUTE;
     expect(await source.refreshOnGesture()).toBe(false);
-    // In the token's last minutes getToken's own silent try is not held by it either.
+    expect(source.signInState()).toBe('renew');
     clock = 57 * MINUTE;
     expect(await source.getToken()).toBe('first');
-    // Google's window was not answered: the next click shows it properly.
-    expect(await source.refreshOnGesture()).toBe(true);
-    expect(gis.prompts).toEqual(['consent', 'none', 'none', '']);
+    expect(await source.requestInteractive()).toBe('second');
+    expect(gis.prompts).toEqual(['consent', 'none', '']);
   });
 
   it('takes a token that arrives after its request gave up, and says so', async () => {
     installGis([{ token: 'first' }, { late: 'second' }]);
     let clock = 0;
-    const source = new GoogleTokenSource({ clientId: 'c', now: () => clock, requestTimeoutMs: quick });
+    const source = new GoogleTokenSource({ clientId: 'c', memory: noMemory(), now: () => clock, requestTimeoutMs: quick });
     await source.requestInteractive();
     let told = 0;
     source.subscribe(() => told++);
@@ -326,20 +370,37 @@ describe('GoogleTokenSource renewing from a click', () => {
   it("opens Reconnect's window while a silent request waits, and answers both", async () => {
     const gis = installGis([{ token: 'first' }, { never: true }, { token: 'second' }]);
     let clock = 0;
-    const source = new GoogleTokenSource({ clientId: 'c', now: () => clock });
+    const source = new GoogleTokenSource({ clientId: 'c', memory: noMemory(), now: () => clock });
     await source.requestInteractive();
-    clock = 57 * MINUTE;
-    const silent = source.getToken();
+    clock = 46 * MINUTE;
+    const silent = source.refreshOnGesture();
     const reconnect = source.requestInteractive();
     expect(await reconnect).toBe('second');
-    expect(await silent).toBe('second');
+    expect(await silent).toBe(true);
     expect(gis.prompts).toEqual(['consent', 'none', '']);
+  });
+
+  it('tells work waiting for sign-in when a token comes, however it comes', async () => {
+    installGis([{ token: 'first' }, { token: 'second' }]);
+    let clock = 0;
+    const source = new GoogleTokenSource({ clientId: 'c', memory: noMemory(), now: () => clock });
+    await source.requestInteractive();
+    const count = source.tokenCount;
+    const abort = new AbortController();
+    const gaveUp = source.whenTokenAfter(count, abort.signal);
+    abort.abort();
+    await expect(gaveUp).rejects.toMatchObject({ code: 'aborted' });
+    const waiting = source.whenTokenAfter(count);
+    clock = 46 * MINUTE;
+    expect(await source.refreshOnGesture()).toBe(true);
+    await waiting;
+    await source.whenTokenAfter(count);
   });
 
   it('makes one request for clicks that arrive together', async () => {
     const gis = installGis([{ token: 'first' }, { token: 'second' }]);
     let clock = 0;
-    const source = new GoogleTokenSource({ clientId: 'c', now: () => clock });
+    const source = new GoogleTokenSource({ clientId: 'c', memory: noMemory(), now: () => clock });
     await source.requestInteractive();
     clock = 46 * MINUTE;
     const results = await Promise.all([source.refreshOnGesture(), source.refreshOnGesture(), source.refreshOnGesture()]);

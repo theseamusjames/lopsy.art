@@ -81,7 +81,12 @@ export async function driveImportHarness(options: { readonly chunkSize?: number;
     refuseExpired();
     return drive.fetch(input, init);
   };
-  const tokens = new GoogleTokenSource({ clientId: 'test-client', now: () => clock, requestTimeoutMs: { silent: 20, interactive: 20 } });
+  const remembered = new Map<string, string>();
+  const memory = {
+    read: (key: string) => remembered.get(key) ?? null,
+    write: (key: string, value: string | null) => void (value === null ? remembered.delete(key) : remembered.set(key, value)),
+  };
+  const tokens = new GoogleTokenSource({ clientId: 'test-client', now: () => clock, requestTimeoutMs: { silent: 20, interactive: 20 }, memory });
   await tokens.requestInteractive();
   const uploadSessions = new MemoryUploadSessionStore();
   const adapter = new GoogleDriveAdapter({

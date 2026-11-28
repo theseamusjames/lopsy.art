@@ -14,31 +14,38 @@
  * and a browser lets a page open a popup only from a click or key press.
  * So the token is renewed from the user's own clicks: once it is 45 minutes
  * old, `refreshOnGesture`, called from any click, asks Google for a new one
- * without showing anything (prompt 'none'). If Google has to ask something
- * first (several accounts are signed in and it cannot tell which), the next
- * click opens its window properly; if the user closes that, nothing more is
- * tried and the token runs its hour. `getToken` still tries a silent
- * refresh of its own when under five minutes remain, which works only where
- * the browser lets that popup through, and throws 'auth' once the token has
- * run out; the UI then shows Reconnect, whose click calls
- * `requestInteractive`, which always opens Google's window.
+ * without showing anything (prompt 'none'). If that gives no token (Google
+ * has to ask something first, the window never answers, or the browser
+ * keeps the answer from the page), it is not tried from clicks again, in
+ * this browser for a month (`SILENT_RENEWAL_KEY`): a window flashing on
+ * every click and giving nothing helps nobody. The sign-in state then says
+ * 'renew' once the token is old, and the UI offers Reconnect, whose click
+ * calls `requestInteractive`, which always opens Google's window.
+ * `getToken` never opens a window itself (outside a click the browser
+ * blocks it): it returns the token while a minute of it is left, and
+ * otherwise says 'needed' and throws 'auth'.
  *
  * No request waits on Google for ever: one whose window never answers is
  * given up after a while (`SILENT_REQUEST_TIMEOUT_MS`), and a token that
- * arrives later is still taken. `subscribe` tells work waiting for
- * sign-in (an import) that a new token is here, however it came.
+ * arrives later is still taken. `subscribe` and `whenTokenAfter` tell work
+ * waiting for sign-in that a new token is here, however it came;
+ * `signInState` and `subscribeSignIn` tell the UI whether it needs one.
  */
 
 import { StorageError } from '../storage/errors';
+import { abortedError } from '../storage/signals';
 import { loadScript, readGlobal } from './load-script';
-import type { TokenSource } from './types';
+import type { SignInGate, SignInState, TokenSource } from './types';
 
 export const GIS_SCRIPT_URL = 'https://accounts.google.com/gsi/client';
 export const DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 /** Everything the sign-in asks for. */
 export const GOOGLE_SCOPES = DRIVE_FILE_SCOPE;
-const REFRESH_MARGIN_MS = 5 * 60 * 1000;
 const MIN_VALIDITY_MS = 60 * 1000;
+/** Where this browser remembers that a silent renewal gave no token ("fails:<when>"). Nothing about the account. */
+export const SILENT_RENEWAL_KEY = 'photonamous.silent-renewal';
+/** How long that is believed: a month, then a click tries again. */
+export const SILENT_RENEWAL_MEMORY_MS = 30 * 24 * 60 * 60 * 1000;
 /** How old a token is when a click renews it. Google's tokens last an hour. */
 export const GESTURE_REFRESH_AGE_MS = 45 * 60 * 1000;
 /**
@@ -105,6 +112,8 @@ export interface GoogleTokenSourceOptions {
   readonly fetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   /** How long Google's window may take to answer; default the constants above. */
   readonly requestTimeoutMs?: { readonly silent: number; readonly interactive: number };
+  /** Where `SILENT_RENEWAL_KEY` is kept; localStorage by default. */
+  readonly memory?: { read(key: string): string | null; write(key: string, value: string | null): void };
 }
 
 /** Thrown when Google granted a token for another account than `expectedAccountId`. */
@@ -143,10 +152,9 @@ function failureReason(type: string | undefined): SignInFailureReason {
 
 /**
  * Where renewing from clicks stands for the current token: 'silent' asks
- * without showing anything, 'ask' lets Google show its window, 'off' leaves
- * the token to run out.
+ * without showing anything, 'off' leaves it to Reconnect.
  */
-type GestureRefresh = 'silent' | 'ask' | 'off';
+type GestureRefresh = 'silent' | 'off';
 
 /** A request waiting for Google's answer. */
 interface Waiter {
@@ -155,8 +163,33 @@ interface Waiter {
   readonly onMismatch: 'drop-current' | 'keep-current';
 }
 
-export class GoogleTokenSource implements TokenSource {
+function localMemory(): { read(key: string): string | null; write(key: string, value: string | null): void } {
+  return {
+    read: (key) => {
+      try {
+        return localStorage.getItem(key);
+      } catch {
+        return null;
+      }
+    },
+    write: (key, value) => {
+      try {
+        if (value === null) localStorage.removeItem(key);
+        else localStorage.setItem(key, value);
+      } catch {
+        // No storage: it is tried again next time.
+      }
+    },
+  };
+}
+
+export class GoogleTokenSource implements TokenSource, SignInGate {
   private token: Grant | null = null;
+  private state: SignInState = 'ok';
+  private readonly stateListeners = new Set<() => void>();
+  /** Tokens taken so far, for `whenTokenAfter`. */
+  private taken = 0;
+  private readonly memory: { read(key: string): string | null; write(key: string, value: string | null): void };
   private gestureRefresh: GestureRefresh = 'silent';
   private gestureNotBefore = 0;
   private client: TokenClient | null = null;
@@ -169,6 +202,7 @@ export class GoogleTokenSource implements TokenSource {
 
   constructor(private readonly options: GoogleTokenSourceOptions) {
     this.now = options.now ?? Date.now;
+    this.memory = options.memory ?? localMemory();
     forgetLegacyLoginHint();
   }
 
@@ -181,18 +215,50 @@ export class GoogleTokenSource implements TokenSource {
     return () => this.listeners.delete(listener);
   }
 
+  get tokenCount(): number {
+    return this.taken;
+  }
+
+  whenTokenAfter(count: number, signal?: AbortSignal): Promise<void> {
+    if (this.taken > count) return Promise.resolve();
+    return new Promise<void>((resolve, reject) => {
+      const off = this.subscribe(() => {
+        if (this.taken <= count) return;
+        off();
+        signal?.removeEventListener('abort', aborted);
+        resolve();
+      });
+      const aborted = (): void => {
+        off();
+        reject(abortedError());
+      };
+      if (signal?.aborted) aborted();
+      else signal?.addEventListener('abort', aborted, { once: true });
+    });
+  }
+
+  /** 'needed' once work found no usable token, 'renew' when the token is old and only Reconnect can renew it, else 'ok'. */
+  signInState(): SignInState {
+    return this.state;
+  }
+
+  subscribeSignIn(listener: () => void): () => void {
+    this.stateListeners.add(listener);
+    return () => this.stateListeners.delete(listener);
+  }
+
+  /** Work refused for sign-in with a token that looked good (a 401 or 403): Reconnect is wanted. */
+  markSignInNeeded(): void {
+    this.setState('needed');
+  }
+
   async getToken(): Promise<string> {
     const token = this.token;
-    const remaining = token ? token.expiresAt - this.now() : 0;
-    if (token && remaining > REFRESH_MARGIN_MS) return token.value;
-    if (token && remaining > MIN_VALIDITY_MS) {
-      try {
-        return await this.request('none');
-      } catch (error) {
-        if (error instanceof AccountMismatchError) throw error;
-        return token.value;
-      }
+    if (token && token.expiresAt - this.now() > MIN_VALIDITY_MS) {
+      this.review();
+      return token.value;
     }
+    this.setState('needed');
     throw new StorageError('auth', 'Google Drive needs reconnecting');
   }
 
@@ -212,26 +278,28 @@ export class GoogleTokenSource implements TokenSource {
    * Resolves true when a new token was taken.
    */
   async refreshOnGesture(): Promise<boolean> {
+    this.review();
     const token = this.token;
     if (!token || this.inFlight) return false;
     const now = this.now();
     // Run out: Reconnect, which says what is happening, is the way back.
     if (token.expiresAt - now <= MIN_VALIDITY_MS) return false;
     if (now - token.grantedAt < GESTURE_REFRESH_AGE_MS) return false;
-    if (this.gestureRefresh === 'off' || now < this.gestureNotBefore) return false;
-    const isSilent = this.gestureRefresh === 'silent';
+    if (this.gestureRefresh === 'off' || this.silentKnownToFail() || now < this.gestureNotBefore) return false;
     try {
-      await this.request(isSilent ? 'none' : '', 'keep-current');
+      await this.request('none', 'keep-current');
+      this.memory.write(SILENT_RENEWAL_KEY, null);
       return true;
     } catch (error) {
       if (error instanceof SignInFailure && error.reason === 'blocked') {
+        // The click was spent on something else that needed it: one of the next clicks tries.
         this.gestureNotBefore = this.now() + GESTURE_RETRY_MS;
-      } else if (isSilent && !(error instanceof AccountMismatchError)) {
-        // Google needs to ask something: let the next click show its window.
-        this.gestureRefresh = 'ask';
       } else {
-        // The window was closed, or another account was picked: do not open it again unasked.
+        // No token from a silent try (Google has to ask, the window never answered, or another account came
+        // back): no more windows from clicks. The UI offers Reconnect once the token is old ('renew').
+        if (!(error instanceof AccountMismatchError)) this.memory.write(SILENT_RENEWAL_KEY, `fails:${this.now()}`);
         this.gestureRefresh = 'off';
+        this.review();
       }
       return false;
     }
@@ -239,6 +307,35 @@ export class GoogleTokenSource implements TokenSource {
 
   invalidate(): void {
     this.token = null;
+  }
+
+  /** Whether a silent renewal has given no token in this browser in the last month. */
+  private silentKnownToFail(): boolean {
+    const remembered = this.memory.read(SILENT_RENEWAL_KEY);
+    const at = remembered?.startsWith('fails:') ? Number(remembered.slice(6)) : Number.NaN;
+    return Number.isFinite(at) && this.now() - at < SILENT_RENEWAL_MEMORY_MS;
+  }
+
+  /** 'renew' while the token is old and clicks will not renew it; 'needed' stays until a token comes. */
+  private review(): void {
+    if (this.state === 'needed') return;
+    const token = this.token;
+    if (!token) return;
+    const old = this.now() - token.grantedAt >= GESTURE_REFRESH_AGE_MS;
+    const clicksCannot = this.gestureRefresh === 'off' || this.silentKnownToFail();
+    this.setState(old && clicksCannot ? 'renew' : 'ok');
+  }
+
+  private setState(next: SignInState): void {
+    if (next === this.state) return;
+    this.state = next;
+    for (const listener of [...this.stateListeners]) {
+      try {
+        listener();
+      } catch (error) {
+        console.error('A listener of the sign-in state threw; carrying on:', error);
+      }
+    }
   }
 
   /** Revokes the token and forgets it. */
@@ -329,9 +426,11 @@ export class GoogleTokenSource implements TokenSource {
       }
     }
     this.token = grant;
-    // A new token starts over: its own renewal asks silently first.
+    // A new token starts over: its own renewal asks silently first (unless that is known to give nothing here).
     this.gestureRefresh = 'silent';
     this.gestureNotBefore = 0;
+    this.taken++;
+    this.setState('ok');
     for (const listener of [...this.listeners]) {
       try {
         listener();
