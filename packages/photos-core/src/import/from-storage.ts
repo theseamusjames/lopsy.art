@@ -47,7 +47,7 @@ export interface StorageImportContext {
 }
 
 const PROGRESS_INTERVAL_MS = 100;
-const TERMINAL: ReadonlySet<ImportItemState> = new Set(['duplicate', 'unsupported', 'done', 'failed', 'skipped']);
+const TERMINAL: ReadonlySet<ImportItemState> = new Set(['duplicate', 'unsupported', 'done', 'failed', 'skipped', 'stopped']);
 
 /** MIME types worth downloading to look at; the magic bytes decide after that. */
 function mayBePhoto(mimeType: string): boolean {
@@ -381,7 +381,9 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
       finish(work, 'done', { assetId, error: note }, assetId);
     } catch (error) {
       const cancelled = stopped || error instanceof Stopped || (isStorageError(error) && error.code === 'aborted');
-      finish(work, 'failed', { error: cancelled ? 'Cancelled' : errorMessage(error) });
+      // Stopped is not a failure: the file stays in Drive as it was, and can be added again.
+      if (cancelled) finish(work, 'stopped', { error: null });
+      else finish(work, 'failed', { error: errorMessage(error) });
     } finally {
       work.read.resolve(null);
       work.outcome.resolve(null);
@@ -417,7 +419,7 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
   let pairOf = new Map<string, string>();
 
   const getProgress = (): ImportProgress => {
-    if (!snapshot) snapshot = { items: items.slice(), finished, needsSignIn: waitingForSignIn > 0 && !finished };
+    snapshot ??= { items: items.slice(), finished, needsSignIn: waitingForSignIn > 0 && !finished && !stopped, ...(stopped ? { stopped: true } : {}) };
     return snapshot;
   };
 
@@ -467,8 +469,9 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
     if (stopped) return;
     stopped = true;
     abort.abort();
+    snapshot = null;
     for (const work of works) {
-      if (items[work.index]?.state === 'queued') finish(work, 'failed', { error: 'Cancelled' });
+      if (items[work.index]?.state === 'queued') finish(work, 'stopped', { error: null });
     }
   };
 

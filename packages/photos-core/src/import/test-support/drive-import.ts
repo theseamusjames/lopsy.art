@@ -27,6 +27,8 @@ export interface DriveImportHarness {
   readonly prompts: string[];
   /** Decides each sign-in request's fate; 'grant' by default. */
   answer: (prompt: string) => GisAnswer;
+  /** Holds a Drive request until the promise settles (null: not held); an aborted request gives up, as fetch does. */
+  hold: (request: Request) => Promise<void> | null;
   /** Sees every Drive request before the fake Drive does (to move the clock, or expire tokens, mid-upload). */
   beforeFetch: (request: Request) => void;
   /** Expires every token granted so far, as Google would at the end of its hour. */
@@ -41,9 +43,14 @@ export async function driveImportHarness(options: { readonly chunkSize?: number;
   const drive = createFakeDrive({ tokens: [], now: () => new Date(clock) });
   const prompts: string[] = [];
   let granted = 0;
-  const harness: { answer: (prompt: string) => GisAnswer; beforeFetch: (request: Request) => void } = {
+  const harness: {
+    answer: (prompt: string) => GisAnswer;
+    beforeFetch: (request: Request) => void;
+    hold: (request: Request) => Promise<void> | null;
+  } = {
     answer: () => 'grant',
     beforeFetch: () => {},
+    hold: () => null,
   };
   const oauth2 = {
     initTokenClient(config: {
@@ -76,8 +83,20 @@ export async function driveImportHarness(options: { readonly chunkSize?: number;
   const refuseExpired = () => {
     for (const [token, expiresAt] of expiries) if (clock >= expiresAt) drive.revokeToken(token);
   };
-  const fetch = (input: RequestInfo | URL, init?: RequestInit) => {
-    harness.beforeFetch(new Request(input, init));
+  const fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = new Request(input, init);
+    harness.beforeFetch(request);
+    // A held request waits, as a slow upload does, and gives up when its signal aborts, as fetch does.
+    const held = harness.hold(request);
+    if (held) {
+      const signal = init?.signal;
+      await new Promise<void>((resolve, reject) => {
+        const aborted = () => reject(new DOMException('The operation was aborted.', 'AbortError'));
+        if (signal?.aborted) return aborted();
+        signal?.addEventListener('abort', aborted, { once: true });
+        held.then(resolve, reject);
+      });
+    }
     refuseExpired();
     return drive.fetch(input, init);
   };
@@ -121,6 +140,12 @@ export async function driveImportHarness(options: { readonly chunkSize?: number;
     },
     set answer(value) {
       harness.answer = value;
+    },
+    get hold() {
+      return harness.hold;
+    },
+    set hold(value) {
+      harness.hold = value;
     },
     get beforeFetch() {
       return harness.beforeFetch;

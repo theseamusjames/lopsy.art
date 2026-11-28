@@ -55,7 +55,7 @@ export const PREVIEW_SIZES = { thumb: 512, screen: 2048 } as const;
 /** Progress-only updates are batched to at most one notification per interval. */
 const PROGRESS_INTERVAL_MS = 100;
 
-const TERMINAL: ReadonlySet<ImportItemState> = new Set(['duplicate', 'unsupported', 'done', 'failed', 'skipped']);
+const TERMINAL: ReadonlySet<ImportItemState> = new Set(['duplicate', 'unsupported', 'done', 'failed', 'skipped', 'stopped']);
 
 export interface ImportContext {
   readonly session: LibrarySession;
@@ -162,6 +162,8 @@ interface WorkSpec {
   readonly resumeError: string | null;
   /** The `.xmp` sidecar to apply once the asset is added. */
   readonly sidecar: Blob | null;
+  /** A resumed item whose upload had begun before the reload. */
+  readonly uploadStarted: boolean;
   /** Set for a sidecar file: it is skipped with this reason, never imported. */
   readonly skipReason: string | null;
 }
@@ -190,6 +192,10 @@ interface Work extends Omit<WorkSpec, 'assetId'> {
   attempts: number;
   /** Upload attempts the storage refused for sign-in, retried once there was a new token. */
   signInWaits: number;
+  /** Its upload began (it may have left part of itself in storage). */
+  uploadStarted: boolean;
+  /** Added to the library: Stop leaves it imported. */
+  inLibrary: boolean;
 }
 
 /** What the prepare stage settled for the upload stage. */
@@ -289,6 +295,7 @@ function newItemRecord(spec: WorkSpec, index: number): ImportItemRecord {
     pairedWith: spec.settled?.pairedWith ?? null,
     folderSegments: spec.settled?.folderSegments ?? null,
     destinationName: spec.settled?.destinationName ?? null,
+    ...(spec.uploadStarted ? { uploadStarted: true } : {}),
   };
 }
 
@@ -316,6 +323,7 @@ export function startImport(files: readonly File[], ctx: ImportContext): ImportJ
       resumeError: null,
       sidecar: applySidecars && sidecarIndex !== undefined ? (files[sidecarIndex] ?? null) : null,
       skipReason,
+      uploadStarted: false,
     };
   });
   const base = {
@@ -390,8 +398,11 @@ async function tryResume(ctx: ResumeContext, locks: ImportLocks): Promise<Import
     const age = now().getTime() - Date.parse(record.heartbeatAt);
     return Number.isFinite(age) && age < leaseMs;
   };
-  const candidates = (await queueStore.listJobs(session.libraryId))
-    .filter((record) => record.interrupted !== true && !held(record))
+  const listed = await queueStore.listJobs(session.libraryId);
+  // A stopped job is never resumed: what it left is cleared up (it was not, before the reload), then it goes.
+  for (const record of listed) if (record.stopped === true) await clearStoppedRecord(ctx, locks, record);
+  const candidates = listed
+    .filter((record) => record.interrupted !== true && record.stopped !== true && !held(record))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const releases: (() => void)[] = [];
   try {
@@ -405,6 +416,27 @@ async function tryResume(ctx: ResumeContext, locks: ImportLocks): Promise<Import
     return await claimRecords(ctx, locks, records, now);
   } finally {
     for (const release of releases) release();
+  }
+}
+
+/** Deletes a stopped job's staged copies and trashes what its uploads left; the record goes once that is done. */
+async function clearStoppedRecord(ctx: ResumeContext, locks: ImportLocks, record: ImportJobRecord): Promise<void> {
+  const release = await locks.tryAcquire(importLockName(record.id)).catch(() => null);
+  if (!release) return;
+  try {
+    let clean = true;
+    for (const item of record.items) {
+      if (TERMINAL.has(item.state) && item.state !== 'stopped') continue;
+      const key = item.stagingKey ?? item.sha256;
+      if (key && ctx.staging) {
+        await ctx.staging.delete(key).catch(warn('deleting a staged copy'));
+        await ctx.staging.delete(sidecarStagingKey(key)).catch(warn('deleting a staged copy'));
+      }
+      if (item.uploadStarted) clean = (await trashStrayUpload(ctx.session, item.plannedAssetId)) && clean;
+    }
+    if (clean) await ctx.queueStore.deleteJob(record.id);
+  } finally {
+    release();
   }
 }
 
@@ -468,6 +500,7 @@ async function claimRecords(
         resumeError: null,
         sidecar,
         skipReason: null,
+        uploadStarted: item.uploadStarted === true,
       });
     }
   }
@@ -553,6 +586,8 @@ function runJob(setup: JobSetup): ImportJob {
     destinationName: spec.settled?.destinationName ?? null,
     attempts: 0,
     signInWaits: 0,
+    uploadStarted: spec.uploadStarted,
+    inLibrary: false,
     interruptedMatch: null,
     pairHint: null,
   }));
@@ -746,7 +781,7 @@ function runJob(setup: JobSetup): ImportJob {
         properties: { 'lp.lib': session.libraryId, 'lp.role': 'preview', 'lp.asset': assetId },
       },
       preview.blob,
-      { signal: abort.signal },
+      // Not aborted by Stop or Pause: the photo is in the library, and its previews are small.
     );
     session.setPreview(versionId, size, {
       fileId: stored.id,
@@ -973,7 +1008,8 @@ function runJob(setup: JobSetup): ImportJob {
     checkStopped();
 
     patch(index, { state: 'uploading', sentBytes: 0, error: prep.unstagedNote });
-    persist(index, { state: 'uploading' });
+    work.uploadStarted = true;
+    persist(index, { state: 'uploading', uploadStarted: true });
     const folderId = await ensureFolderPath(session.adapter, session.layout.originalsId, prep.segments, folderCache, {
       'lp.lib': session.libraryId,
     });
@@ -1010,7 +1046,9 @@ function runJob(setup: JobSetup): ImportJob {
       throw new RetryableUpload('Checksum mismatch: the stored copy differs from the file');
     }
 
-    // The original is safely stored: from here the item completes even if stopped, so no stored file is left without its asset.
+    // Stopped before it reached the library: it is not added, and the original it stored is trashed (cleanUpStopped).
+    if (stopping === 'cancel') throw new Stopped();
+    // The original is safely stored: from here the item completes even if paused, so no stored file is left without its asset.
     let added: { assetId: AssetId; versionId: VersionId };
     try {
       added = addToLibrary(work, metadata, sha, stored.id, pairedWith);
@@ -1021,6 +1059,7 @@ function runJob(setup: JobSetup): ImportJob {
       throw new Stopped();
     }
     const { assetId, versionId } = added;
+    work.inLibrary = true;
     // Only now, with the checksum verified and the asset saved in the library on this device, is the staged copy let go.
     // If that save fails the copy stays staged, so a reload can still finish the import.
     if (await session.whenDurable().then(() => true, warn('saving the new photo on this device'))) await unstage(work);
@@ -1032,15 +1071,15 @@ function runJob(setup: JobSetup): ImportJob {
     for (const size of ['thumb', 'screen'] as const) {
       const preview = previews[size];
       if (!preview) continue;
-      // A preview refused for sign-in waits for the new token like the original did.
+      // A photo in the library gets its previews even when the job is stopped or paused meanwhile (they are small,
+      // and not aborted); one refused for sign-in waits for the new token like the original did, unless stopped.
       for (;;) {
-        if (stopping) break;
         const epoch = authEpoch;
         try {
           await uploadPreview(assetId, versionId, size, preview);
           break;
         } catch (error) {
-          if (isSignInRefused(error)) {
+          if (isSignInRefused(error) && !stopping) {
             await waitForSignIn(epoch);
             continue;
           }
@@ -1060,8 +1099,12 @@ function runJob(setup: JobSetup): ImportJob {
     const stopped = isStopped(error);
     if (stopped && stopping === 'pause') {
       patch(work.index, { state: 'queued', sentBytes: 0, error: pauseReason });
+    } else if (stopped) {
+      // Stopped: not a failure. Its staged copy is let go now; what its upload left is trashed once the job has drained.
+      markStopped(work);
+      if (!work.inLibrary) await unstage(work);
     } else {
-      await finish(work, 'failed', { error: stopped ? 'Cancelled' : errorMessage(error) });
+      await finish(work, 'failed', { error: errorMessage(error) });
     }
   };
 
@@ -1111,8 +1154,16 @@ function runJob(setup: JobSetup): ImportJob {
     if (partner) partners.add(partner.index);
   }
   const prepareQueue = [...works.filter((w) => partners.has(w.index)), ...works.filter((w) => !partners.has(w.index))];
+  // Which works a stage is busy with, so Stop's clean-up waits for just those to let go (they are aborted), not for the rest.
+  const busy = new Map<Work, Deferred<void>>();
+  const occupy = (work: Work) => busy.set(work, deferred<void>());
+  const release = (work: Work) => {
+    busy.get(work)?.resolve();
+    busy.delete(work);
+  };
   const preparer = async () => {
     for (let work = prepareQueue.shift(); work; work = prepareQueue.shift()) {
+      occupy(work);
       try {
         const prep = await prepare(work);
         if (prep) {
@@ -1125,6 +1176,7 @@ function runJob(setup: JobSetup): ImportJob {
         await failed(work, error);
         work.outcome.resolve(null);
       } finally {
+        release(work);
         work.read.resolve(null);
         work.preparedSignal.resolve();
       }
@@ -1134,6 +1186,7 @@ function runJob(setup: JobSetup): ImportJob {
     for (let next = await nextReady(); next; next = await nextReady()) {
       const { work, prep } = next;
       let outcome: AssetId | null = null;
+      occupy(work);
       try {
         if (isTerminal(work.index)) continue;
         for (;;) {
@@ -1165,17 +1218,30 @@ function runJob(setup: JobSetup): ImportJob {
       } catch (error) {
         await failed(work, error);
       } finally {
+        release(work);
         work.outcome.resolve(outcome);
       }
     }
   };
 
+  let stopRequested = false;
   const getProgress = (): ImportProgress => {
-    if (!snapshot) snapshot = { items: items.slice(), finished, needsSignIn: needsSignIn && !finished };
+    snapshot ??= {
+      items: items.slice(),
+      finished,
+      needsSignIn: needsSignIn && !finished && !stopRequested,
+      ...(stopRequested ? { stopped: true } : {}),
+    };
     return snapshot;
   };
 
   const heartbeat = queueStore ? setInterval(renew, HEARTBEAT_MS) : null;
+  let claimReleased = false;
+  const releaseClaim = async () => {
+    if (claimReleased) return;
+    claimReleased = true;
+    (await setup.claim)?.();
+  };
 
   const workerCount = Math.min(concurrency, works.length);
   const preparers = Promise.all(Array.from({ length: workerCount }, preparer)).then(() => {
@@ -1183,29 +1249,119 @@ function runJob(setup: JobSetup): ImportJob {
     wake();
   });
   const uploaders = Promise.all(Array.from({ length: workerCount }, uploader));
-  const done = Promise.all([preparers, uploaders]).then(async () => {
-    if (heartbeat !== null) clearInterval(heartbeat);
-    unsubscribeAuth?.();
+  const drained = Promise.all([preparers, uploaders]);
+
+  /**
+   * After Stop, once the work in flight has let go: the staged copies of
+   * the files not imported are deleted, and what their uploads left in
+   * storage is trashed. The record goes when that is done; if storage
+   * cannot be reached now (no token, offline), it stays, marked stopped,
+   * and `resumeImports` finishes the job after a reload, never resuming it.
+   */
+  const cleanUpStopped = async () => {
+    const stoppedWorks = works.filter((work) => stateOf(work.index) === 'stopped');
+    // Each file once its own stage has let go: a photo still sending its previews holds up nothing.
+    await Promise.all(stoppedWorks.map((work) => busy.get(work)?.promise));
     await persisted;
-    if (queueStore && works.length > 0) {
-      if (works.every((w) => isTerminal(w.index))) await queueStore.deleteJob(jobId).catch(warn('clearing the queue'));
-      else await queueStore.heartbeat(jobId, null, now().toISOString()).catch(warn('releasing the lease'));
+    let left: Work[] = [];
+    for (const work of stoppedWorks) {
+      await unstage(work);
+      if (work.uploadStarted && !work.inLibrary && !(await trashStrayUpload(session, work.assetId))) left.push(work);
     }
-    (await setup.claim)?.();
-    finished = true;
+    // Storage could not be reached (no token, offline): tried again when a token comes, else after a reload.
+    if (left.length > 0 && setup.authorization) {
+      await new Promise<void>((resolve) => {
+        const off = setup.authorization?.subscribe(() => {
+          off?.();
+          resolve();
+        });
+      });
+      const retry: Work[] = [];
+      for (const work of left) if (!(await trashStrayUpload(session, work.assetId))) retry.push(work);
+      left = retry;
+    }
+    if (queueStore && works.length > 0 && left.length === 0) await queueStore.deleteJob(jobId).catch(warn('clearing the stopped import'));
+    await releaseClaim();
+  };
+
+  let stopFinished: Promise<ImportProgress> | null = null;
+  /** Stop ends the job at once: it does not wait for the work in flight, which is aborted and cleared up after. */
+  const finishStopped = (): Promise<ImportProgress> =>
+    (stopFinished ??= (async () => {
+      unsubscribeAuth?.();
+      finished = true;
+      snapshot = null;
+      notify();
+      void cleanUpStopped().catch(warn('clearing up a stopped import'));
+      return getProgress();
+    })());
+
+  const cancelled = deferred<void>();
+  const done = Promise.race([
+    drained.then(async () => {
+      if (stopRequested) return finishStopped();
+      if (heartbeat !== null) clearInterval(heartbeat);
+      unsubscribeAuth?.();
+      await persisted;
+      if (queueStore && works.length > 0) {
+        if (works.every((w) => isTerminal(w.index))) await queueStore.deleteJob(jobId).catch(warn('clearing the queue'));
+        else await queueStore.heartbeat(jobId, null, now().toISOString()).catch(warn('releasing the lease'));
+      }
+      await releaseClaim();
+      if (stopRequested) return finishStopped();
+      finished = true;
+      snapshot = null;
+      notify();
+      return getProgress();
+    }),
+    cancelled.promise.then(finishStopped),
+  ]);
+
+  /** A file Stop left out: 'stopped', not failed, and nothing to retry. */
+  const markStopped = (work: Work) => {
+    if (isTerminal(work.index)) return;
+    if (work.inLibrary) {
+      // Imported already (its previews may still be on their way): it stays, and counts as imported.
+      patch(work.index, { state: 'done', assetId: work.assetId, sentBytes: work.byteSize }, false);
+      return;
+    }
+    patch(work.index, { state: 'stopped', sentBytes: 0, error: null }, false);
+    persist(work.index, { state: 'stopped', error: null });
+  };
+
+  const cancel = () => {
+    if (stopRequested) return;
+    stopRequested = true;
+    const wasPaused = stopping === 'pause' && finished;
+    stopping = 'cancel';
+    abort.abort();
+    if (heartbeat !== null) clearInterval(heartbeat);
+    for (const work of works) markStopped(work);
+    // Said in the queue at once, so a reload never resumes it, even before what was in flight has let go.
+    const store = queueStore;
+    if (store) {
+      persisted = persisted
+        .then(async () => {
+          const record = (await store.listJobs(session.libraryId)).find((r) => r.id === jobId);
+          if (record) await store.saveJob({ ...record, stopped: true, owner: null });
+        })
+        .catch(warn('marking the import stopped'));
+    }
     snapshot = null;
     notify();
-    return getProgress();
-  });
+    // A paused job had already finished: it is stopped now, and what it holds is cleared up.
+    if (wasPaused) void finishStopped();
+    cancelled.resolve();
+  };
 
   const stop = (how: 'cancel' | 'pause') => {
+    if (how === 'cancel') return cancel();
     if (stopping) return;
     stopping = how;
     abort.abort();
     for (const work of works) {
       if (stateOf(work.index) !== 'queued') continue;
-      if (how === 'pause') patch(work.index, { error: 'Paused' });
-      else void finish(work, 'failed', { error: 'Cancelled' });
+      patch(work.index, { error: 'Paused' });
     }
   };
 
@@ -1216,8 +1372,26 @@ function runJob(setup: JobSetup): ImportJob {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    cancel: () => stop('cancel'),
+    cancel,
     pause: () => stop(queueStore ? 'pause' : 'cancel'),
     finished: done,
   };
+}
+
+/**
+ * Trashes what an upload of `assetId` left in storage (its original, or
+ * part of one, and previews), unless the asset is in the library. Delete
+ * means trash, as everywhere. False when storage could not be reached.
+ */
+export async function trashStrayUpload(session: LibrarySession, assetId: AssetId): Promise<boolean> {
+  const asset = session.getView().assets.get(assetId);
+  if (asset && !asset.deleted) return true;
+  try {
+    const found = await session.adapter.findByProperty('lp.asset', assetId);
+    for (const file of found) if (!file.isFolder && !file.trashed) await session.adapter.trash(file.id);
+    return true;
+  } catch (error) {
+    warn('trashing what a stopped upload left')(error);
+    return false;
+  }
 }

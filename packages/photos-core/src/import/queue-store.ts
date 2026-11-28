@@ -34,6 +34,8 @@ export interface ImportItemRecord {
    * its copy is gone), so only choosing it again can finish it.
    */
   readonly needsFile?: boolean;
+  /** Its upload began: if the job is stopped before it reaches the library, Drive may hold part of it, to trash. */
+  readonly uploadStarted?: boolean;
 }
 
 export interface ImportJobRecord {
@@ -56,6 +58,8 @@ export interface ImportJobRecord {
    * can be matched against them; `resumeImports` leaves it alone.
    */
   readonly interrupted?: boolean;
+  /** Stop was pressed: never resumed; what it half did is cleared away (`resumeImports` finishes that after a reload). */
+  readonly stopped?: boolean;
 }
 
 export interface ImportQueueStore {

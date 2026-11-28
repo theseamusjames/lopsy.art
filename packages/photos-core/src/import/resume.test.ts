@@ -178,16 +178,21 @@ describe('resumable imports', () => {
     expect(await staging.list()).toEqual([]);
   });
 
-  it('cancel deletes staged copies and the queue', async () => {
+  it('Stop deletes staged copies and the queue', async () => {
     const { adapter, staging, queueStore, ctx } = await setup();
     holdUploadsAfter(adapter, 0);
     const job = startImport([jpegFile('a.JPG', 0), jpegFile('b.JPG', 1)], ctx());
     await waitUntilAllStagedAndDone(job, 0);
     job.cancel();
     const result = await job.finished;
-    expect(result.items.map((i) => i.error)).toEqual(['Cancelled', 'Cancelled']);
-    expect(await staging.list()).toEqual([]);
-    expect(queueStore.jobs.size).toBe(0);
+    expect(result.items.map((i) => [i.state, i.error])).toEqual([
+      ['stopped', null],
+      ['stopped', null],
+    ]);
+    await vi.waitFor(async () => {
+      expect(await staging.list()).toEqual([]);
+      expect(queueStore.jobs.size).toBe(0);
+    });
   });
 
   it('imports the next copy of a duplicate when the first copy fails', async () => {

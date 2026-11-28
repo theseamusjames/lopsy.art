@@ -66,7 +66,9 @@ export type ImportItemState =
   | 'done'
   | 'failed'
   /** The JPEG half of a RAW+JPEG pair, left out because `rawPlusJpeg` is 'raw-only'. */
-  | 'skipped';
+  | 'skipped'
+  /** Not imported because the import was stopped (Stop). Not a failure. */
+  | 'stopped';
 
 export interface ImportItem {
   readonly id: string;
@@ -88,6 +90,11 @@ export interface ImportProgress {
    * new token was taken (the UI's Reconnect). Absent means false.
    */
   readonly needsSignIn?: boolean;
+  /**
+   * Stop was pressed: the job ends at once (finished soon after, items not
+   * imported are 'stopped'), and what it had half done is cleared away.
+   */
+  readonly stopped?: boolean;
 }
 
 /** Says when the storage's sign-in has a new token; a job waiting for sign-in then carries on. */
@@ -122,7 +129,13 @@ export interface ImportJob {
   readonly id: string;
   getProgress(): ImportProgress;
   subscribe(listener: () => void): () => void;
-  /** Stops for good: unfinished items fail as cancelled and their staged copies are deleted. */
+  /**
+   * Stop: ends the job at once, paused or not. Unfinished items are
+   * 'stopped' (not failed); work in flight is aborted, and a file that had not
+   * reached the library is not added: its part-uploaded original is trashed
+   * and its staged copy deleted. Photos already imported stay. A stopped job
+   * is never resumed.
+   */
   cancel(): void;
   /**
    * Stops for now: in-flight uploads are aborted, and unfinished items stay
