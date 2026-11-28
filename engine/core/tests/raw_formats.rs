@@ -14,6 +14,8 @@
 //!   with "DNG cannot open as RAW:".
 //! - Every format: the oriented size of the linear path equals the baked
 //!   decode's, and `sniff` names the format.
+//! - CR2 and NEF (`LOPSY_CR2_SAMPLES`, `LOPSY_NEF_SAMPLES`): only the
+//!   bodies with a matrix in `camera_colour` open without the colour note.
 //!
 //! Folders not set are noted and skipped. Full-size files: `--release`.
 
@@ -266,4 +268,25 @@ fn the_format_answers_finished_bands_as_its_descriptions_do() {
         seen += 1;
     }
     println!("{seen} files: finished bands as their format says");
+}
+
+/// The bodies with a matrix of the engine's own (`camera_colour::canon`
+/// and `nikon`) open with no colour note; every other CR2 and NEF that
+/// opens says its colour is approximate.
+#[test]
+fn only_canon_and_nikon_bodies_with_a_matrix_open_without_the_colour_note() {
+    const WITH_MATRIX: [&str; 3] = ["Canon EOS 5D Mark III", "Canon EOS 5D Mark IV", "NIKON D850"];
+    let mut paths = files("LOPSY_CR2_SAMPLES", "cr2");
+    paths.extend(files("LOPSY_NEF_SAMPLES", "nef"));
+    let mut seen = 0;
+    for path in paths {
+        let Ok(prep) = raw::prepare(&std::fs::read(&path).unwrap()) else { continue };
+        let d = &prep.description;
+        let has_matrix = WITH_MATRIX.contains(&d.camera_model.as_str());
+        assert_eq!(d.color_note.is_none(), has_matrix, "{}: {} {:?}", path.display(), d.camera_model, d.color_note);
+        seen += usize::from(has_matrix);
+    }
+    if std::env::var_os("LOPSY_CR2_SAMPLES").is_some() && std::env::var_os("LOPSY_NEF_SAMPLES").is_some() {
+        assert!(seen >= 3, "only {seen} files from the bodies with a matrix");
+    }
 }

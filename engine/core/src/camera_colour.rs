@@ -36,18 +36,21 @@ pub fn sony(model: &str) -> Option<CamToSrgb> {
     SONY.iter().find(|(m, _)| *m == model).map(|(_, matrix)| *matrix)
 }
 
-/// Canon bodies, by the exact `Model` string of IFD0 (`cr2`). None yet:
-/// a CR2 without one opens with its white balance only.
-const CANON: &[(&str, CamToSrgb)] = &[];
+/// Canon bodies, by the exact `Model` string of IFD0 (`cr2`). A CR2 from
+/// any other opens with its white balance only.
+const CANON: &[(&str, CamToSrgb)] = &[
+    ("Canon EOS 5D Mark III", [2.0897, -1.2464, 0.1567, -0.2055, 1.6897, -0.4842, 0.0525, -0.6059, 1.5534]),
+    ("Canon EOS 5D Mark IV", [2.3272, -1.6603, 0.3331, -0.2296, 1.8892, -0.6596, 0.0389, -0.7434, 1.7045]),
+];
 
 /// The matrix of a Canon body, or `None` for one with none here.
 pub fn canon(model: &str) -> Option<CamToSrgb> {
     CANON.iter().find(|(m, _)| *m == model).map(|(_, matrix)| *matrix)
 }
 
-/// Nikon bodies, by the exact `Model` string of IFD0. None yet: a NEF
-/// without one is developed with its white balance alone (`nef`).
-const NIKON: &[(&str, CamToSrgb)] = &[];
+/// Nikon bodies, by the exact `Model` string of IFD0. A NEF from any
+/// other is developed with its white balance alone (`nef`).
+const NIKON: &[(&str, CamToSrgb)] = &[("NIKON D850", [1.6649, -0.6285, -0.0364, -0.1058, 1.4930, -0.3872, 0.0448, -0.5161, 1.4713])];
 
 /// The matrix of a Nikon body, or `None` for one with none here.
 pub fn nikon(model: &str) -> Option<CamToSrgb> {
@@ -91,7 +94,7 @@ mod tests {
 
     #[test]
     fn every_matrix_keeps_a_neutral_neutral() {
-        let all = SONY.iter().map(|(_, m)| *m).chain([FUJIFILM_X_TRANS_5_HR, FUJIFILM_X_TRANS_4, FUJIFILM_GFX_102, FUJIFILM_GFX_102_II, FUJIFILM_GFX_51]);
+        let all = SONY.iter().chain(CANON).chain(NIKON).map(|(_, m)| *m).chain([FUJIFILM_X_TRANS_5_HR, FUJIFILM_X_TRANS_4, FUJIFILM_GFX_102, FUJIFILM_GFX_102_II, FUJIFILM_GFX_51]);
         for m in all {
             for row in m.chunks_exact(3) {
                 assert!((row.iter().sum::<f32>() - 1.0).abs() < 1e-5, "{m:?}");
@@ -121,5 +124,12 @@ mod tests {
         // Exact names only: a body with measured data, and a near name.
         assert_eq!(sony("ILCE-7M3"), None);
         assert_eq!(sony("ILCE-6000 "), None);
+        // Canon and Nikon by the Model their decoders look up, and only those bodies.
+        assert!(canon("Canon EOS 5D Mark III").is_some() && canon("Canon EOS 5D Mark IV").is_some());
+        assert!(nikon("NIKON D850").is_some());
+        for other in ["Canon EOS 7D", "Canon EOS 5D Mark II", "EOS 5D Mark III", "NIKON D850 "] {
+            assert_eq!(canon(other).or(nikon(other)), None, "{other}");
+        }
+        assert_eq!(nikon("NIKON Z 6"), None);
     }
 }

@@ -61,14 +61,15 @@ fn linear_hash(data: &[u8]) -> u64 {
 }
 
 /// (body, layout and depth; baked decode; linear plane and defaults),
-/// recorded when the NEF decoder was written.
+/// recorded when the NEF decoder was written; the D850's again when it
+/// took a matrix of the engine's own.
 const EXPECTED: [(&str, u64, u64); 8] = [
     ("NIKON D200 Packed { bits: 12, row_bytes: 5856, msb_first: true } 12-bit", 0xbcd76d0162bdde60, 0x3716b1fd36e83ca5),
     ("NIKON D3 Packed { bits: 12, row_bytes: 6432, msb_first: true } 12-bit", 0xd890187c04dc0b4d, 0x4c1e18ea82349865),
     ("NIKON D3 Words { big_endian: true } 14-bit", 0x06553df1986db6ca, 0x338cca83ecbfb2f3),
     ("NIKON D500 Packed { bits: 12, row_bytes: 8400, msb_first: false } 12-bit", 0xaf3bd89792db43af, 0xd0de66b78dcce734),
     ("NIKON D6 Packed { bits: 14, row_bytes: 9776, msb_first: false } 14-bit", 0xf62d749b25818c3b, 0xae3b47b3864481e7),
-    ("NIKON D850 Words { big_endian: false } 14-bit", 0xad2024df1135f7d1, 0x15685ea188e08bdc),
+    ("NIKON D850 Words { big_endian: false } 14-bit", 0x158a96d94be0c820, 0x9b06fe73b0531b1d),
     ("NIKON Z 6 Packed { bits: 12, row_bytes: 9104, msb_first: false } 12-bit", 0xfe0ef3c1a3ff6a85, 0xda7fdb18c758e65f),
     ("NIKON Z 6 Packed { bits: 14, row_bytes: 10624, msb_first: false } 14-bit", 0x6b07c70c369f8417, 0x1fa2b6a9882016e8),
 ];

@@ -57,13 +57,14 @@ fn linear_hash(data: &[u8]) -> u64 {
 }
 
 /// (file, baked decode, linear plane and defaults), recorded when the CR2
-/// decoder was added.
+/// decoder was added; the 5D Mark III's and 5D Mark IV's again when those
+/// bodies took a matrix of the engine's own.
 const EXPECTED: [(&str, u64, u64); 7] = [
     ("EOS-20D_RAW.CR2", 0x83011e5be747bcff, 0xc84ac2fd34b289cc),
     ("EOS-40D_RAW.CR2", 0x8800fd339d3e0d97, 0xb29f82057675438f),
-    ("EOS-5D-Mark-III_RAW.CR2", 0x05b8fb15c32efb0e, 0x22b9fe37efa5cffa),
-    ("EOS-5D-Mark-IV_RAW-B.CR2", 0x4d8f894210b0c069, 0xab08358b00bbbfc3),
-    ("EOS-5D-Mark-IV_RAW.CR2", 0x1eecd6e7d5795248, 0xb9487eed930c7173),
+    ("EOS-5D-Mark-III_RAW.CR2", 0x1c8848de92084fe4, 0xda20adf62973c90f),
+    ("EOS-5D-Mark-IV_RAW-B.CR2", 0xf7e3585dc1c15fff, 0xe05ac79784cafa11),
+    ("EOS-5D-Mark-IV_RAW.CR2", 0x37d96d4c5811b5fc, 0x7dc70e46a8c82011),
     ("EOS-7D_RAW.CR2", 0x5d535eaa3c0cbd4b, 0x6aaa180b4950e49a),
     ("PowerShot-G16_RAW.CR2", 0x9de1d3317955ef08, 0xc78651e6bbf5a658),
 ];
