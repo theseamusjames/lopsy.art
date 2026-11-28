@@ -525,8 +525,8 @@ The Canon and Nikon tests (photos-core's `import/cr2-nef.test.ts`,
 so on, with an sRAW, an mRAW and the CR3s that must be refused;
 `LOPSY_CR3_SAMPLES` may name the same folder) and `LOPSY_NEF_SAMPLES`
 (NEFs by body, depth and compression, `D850_14bit_uncompressed.NEF` and
-so on, with the compressed ones, a High Efficiency one and a COOLPIX
-NRW that must be refused).
+so on, compressed ones included, with a High Efficiency one, a Small
+one, the D70's and a COOLPIX NRW that must be refused).
 
 **RAW parity.** `e2e/raw-parity.spec.ts` renders each RAF in
 `LOPSY_RAF_SAMPLES` in the Edit view at its working size under three
@@ -538,7 +538,7 @@ browser, renderer and way. Four Sony ARWs (`LOPSY_ARW_SAMPLES`), four
 Canon DNGs, lossless and lossy JPEG (`LOPSY_DNG_ADOBE_SAMPLES`), and the
 two ProRAW files (`LOPSY_DNG_SAMPLES`) and the Leica M10-R
 (`LOPSY_DNG_CAMERA_SAMPLES`), two Canon CR2s (`LOPSY_CR2_SAMPLES`) and
-two Nikon NEFs (`LOPSY_NEF_SAMPLES`) are fingerprinted the same way on
+three Nikon NEFs (`LOPSY_NEF_SAMPLES`) are fingerprinted the same way on
 the linear and no-float ways. It runs in Chromium only, in about
 thirteen minutes with four workers. A change that
 is meant to move the RAW develop records new fingerprints for the

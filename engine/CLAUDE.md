@@ -40,7 +40,7 @@ engine/
                       # from the sensor data) onto the DNG decode's plane, renders and baked finish
       cr3/            # Canon CR3: the container read (boxes, metadata, tracks); its codec is not
                       # decoded, so the RAW interface refuses a CR3 with a sentence
-      nef/            # Nikon NEF decode (uncompressed; compressed refused) onto the DNG decode's
+      nef/            # Nikon NEF decode (uncompressed, and compressed lossless and lossy) onto the DNG decode's
                       # plane, renders and baked finish; camera_colour's matrix or white balance only
       raw/            # One RAW interface over raf/, dng/, arw/, cr2/ and nef/: sniff, prepare and describe,
                       # bands, binned view, white balance in recipe units (the raw… exports);
@@ -214,8 +214,9 @@ JS API, and the deviations from `docs/photonamous-spec.md` 6.10. Rules:
   `LOPSY_CR2_SAMPLES`, `LOPSY_CR3_SAMPLES` and `LOPSY_NEF_SAMPLES`
   (`core/tests/cr2_*.rs`, `cr3_container.rs`, `nef_*.rs`, `--release`).
   The RAW interface refuses with a sentence a CR3 (its codec is not
-  decoded), a Canon sRAW or mRAW, a compressed, High Efficiency, Medium
-  or Small NEF and a COOLPIX NRW.
+  decoded), a Canon sRAW or mRAW, a High Efficiency, Medium or Small NEF,
+  a NEF whose white balance is not in the clear (the D70's) and a COOLPIX
+  NRW.
 - Develop shaders compile lazily through `ShaderPrograms::<name>()`, never
   in `compile_all`.
 - **Tiles.** A document can be one rectangle of a larger picture

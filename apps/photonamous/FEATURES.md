@@ -363,17 +363,17 @@ the newer version made.
   JPEG XL is not read. DNGs written by a camera open the same way
   (Leica's M, Q and SL bodies), without the lens corrections the file
   carries. Canon CR2 opens full size, 12- and 14-bit (a dual-pixel
-  RAW from its first frame); Nikon NEF opens uncompressed, 12- and
-  14-bit. Neither applies the lens corrections or picture styles the
+  RAW from its first frame); Nikon NEF opens 12- and 14-bit,
+  uncompressed and compressed (lossless and lossy). Neither applies the lens corrections or picture styles the
   camera records. A file the
   RAW path cannot read, and DNG, ARW, CR2 and NEF on a GPU without float
   targets, open as the engine's finished picture and are edited as an
   ordinary photo; when that cannot be read either, the Edit view says
   why, in the engine's sentence ("This photo could not be opened", then
-  for example "This Nikon RAW is lossless compressed, which is not
-  supported yet: only uncompressed NEF files open"). That is what a
-  Canon sRAW or mRAW, a compressed NEF (lossless or lossy), a High
-  Efficiency NEF and a Medium or Small NEF show. 16-bit
+  for example "This Nikon RAW is a High Efficiency RAW, which uses a
+  licensed third-party codec and is not supported"). That is what a
+  Canon sRAW or mRAW, a High Efficiency NEF, a Medium or Small NEF and a
+  NEF whose white balance is not in the clear (a D70's) show. 16-bit
   PNG at full depth; JPEG and WebP through the browser. Editing starts on
   a *working image* sized to the view (at most 4096 px on its long edge;
   a RAW file binned by a whole factor, so one less than twice that size
@@ -531,7 +531,7 @@ the newer version made.
   sensor data (RX100 IV, A6400, A7C II, A7 III, A7 IV, A7R II, A7R III,
   A7R IV, A7S II, A7S III, A9), and three more have a colour matrix of
   the engine's own (A6000, A6700, RX100 III); so do the Canon EOS 5D
-  Mark III and 5D Mark IV and the Nikon D850. For any other Sony body the
+  Mark III and 5D Mark IV and the Nikon D850 and Z 9. For any other Sony body the
   colour is only approximate (the file carries part of the camera's colour, so it is
   less saturated than the camera's JPEG), and for any other Canon or
   Nikon body more so (the file carries no colour matrix, so only its

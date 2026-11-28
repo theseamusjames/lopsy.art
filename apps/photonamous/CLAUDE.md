@@ -121,11 +121,11 @@ only a fallback: a file `rawPrepare` refuses, and a format that renders
 no finished bands (`rawRendersFinishedBands`) on a GPU without float
 targets. When the baked decode refuses the file too, its sentence is the
 Edit view's load error (`LoadStatus`): that is how a Canon sRAW or a
-compressed NEF says why it does not open. Import (photos-core's
+High Efficiency NEF says why it does not open. Import (photos-core's
 `detectFormat`) knows a format by its bytes as the engine's `sniff`
 does, and turns away what it can tell the engine will refuse from the
 header alone (an SR2, a COOLPIX NRW; a CR3 is not a TIFF); a variant
-only the decoder can tell (an sRAW, a compressed NEF) imports with its
+only the decoder can tell (an sRAW, a High Efficiency NEF) imports with its
 preview. `e2e/raw-parity.spec.ts` pins every format's render exactly.
 
 **Photos larger than the GPU.** One threshold, in `src/engine/full-size.ts`:
