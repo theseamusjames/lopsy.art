@@ -93,6 +93,8 @@ export interface ImportProgress {
 /** Says when the storage's sign-in has a new token; a job waiting for sign-in then carries on. */
 export interface AuthorizationSignal {
   subscribe(listener: () => void): () => void;
+  /** Told that work waits for Reconnect (the app's header says so); see SignInGate. */
+  markSignInNeeded?(): void;
 }
 
 export interface ImportOptions {

@@ -648,6 +648,7 @@ function runJob(setup: JobSetup): ImportJob {
     if (authEpoch !== since) return;
     if (!needsSignIn) {
       needsSignIn = true;
+      setup.authorization?.markSignInNeeded?.();
       snapshot = null;
       notify();
     }
