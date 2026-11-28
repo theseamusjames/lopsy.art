@@ -237,7 +237,7 @@ describe('startImport', () => {
     expect([...sent].some((n) => n > 0)).toBe(true);
   });
 
-  it('cancels: queued items stop, in-flight uploads abort, nothing half-added', async () => {
+  it('Stop: queued items stop, in-flight uploads abort, nothing half-added, nothing failed', async () => {
     const { adapter, session, ctx } = await setup();
     adapter.hooks.createDelay = () => new Promise<void>(() => {});
     const files = Array.from({ length: 5 }, (_, i) => jpegFile(`C${i}.JPG`, undefined, i));
@@ -247,7 +247,8 @@ describe('startImport', () => {
     });
     job.cancel();
     const result = await job.finished;
-    expect(result.items.map((i) => [i.state, i.error])).toEqual(Array.from({ length: 5 }, () => ['failed', 'Cancelled']));
+    expect(result.items.map((i) => [i.state, i.error])).toEqual(Array.from({ length: 5 }, () => ['stopped', null]));
+    expect(result.stopped).toBe(true);
     expect(session.getView().assets.size).toBe(0);
     expect([...adapter.files.values()].filter((e) => !e.file.isFolder && !e.file.trashed && e.file.parentId !== null)).toHaveLength(0);
   });
@@ -329,6 +330,6 @@ describe('startImport', () => {
   it('finishes at once with no files', async () => {
     const { ctx } = await setup();
     const result = await startImport([], ctx()).finished;
-    expect(result).toEqual({ items: [], finished: true });
+    expect(result).toEqual({ items: [], finished: true, needsSignIn: false });
   });
 });

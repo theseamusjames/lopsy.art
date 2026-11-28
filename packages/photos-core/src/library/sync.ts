@@ -7,6 +7,7 @@
  */
 
 import { isStorageError } from '../storage/errors';
+import { notifyAll } from '../listeners';
 import type { FileId, StorageAdapter, StoredFile } from '../storage/types';
 import { DecodeError } from './gzip';
 import { isDeviceId } from './ids';
@@ -869,7 +870,7 @@ export class SyncEngine {
       return;
     }
     this.status = next;
-    for (const listener of this.listeners) listener();
+    notifyAll(this.listeners, 'the sync status');
   }
 
   private scheduleFlush(): void {

@@ -191,13 +191,14 @@ describe('startImportFromStorage', () => {
     expect(s2.getView().assets.size).toBe(1);
   });
 
-  it('cancels', async () => {
+  it('stops: nothing added, nothing failed', async () => {
     const { elsewhere, put, ctx, session } = await setup();
     const ids = await Promise.all([1, 2, 3].map((i) => put(elsewhere.id, `X${i}.JPG`, jpeg(i))));
     const job = startImportFromStorage(ids, ctx({ options: { concurrency: 1 } }));
     job.cancel();
     const result = await job.finished;
-    expect(result.items.every((i) => i.state === 'failed' && i.error === 'Cancelled')).toBe(true);
+    expect(result.items.every((i) => i.state === 'stopped' && i.error === null)).toBe(true);
+    expect(result.stopped).toBe(true);
     expect(session.getView().assets.size).toBe(0);
   });
 });

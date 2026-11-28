@@ -30,6 +30,13 @@ export function ImportSheet() {
   const [newAlbum, setNewAlbum] = useState('');
   const [keywords, setKeywords] = useState('');
   const duplicates = useMemo(() => likelyDuplicates(files ?? [], view.assets.values()), [files, view.assets]);
+  // Chosen again after an interrupted import: how many of these are the files it did not finish.
+  const interrupted = useUi((s) => s.interruptedImport);
+  const finishing = useMemo(() => {
+    if (!interrupted || !files) return 0;
+    const missing = new Set(interrupted.missing.map((f) => `${f.byteSize}:${f.lastModified}:${f.fileName}`));
+    return files.filter((f) => missing.has(`${f.size}:${f.lastModified}:${f.name}`)).length;
+  }, [interrupted, files]);
   const [quota, setQuota] = useState<StorageQuota | null>(null);
 
   const summary = useMemo(
@@ -117,6 +124,13 @@ export function ImportSheet() {
               {tooBig
                 ? `There is not enough room: ${formatBytes(free)} is free.`
                 : `${formatBytes(free)} free in ${session.adapter.label}.`}
+            </p>
+          )}
+          {interrupted !== null && (
+            <p className={styles.muted} role="note">
+              {finishing > 0
+                ? `${plural(finishing, 'photo')} of these ${finishing === 1 ? 'is' : 'are'} what the interrupted import did not finish. What it did import is skipped without being read again.`
+                : `None of these are the ${plural(interrupted.missing.length, 'photo')} the interrupted import did not finish.`}
             </p>
           )}
           <p className={styles.muted}>Photos already in the library are skipped. The files you pick are never changed.</p>

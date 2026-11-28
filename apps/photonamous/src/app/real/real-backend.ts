@@ -16,9 +16,12 @@ import { AccountMismatchError, fetchDriveAccountId, GoogleTokenSource } from '@l
 import { afterDialog } from '../after-dialog';
 import { renewOnClicks } from './gesture-refresh';
 import { isStorageError } from '@lopsy/photos-core/storage/errors';
+import { withSignIn } from '@lopsy/photos-core/auth/sign-in-wait';
+import type { SignInState } from '@lopsy/photos-core/auth/types';
 import { resumeImports, startImport } from '@lopsy/photos-core/import/importer';
 import { OpfsStagingStore, type StagingStore } from '@lopsy/photos-core/import/staging';
 import { IndexedDbImportQueueStore, type ImportQueueStore } from '@lopsy/photos-core/import/queue-store';
+import { dismissInterruptedImports, readInterruptedImports, type InterruptedImport } from '@lopsy/photos-core/import/interrupted';
 import { openAccountCaches, type AccountCaches } from '@lopsy/photos-core/cache/account-caches';
 import { LibraryBusyError } from '@lopsy/photos-core/library/lock';
 import type { PhotosLibrarySession } from '@lopsy/photos-core/library/session';
@@ -148,6 +151,11 @@ function today(): string {
 /** Hands a finished download export to the browser. */
 function downloadResult(result: ExportResult, zip: boolean): void {
   for (const file of filesToDownload(result, zip)) downloadBlob(file.blob, file.name);
+}
+
+/** The gate a job waits on for sign-in, where the storage has one. */
+function signInOf(tokenSource: GoogleTokenSource | null | undefined): { signIn?: GoogleTokenSource } {
+  return tokenSource ? { signIn: tokenSource } : {};
 }
 
 function messageOf(error: unknown): string {
@@ -322,7 +330,14 @@ export class RealBackend implements PhotosBackend {
     const extras = this.extras.get(session);
     const tokenSource = extras?.tokenSource;
     if (extras && tokenSource) {
-      const token = await tokenSource.requestInteractive();
+      let token: string;
+      try {
+        token = await tokenSource.requestInteractive();
+      } catch (error) {
+        if (error instanceof AccountMismatchError || !isStorageError(error) || error.code !== 'auth') throw error;
+        // Google's own words ("Popup window closed") say little: say what did not happen.
+        throw new Error('Google Drive was not reconnected: Google’s window closed before you signed in.', { cause: error });
+      }
       // The popup lets the user pick any account; only the library's own may write to it.
       const accountId = await fetchDriveAccountId(token);
       try {
@@ -335,6 +350,19 @@ export class RealBackend implements PhotosBackend {
     await session.syncNow();
   }
 
+  signInState(session: LibrarySession): SignInState {
+    return this.extras.get(session)?.tokenSource?.signInState() ?? 'ok';
+  }
+
+  subscribeSignIn(session: LibrarySession, listener: () => void): () => void {
+    return this.extras.get(session)?.tokenSource?.subscribeSignIn(listener) ?? (() => {});
+  }
+
+  /** Storage work that waits for sign-in instead of failing when Google's token is missing or refused. */
+  private withSignIn<T>(session: LibrarySession, run: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    return withSignIn(this.extras.get(session)?.tokenSource ?? null, run, signal ? { signal } : {});
+  }
+
   startImport(files: readonly File[], session: LibrarySession, options: Partial<ImportOptions> = {}): ImportJob {
     const extras = this.extras.get(session);
     return startImport(files, {
@@ -343,6 +371,8 @@ export class RealBackend implements PhotosBackend {
       options,
       ...(extras?.queue ? { queueStore: extras.queue } : {}),
       ...(extras?.staging ? { staging: extras.staging } : {}),
+      // A job refused for sign-in waits, and carries on when the token source has a new token (Reconnect).
+      ...(extras?.tokenSource ? { authorization: extras.tokenSource } : {}),
     });
   }
 
@@ -354,7 +384,18 @@ export class RealBackend implements PhotosBackend {
       previewRenderer: this.previewRenderer,
       queueStore: extras.queue,
       ...(extras.staging ? { staging: extras.staging } : {}),
+      ...(extras.tokenSource ? { authorization: extras.tokenSource } : {}),
     });
+  }
+
+  async getInterruptedImport(session: LibrarySession): Promise<InterruptedImport | null> {
+    const queue = this.extras.get(session)?.queue;
+    return queue ? readInterruptedImports(queue, session.libraryId, session.getView()) : null;
+  }
+
+  async dismissInterruptedImport(session: LibrarySession): Promise<void> {
+    const queue = this.extras.get(session)?.queue;
+    if (queue) await dismissInterruptedImports(queue, session.libraryId);
   }
 
   canAddFromDrive(session: LibrarySession): boolean {
@@ -379,7 +420,8 @@ export class RealBackend implements PhotosBackend {
       // Before anything is awaited: Google's window is a pop-up, which a browser allows only straight from the click.
       picking = pickDriveFilesInWindow({ clientId, redirectUri: drivePickRedirectUri(), mimeTypes: IMPORTABLE_MIME_TYPES });
     } else {
-      picking = tokenSource.getToken().then((oauthToken) =>
+      // With no usable token the Picker waits for Reconnect (the header offers it) and then opens.
+      picking = this.withSignIn(session, () => tokenSource.getToken(), options.signal).then((oauthToken) =>
         pickDriveFiles({
           developerKey,
           appId,
@@ -403,6 +445,7 @@ export class RealBackend implements PhotosBackend {
       session: unguarded(session),
       previewRenderer: this.previewRenderer,
       ...(extras?.caches ? { originalsCache: extras.caches.originals } : {}),
+      ...(extras?.tokenSource ? { signIn: extras.tokenSource } : {}),
       options: { move: options.move },
     });
   }
@@ -419,6 +462,7 @@ export class RealBackend implements PhotosBackend {
       session: unguarded(session),
       previewRenderer: this.previewRenderer,
       ...(caches ? { originalsCache: caches.originals } : {}),
+      ...signInOf(this.extras.get(session)?.tokenSource),
       // They are already in Originals/.
       options: { move: false },
     });
@@ -497,10 +541,16 @@ export class RealBackend implements PhotosBackend {
   }
 
   readPreview(session: LibrarySession, ref: PreviewRef): Promise<Blob> {
-    return getPreviewSource().read(session, ref);
+    // Refused for sign-in, a preview waits for Reconnect (the single view says so) and then loads by itself.
+    return this.withSignIn(session, () => getPreviewSource().read(session, ref));
   }
 
   loadOriginal(session: LibrarySession, asset: Asset, options: LoadOriginalOptions = {}): Promise<Blob> {
+    // Refused for sign-in, the original waits for Reconnect (the Edit view and exports say so) and then comes by itself.
+    return this.withSignIn(session, () => this.readOriginalOnce(session, asset, options), options.signal);
+  }
+
+  private readOriginalOnce(session: LibrarySession, asset: Asset, options: LoadOriginalOptions): Promise<Blob> {
     // A Lopsy document develops from its flattened render. The library records no checksum for the
     // render, which the originals cache verifies against, so it is read from storage each time.
     if (asset.kind === 'document') {
@@ -520,7 +570,8 @@ export class RealBackend implements PhotosBackend {
   }
 
   storeEditPreviews(session: LibrarySession, versionId: VersionId, previews: EditPreviews): Promise<void> {
-    return storeEditPreviews(unguarded(session), versionId, previews, this.extras.get(session)?.caches?.previews ?? null);
+    const cache = this.extras.get(session)?.caches?.previews ?? null;
+    return this.withSignIn(session, () => storeEditPreviews(unguarded(session), versionId, previews, cache));
   }
 
   trashAssets(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void> {
@@ -569,6 +620,7 @@ export class RealBackend implements PhotosBackend {
           renderer,
           settings: toExportSettings(request),
           destination: toExportDestination(request, today()),
+          ...signInOf(this.extras.get(session)?.tokenSource),
         });
         core = job;
         const unsubscribe = job.subscribe(refresh);

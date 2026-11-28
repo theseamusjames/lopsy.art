@@ -92,6 +92,41 @@ describe('the import strip', () => {
     expect(politeWords()).toBe('');
   });
 
+  it('waits for sign-in with one Reconnect button, nothing failed, said once', () => {
+    const files = [item('a', 'done'), item('b', 'staged'), item('c', 'queued')];
+    const move = startImport({ finished: false, items: files });
+    move({ finished: false, needsSignIn: true, items: files });
+    expect(strip()?.textContent).toContain('Reconnect to Google Drive to continue · 2 of 3 photos left');
+    const button = [...(strip()?.querySelectorAll('button') ?? [])].find((b) => b.textContent === 'Reconnect Google Drive');
+    expect(button).toBeDefined();
+    expect(strip()?.textContent).not.toContain('could not be imported');
+    expect(strip()?.textContent).not.toContain('Pause');
+    expect(politeWords()).toBe('Import paused: reconnect to Google Drive to continue');
+    expect(toasts()).toEqual([]);
+    // The token came (Reconnect, or the header's): the strip is progress again.
+    move({ finished: false, needsSignIn: false, items: [item('a', 'done'), item('b', 'done'), item('c', 'queued')] });
+    expect(strip()?.textContent).toContain('Importing 2 of 3 photos');
+    expect(politeWords()).toBe('Import continuing');
+  });
+
+  it('Stop says at once that it is stopping, keeps focus on the button, then sums up, nothing failed', () => {
+    const files = [item('a', 'done'), item('b', 'uploading'), item('c', 'queued')];
+    const move = startImport({ finished: false, items: files });
+    const stopButton = [...(strip()?.querySelectorAll('button') ?? [])].find((b) => b.textContent === 'Stop');
+    expect(stopButton?.getAttribute('title')).toMatch(/^Stop: /);
+    stopButton?.focus();
+    move({ finished: false, stopped: true, items: [item('a', 'done'), item('b', 'stopped'), item('c', 'stopped')] });
+    expect(strip()?.textContent).toContain('Stopping the import…');
+    expect(document.activeElement?.textContent).toBe('Stopping…');
+    expect(document.activeElement?.getAttribute('aria-disabled')).toBe('true');
+    move({ finished: true, stopped: true, items: [item('a', 'done'), item('b', 'stopped'), item('c', 'stopped')] });
+    expect(strip()?.textContent).toContain('Import stopped: 1 of 3 photos imported, 2 not. Choose the same photos again to import the rest.');
+    expect(document.activeElement?.textContent).toBe('Dismiss');
+    expect(strip()?.textContent).not.toContain('could not be imported');
+    expect(politeWords()).toBe('Import stopped: 1 photo imported, 2 not');
+    expect(toasts()).toEqual([]);
+  });
+
   it('keeps the strip, and makes no toast, when something failed', () => {
     const move = startImport({ finished: false, items: [item('a', 'done'), item('b', 'queued')] });
     move({ finished: true, items: [item('a', 'done'), item('b', 'unsupported', 'Not a supported photo format')] });

@@ -67,12 +67,30 @@ is `docs/photonamous-spec.md`; running and setup are in
   Tokens stay in memory. Google's token lasts an hour and can only be
   renewed through Google's own window, which a browser opens from a
   click; so once the token is 45 minutes old, the next ordinary click in
-  the app renews it. Google's window opens and closes by itself. If
-  several Google accounts are signed in, Google cannot tell which is
-  meant and the click after that shows its account chooser once; closing
-  it leaves things as they are. When a token does run out (the app was
-  left untouched past the hour), the header offers **Reconnect Google
-  Drive**; nothing else is lost.
+  the app renews it. Google's window opens and closes by itself. If that
+  gives no token (several Google accounts are signed in and Google cannot
+  tell which is meant, the window never answers and is given up after
+  half a minute, or the browser keeps the answer from the page), clicks
+  do not try again in this browser for a month: no window flashing on
+  every click. The header then offers **Reconnect Google Drive** while the
+  old token still works, its tooltip saying the sign-in ends soon. The app
+  never opens Google's window except from a click.
+- **Coming back after the hour.** The first time anything needs Drive
+  without a usable token (the token ran out, or Drive refused it), the
+  header offers **Reconnect Google Drive** and says once, to a screen
+  reader too, that Google Drive needs you to sign in again. Nothing that
+  reads from Drive fails meanwhile: it waits, says so where you are
+  looking, and offers the same Reconnect there. The single view says
+  "Reconnect Google Drive to load this photo at full size."; the Edit
+  view, "Reconnect Google Drive to get the original and edit this
+  photo." (before any bytes arrive it says "Asking Google Drive for the
+  original…", then shows the bytes); an export, "Reconnect Google Drive to
+  go on exporting."; Edit in Lopsy's message, "Reconnect Google Drive to
+  send this photo to Lopsy."; an import or Add from Google Drive, in its
+  strip (Import, below). Grid thumbnails wait with no message of their
+  own. One press of any Reconnect serves everything waiting: the
+  full-size picture loads, the original comes and Edit opens, the import
+  goes on, with no reload and nothing to press again.
 - **Add from Google Drive…** (the Import menu, Drive libraries only):
   picks photos already in Drive with Google's Picker and adds them to the
   library; Settings chooses whether they are moved into `Originals/` or
@@ -322,6 +340,46 @@ is `docs/photonamous-spec.md`; running and setup are in
   minute are told apart in the sidebar by their seconds. An import that
   is interrupted (the tab closes, the network drops) resumes; uploads
   resume where Drive allows.
+- **Pause and Stop.** Pause keeps the photos not imported yet on this
+  device, and Resume carries on, after a reload too. Stop leaves them out:
+  the strip says "Stopping the import…" on the button pressed, which keeps
+  focus, and a moment later "Import stopped: 12 of 40 photos imported, 28
+  not. Choose the same photos again to import the rest." with Dismiss
+  there. What was in flight is cancelled, not waited for: a file that had
+  not reached the library is not added, what its upload left in Drive is
+  moved to Drive's trash (when Drive cannot be reached, as soon as it can,
+  after a reload too), and its copy on this device is deleted. Photos
+  already imported stay, with their previews. A stopped import is never
+  resumed and never shown as interrupted, nothing in it counts as failed,
+  and a paused import can be stopped too.
+- **A long import outlives Google's token.** An ordinary click renews it
+  as everywhere else (Sign-in, above), and the uploads carry on with the
+  new one. When the token has run out and a new one needs the person (no
+  click came in time, or Google's window was closed), the import does not
+  fail anything: it waits, and the strip says **Reconnect to Google Drive
+  to continue · 412 of 700 photos left** with **Reconnect Google Drive**,
+  which opens Google's window. Once signed in, the import carries on from
+  where it was (a large file from the part Drive already has), with
+  nothing to pick again; the header's Reconnect does the same. Add from
+  Google Drive waits the same way.
+  It waits as long as it takes, and Stop still stops it. A screen reader
+  hears the pause once, and once that it continues.
+- **After a reload.** Each file is copied onto this device before it is
+  uploaded, as far as the browser's storage allows (staging), and those
+  copies finish by themselves when the library is opened again. Files
+  that were not copied yet (or did not fit: some browsers, Brave among
+  them, allow far less room than a large import needs) exist only on the
+  person's disk, so a reload leaves one line above the strip: **An import
+  was interrupted: 288 of 700 photos imported, 412 not**, with **Choose
+  photos again…** and **Choose the folder again…**. Choosing the same
+  photos or folder again (or dropping them) imports only the ones not
+  imported, and skips what the library already has without reading it
+  (matched by name, size and modified time); the sheet says how many of
+  the chosen files are the missing ones, and the outcome how many were
+  skipped. A file whose upload had reached Drive after all is taken as it
+  is, never stored twice. **List the 412 photos not imported** shows
+  their names, to copy or download as a text file. The line goes once
+  nothing is missing, or with its Dismiss button.
 
 ## Edit view
 

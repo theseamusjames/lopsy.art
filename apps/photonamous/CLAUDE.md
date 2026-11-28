@@ -214,7 +214,12 @@ could use too goes there; one only this app uses stays here.
     the help lists them and Settings > General can turn them off.
 - **A click pays for one popup.** The Google token is renewed from the
   user's clicks (`src/app/real/gesture-refresh.ts`): once it is 45 minutes
-  old, a click anywhere opens Google's window for a moment. A control
+  old, a click anywhere opens Google's window for a moment (unless that has
+  given no token in this browser: then the header offers Reconnect). Every
+  read from Drive goes through `withSignIn` (photos-core
+  `auth/sign-in-wait.ts`) in the backend, so with no usable token it waits
+  and the UI says so (`SignInPrompt`, `useSignInState`); a new read path
+  does the same. A control
   that opens a popup, a file dialog or writes to the clipboard *after
   waiting for something* would lose its click to that, so it sits inside
   a menu or a dialog (both are left alone) or carries

@@ -8,6 +8,8 @@ import type { Asset, AssetId, LibrarySession, PreviewRef, VersionId } from '@lop
 import type { KeepOriginals, OriginalsDownload } from '@lopsy/photos-core/cache/keep-originals';
 import type { PreviewRefresher } from '../preview-refresh';
 import type { ImportItem, ImportJob, ImportOptions, ImportProgress } from '@lopsy/photos-core/import/types';
+import type { InterruptedImport } from '@lopsy/photos-core/import/interrupted';
+import type { SignInState } from '@lopsy/photos-core/auth/types';
 import type { FileId, StorageQuota } from '@lopsy/photos-core/storage/types';
 import type { RepairReport } from '@lopsy/photos-core/library/repair';
 import { PIPELINE_VERSION } from '@lopsy/photos-core/library/recipe';
@@ -231,6 +233,14 @@ export class FakeBackend implements PhotosBackend {
     await session.syncNow();
   }
 
+  signInState(): SignInState {
+    return 'ok';
+  }
+
+  subscribeSignIn(): () => void {
+    return () => {};
+  }
+
   async connect(kind: StorageChoice): Promise<Connection> {
     await new Promise((r) => setTimeout(r, 400));
     const session = new FakeSession(kind === 'google-drive' ? 'google-drive' : kind, LABELS[kind]);
@@ -314,6 +324,12 @@ export class FakeBackend implements PhotosBackend {
   async resumeImports(): Promise<ImportJob | null> {
     return null;
   }
+
+  async getInterruptedImport(): Promise<InterruptedImport | null> {
+    return null;
+  }
+
+  async dismissInterruptedImport(): Promise<void> {}
 
   async loadOriginal(session: LibrarySession, asset: Asset): Promise<Blob> {
     if (asset.kind === 'document' && asset.renderFileId) return session.adapter.readContent(asset.renderFileId);

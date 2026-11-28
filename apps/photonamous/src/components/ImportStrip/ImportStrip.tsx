@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, TriangleAlert, X } from 'lucide-react';
+import { Check, LogIn, TriangleAlert, X } from 'lucide-react';
 import { useImportProgress, useLibraryView } from '../../app/hooks';
 import { isHiddenPairHalf } from '../../library/asset-query';
 import { useUi } from '../../app/store';
 import { getBackend } from '../../app/backend-registry';
 import { showToast } from '../../app/toasts';
-import { endedCleanly, estimateLeft, importHeadline, importStats } from '../../import/import-progress';
+import { endedCleanly, estimateLeft, importHeadline, importStats, signInHeadline } from '../../import/import-progress';
 import { plural } from '../../import/import-summary';
 import type { ImportJob } from '@lopsy/photos-core/import/types';
 import { Button } from '../Button/Button';
@@ -13,7 +13,13 @@ import { IconButton } from '../IconButton/IconButton';
 import { announceImport, type Announced, type ImportFacts } from './import-announcer';
 import { importFileErrors } from '../../app/file-error-events';
 import { track } from '../../app/track';
+import { refreshInterruptedImport } from '../../import/interrupted-refresh';
+import { reconnect, useReconnecting } from '../../app/reconnect';
 import styles from './ImportStrip.module.css';
+
+/** Pause and Stop, told apart where they are pressed. */
+const PAUSE_WORDS = 'Pause: the photos not imported yet wait on this device, and Resume carries on, after a reload too';
+const STOP_WORDS = 'Stop: the photos not imported yet are left out; those imported stay';
 
 /** The imports whose refused files have been reported: once each, when it ends. */
 const reportedJobs = new WeakSet<ImportJob>();
@@ -37,11 +43,13 @@ export function ImportStrip() {
     setShowFailures(false);
   }, [job]);
 
+  // One clock for the whole run: restarted on every progress change, a busy import's would never tick.
+  const running = progress !== null && !progress.finished;
   useEffect(() => {
-    if (!progress || progress.finished) return;
+    if (!running) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
-  }, [progress]);
+  }, [running]);
 
   const resume = () => {
     const session = useUi.getState().connection?.session;
@@ -51,6 +59,17 @@ export function ImportStrip() {
       .then((next) => setImportJob(next))
       .catch((error: unknown) => console.warn('The import could not be resumed', error));
   };
+
+  // Waiting for sign-in: the header's Reconnect, offered here too (one press serves both). The click is the gesture that
+  // opens Google's window; the job hears of the new token itself and carries on, with nothing to pick again.
+  const reconnecting = useReconnecting();
+
+  // An import that ends may finish an interrupted one (the same files chosen again): its summary is read again.
+  const ended = progress?.finished === true;
+  useEffect(() => {
+    const session = useUi.getState().connection?.session;
+    if (ended && session) refreshInterruptedImport(session);
+  }, [job, ended]);
 
   const stats = useMemo(() => (progress ? importStats(progress) : null), [progress]);
   // The files the import refused (it lists them under "could not be imported"), reported once it ends, one event per reason.
@@ -84,21 +103,23 @@ export function ImportStrip() {
             skipped: stats.duplicates,
             waiting: stats.waiting.length,
             paused: stats.paused,
+            stopped: stats.stopped,
+            needsSignIn: progress.needsSignIn === true,
           }
         : null,
     [progress, stats, pairHalves],
   );
   const isClean = facts !== null && endedCleanly(facts);
-  const headline = progress && stats ? importHeadline(progress, stats, pairHalves) : null;
+  const needsSignIn = progress?.needsSignIn === true && !progress.finished;
+  const headline = progress && stats ? (needsSignIn ? signInHeadline(stats) : importHeadline(progress, stats, pairHalves)) : null;
   // The strip changes every second; a screen reader hears the start, each quarter and the end (import-announcer).
+  // Worked out while rendering, not in an effect: an effect setting it after every progress render would leave
+  // each of those commits with a render to do, and a fast import's run of notifications would pass React's
+  // nested-update limit (error 185, thrown from the import's own listener call).
   const [said, setSaid] = useState<{ job: ImportJob; announced: Announced } | null>(null);
-  useEffect(() => {
-    if (!job || !facts) return setSaid(null);
-    setSaid((before) => {
-      const announced = announceImport(before?.job === job ? before.announced : null, facts);
-      return before?.job === job && before.announced === announced ? before : { job, announced };
-    });
-  }, [job, facts]);
+  const before = said !== null && said.job === job ? said.announced : null;
+  const announced = job && facts ? announceImport(before, facts) : null;
+  if (announced !== (said?.announced ?? null)) setSaid(job && announced ? { job, announced } : null);
   // A clean end needs no row of its own: its outcome becomes a toast (which says it to a screen reader) and the strip goes.
   useEffect(() => {
     if (!job || !isClean || headline === null) return;
@@ -118,8 +139,9 @@ export function ImportStrip() {
 
   if (!job || !progress || !stats || isClean) return voice;
 
-  const left = progress.finished ? null : estimateLeft(stats, now - started.current);
-  const paused = progress.finished && stats.paused > 0;
+  const left = progress.finished || needsSignIn ? null : estimateLeft(stats, now - started.current);
+  const stopped = progress.stopped === true;
+  const paused = progress.finished && stats.paused > 0 && !stopped;
   const waiting = stats.waiting.length;
 
   return (
@@ -127,7 +149,8 @@ export function ImportStrip() {
       {voice}
       <section className={styles.strip} aria-label="Import">
         <div className={styles.row}>
-          {progress.finished && !paused && waiting === 0 && <Check size={16} className={styles.ok} />}
+          {progress.finished && !paused && !stopped && waiting === 0 && <Check size={16} className={styles.ok} />}
+          {needsSignIn && <LogIn size={16} className={styles.warn} aria-hidden />}
           <span className={styles.headline}>{headline}</span>
           {left && <span className={styles.muted}>{left}</span>}
           {waiting > 0 && (
@@ -142,7 +165,8 @@ export function ImportStrip() {
             </Button>
           )}
           <span className={styles.spacer} />
-          {paused ? (
+          {/* Two slots, the second always a Button where Stop is, so the button pressed keeps focus as it says "Stopping…", then Dismiss. */}
+          {stopped ? null : paused ? (
             <Button size="sm" variant="primary" onClick={resume}>
               Resume
             </Button>
@@ -150,17 +174,30 @@ export function ImportStrip() {
             <Button size="sm" variant="primary" onClick={resume}>
               Retry
             </Button>
-          ) : progress.finished ? (
-            <IconButton size="sm" label="Dismiss" icon={<X size={14} />} onClick={() => setImportJob(null)} />
+          ) : progress.finished ? null : needsSignIn ? (
+            <Button size="sm" variant="primary" aria-disabled={reconnecting} onClick={reconnect}>
+              Reconnect Google Drive
+            </Button>
           ) : (
-            <>
-              <Button size="sm" onClick={() => job.pause()}>
-                Pause
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => job.cancel()}>
-                Stop
-              </Button>
-            </>
+            <Button size="sm" onClick={() => job.pause()} title={PAUSE_WORDS}>
+              Pause
+            </Button>
+          )}
+          {stopped ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-disabled={!progress.finished}
+              onClick={progress.finished ? () => setImportJob(null) : undefined}
+            >
+              {progress.finished ? 'Dismiss' : 'Stopping…'}
+            </Button>
+          ) : !progress.finished || paused ? (
+            <Button size="sm" variant="ghost" onClick={() => job.cancel()} title={STOP_WORDS}>
+              Stop
+            </Button>
+          ) : waiting > 0 ? null : (
+            <IconButton size="sm" label="Dismiss" icon={<X size={14} />} onClick={() => setImportJob(null)} />
           )}
         </div>
         {!progress.finished && (

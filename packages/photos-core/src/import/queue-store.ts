@@ -29,6 +29,13 @@ export interface ImportItemRecord {
   /** Where the original goes under `Originals/`, once chosen. */
   readonly folderSegments: readonly string[] | null;
   readonly destinationName: string | null;
+  /**
+   * In an interrupted record: the file was never staged on this device (or
+   * its copy is gone), so only choosing it again can finish it.
+   */
+  readonly needsFile?: boolean;
+  /** Its upload began: if the job is stopped before it reaches the library, Drive may hold part of it, to trash. */
+  readonly uploadStarted?: boolean;
 }
 
 export interface ImportJobRecord {
@@ -45,6 +52,14 @@ export interface ImportJobRecord {
   readonly owner?: string | null;
   /** ISO 8601; the owner renews it while the job runs. */
   readonly heartbeatAt?: string | null;
+  /**
+   * Not a job to run: what a reload left of one (import/interrupted.ts).
+   * Its items are every file the job had, so choosing the same files again
+   * can be matched against them; `resumeImports` leaves it alone.
+   */
+  readonly interrupted?: boolean;
+  /** Stop was pressed: never resumed; what it half did is cleared away (`resumeImports` finishes that after a reload). */
+  readonly stopped?: boolean;
 }
 
 export interface ImportQueueStore {

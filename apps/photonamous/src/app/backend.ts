@@ -11,6 +11,8 @@ import type { Asset, AssetId, LibrarySession, PreviewRef, VersionId } from '@lop
 import type { KeepOriginals, OriginalsDownload } from '@lopsy/photos-core/cache/keep-originals';
 import type { PreviewRefresher } from './preview-refresh';
 import type { ImportJob, ImportOptions } from '@lopsy/photos-core/import/types';
+import type { InterruptedImport } from '@lopsy/photos-core/import/interrupted';
+import type { SignInState } from '@lopsy/photos-core/auth/types';
 import type { FileId, StorageQuota } from '@lopsy/photos-core/storage/types';
 import type { RepairReport } from '@lopsy/photos-core/library/repair';
 import type { ExportExtras } from '../library/export-size';
@@ -126,10 +128,19 @@ export interface PhotosBackend {
   connect(kind: StorageChoice, options?: ConnectOptions): Promise<Connection>;
 
   /**
-   * Asks the user to sign in again when sync is paused for it (Drive), then
-   * syncs. Call from a click.
+   * Asks the user to sign in again (Google's window, so call it from a
+   * click), then syncs. Everything waiting for sign-in carries on by itself.
    */
   reauthorize(session: LibrarySession): Promise<void>;
+
+  /**
+   * Whether the storage's sign-in needs the person (photos-core
+   * `SignInState`): 'needed' while work waits for Reconnect, 'renew' when
+   * the token is old and only Reconnect can renew it. Always 'ok' for
+   * storage without a sign-in.
+   */
+  signInState(session: LibrarySession): SignInState;
+  subscribeSignIn(session: LibrarySession, listener: () => void): () => void;
 
   /** Starts importing files into the library. Each photo appears in the view as soon as it is read. */
   startImport(files: readonly File[], session: LibrarySession, options?: Partial<ImportOptions>): ImportJob;
@@ -185,6 +196,17 @@ export interface PhotosBackend {
 
   /** Continues imports a reload interrupted, as one job; null when there are none. */
   resumeImports(session: LibrarySession): Promise<ImportJob | null>;
+
+  /**
+   * What a reload left of imports whose files were never staged on this
+   * device: one summary, cleared once nothing is missing. Choosing the
+   * same files again (startImport) imports only what is missing. Null when
+   * there is none.
+   */
+  getInterruptedImport(session: LibrarySession): Promise<InterruptedImport | null>;
+
+  /** Forgets the interrupted imports' summary. */
+  dismissInterruptedImport(session: LibrarySession): Promise<void>;
 
   /** A stored preview's JPEG. */
   readPreview(session: LibrarySession, ref: PreviewRef): Promise<Blob>;

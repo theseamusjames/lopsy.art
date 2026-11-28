@@ -13,6 +13,10 @@ import { ensureFolderPath } from '../import/folders';
 import type { FolderCache } from '../import/folders';
 import type { AssetId, LibrarySession, VersionId } from '../library/types';
 import { isStorageError } from '../storage/errors';
+import { notifyAll } from '../listeners';
+import { withSignIn } from '../auth/sign-in-wait';
+import type { SignInGate } from '../auth/types';
+import { shownMessage } from '../shown-message';
 import type { FileId } from '../storage/types';
 import { applyExportMetadata } from './exif-writer';
 import { exportFileName, sanitizeFileName } from './file-names';
@@ -36,6 +40,8 @@ export interface ExportContext {
   readonly settings: Partial<ExportSettings>;
   readonly destination: ExportDestination;
   readonly now?: () => Date;
+  /** The storage's sign-in: writing to a library folder refused for sign-in waits for the next token (auth/sign-in-wait.ts). */
+  readonly signIn?: SignInGate;
 }
 
 export interface ExportSelection {
@@ -49,9 +55,9 @@ class Cancelled extends Error {
   }
 }
 
+/** What a person is shown of an error (shown-message.ts). */
 function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message;
-  return String(error);
+  return shownMessage(error, 'Export');
 }
 
 function localDay(date: Date): string {
@@ -61,6 +67,7 @@ function localDay(date: Date): string {
 
 export function startExport(selection: readonly ExportSelection[], ctx: ExportContext): ExportJob {
   const { session, renderer, destination } = ctx;
+  const signIn = ctx.signIn ?? null;
   const settings: ExportSettings = { ...DEFAULT_EXPORT_SETTINGS, ...ctx.settings };
   const now = ctx.now ?? (() => new Date());
   const jobId = crypto.randomUUID();
@@ -82,7 +89,7 @@ export function startExport(selection: readonly ExportSelection[], ctx: ExportCo
   let finished = false;
 
   const notify = () => {
-    for (const listener of [...listeners]) listener();
+    notifyAll(listeners, 'an export');
   };
   const patch = (index: number, change: Partial<ExportItem>) => {
     const current = items[index];
@@ -137,7 +144,7 @@ export function startExport(selection: readonly ExportSelection[], ctx: ExportCo
       checkCancelled();
 
       patch(index, { state: 'writing' });
-      const parentId = destination.kind === 'library' ? await libraryFolder() : null;
+      const parentId = destination.kind === 'library' ? await withSignIn(signIn, libraryFolder, { signal: abort.signal }) : null;
       checkCancelled();
       const name = exportFileName(settings.fileNameTemplate, { asset, version, seq: index + 1 }, settings.format, taken);
       if (parentId === null) {
@@ -145,16 +152,13 @@ export function startExport(selection: readonly ExportSelection[], ctx: ExportCo
         patch(index, { state: 'done', fileName: name, byteSize: blob.size });
         return;
       }
-      const stored = await session.adapter.createFile(
-        {
-          parentId,
-          name,
-          mimeType: mimeTypeFor(settings.format),
-          properties: { 'lp.lib': session.libraryId, 'lp.role': 'export', 'lp.asset': asset.id },
-        },
-        blob,
-        { signal: abort.signal },
-      );
+      const newFile = {
+        parentId,
+        name,
+        mimeType: mimeTypeFor(settings.format),
+        properties: { 'lp.lib': session.libraryId, 'lp.role': 'export', 'lp.asset': asset.id },
+      };
+      const stored = await withSignIn(signIn, () => session.adapter.createFile(newFile, blob, { signal: abort.signal }), { signal: abort.signal });
       patch(index, { state: 'done', fileName: name, byteSize: blob.size, fileId: stored.id });
     } catch (error) {
       const wasCancelled =

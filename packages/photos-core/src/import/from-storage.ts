@@ -12,6 +12,10 @@ import { DEFAULT_RECIPE, PIPELINE_VERSION, recipeHash } from '../library/recipe'
 import type { Recipe } from '../library/recipe';
 import type { AlbumId, AssetId, LibrarySession, LibraryView, NewAsset, VersionId } from '../library/types';
 import { isStorageError } from '../storage/errors';
+import { notifyAll } from '../listeners';
+import { shownMessage } from '../shown-message';
+import { withSignIn } from '../auth/sign-in-wait';
+import type { SignInGate } from '../auth/types';
 import type { FileId, StoredFile } from '../storage/types';
 import { ensureFolderPath, originalsFolderSegments } from './folders';
 import type { FolderCache } from './folders';
@@ -38,10 +42,12 @@ export interface StorageImportContext {
   readonly recipe?: Recipe;
   readonly keywords?: readonly string[];
   readonly albumId?: AlbumId;
+  /** The storage's sign-in: work refused for sign-in waits for its next token instead of failing (auth/sign-in-wait.ts). */
+  readonly signIn?: SignInGate;
 }
 
 const PROGRESS_INTERVAL_MS = 100;
-const TERMINAL: ReadonlySet<ImportItemState> = new Set(['duplicate', 'unsupported', 'done', 'failed', 'skipped']);
+const TERMINAL: ReadonlySet<ImportItemState> = new Set(['duplicate', 'unsupported', 'done', 'failed', 'skipped', 'stopped']);
 
 /** MIME types worth downloading to look at; the magic bytes decide after that. */
 function mayBePhoto(mimeType: string): boolean {
@@ -80,9 +86,9 @@ class Stopped extends Error {
   }
 }
 
+/** What a person is shown of an error (shown-message.ts). */
 function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message;
-  return String(error);
+  return shownMessage(error, 'Import');
 }
 
 /** Adopts files already in storage (picked from Drive) into the library. */
@@ -124,7 +130,7 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
       clearTimeout(progressTimer);
       progressTimer = null;
     }
-    for (const listener of [...listeners]) listener();
+    notifyAll(listeners, 'an import from storage');
   };
   const patch = (index: number, change: Partial<ImportItem>, immediate = true) => {
     const current = items[index];
@@ -138,6 +144,15 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
   const checkStopped = () => {
     if (stopped) throw new Stopped();
   };
+
+  // Sign-in: a refusal waits for the next token (the job says so: needsSignIn), then the same call runs again.
+  let waitingForSignIn = 0;
+  const onWait = (waiting: boolean) => {
+    waitingForSignIn += waiting ? 1 : -1;
+    snapshot = null;
+    notify();
+  };
+  const storage = <T>(call: () => Promise<T>): Promise<T> => withSignIn(ctx.signIn ?? null, call, { signal: abort.signal, onWait });
 
   let indexedView: LibraryView | null = null;
   let libraryBySha = new Map<string, AssetId>();
@@ -176,7 +191,8 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
   /** Applies a duplicate's sidecar to the asset already in the library, when that one is untouched. */
   const duplicateNote = async (work: Work, assetId: AssetId, sha: string): Promise<{ error?: string }> => {
     if (!work.sidecar || existingAsset(sha) !== assetId) return {};
-    const blob = await session.adapter.readContent(work.sidecar.id, { signal: abort.signal }).catch(() => null);
+    const sidecarId = work.sidecar.id;
+    const blob = await storage(() => session.adapter.readContent(sidecarId, { signal: abort.signal })).catch(() => null);
     if (!blob) return { error: 'Photo already in the library; its XMP sidecar could not be read' };
     return { error: await applySidecarToExisting(session, assetId, blob) };
   };
@@ -198,13 +214,10 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
   const download = async (work: Work, file: StoredFile): Promise<Blob> => {
     const onProgress = (received: number) => patch(work.index, { sentBytes: received }, false);
     if (originalsCache && file.sha256) {
-      return originalsCache.readOriginal(
-        session.adapter,
-        { fileId: file.id, sha256: file.sha256, byteSize: file.size },
-        { signal: abort.signal, onProgress },
-      );
+      const ref = { fileId: file.id, sha256: file.sha256, byteSize: file.size };
+      return storage(() => originalsCache.readOriginal(session.adapter, ref, { signal: abort.signal, onProgress }));
     }
-    return session.adapter.readContent(file.id, { signal: abort.signal, onProgress });
+    return storage(() => session.adapter.readContent(file.id, { signal: abort.signal, onProgress }));
   };
 
   const finish = (work: Work, state: ImportItemState, change: Partial<ImportItem> = {}, outcome: AssetId | null = null) => {
@@ -305,18 +318,15 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
       if (options.move) {
         const modified = Date.parse(file.modifiedTime);
         const segments = originalsFolderSegments(metadata.capturedAt, Number.isNaN(modified) ? now() : new Date(modified));
-        const folderId = await ensureFolderPath(session.adapter, session.layout.originalsId, segments, folderCache, {
-          'lp.lib': session.libraryId,
-        });
+        const folderId = await storage(() =>
+          ensureFolderPath(session.adapter, session.layout.originalsId, segments, folderCache, { 'lp.lib': session.libraryId }),
+        );
         checkStopped();
-        if (file.parentId !== folderId) placed = await session.adapter.move(file.id, folderId);
+        if (file.parentId !== folderId) placed = await storage(() => session.adapter.move(file.id, folderId));
       }
-      placed = await session.adapter.updateProperties(file.id, {
-        'lp.lib': session.libraryId,
-        'lp.role': 'original',
-        'lp.asset': work.assetId,
-        'lp.sha': sha,
-      });
+      placed = await storage(() =>
+        session.adapter.updateProperties(file.id, { 'lp.lib': session.libraryId, 'lp.role': 'original', 'lp.asset': work.assetId, 'lp.sha': sha }),
+      );
 
       const asset: NewAsset = {
         id: work.assetId,
@@ -352,8 +362,7 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
       let note = previews.error;
       if (work.sidecar) {
         const sidecar = work.sidecar;
-        const applied = await session.adapter
-          .readContent(sidecar.id, { signal: abort.signal })
+        const applied = await storage(() => session.adapter.readContent(sidecar.id, { signal: abort.signal }))
           .then((blob) => applySidecarFile(session, assetId, versionId, blob, metadata.orientation))
           .catch(() => null);
         if (!applied) note = 'Its XMP sidecar could not be read';
@@ -363,7 +372,7 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
           const preview = previews[size];
           if (!preview) continue;
           try {
-            await uploadPreview(assetId, versionId, size, preview);
+            await storage(() => uploadPreview(assetId, versionId, size, preview));
           } catch (error) {
             note = `Preview not uploaded: ${errorMessage(error)}`;
           }
@@ -372,7 +381,9 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
       finish(work, 'done', { assetId, error: note }, assetId);
     } catch (error) {
       const cancelled = stopped || error instanceof Stopped || (isStorageError(error) && error.code === 'aborted');
-      finish(work, 'failed', { error: cancelled ? 'Cancelled' : errorMessage(error) });
+      // Stopped is not a failure: the file stays in Drive as it was, and can be added again.
+      if (cancelled) finish(work, 'stopped', { error: null });
+      else finish(work, 'failed', { error: errorMessage(error) });
     } finally {
       work.read.resolve(null);
       work.outcome.resolve(null);
@@ -408,7 +419,7 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
   let pairOf = new Map<string, string>();
 
   const getProgress = (): ImportProgress => {
-    if (!snapshot) snapshot = { items: items.slice(), finished };
+    snapshot ??= { items: items.slice(), finished, needsSignIn: waitingForSignIn > 0 && !finished && !stopped, ...(stopped ? { stopped: true } : {}) };
     return snapshot;
   };
 
@@ -417,7 +428,7 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
     await Promise.all(
       works.map(async (work) => {
         try {
-          work.file = await session.adapter.getFile(work.fileId);
+          work.file = await storage(() => session.adapter.getFile(work.fileId));
         } catch {
           work.file = null;
         }
@@ -458,8 +469,9 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
     if (stopped) return;
     stopped = true;
     abort.abort();
+    snapshot = null;
     for (const work of works) {
-      if (items[work.index]?.state === 'queued') finish(work, 'failed', { error: 'Cancelled' });
+      if (items[work.index]?.state === 'queued') finish(work, 'stopped', { error: null });
     }
   };
 

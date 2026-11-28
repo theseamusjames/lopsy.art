@@ -21,6 +21,7 @@ import { FilterBar } from '../FilterBar/FilterBar';
 import { Header } from '../Header/Header';
 import { ImportSheet } from '../ImportSheet/ImportSheet';
 import { ImportStrip } from '../ImportStrip/ImportStrip';
+import { InterruptedImport } from '../InterruptedImport/InterruptedImport';
 import { InfoPanel } from '../InfoPanel/InfoPanel';
 import { PhotoGrid } from '../PhotoGrid/PhotoGrid';
 import { Sidebar } from '../Sidebar/Sidebar';
@@ -179,6 +180,7 @@ export function LibraryScreen() {
               </div>
             )}
           </div>
+          <InterruptedImport />
           <ImportStrip />
         </main>
         {infoOpen && <InfoPanel />}

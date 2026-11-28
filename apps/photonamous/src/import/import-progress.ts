@@ -15,6 +15,8 @@ export interface ImportStats {
   readonly settled: number;
   /** Items a pause left waiting for `resumeImports`. */
   readonly paused: number;
+  /** Items Stop left out: not imported, not failed. */
+  readonly stopped: number;
   /** Items the importer set aside after a failure, to try again (error "Waiting to retry: …"). */
   readonly waiting: readonly ImportItem[];
   readonly totalBytes: number;
@@ -29,6 +31,7 @@ export function importStats(progress: ImportProgress): ImportStats {
   let totalBytes = 0;
   let sentBytes = 0;
   let paused = 0;
+  let stopped = 0;
   const waiting: ImportItem[] = [];
   const failed: ImportItem[] = [];
   for (const item of progress.items) {
@@ -48,6 +51,10 @@ export function importStats(progress: ImportProgress): ImportStats {
         failed.push(item);
         sentBytes += item.byteSize;
         break;
+      case 'stopped':
+        stopped++;
+        sentBytes += item.byteSize;
+        break;
       case 'verifying':
         sentBytes += item.byteSize;
         break;
@@ -63,8 +70,9 @@ export function importStats(progress: ImportProgress): ImportStats {
     done,
     duplicates,
     failed,
-    settled: done + duplicates + failed.length,
+    settled: done + duplicates + failed.length + stopped,
     paused,
+    stopped,
     waiting,
     totalBytes,
     sentBytes,
@@ -80,6 +88,8 @@ export interface ImportEnd {
   readonly waiting: number;
   /** Items a pause left to do. */
   readonly paused: number;
+  /** Items Stop left out. */
+  readonly stopped: number;
 }
 
 /**
@@ -88,7 +98,7 @@ export interface ImportEnd {
  * any other end keeps the strip, with Retry or Resume and what failed.
  */
 export function endedCleanly(end: ImportEnd): boolean {
-  return end.finished && end.failed === 0 && end.waiting === 0 && end.paused === 0;
+  return end.finished && end.failed === 0 && end.waiting === 0 && end.paused === 0 && end.stopped === 0;
 }
 
 /**
@@ -97,6 +107,8 @@ export function endedCleanly(end: ImportEnd): boolean {
  * halves of RAW+JPEG pairs are files, not photos of their own).
  */
 export function importHeadline(progress: ImportProgress, stats: ImportStats, pairHalves: number): string {
+  if (progress.stopped && !progress.finished) return 'Stopping the import…';
+  if (progress.stopped) return stoppedHeadline(stats, pairHalves);
   const waiting = stats.waiting.length;
   if (progress.finished && stats.paused > 0) return `Import paused · ${plural(stats.paused, 'photo')} still to go`;
   if (progress.finished && waiting > 0) return `Imported ${plural(stats.done, 'photo')} · ${plural(waiting, 'photo')} waiting to try again`;
@@ -106,6 +118,18 @@ export function importHeadline(progress: ImportProgress, stats: ImportStats, pai
     return `Imported ${plural(stats.done - pairHalves, 'photo')}${pairs}${skipped}`;
   }
   return `Importing ${stats.settled.toLocaleString()} of ${plural(stats.total, 'photo')} · ${formatBytes(stats.totalBytes - stats.sentBytes)} left`;
+}
+
+/** After Stop: what came in and what did not, and how to get the rest. */
+export function stoppedHeadline(stats: ImportStats, pairHalves: number): string {
+  const imported = stats.done - pairHalves + stats.duplicates;
+  return `Import stopped: ${imported.toLocaleString('en-US')} of ${plural(stats.total - pairHalves, 'photo')} imported, ${stats.stopped.toLocaleString('en-US')} not. Choose the same photos again to import the rest.`;
+}
+
+/** The headline while the import waits for the person to reconnect (ImportProgress.needsSignIn). */
+export function signInHeadline(stats: ImportStats): string {
+  const left = stats.total - stats.settled;
+  return `Reconnect to Google Drive to continue · ${left.toLocaleString('en-US')} of ${plural(stats.total, 'photo')} left`;
 }
 
 /** "About 3 minutes left", from bytes sent so far over the time taken. */

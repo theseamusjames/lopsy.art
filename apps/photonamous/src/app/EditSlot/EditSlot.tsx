@@ -17,6 +17,8 @@ import { useLibraryView, useSession } from '../hooks';
 import { lopsyRefusalHere, openInLopsy, reportLopsyRefusal } from '../lopsy-handoff';
 import { showErrorToast, showToast } from '../toasts';
 import { formatBytes } from '../../import/import-summary';
+import { useSignInState } from '../reconnect';
+import { SignInPrompt } from '../../components/SignInPrompt/SignInPrompt';
 import styles from './EditSlot.module.css';
 import { isDevelopable } from '../../library/develop-source';
 
@@ -38,6 +40,7 @@ export function EditSlot({ assetId, versionId, onClose }: EditSlotProps) {
   const asset = view.assets.get(assetId);
   const version = view.versions.get(versionId);
   const [download, setDownload] = useState<Download | null>(null);
+  const signIn = useSignInState();
   const setEditing = useUi((s) => s.setEditing);
   const copiedEdits = useUi((s) => s.copiedEdits);
   const setCopiedEdits = useUi((s) => s.setCopiedEdits);
@@ -229,10 +232,17 @@ export function EditSlot({ assetId, versionId, onClose }: EditSlotProps) {
       />
       {download && download.loaded < (download.total ?? Infinity) && (
         <div className={styles.download} role="status" aria-live="polite">
-          <span>
-            Getting the original: {formatBytes(download.loaded)}
-            {download.total !== null && ` of ${formatBytes(download.total)}`}
-          </span>
+          {download.loaded === 0 && signIn === 'needed' ? (
+            // Nothing has come, and nothing can until the person reconnects: say so, and it carries on by itself after.
+            <SignInPrompt sentence="Reconnect Google Drive to get the original and edit this photo." size="md" />
+          ) : download.loaded === 0 ? (
+            <span>Asking {session.adapter.label} for the original…</span>
+          ) : (
+            <span>
+              Getting the original: {formatBytes(download.loaded)}
+              {download.total !== null && ` of ${formatBytes(download.total)}`}
+            </span>
+          )}
           <span className={styles.bar}>
             <span
               className={styles.fill}
