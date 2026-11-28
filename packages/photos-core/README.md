@@ -16,7 +16,7 @@ instead of repeating it. The app's rules are in
 | `storage/` | `StorageAdapter` (`types.ts`), the only door to files. Adapters: Google Drive (`google-drive/`), a local folder (OPFS or a picked folder) and memory. Shared contract tests are in `adapter-contract.ts`. |
 | `auth/` | Where Drive gets its token: the Google Identity Services client, or a fixed token in tests. |
 | `library/` | The synced database ([spec 6.6](../../docs/photonamous-spec.md#66-the-library-database)). `session.ts` holds `openLibrary` and `LibrarySession`, which is the only way to change the library. `sync.ts` holds the sync engine. Data model: `types.ts`. Edit recipe: `recipe.ts`. |
-| `import/` | The import job ([6.8](../../docs/photonamous-spec.md#68-import-and-upload)): hashing, EXIF/TIFF/RAF inspection, previews, RAW+JPEG pairs, staging, resume, and adding from storage. |
+| `import/` | The import job ([6.8](../../docs/photonamous-spec.md#68-import-and-upload)): hashing, EXIF/TIFF/RAF inspection, previews, RAW+JPEG pairs, staging, resume, waiting for sign-in (`needsSignIn`), interrupted imports and re-picking them (`interrupted.ts`), and adding from storage. |
 | `export/` | The export job ([6.11](../../docs/photonamous-spec.md#611-export)), export settings and presets, the EXIF writer, file names and zip. Rendering is injected. |
 | `cache/` | Originals and previews on the device ([6.7](../../docs/photonamous-spec.md#67-storage-on-the-device)): OPFS blob caches, checked downloads, and Keep originals. |
 | `search/` | Saved-search rules, text search, facets, dates and bursts over a `LibraryView`. |
