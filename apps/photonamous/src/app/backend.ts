@@ -12,6 +12,7 @@ import type { KeepOriginals, OriginalsDownload } from '@lopsy/photos-core/cache/
 import type { PreviewRefresher } from './preview-refresh';
 import type { ImportJob, ImportOptions } from '@lopsy/photos-core/import/types';
 import type { InterruptedImport } from '@lopsy/photos-core/import/interrupted';
+import type { SignInState } from '@lopsy/photos-core/auth/types';
 import type { FileId, StorageQuota } from '@lopsy/photos-core/storage/types';
 import type { RepairReport } from '@lopsy/photos-core/library/repair';
 import type { ExportExtras } from '../library/export-size';
@@ -127,10 +128,19 @@ export interface PhotosBackend {
   connect(kind: StorageChoice, options?: ConnectOptions): Promise<Connection>;
 
   /**
-   * Asks the user to sign in again when sync is paused for it (Drive), then
-   * syncs. Call from a click.
+   * Asks the user to sign in again (Google's window, so call it from a
+   * click), then syncs. Everything waiting for sign-in carries on by itself.
    */
   reauthorize(session: LibrarySession): Promise<void>;
+
+  /**
+   * Whether the storage's sign-in needs the person (photos-core
+   * `SignInState`): 'needed' while work waits for Reconnect, 'renew' when
+   * the token is old and only Reconnect can renew it. Always 'ok' for
+   * storage without a sign-in.
+   */
+  signInState(session: LibrarySession): SignInState;
+  subscribeSignIn(session: LibrarySession, listener: () => void): () => void;
 
   /** Starts importing files into the library. Each photo appears in the view as soon as it is read. */
   startImport(files: readonly File[], session: LibrarySession, options?: Partial<ImportOptions>): ImportJob;

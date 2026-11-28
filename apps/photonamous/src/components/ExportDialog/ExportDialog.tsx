@@ -42,6 +42,8 @@ import { plural } from '../../import/import-summary';
 import { Button } from '../Button/Button';
 import { Modal } from '../Modal/Modal';
 import { focusedElement } from '@lopsy/ui/a11y/focus-trap';
+import { useSignInState } from '../../app/reconnect';
+import { SignInPrompt } from '../SignInPrompt/SignInPrompt';
 import styles from './ExportDialog.module.css';
 
 const TOKENS = ['{name}', '{date}', '{seq}', '{seq:3}', '{title}', '{version}', '{camera}'];
@@ -85,6 +87,7 @@ export function ExportDialog() {
   const [destination, setDestination] = useState<'library' | 'download'>('library');
   const [name, setName] = useState(defaultName);
   const running = progress !== null && !progress.finished;
+  const signIn = useSignInState();
   const format = settings.format;
   const id = useId();
   const doneRef = useRef<HTMLButtonElement>(null);
@@ -524,6 +527,7 @@ export function ExportDialog() {
                 : `Exporting ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…`}
               {progress.failures.length > 0 && ` ${progress.failures.length} failed.`}
             </p>
+            {running && signIn === 'needed' && <SignInPrompt sentence="Reconnect Google Drive to go on exporting." />}
             {progress.failures.length > 0 && (
               <ul className={styles.failures} role="alert">
                 {[...new Set(progress.failures.map((f) => f.error))].slice(0, 3).map((message) => (

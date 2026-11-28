@@ -13,6 +13,7 @@ import { editInLopsy, lopsyUrl } from '../handoff/send-to-lopsy';
 import { startHandoffReceiver, type HandoffReceiver, type ReceiverState } from '../handoff/receiver';
 import type { StoredLopsySave } from '../handoff/store-lopsy-save';
 import { getExportRenderer } from './export-renderer-registry';
+import { getBackend } from './backend-registry';
 import { unguarded } from './guard-session';
 import { dismissToast, showErrorToast, showToast } from './toasts';
 import { editableLimit } from '../engine/full-size';
@@ -155,10 +156,26 @@ export function openInLopsy(session: LibrarySession, assetId: AssetId, chosenVer
     return;
   }
   handoffs.push(handoff);
-  const opening = showToast('Opening Lopsy…', null);
+  let opening = showToast('Opening Lopsy…', null);
+  // The photo is read from Drive on the way: while that waits for sign-in, the message says so, with Reconnect.
+  const backend = getBackend();
+  const onSignIn = () => {
+    if (backend.signInState(session) !== 'needed') return;
+    dismissToast(opening);
+    opening = showToast('Reconnect Google Drive to send this photo to Lopsy.', null, {
+      label: 'Reconnect Google Drive',
+      run: () => void backend.reauthorize(session).catch((error: unknown) => console.warn('Google Drive was not reconnected', error)),
+    });
+  };
+  const stopWatching = backend.subscribeSignIn(session, onSignIn);
+  onSignIn();
   handoff.delivered.then(
-    () => dismissToast(opening),
+    () => {
+      stopWatching();
+      dismissToast(opening);
+    },
     (error: unknown) => {
+      stopWatching();
       dismissToast(opening);
       showErrorToast(handoffFailureMessage(error));
     },

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, Keyboard, LoaderCircle, LogOut, Settings, TriangleAlert } from 'lucide-react';
 import { getBackend } from '../../app/backend-registry';
-import { showToast } from '../../app/toasts';
 import { LOCK_LOST_MESSAGE } from '@lopsy/photos-core/library/lock';
 import { useSyncStatus } from '../../app/hooks';
+import { reconnect, signInWords, useReconnecting, useSignInState } from '../../app/reconnect';
 import { Cloud02 } from '../../icons/Cloud02';
 import { Cloud02Check } from '../../icons/Cloud02Check';
 import { Cloud02Off } from '../../icons/Cloud02Off';
@@ -29,7 +29,8 @@ export function Header() {
   const isEditing = useUi((s) => s.editing !== null);
   const status = useSyncStatus();
   const [leaving, setLeaving] = useState(false);
-  const [reconnecting, setReconnecting] = useState(false);
+  const reconnecting = useReconnecting();
+  const signIn = useSignInState();
   const closePopover = useCallback(() => openDialog(null), [openDialog]);
   const syncButton = useRef<HTMLButtonElement>(null);
   const helpAnchor = useRef<HTMLDivElement>(null);
@@ -115,18 +116,12 @@ export function Header() {
             </Button>
           </span>
         )}
-        {status.state === 'paused' && (
-          <Button
-            variant="primary"
-            disabled={reconnecting}
-            onClick={() => {
-              setReconnecting(true);
-              getBackend()
-                .reauthorize(connection.session)
-                .catch((error: unknown) => showToast(error instanceof Error ? error.message : String(error), 12_000))
-                .finally(() => setReconnecting(false));
-            }}
-          >
+        {/* The one place sign-in is always offered: everything waiting for it carries on after one press, wherever it is pressed. */}
+        <p className={styles.visuallyHidden} role="status">
+          {signInWords(signIn)}
+        </p>
+        {(status.state === 'paused' || signIn !== 'ok') && (
+          <Button variant="primary" aria-disabled={reconnecting} title={signInWords(signIn) || undefined} onClick={reconnect}>
             {connection.session.adapter.kind === 'google-drive' ? 'Reconnect Google Drive' : 'Reconnect'}
           </Button>
         )}

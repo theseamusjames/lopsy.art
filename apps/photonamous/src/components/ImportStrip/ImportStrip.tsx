@@ -14,6 +14,7 @@ import { announceImport, type Announced, type ImportFacts } from './import-annou
 import { importFileErrors } from '../../app/file-error-events';
 import { track } from '../../app/track';
 import { refreshInterruptedImport } from '../../import/interrupted-refresh';
+import { reconnect, useReconnecting } from '../../app/reconnect';
 import styles from './ImportStrip.module.css';
 
 /** The imports whose refused files have been reported: once each, when it ends. */
@@ -55,21 +56,9 @@ export function ImportStrip() {
       .catch((error: unknown) => console.warn('The import could not be resumed', error));
   };
 
-  // Waiting for sign-in: this click is the gesture that opens Google's window (reauthorize asks at once).
-  // The job hears of the new token itself and carries on; nothing is picked again.
-  const [reconnecting, setReconnecting] = useState(false);
-  const reconnect = () => {
-    const session = useUi.getState().connection?.session;
-    if (!session) return;
-    setReconnecting(true);
-    getBackend()
-      .reauthorize(session)
-      .catch((error: unknown) => {
-        console.warn('Google Drive was not reconnected', error);
-        showToast(`${error instanceof Error ? error.message : String(error)} The import waits until you reconnect.`, 12_000);
-      })
-      .finally(() => setReconnecting(false));
-  };
+  // Waiting for sign-in: the header's Reconnect, offered here too (one press serves both). The click is the gesture that
+  // opens Google's window; the job hears of the new token itself and carries on, with nothing to pick again.
+  const reconnecting = useReconnecting();
 
   // An import that ends may finish an interrupted one (the same files chosen again): its summary is read again.
   const ended = progress?.finished === true;
@@ -183,7 +172,7 @@ export function ImportStrip() {
           ) : needsSignIn ? (
             <>
               <Button size="sm" variant="primary" aria-disabled={reconnecting} onClick={reconnect}>
-                Reconnect to Google Drive
+                Reconnect Google Drive
               </Button>
               <Button size="sm" variant="ghost" onClick={() => job.cancel()}>
                 Stop

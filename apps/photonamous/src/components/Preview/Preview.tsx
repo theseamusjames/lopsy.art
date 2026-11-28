@@ -1,6 +1,8 @@
 import type { KeyboardEvent, MouseEvent } from 'react';
 import { parseItem, type ItemId } from '../../library/items';
 import { useLibraryView, usePreviewUrl } from '../../app/hooks';
+import { useSignInState } from '../../app/reconnect';
+import { SignInPrompt } from '../SignInPrompt/SignInPrompt';
 import styles from './Preview.module.css';
 
 /** Where a zoomed preview is looking, as fractions of the image (0..1). */
@@ -61,6 +63,9 @@ export function Preview({ itemId, zoom = null, onZoom }: PreviewProps) {
   const thumb = usePreviewUrl(version?.thumb ?? null, 'thumb');
   const screen = usePreviewUrl(version?.screen ?? null, 'screen');
   const url = screen ?? thumb;
+  // The full-size picture waits for sign-in (it loads by itself once reconnected): say so here, where it is missing.
+  const signIn = useSignInState();
+  const waitsForSignIn = signIn === 'needed' && version?.screen != null && screen === null;
   const name = asset?.title || asset?.fileName || '';
   // Until the photo has loaded there is nothing to look closer at.
   const zoomable = onZoom !== undefined && url !== null;
@@ -96,6 +101,11 @@ export function Preview({ itemId, zoom = null, onZoom }: PreviewProps) {
         />
       ) : (
         <p className={styles.loading}>Loading…</p>
+      )}
+      {waitsForSignIn && (
+        <div className={styles.signIn} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          <SignInPrompt sentence="Reconnect Google Drive to load this photo at full size." />
+        </div>
       )}
     </div>
   );

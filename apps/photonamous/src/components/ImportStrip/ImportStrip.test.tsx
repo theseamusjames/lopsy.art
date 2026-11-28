@@ -97,7 +97,7 @@ describe('the import strip', () => {
     const move = startImport({ finished: false, items: files });
     move({ finished: false, needsSignIn: true, items: files });
     expect(strip()?.textContent).toContain('Reconnect to Google Drive to continue · 2 of 3 photos left');
-    const button = [...(strip()?.querySelectorAll('button') ?? [])].find((b) => b.textContent === 'Reconnect to Google Drive');
+    const button = [...(strip()?.querySelectorAll('button') ?? [])].find((b) => b.textContent === 'Reconnect Google Drive');
     expect(button).toBeDefined();
     expect(strip()?.textContent).not.toContain('could not be imported');
     expect(strip()?.textContent).not.toContain('Pause');
