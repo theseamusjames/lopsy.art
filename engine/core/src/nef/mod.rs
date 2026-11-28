@@ -250,6 +250,17 @@ fn sub_ifds(reader: &TiffReader, ifd0: &[IfdEntry]) -> Vec<Vec<IfdEntry>> {
     u32s(ifd0, TagId::SubIFDs as u16).unwrap_or_default().iter().take(MAX_SUB_IFDS).filter_map(|&o| reader.read_ifd_at(o).ok()).collect()
 }
 
+/// A 2×2 colour filter of one red (0), one blue (2) and two greens (1) on
+/// a diagonal, as every Bayer sensor has; `None` for any other, such as
+/// red, green / blue, green, which holds all three colours but puts its
+/// greens side by side.
+fn bayer_pattern(p: &[u8]) -> Option<[u8; 4]> {
+    let p: [u8; 4] = p.try_into().ok()?;
+    let count = |c: u8| p.iter().filter(|&&v| v == c).count();
+    let greens_on_a_diagonal = (p[0] == 1 && p[3] == 1) || (p[1] == 1 && p[2] == 1);
+    (count(0) == 1 && count(2) == 1 && count(1) == 2 && greens_on_a_diagonal).then_some(p)
+}
+
 /// The strips of the raw IFD, each inside the file, in increasing order
 /// and not overlapping: the summed length the layout is decided from is
 /// then never more than the file holds.
@@ -381,7 +392,7 @@ pub fn read_info(data: &[u8]) -> Result<NefInfo, String> {
         let dim = u32s(&raw_ifd, TagId::CfaRepeatPatternDim as u16);
         let pattern = raw_ifd.iter().find(|e| e.tag == TagId::CfaPattern as u16).map(|e| e.raw_bytes.clone());
         match (dim.as_deref(), pattern) {
-            (None | Some([2, 2]), Some(p)) if p.len() == 4 && p.iter().all(|&c| c <= 2) && (0..3).all(|c| p.contains(&c)) => [p[0], p[1], p[2], p[3]],
+            (None | Some([2, 2]), Some(p)) if bayer_pattern(&p).is_some() => [p[0], p[1], p[2], p[3]],
             _ => return Err("This Nikon RAW's colour filter is not a 2×2 red, green and blue pattern, which is not supported".into()),
         }
     };
@@ -634,5 +645,18 @@ mod tests {
         let ok = strip_table(&[16, 116, 400], &[100, 200, 50]);
         let parts = strips(&data, &ok).unwrap();
         assert_eq!(parts.iter().map(|p| p.len()).collect::<Vec<_>>(), vec![100, 200, 50]);
+    }
+
+    #[test]
+    fn only_a_bayer_pattern_is_a_colour_filter() {
+        for p in [[0, 1, 1, 2], [2, 1, 1, 0], [1, 0, 2, 1], [1, 2, 0, 1]] {
+            assert_eq!(bayer_pattern(&p), Some(p));
+        }
+        // All three colours, greens side by side or one each.
+        for p in [[0, 1, 2, 1], [1, 1, 0, 2], [0, 1, 2, 2], [0, 0, 1, 2], [1, 1, 1, 1]] {
+            assert_eq!(bayer_pattern(&p), None, "{p:?}");
+        }
+        assert_eq!(bayer_pattern(&[0, 1, 1]), None);
+        assert_eq!(bayer_pattern(&[0, 1, 1, 3]), None);
     }
 }
