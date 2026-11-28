@@ -46,9 +46,12 @@ pub fn jpeg_ranges(data: &[u8]) -> Vec<(usize, usize)> {
 
 /// The camera's preview of the whole picture (`width` × `height` after
 /// orientation) and its median, as `arw::exposure::whole_picture_preview`
-/// chooses and measures it, or `None`.
+/// chooses and measures it, or `None`. Nikon stores its previews unturned
+/// (a portrait frame's is landscape, with the orientation tag), so either
+/// aspect is the picture's; the median does not depend on which.
 pub fn whole_picture_preview(data: &[u8], width: u32, height: u32) -> Option<Preview> {
-    preview_of(data, &jpeg_ranges(data), &[f64::from(width) / f64::from(height.max(1))], width.max(height))
+    let aspect = f64::from(width) / f64::from(height.max(1));
+    preview_of(data, &jpeg_ranges(data), &[aspect, 1.0 / aspect], width.max(height))
 }
 
 /// The exposure (stops) at which the develop chain's rendering of a
