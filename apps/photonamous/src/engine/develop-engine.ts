@@ -934,7 +934,10 @@ class PhotoEngine implements DevelopEngine {
   /** Oriented size, before framing. */
   private sourceSize: Size | null = null;
   private framing: Framing = { rotate: 0, flipH: false };
+  /** The recipe applied to the engine now: the screen's, or an export's or preview's while it renders. */
   private recipe: Recipe = DEFAULT_RECIPE;
+  /** The screen's recipe, as `setRecipe` last gave it: what an export or preview puts back. */
+  private screenRecipe: Recipe = DEFAULT_RECIPE;
   private applied: EngineAdjustments | null = null;
   private view: View = { zoom: 1, panX: 0, panY: 0, isFit: true };
   private fitInsets: Insets = NO_INSETS;
@@ -1744,6 +1747,11 @@ class PhotoEngine implements DevelopEngine {
   // ---- the recipe ----------------------------------------------------
 
   setRecipe(recipe: Recipe): void {
+    this.screenRecipe = recipe;
+    this.useRecipe(recipe);
+  }
+
+  private useRecipe(recipe: Recipe): void {
     this.recipe = recipe;
     if (this.sourceSize) this.applyRecipe();
   }
@@ -3085,7 +3093,9 @@ class PhotoEngine implements DevelopEngine {
   /**
    * Runs `work` with the full size loaded when an output of long edge
    * `maxSize` (full size when undefined) needs it, and with `recipe`
-   * applied, putting the screen's edit back afterwards.
+   * applied, putting the screen's edit back afterwards: the screen's, not
+   * whatever was applied when it began, which may be another export's
+   * recipe (a preview and the split view's before rendering at once).
    */
   private async atSizeWith<T>(maxSize: number | undefined, recipe: Recipe | undefined, work: () => Promise<T>): Promise<T> {
     const working = this.imageSize();
@@ -3093,13 +3103,12 @@ class PhotoEngine implements DevelopEngine {
       await this.ensureFullResolution();
     }
     if (!recipe) return work();
-    const shown = this.recipe;
-    this.setRecipe(recipe);
+    this.useRecipe(recipe);
     try {
       return await work();
     } finally {
-      // Unless the screen's edit changed meanwhile, which then stays.
-      if (this.recipe === recipe && !this.isDisposed) this.setRecipe(shown);
+      // Unless another export, or the screen's edit, has applied its own meanwhile: that one puts it back, or stays.
+      if (this.recipe === recipe && !this.isDisposed) this.useRecipe(this.screenRecipe);
     }
   }
 
