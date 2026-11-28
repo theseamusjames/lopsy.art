@@ -10,6 +10,9 @@ import {
 import { showErrorToast, showToast } from '../../app/toasts';
 import type { View } from '../../engine/viewport';
 import { developSource } from '../../library/develop-source';
+import { RawPrepareError, RawRefusedError } from '../../engine/raw/raw-decode';
+import { openFailureFileError } from '../../app/file-error-events';
+import { track } from '../../app/track';
 
 export type EngineStatus =
   | { readonly kind: 'starting' }
@@ -19,6 +22,12 @@ export type EngineStatus =
 
 function describe(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/** Reports a photo the engine could not open, as a `file_error` event: the engine's sentence only when it refused the file. */
+function reportOpenFailure(err: unknown, asset: Asset): void {
+  const engineSentence = err instanceof RawPrepareError || err instanceof RawRefusedError ? err.message : null;
+  track.error(openFailureFileError(describe(err), engineSentence, asset.format, asset.fileName));
 }
 
 /** How long a lost WebGL context is waited for before the engine is made again on a new canvas. */
@@ -54,6 +63,8 @@ export function usePhotoEngine(
   assetRef.current = asset;
   /** Set when the GPU was lost: the next load into a new engine is a recovery, and says so. */
   const isRecovering = useRef(false);
+  /** The photos (id and content) whose failure to open has been reported, so it is reported once. */
+  const reportedFailures = useRef(new Set<string>());
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -139,10 +150,13 @@ export function usePhotoEngine(
     isRecovering.current = false;
     const current = developSource(assetRef.current);
     setStatus({ kind: 'loading', progress: null });
+    /** Set once the original is read: a failure after it is the file's, before it the storage's. */
+    let isDecoding = false;
     loadOriginalRef
       .current(current)
       .then((blob) => {
         if (isCancelled) return null;
+        isDecoding = true;
         return engine.load(blob, current.format, (progress) => {
           if (!isCancelled) setStatus({ kind: 'loading', progress });
         });
@@ -155,6 +169,12 @@ export function usePhotoEngine(
       .catch((err: unknown) => {
         if (isCancelled || err instanceof DecodeAbortedError) return;
         setStatus({ kind: 'error', message: describe(err) });
+        // Once per photo opened here: a new engine after a lost GPU loads it again, and may fail again.
+        const key = `${current.id}|${current.sha256}`;
+        if (isDecoding && !reportedFailures.current.has(key)) {
+          reportedFailures.current.add(key);
+          reportOpenFailure(err, current);
+        }
       });
     return () => {
       isCancelled = true;

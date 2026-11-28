@@ -331,6 +331,12 @@ surfaces decode images differently, the open-document dialog does not
 send `.lopsy`, `.dng` or `.raf` to their loaders, and a drop onto an open
 document adds a layer instead of opening a document.
 
+**Alike**: an image or project too large for this device is refused on
+every surface before anything changes, with the message over the canvas
+(`reportOpenFailure`, `showIfTooLarge`); the open-document New Document
+dialog closes for it so the message is not under it
+(`image-too-large.spec.ts`).
+
 **Pinned by**: `surface-menu-file.spec.ts` "D14: Open... on a dirty
 document asks first; dismissing opens no chooser", "D14: Open... opens a
 chooser for images, PSD, raw and projects, and opens a PNG as a new

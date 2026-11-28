@@ -7,7 +7,12 @@ import { useUi } from '../../app/store';
 import { formatBytes, isPhotoFile, plural, summarizeImport } from '../../import/import-summary';
 import { Button } from '../Button/Button';
 import { Modal } from '../Modal/Modal';
+import { skippedFileErrors } from '../../app/file-error-events';
+import { track } from '../../app/track';
 import styles from './ImportSheet.module.css';
+
+/** The picks whose left-out files have been reported: a sheet that renders again is the same refusal. */
+const reportedPicks = new WeakSet<readonly File[]>();
 
 /** Before an import starts: what is about to come in, and the RAW+JPEG choice. */
 export function ImportSheet() {
@@ -44,6 +49,13 @@ export function ImportSheet() {
       live = false;
     };
   }, [session]);
+
+  // The files left out as not photos are reported once for each pick, when the sheet says so.
+  useEffect(() => {
+    if (!files || reportedPicks.has(files)) return;
+    reportedPicks.add(files);
+    for (const error of skippedFileErrors(summary.skippedNames)) track.error(error);
+  }, [files, summary.skippedNames]);
 
   if (!files) return null;
   const close = () => setPendingImport(null);

@@ -174,7 +174,7 @@ import { areaLayerKey, areaLayerValues, areaValues, linearAreaLayerKey, linearAr
 import { developPathFor, developStages, type DevelopPath, type LegacyStages, type LinearStages } from './develop-stages';
 import { effectiveTextureLimit, treatsAsFloat, usesWorkingSpace } from './develop-override';
 import { NO_INSETS, clampZoom, fitView, limitSize, panBy, zoomAround, type Insets, type Size, type View } from './viewport';
-import { decodeRawInWorkers, DecodeAbortedError, openRawFrame, RawPrepareError, type FrameSize } from './raw/raw-decode';
+import { decodeRawInWorkers, DecodeAbortedError, openRawFrame, RawPrepareError, RawRefusedError, type FrameSize } from './raw/raw-decode';
 import { rawLoadPath, type RawDescription } from './raw/raw-format';
 import { rawWhiteBalanceFor, type RawWhiteBalance, type RawWhiteEngine } from './raw/raw-white-balance';
 import { rawSettingsFor, rawSettingsJson, temperatureTintFor, type RawDevelopSettings } from './raw-develop';
@@ -314,8 +314,12 @@ export interface ExportOptions {
   readonly reducedSize?: Size | null;
   /** Checked between tiles: an abort stops a tiled export and frees what it took. */
   readonly signal?: AbortSignal;
-  /** Told, in a sentence for the person, when an export meant for tiles is made at the held size instead. */
-  readonly onReduced?: (note: string) => void;
+  /**
+   * Told, in a sentence for the person, when an export meant for tiles is
+   * made at the held size instead; `cause` says why: 'settings', no tile
+   * can be made with the edit's settings, or 'failed', a tile failed.
+   */
+  readonly onReduced?: (note: string, cause: 'settings' | 'failed') => void;
 }
 
 /** What the loaded photo offers the Edit view. */
@@ -1433,7 +1437,14 @@ class PhotoEngine implements DevelopEngine {
     await nextFrame();
     this.checkLive(signal);
     this.resetLayer(1, 1);
-    const meta = JSON.parse(decodeAndUploadRawBaked(this.engine, this.layerId, data)) as BakedRawMeta;
+    let metaJson: string;
+    try {
+      metaJson = decodeAndUploadRawBaked(this.engine, this.layerId, data);
+    } catch (err) {
+      // The engine's sentence, shown as it is; typed so the Edit view can report it without its other errors' words.
+      throw new RawRefusedError(err instanceof Error ? err.message : String(err));
+    }
+    const meta = JSON.parse(metaJson) as BakedRawMeta;
     if (!meta.width || !meta.height) throw new Error('The RAW file decoded to an empty image');
     this.colorNote = meta.colorApproximate === true && typeof meta.colorNote === 'string' && meta.colorNote !== '' ? meta.colorNote : null;
     // The whole picture is decoded at once: what the layer holds is its full size here, reduced when the GPU could not hold it.
@@ -2385,10 +2396,12 @@ class PhotoEngine implements DevelopEngine {
     } catch (err) {
       if (err instanceof DecodeAbortedError || options.signal?.aborted || this.isDisposed) throw err;
       console.warn('Photonamous: the export could not be made in tiles', err);
-      const why = err instanceof NoWorkableTileError ? 'with these settings' : `(${err instanceof Error ? err.message : String(err)})`;
+      const isSettings = err instanceof NoWorkableTileError;
+      const why = isSettings ? 'with these settings' : `(${err instanceof Error ? err.message : String(err)})`;
       const made = reduced.size ?? limitSize(image, reduced.maxSize);
       options.onReduced?.(
         `This photo could not be exported at its full size of ${own.width} × ${own.height} a part at a time ${why}, so it was exported at ${made.width} × ${made.height}.`,
+        isSettings ? 'settings' : 'failed',
       );
       return this.encode(reduced);
     }

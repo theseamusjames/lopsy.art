@@ -11,14 +11,15 @@ import { initWasm, uploadLayerPixels, uploadLayerMask, uploadLayerPixelsCompress
 import { resetTrackedState, flushLayerSync, syncDocumentSize, forgetTextLayerLayout } from '../engine-wasm/engine-sync';
 import { extractFamilyName } from '../utils/font-loader';
 import { pixelDataManager } from '../engine/pixel-data-manager';
-import { notifyError, describeError } from '../app/notifications-store';
+import { describeError } from '../app/notifications-store';
 import { loadDocumentFonts } from '../app/load-document-fonts';
 import type { Layer, RasterLayer, TextLayer, ShapeLayer, GroupLayer } from '../types/layers';
 import type { Color } from '../types/color';
 import type { AdjustmentNode } from '../types/adjustment-nodes';
 import { FORMAT_VERSION, isRgba16Layer, type SerializedLayer } from './project-save';
 import { inflateExact, pixelBlobSize, readProjectContainer } from './project-format';
-import { getMaxDocumentSide } from '../engine-wasm/gpu-limits';
+import { getDocumentSizeLimit } from '../engine-wasm/gpu-limits';
+import { reportOpenFailure } from '../app/report-open-failure';
 import { effectsForFormatVersion, parseStoredEffects } from './layer-effects-format';
 import { parseStoredColorSpans } from '../tools/text/text-color-spans';
 
@@ -163,8 +164,10 @@ export async function loadProjectOrThrow(file: File): Promise<LoadedProject> {
 
     const arrayBuffer = await file.arrayBuffer();
     // Everything in the file is checked before the open document is replaced.
+    const limit = getDocumentSizeLimit();
     const { version, manifest, blobs, pixelBlobCount } = readProjectContainer(arrayBuffer, {
-      maxSide: getMaxDocumentSide(),
+      maxSide: limit.side,
+      isDeviceLimit: limit.isDevice,
       supportedVersion: SUPPORTED_VERSION,
     });
     const header = { version };
@@ -295,10 +298,11 @@ export async function loadProjectOrThrow(file: File): Promise<LoadedProject> {
   return { fonts };
 }
 
+/** Opens a .lopsy file as the document; a failure is reported once (a project too large for this device over the canvas, else a toast). */
 export async function loadProject(file: File): Promise<void> {
   try {
     await loadProjectOrThrow(file);
   } catch (err) {
-    notifyError(`Failed to load project: ${describeError(err)}`);
+    reportOpenFailure(err, { kind: 'project', name: file.name }, `Failed to load project: ${describeError(err)}`);
   }
 }

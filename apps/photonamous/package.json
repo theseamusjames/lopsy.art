@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@lopsy/handoff": "*",
+    "@lopsy/tracking": "*",
     "@lopsy/photos-core": "*",
     "@lopsy/ui": "*",
     "lucide-react": "0.577.0",

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MAX_DOCUMENT_SIDE, clampDocumentSide, maxDocumentSide } from './document-size';
+import { MAX_DOCUMENT_SIDE, clampDocumentSide, documentSizeLimit, maxDocumentSide } from './document-size';
 
 describe('maxDocumentSide (#934)', () => {
   it('uses the GPU texture limit when it is below the hard cap', () => {
@@ -26,5 +26,18 @@ describe('clampDocumentSide', () => {
     expect(clampDocumentSide(99.6, 8192)).toBe(100);
     expect(clampDocumentSide(0, 8192)).toBe(1);
     expect(clampDocumentSide(Number.NaN, 8192)).toBe(1);
+  });
+});
+
+describe('documentSizeLimit', () => {
+  it('is the GPU\'s when the GPU allows no more than the cap', () => {
+    expect(documentSizeLimit(8192)).toEqual({ side: 8192, isDevice: true });
+    expect(documentSizeLimit(16384)).toEqual({ side: 16384, isDevice: true });
+  });
+
+  it('is Lopsy\'s cap when the GPU allows more, or its limit is unknown', () => {
+    expect(documentSizeLimit(32768)).toEqual({ side: MAX_DOCUMENT_SIDE, isDevice: false });
+    expect(documentSizeLimit(null)).toEqual({ side: MAX_DOCUMENT_SIDE, isDevice: false });
+    expect(documentSizeLimit(0)).toEqual({ side: MAX_DOCUMENT_SIDE, isDevice: false });
   });
 });

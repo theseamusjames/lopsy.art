@@ -222,6 +222,10 @@ The page puts no limit on what it fetches, but a browser reads another
 site's file only when that site allows it (`Access-Control-Allow-Origin`);
 when it does not, `fetch` rejects with a `TypeError`.
 
+An image or project larger than the device can hold (a side over the
+GPU's largest texture, or over 16384) is refused with code `refused` and
+a message giving its size and the largest side allowed; nothing changes.
+
 ## The loop
 
 A finished piece takes dozens to hundreds of commands. Don't send one giant

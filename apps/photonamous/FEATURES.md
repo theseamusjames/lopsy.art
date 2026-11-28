@@ -438,8 +438,8 @@ the newer version made.
   "shown and exported at", on a GPU without float targets, for a RAW
   file opened as the finished picture, a layer from Lopsy and a full
   size that failed for memory. An HDR file smaller than the photo's own
-  size, and Edit in Lopsy's PNG (Lopsy edits on the same GPU), are made
-  from the reduced image too. An edit whose effects reach so far that
+  size is made from the reduced image too. Such a photo does not go to
+  Lopsy at all (see Lopsy round trips). An edit whose effects reach so far that
   the rectangles would be mostly overlap is exported at the reduced size
   and the line says "With these settings it cannot be exported a part at
   a time"; a rectangle that fails (memory, a canvas the browser refuses)
@@ -797,6 +797,19 @@ never talks to Google. Lopsy's side is in `apps/lopsy-web/FEATURES.md`
   `.lopsy` with the file's current revision (read until stable). In Single
   view a document's button is **Open in Lopsy**, beside Edit, which edits
   its flattened render here (see the Edit view).
+- **A photo larger than Lopsy can open on this device** is not handed
+  over. Lopsy keeps each layer as one image on the same GPU, so a photo
+  whose long edge is larger than this device's graphics can edit (the
+  limit the Edit view's line under the view bar names) would not open
+  there. Edit in Lopsy is then shown as unavailable on every surface: in
+  the grid toolbar's More menu and the tile menu the item is off with the
+  reason as its hint, and in the Single view and the Edit view's toolbar
+  the button is drawn off but stays focusable, with the reason as its
+  tooltip and its description for screen readers; pressing it does
+  nothing. The reason reads "This photo is 17504 × 3440 pixels, larger
+  than Lopsy can open on this device (16382 on a side)." A photo whose
+  size or GPU limit is unknown is offered as usual, and a Lopsy
+  document's **Open in Lopsy** is unaffected.
 - **Save to Photonamous** (in Lopsy): the `.lopsy` and a flattened 16-bit
   PNG come back and are stored in `Lopsy documents/` as a document
   asset, stacked behind the photo it was made from, with previews. Saving

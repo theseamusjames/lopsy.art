@@ -49,18 +49,18 @@ const GRADIENT: Channels = (x, y) => [Math.min(65535, x * 1024), Math.min(65535,
 /** Steps far finer than 8 bits can hold: 8-bit storage would collapse them. */
 const FINE_GRADIENT: Channels = (x, y) => [20000 + x * 9, 40000 + y * 11, 12345 + (x + y) * 5, 0xffff];
 
-/** A 16-bit RGBA PNG of `PNG_W` x `PNG_H`. */
-function makePng16(channels: Channels = GRADIENT): Buffer {
+/** A 16-bit RGBA PNG of `width` x `height` (`PNG_W` x `PNG_H` unless said). */
+function makePng16(channels: Channels = GRADIENT, width = PNG_W, height = PNG_H): Buffer {
   const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(PNG_W, 0);
-  ihdr.writeUInt32BE(PNG_H, 4);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
   ihdr[8] = 16; // bit depth
   ihdr[9] = 6; // RGBA
-  const stride = 1 + PNG_W * 8;
-  const raw = Buffer.alloc(stride * PNG_H);
-  for (let y = 0; y < PNG_H; y++) {
+  const stride = 1 + width * 8;
+  const raw = Buffer.alloc(stride * height);
+  for (let y = 0; y < height; y++) {
     raw[y * stride] = 0;
-    for (let x = 0; x < PNG_W; x++) {
+    for (let x = 0; x < width; x++) {
       const o = y * stride + 1 + x * 8;
       const [r, g, b, a] = channels(x, y);
       raw.writeUInt16BE(r, o);
@@ -228,8 +228,9 @@ async function openLopsyFrom(
   lopsyUrl: string,
   mode: 'handshake' | 'unprompted' = 'handshake',
   channels: Channels = GRADIENT,
+  size: { width: number; height: number } = { width: PNG_W, height: PNG_H },
 ): Promise<Page> {
-  const png = makePng16(channels).toString('base64');
+  const png = makePng16(channels, size.width, size.height).toString('base64');
   const [lopsy] = await Promise.all([
     context.waitForEvent('page'),
     photos.evaluate(({ url, b64, m }) => (window as unknown as { startHandoff: (u: string, b: string, m: string) => string }).startHandoff(url, b64, m), {
@@ -447,6 +448,39 @@ test.describe('Photonamous handoff', () => {
     expect(save!.renderHeight).toBe(80);
     // A document that did not come from Photonamous gets no bar.
     await expect(page.getByRole('region', { name: 'Photonamous' })).toHaveCount(0);
+  });
+
+  test('a photo larger than this device allows is not opened: the start screen stays and the message says why', async ({ page, context, baseURL }) => {
+    await servePhotosPages(context, new URL(baseURL!).origin);
+    await page.goto(`${PHOTOS_ORIGIN}/library`);
+    // The largest document side here: the GPU's largest texture (8,192 on SwiftShader), at most 16,384.
+    const limit = Math.min(
+      16384,
+      await page.evaluate(async (wgpu) => {
+        if (wgpu) {
+          const gpu = (navigator as unknown as { gpu: { requestAdapter: () => Promise<{ limits: { maxTextureDimension2D: number } } | null> } }).gpu;
+          return (await gpu.requestAdapter())?.limits.maxTextureDimension2D ?? 0;
+        }
+        const gl = document.createElement('canvas').getContext('webgl2');
+        return (gl?.getParameter(gl.MAX_TEXTURE_SIZE) as number | undefined) ?? 0;
+      }, process.env.LOPSY_RENDERER === 'wgpu'),
+    );
+    const lopsy = await openLopsyFrom(context, page, `${baseURL}/`, 'handshake', GRADIENT, { width: limit + 8, height: 2 });
+    await waitForStore(lopsy);
+
+    const message = lopsy.getByRole('alertdialog');
+    await expect(message).toBeVisible({ timeout: 30_000 });
+    await expect(message).toHaveAccessibleName('This image is too large to open');
+    await expect(message).toHaveAccessibleDescription(
+      `DSCF1234 is ${(limit + 8).toLocaleString('en-US')} × 2 pixels. Lopsy keeps each layer as one image in this device's graphics memory, ` +
+        `and the largest this device allows is ${limit.toLocaleString('en-US')} pixels on a side. Make the image smaller and open it again.`,
+    );
+    await lopsy.screenshot({ path: 'e2e/screenshots/photos-handoff-too-large.png' });
+    // Nothing opened: the start screen, no bar, no toast.
+    await expect(lopsy.getByRole('dialog', { name: 'New Document' })).toBeVisible();
+    await expect(lopsy.getByRole('region', { name: 'Photonamous' })).toHaveCount(0);
+    expect(await lopsy.evaluate(() => (window as unknown as { __editorStore: { getState: () => { documentReady: boolean } } }).__editorStore.getState().documentReady)).toBe(false);
+    await expect(lopsy.getByText(/Couldn't receive the photo/)).toHaveCount(0);
   });
 
   test('without the handoff parameter Lopsy shows no Photonamous bar', async ({ page }) => {

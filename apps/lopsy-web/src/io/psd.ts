@@ -8,6 +8,8 @@
  * in engine/lopsy-core/psd.
  */
 
+import { assertFitsDocument } from './image-too-large';
+import { getDocumentSizeLimit } from '../engine-wasm/gpu-limits';
 import { useEditorStore } from '../app/editor-store';
 import { useUIStore } from '../app/ui-store';
 import { notifyInfo } from '../app/notifications-store';
@@ -227,7 +229,14 @@ export async function exportPsdFile(depth: 8 | 16 = 8): Promise<void> {
 
 export async function importPsdFile(data: Uint8Array, name: string): Promise<void> {
   useUIStore.getState().openModal({ kind: 'loading', message: 'Opening PSD…' });
+  try {
+    await importPsdFileInner(data, name);
+  } finally {
+    useUIStore.getState().closeModalOfKind('loading');
+  }
+}
 
+async function importPsdFileInner(data: Uint8Array, name: string): Promise<void> {
   // Ensure the WASM module is initialized — when opening from the initial
   // modal before any document exists, the engine hasn't been created yet.
   await initWasm();
@@ -259,6 +268,9 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
       effectsJson?: string;
     }>;
   };
+
+  // A PSD larger than a layer can be here is refused before the open document is replaced.
+  assertFitsDocument(manifest.width, manifest.height, getDocumentSizeLimit());
 
   // Create a new document with the PSD dimensions.
   useEditorStore.getState().createDocument(manifest.width, manifest.height, true);
@@ -414,7 +426,6 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
   }
 
   store.getState().fitToView();
-  useUIStore.getState().closeModalOfKind('loading');
   notifyRasterizedLayers(manifest.layers);
 }
 

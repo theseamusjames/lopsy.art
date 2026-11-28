@@ -89,14 +89,17 @@ async function renderBands(
 }
 
 /**
- * Decodes a RAF file across a pool of workers. `onBand` receives each
- * finished band (already oriented, positioned in the final image) as soon
- * as it is ready, in no particular order. Resolves with the image metadata
- * once every band has been delivered.
+ * Decodes a RAF file across a pool of workers. `onPrepared` receives the
+ * image's metadata once the frame is prepared, before any band renders; if
+ * it rejects, the decode stops there. `onBand` then receives each finished
+ * band (already oriented, positioned in the final image) as soon as it is
+ * ready, in no particular order. Resolves with the image metadata once
+ * every band has been delivered.
  */
 export async function decodeRafInWorkers(
   data: Uint8Array,
   onBand: (meta: RafPrepareMeta, band: RafBandPixels) => void,
+  onPrepared: (meta: RafPrepareMeta) => Promise<void> | void = () => undefined,
 ): Promise<RafPrepareMeta> {
   const module = await compileWasmModule();
   const workers = Array.from({ length: rafWorkerCount(navigator.hardwareConcurrency) }, () => spawnWorker(module));
@@ -107,6 +110,7 @@ export async function decodeRafInWorkers(
     if (prepared.kind !== 'prepared') throw new Error(`RAF worker sent ${prepared.kind} instead of the prepared frame`);
 
     const meta = JSON.parse(prepared.metaJson) as RafPrepareMeta;
+    await onPrepared(meta);
 
     await renderBands(workers, prepared.mosaic, meta, prepared.paramsJson, (band) => onBand(meta, band));
     return meta;

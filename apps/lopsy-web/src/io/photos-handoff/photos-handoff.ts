@@ -29,6 +29,10 @@ import { renderPng16 } from '../export-image';
 import { loadProject } from '../project-load';
 import { serializeProject } from '../project-save';
 import { photosUrl } from './photos-url';
+import { getDocumentSizeLimit } from '../../engine-wasm/gpu-limits';
+import { assertFitsDocument } from '../image-too-large';
+import { pngSize } from '../image-header-size';
+import { reportOpenFailure } from '../../app/report-open-failure';
 import { activePhotosSession, usePhotosHandoffStore } from './photos-handoff-store';
 
 async function waitForEngine(maxFrames = 300): Promise<ReturnType<typeof getEngine>> {
@@ -49,6 +53,9 @@ async function waitForEngine(maxFrames = 300): Promise<ReturnType<typeof getEngi
  * engine's PNG decoder then uploads straight into that layer's texture.
  */
 async function openPngDocument(bytes: ArrayBuffer, name: string): Promise<void> {
+  // A photo larger than a layer can be here is refused from its header, before the open document is replaced.
+  const header = pngSize(new Uint8Array(bytes));
+  if (header) assertFitsDocument(header.width, header.height, getDocumentSizeLimit());
   await initWasm();
   useEditorStore.getState().createDocument(1, 1, true);
   const engine = await waitForEngine();
@@ -98,8 +105,10 @@ export async function openPhotosHandoffFromQuery(): Promise<void> {
   window.history.replaceState(window.history.state, '', `${pathname}${searchWithoutHandoffParam(search)}${hash}`);
 
   useUIStore.getState().openModal({ kind: 'loading', message: 'Receiving from Photonamous…' });
+  let received: { kind: 'png16' | 'lopsy'; name: string } | null = null;
   try {
     const { document, connection } = await acceptHandoff({ photosUrl: url, id });
+    received = document;
     const previousDocumentId = useEditorStore.getState().documentReady ? useEditorStore.getState().document.id : null;
     if (document.kind === 'lopsy') {
       await loadProject(new File([document.bytes], `${document.name}.lopsy`));
@@ -116,7 +125,14 @@ export async function openPhotosHandoffFromQuery(): Promise<void> {
       ...(document.camera ? { camera: document.camera } : {}),
     });
   } catch (err) {
-    notifyError(`Couldn't receive the photo from Photonamous: ${describeError(err)}`);
+    const isProject = received?.kind === 'lopsy';
+    const attempt = {
+      kind: isProject ? ('project' as const) : ('image' as const),
+      name: received?.name ?? null,
+      format: received === null ? ('other' as const) : isProject ? ('lopsy' as const) : ('png' as const),
+      isHandoff: true,
+    };
+    reportOpenFailure(err, attempt, `Couldn't receive the photo from Photonamous: ${describeError(err)}`);
   } finally {
     useUIStore.getState().closeModalOfKind('loading');
   }

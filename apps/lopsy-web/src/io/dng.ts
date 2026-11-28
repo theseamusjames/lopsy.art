@@ -40,6 +40,10 @@ import { decodeAndUploadDng, initWasm } from '../engine-wasm/wasm-bridge';
 import { resetTrackedState } from '../engine-wasm/engine-sync';
 import { pixelDataManager } from '../engine/pixel-data-manager';
 import { notifyError } from '../app/notifications-store';
+import { track } from '../app/track';
+import { getDocumentSizeLimit } from '../engine-wasm/gpu-limits';
+import { assertFitsDocument } from './image-too-large';
+import { dngSize } from './image-header-size';
 
 interface DngMeta {
   width: number;
@@ -60,6 +64,10 @@ export async function importDngFile(data: Uint8Array, name: string): Promise<voi
 }
 
 async function importDngFileInner(data: Uint8Array, name: string): Promise<void> {
+  // A DNG larger than a layer can be here is refused from its header, before the open document is replaced.
+  const size = dngSize(data);
+  if (size) assertFitsDocument(size.width, size.height, getDocumentSizeLimit());
+
   await initWasm();
 
   useEditorStore.getState().createDocument(1, 1, true);
@@ -89,6 +97,7 @@ async function importDngFileInner(data: Uint8Array, name: string): Promise<void>
 
   if (meta.width === 0 || meta.height === 0) {
     notifyError('DNG decode returned empty image');
+    track.error({ kind: 'raw-refused', reason: 'RAW file decoded to an empty image', format: 'dng' });
     return;
   }
 

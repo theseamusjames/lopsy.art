@@ -17,7 +17,9 @@ import {
   invalidateInternalClipboardPriority,
   isInternalClipboardNewer,
 } from './store/system-clipboard-sync';
-import { describeError, notifyError } from './notifications-store';
+import { describeError } from './notifications-store';
+import { reportOpenFailure, showIfTooLarge } from './report-open-failure';
+import { formatFromMime } from '@lopsy/tracking/file-error';
 import {
   processTextKey,
   moveVertical,
@@ -323,7 +325,11 @@ export function useKeyboardShortcuts({
           e.preventDefault();
           const name = file.name.replace(/\.[^.]+$/, '') || 'Copied File';
           pasteImageBlob(file, name).catch((err) =>
-            notifyError(`Failed to paste image: ${describeError(err)}`),
+            reportOpenFailure(
+              err,
+              { kind: 'paste', name: file.name || null, format: formatFromMime(file.type) },
+              `Failed to paste image: ${describeError(err)}`,
+            ),
           );
           return;
         }
@@ -340,7 +346,7 @@ export function useKeyboardShortcuts({
             if (blob) {
               e.preventDefault();
               pasteImageBlob(blob, 'Copied File').catch((err) =>
-                notifyError(`Failed to paste image: ${describeError(err)}`),
+                reportOpenFailure(err, { kind: 'paste', name: null, format: formatFromMime(blob.type) }, `Failed to paste image: ${describeError(err)}`),
               );
               return;
             }
@@ -352,10 +358,12 @@ export function useKeyboardShortcuts({
       // Not all browsers support this (Firefox added it in v127), so guard the call.
       e.preventDefault();
       if (typeof navigator.clipboard?.read === 'function') {
+        let pastedType = '';
         navigator.clipboard.read().then(async (clipboardItems) => {
           for (const clipboardItem of clipboardItems) {
             const imageType = clipboardItem.types.find((t: string) => t.startsWith('image/'));
             if (imageType) {
+              pastedType = imageType;
               const blob = await clipboardItem.getType(imageType);
               await pasteImageBlob(blob, 'Copied File');
               return;
@@ -363,8 +371,9 @@ export function useKeyboardShortcuts({
           }
           // No external image — fall back to internal clipboard
           pasteInternalClipboard();
-        }).catch(() => {
-          pasteInternalClipboard();
+        }).catch((err: unknown) => {
+          // An image too large to paste says so; any other failure falls back to the internal clipboard, as before.
+          if (!showIfTooLarge(err, { kind: 'paste', name: null, format: formatFromMime(pastedType) })) pasteInternalClipboard();
         });
       } else {
         // Browser doesn't support clipboard.read() — use internal clipboard

@@ -21,7 +21,7 @@ vi.mock('../../edit/EditView/EditView', () => ({
     return <div data-testid="edit-view" />;
   },
 }));
-vi.mock('../lopsy-handoff', () => ({ openInLopsy: vi.fn() }));
+vi.mock('../lopsy-handoff', () => ({ openInLopsy: vi.fn(), lopsyRefusalHere: vi.fn(() => null) }));
 vi.mock('../preview-cache', () => ({ peekPreviewUrl: () => undefined, loadPreviewUrl: () => new Promise<string>(() => undefined) }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

@@ -1,4 +1,4 @@
-import { maxDocumentSide } from '../utils/document-size';
+import { documentSizeLimit, maxDocumentSide, type DocumentSizeLimit } from '../utils/document-size';
 import { runningRenderer, webGpuTextureLimit } from './renderer-choice';
 
 let cachedMaxTextureSize: number | null | undefined;
@@ -38,4 +38,9 @@ export function getGpuMaxTextureSize(): number | null {
 /** Largest document side this device can allocate. */
 export function getMaxDocumentSide(): number {
   return maxDocumentSide(getGpuMaxTextureSize());
+}
+
+/** `getMaxDocumentSide` with whether this device's GPU sets it or Lopsy's own cap does. */
+export function getDocumentSizeLimit(): DocumentSizeLimit {
+  return documentSizeLimit(getGpuMaxTextureSize());
 }

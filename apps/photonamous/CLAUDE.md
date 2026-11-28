@@ -221,6 +221,24 @@ could use too goes there; one only this app uses stays here.
   `data-keeps-gesture`. One that does so at once in its handler needs
   nothing.
 
+## Usage statistics
+
+`src/app/track.ts` is the app's one way to send analytics
+(`@lopsy/tracking`, `../../packages/tracking/README.md`; Cloudflare Zaraz
+in production). A file the app refuses or cannot open is reported with
+`track.error`, where the person is told and once per failure: the import
+sheet's files that are not photos and an import's refused files (one event
+per reason and format, with the count), a photo the Edit view cannot
+decode, a photo shown below its own size, Edit in Lopsy refused, an export
+made smaller than meant. The events are built in
+`src/app/file-error-events.ts`. A new rejection path fires one too. Never
+send a file name or path, an album, folder or version name, a Drive or
+account id, EXIF or other text from the file, anything the person typed,
+or a message shown to the person: the reason is a fixed sentence or the
+engine's refusal of a RAW (`engineReason`), the format one from the fixed
+list. The Privacy Policy ("Usage statistics") promises this. Tests swap
+the tracker with `setTracker` and a `recordingTracker()`.
+
 ## Storybook
 
 Every component has a `.stories.tsx` beside it (`apps/lopsy-web/CLAUDE.md`).

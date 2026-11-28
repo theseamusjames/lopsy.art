@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import styles from './EditToolbar.module.css';
 
 /** A button that opens a panel beside the toolbar. */
@@ -20,6 +20,14 @@ export interface EditToolbarAction {
   readonly isDisabled?: boolean;
   /** Shown as off and announced as unavailable, but still focusable (while the view is busy). */
   readonly isBusy?: boolean;
+  /**
+   * Why the action cannot be used for this photo: shown as off and
+   * announced as unavailable as `isBusy` is, with this as its tooltip and
+   * description, and a press does nothing.
+   */
+  readonly unavailable?: string;
+  /** Called for a press while `unavailable`, which does nothing else: to report the refusal. */
+  readonly onUnavailablePress?: () => void;
   readonly onClick: () => void;
 }
 
@@ -56,19 +64,32 @@ export function EditToolbar({ tools, activeId, onSelect, actions = [] }: EditToo
         </button>
       ))}
       {actions.map((action) => (
-        <button
-          key={action.id}
-          type="button"
-          className={styles.button}
-          aria-label={action.label}
-          title={action.title ?? action.label}
-          disabled={action.isDisabled}
-          aria-disabled={action.isBusy || undefined}
-          onClick={action.onClick}
-        >
-          {action.icon}
-        </button>
+        <ActionButton key={action.id} action={action} />
       ))}
     </div>
+  );
+}
+
+function ActionButton({ action }: { readonly action: EditToolbarAction }) {
+  const reasonId = useId();
+  const isUnavailable = action.unavailable !== undefined;
+  return (
+    <button
+      type="button"
+      className={styles.button}
+      aria-label={action.label}
+      title={action.unavailable ?? action.title ?? action.label}
+      disabled={action.isDisabled}
+      aria-disabled={action.isBusy || isUnavailable || undefined}
+      aria-describedby={isUnavailable ? reasonId : undefined}
+      onClick={isUnavailable ? action.onUnavailablePress : action.onClick}
+    >
+      {action.icon}
+      {isUnavailable && (
+        <span id={reasonId} hidden>
+          {action.unavailable}
+        </span>
+      )}
+    </button>
   );
 }

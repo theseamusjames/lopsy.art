@@ -316,6 +316,22 @@ React components or hooks: they must run with no UI mounted.
    UI surface does the same operation, a comparison spec
    (`compareUiAndApi`). `e2e/GUIDE.md` describes all three.
 
+## Usage statistics
+
+`src/app/track.ts` is Lopsy's one way to send analytics (`@lopsy/tracking`,
+`../../packages/tracking/README.md`; Cloudflare Zaraz in production):
+`track.event` for an event (the guestbook), `track.error` for a file Lopsy
+refused or could not open. Every failure to open a file is shown through
+`src/app/report-open-failure.ts` (`reportOpenFailure`, `showIfTooLarge`,
+`toastOpenFailure`), which also sends its `file_error` event, once, built
+by `open-failure-event.ts`. A new way in that can fail reports through
+those functions, or calls `track.error` where it tells the person. Never
+send a file name or path, a document or layer name, text from the file,
+anything the person typed, or a message shown to the person: the reason is
+a fixed sentence or the engine's refusal (`engineReason`), the format one
+from the fixed list. Tests swap the tracker with `setTracker` and a
+`recordingTracker()`.
+
 ## Components
 
 - One component per directory. Directory name matches component name (PascalCase).

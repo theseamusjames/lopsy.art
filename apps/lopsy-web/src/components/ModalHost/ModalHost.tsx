@@ -4,7 +4,9 @@ import { useEditorStore } from '../../app/editor-store';
 import type { DocumentColorMode } from '../../types';
 import { pasteOrOpenBlob } from '../../app/paste-or-open';
 import { importPsdFile } from '../../io/psd';
-import { describeError, notifyError } from '../../app/notifications-store';
+import { describeError } from '../../app/notifications-store';
+import { formatFromMime } from '@lopsy/tracking/file-error';
+import { showIfTooLarge, toastOpenFailure, type OpenAttempt } from '../../app/report-open-failure';
 import { confirmShapeSize } from '../../tools/shape/shape-interaction';
 import { confirmMarqueeRegion } from '../../tools/marquee/marquee-strategy';
 import { defaultMarqueeCorners } from '../../tools/marquee/marquee-region';
@@ -57,6 +59,19 @@ export function ModalHost() {
     [closeModal],
   );
 
+  /**
+   * A failed open or paste from the New Document dialog: one too large for
+   * this device closes the dialog, so the message over the canvas that says
+   * why is not under it; any other failure is toasted with the dialog left open.
+   */
+  const reportFailure = useCallback(
+    (err: unknown, attempt: OpenAttempt, toast: string) => {
+      if (showIfTooLarge(err, attempt)) closeModal();
+      else toastOpenFailure(err, attempt, toast);
+    },
+    [closeModal],
+  );
+
   const handleOpenFile = useCallback(
     (file: File) => {
       const name = file.name.replace(/\.[^.]+$/, '');
@@ -65,23 +80,25 @@ export function ModalHost() {
           .arrayBuffer()
           .then((buffer) => importPsdFile(new Uint8Array(buffer), name))
           .then(() => closeModal())
-          .catch((err) => notifyError(`Failed to import PSD: ${describeError(err)}`));
+          .catch((err) => reportFailure(err, { kind: 'image', name: file.name }, `Failed to import PSD: ${describeError(err)}`));
         return;
       }
       pasteOrOpenBlob(file, name, true)
         .then(() => closeModal())
-        .catch((err) => notifyError(`Failed to open file: ${describeError(err)}`));
+        .catch((err) => reportFailure(err, { kind: 'image', name: file.name }, `Failed to open file: ${describeError(err)}`));
     },
-    [closeModal],
+    [closeModal, reportFailure],
   );
 
   const handlePasteClipboard = useCallback(
     (blob: Blob) => {
       pasteOrOpenBlob(blob, 'Copied File', true)
         .then(() => closeModal())
-        .catch((err) => notifyError(`Failed to paste image: ${describeError(err)}`));
+        .catch((err) =>
+          reportFailure(err, { kind: 'paste', name: null, format: formatFromMime(blob.type) }, `Failed to paste image: ${describeError(err)}`),
+        );
     },
-    [closeModal],
+    [closeModal, reportFailure],
   );
 
   const handleShapeSizeConfirm = useCallback(
