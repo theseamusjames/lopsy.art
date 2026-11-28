@@ -13,6 +13,7 @@ one for the directory you are changing before you change it.
 | `apps/photonamous/` | Photonamous, a photo library and RAW editor on the engine (proof of concept of `docs/photonamous-spec.md`) | `apps/photonamous/CLAUDE.md` |
 | `packages/photos-core/` | Photonamous' storage adapters (Google Drive, local folder, memory), library database and import; plain TypeScript | `apps/photonamous/CLAUDE.md` |
 | `packages/handoff/` | The postMessage protocol between Lopsy and Photonamous (Edit in Lopsy, Save and Add to Photonamous, Grade in Photonamous); plain TypeScript used by both apps | `apps/photonamous/CLAUDE.md` |
+| `packages/tracking/` | `@lopsy/tracking`, usage statistics for both apps: the `Tracker` a service implements, the Zaraz tracker, and the `file_error` event; plain TypeScript (`packages/tracking/README.md`) | Its `README.md` |
 | `packages/ui/` | `@lopsy/ui`, the UI both apps share: design tokens, reset and fonts, the Slider, the Menu and the keyboard and focus helpers; React and CSS Modules (`packages/ui/README.md`) | `apps/lopsy-web/CLAUDE.md` |
 | `engine/` | The Rust rendering engine: the engine crate at its top, `core/`, `shaderc/`, and the hosts that embed it (`hosts/wasm` for the browser, `hosts/cli` for the command line) | `engine/CLAUDE.md` |
 | `docs/` | Documents about the repository as a whole | — |
