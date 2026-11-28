@@ -95,8 +95,10 @@
 //! not applied.
 //!
 //! Written from the published TIFF and Exif specifications and from what
-//! the real files show; no code or table of another raw decoder was read
-//! or used.
+//! the real files show. The one exception is the compressed data
+//! ([`compressed`]): its Huffman tables are Nikon's constants, which the
+//! file does not carry, and that module says where their values and the
+//! layout of its bitstream were taken from.
 
 pub mod compressed;
 pub mod crop;
