@@ -518,6 +518,15 @@ engine's real-file tests (`engine/core/tests/raw_formats.rs`,
 the review recorder take the Leica files from raw.pixls.us (CC0) by
 these names: `Leica-Q2.dng`, `Leica-M10-R-compressed.dng`,
 `Leica-M-Typ240-compressed.dng` and `Leica-M9-8bit-compressed.dng`.
+The Canon and Nikon tests (photos-core's `import/cr2-nef.test.ts`,
+`e2e/import-cr2.spec.ts`, `e2e/import-nef.spec.ts`, the engine's
+`cr2_*`, `cr3_*` and `nef_*` tests) read the raw.pixls.us files (CC0) in
+`LOPSY_CR2_SAMPLES` (CR2s by body name, `EOS-5D-Mark-III_RAW.CR2` and
+so on, with an sRAW, an mRAW and the CR3s that must be refused;
+`LOPSY_CR3_SAMPLES` may name the same folder) and `LOPSY_NEF_SAMPLES`
+(NEFs by body, depth and compression, `D850_14bit_uncompressed.NEF` and
+so on, with the compressed ones, a High Efficiency one and a COOLPIX
+NRW that must be refused).
 
 **RAW parity.** `e2e/raw-parity.spec.ts` renders each RAF in
 `LOPSY_RAF_SAMPLES` in the Edit view at its working size under three
@@ -528,7 +537,8 @@ change is) with the one stored in `e2e/raw-parity/<name>.txt`, keyed by
 browser, renderer and way. Four Sony ARWs (`LOPSY_ARW_SAMPLES`), four
 Canon DNGs, lossless and lossy JPEG (`LOPSY_DNG_ADOBE_SAMPLES`), and the
 two ProRAW files (`LOPSY_DNG_SAMPLES`) and the Leica M10-R
-(`LOPSY_DNG_CAMERA_SAMPLES`) are fingerprinted the same way on
+(`LOPSY_DNG_CAMERA_SAMPLES`), two Canon CR2s (`LOPSY_CR2_SAMPLES`) and
+two Nikon NEFs (`LOPSY_NEF_SAMPLES`) are fingerprinted the same way on
 the linear and no-float ways. It runs in Chromium only, in about
 thirteen minutes with four workers. A change that
 is meant to move the RAW develop records new fingerprints for the

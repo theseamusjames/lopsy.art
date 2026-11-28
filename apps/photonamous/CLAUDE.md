@@ -104,9 +104,9 @@ finish, the masks' built-in sliders and the RAW develop stage take the
 same calls on both. A RAW photo's exposure and white balance stay in
 `setRawDevelop`; `setDevelopTone` carries them only for other photos.
 
-**The RAW path.** RAF, DNG and Sony ARW open through the engine's
-format-neutral RAW interface (`raw…` exports), and nothing in
-`src/engine` or `src/edit` names a format: what differs comes from the
+**The RAW path.** RAF, DNG, Sony ARW, Canon CR2 and Nikon NEF open
+through the engine's format-neutral RAW interface (`raw…` exports), and
+nothing in `src/engine` or `src/edit` names a format: what differs comes from the
 file's description (`src/engine/raw/raw-format.ts`, `RawDescription`).
 `rawPrepare` runs in a worker (`raw/raw-worker.ts`), bands are planned
 with `rawPlanBands` and rendered by every worker (`raw/raw-decode.ts`; a
@@ -119,7 +119,14 @@ profiles by their roles (`profiles.ts`; the camera's entry is the
 recipe's `standard`). The baked decode (`decodeAndUploadRawBaked`) is
 only a fallback: a file `rawPrepare` refuses, and a format that renders
 no finished bands (`rawRendersFinishedBands`) on a GPU without float
-targets. `e2e/raw-parity.spec.ts` pins every format's render exactly.
+targets. When the baked decode refuses the file too, its sentence is the
+Edit view's load error (`LoadStatus`): that is how a Canon sRAW or a
+compressed NEF says why it does not open. Import (photos-core's
+`detectFormat`) knows a format by its bytes as the engine's `sniff`
+does, and turns away what it can tell the engine will refuse from the
+header alone (an SR2, a COOLPIX NRW; a CR3 is not a TIFF); a variant
+only the decoder can tell (an sRAW, a compressed NEF) imports with its
+preview. `e2e/raw-parity.spec.ts` pins every format's render exactly.
 
 **Photos larger than the GPU.** One threshold, in `src/engine/full-size.ts`:
 a photo whose own long edge is larger than `editableLimit(textureLimit)`

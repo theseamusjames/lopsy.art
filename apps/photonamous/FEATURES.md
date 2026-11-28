@@ -232,7 +232,7 @@ is `docs/photonamous-spec.md`; running and setup are in
 - **Find photos**, one row under the toolbar: a text search over file
   names, titles, captions and keywords, then filters for rating, label (including *No label*), edits
   (*Edited*, *Not edited*), file type (RAW (Fujifilm), RAW (DNG), RAW
-  (Sony), JPEG, PNG, WebP, Lopsy document), camera and lens, and at the right end the
+  (Sony), RAW (Canon), RAW (Nikon), JPEG, PNG, WebP, Lopsy document), camera and lens, and at the right end the
   order. Where the row has not the room for all of that on one line (a
   small window, the details panel open, or filters whose buttons have
   grown with what they are set to), the filters are one **Filters** menu, opened by the button beside the search
@@ -277,13 +277,16 @@ is `docs/photonamous-spec.md`; running and setup are in
   (everything in it, including folders inside, where the browser can pick
   folders) or, in a Drive library, *Add from Google Drive…*; or drop files
   or folders on the window.
-- Reads **RAF, DNG, ARW (Sony), JPEG, PNG and WebP**, each known by its
-  bytes, not its name. The sheet counts what it found, says what it cannot
-  read, and shows RAW+JPEG pairs as one photo (or imports the RAW only).
-  An ARW (lossy, uncompressed or lossless) shows in the library with the
-  camera's full-size embedded JPEG as its preview and the picture's size
-  (the camera's crop, not the sensor's). Sony's older SR2 and SRF files
-  are not read.
+- Reads **RAF, DNG, ARW (Sony), CR2 (Canon), NEF (Nikon), JPEG, PNG and
+  WebP**, each known by its bytes, not its name. The sheet counts what it
+  found, says what it cannot read, and shows RAW+JPEG pairs as one photo
+  (or imports the RAW only). An ARW (lossy, uncompressed or lossless), a
+  CR2 or a NEF shows in the library with the camera's largest embedded
+  JPEG as its preview and the picture's size (the camera's crop, not the
+  sensor's). Sony's older SR2 and SRF files, Canon's CR3 and the NRW of
+  Nikon's COOLPIX compacts are not read: the sheet leaves them out as
+  files it cannot read. A CR2 or NEF the Edit view cannot open (below)
+  is imported like any other, with its preview.
 - **Photos already in the library are skipped** (by SHA-256), and the
   picked files are never changed. Before importing, the sheet names the
   ones that look like photos already there (same name and size) and
@@ -352,17 +355,25 @@ Nothing in the app changes such a version meanwhile: a preset, pasted
 edits or Reset from the grid passes it by, and its previews stay the ones
 the newer version made.
 
-- **Loading and working size.** RAF, DNG and Sony ARW decode on a pool of
+- **Loading and working size.** RAF, DNG, Sony ARW, Canon CR2 and Nikon NEF decode on a pool of
   workers into the engine's RAW develop stage; an iPhone ProRAW's local
   tone map (its gain table map) is applied there. A DNG's data may be
   uncompressed (8 to 16 bits a sample), lossless JPEG, lossy JPEG
   (Adobe's lossy conversions, 8-bit linear tiles) or deflate; one in
   JPEG XL is not read. DNGs written by a camera open the same way
   (Leica's M, Q and SL bodies), without the lens corrections the file
-  carries. A file the
-  RAW path cannot read, and DNG and ARW on a GPU without float targets,
-  open as the engine's finished picture and are edited as an ordinary
-  photo; when that cannot be read either, the Edit view says why. 16-bit
+  carries. Canon CR2 opens full size, 12- and 14-bit (a dual-pixel
+  RAW from its first frame); Nikon NEF opens uncompressed, 12- and
+  14-bit. Neither applies the lens corrections or picture styles the
+  camera records. A file the
+  RAW path cannot read, and DNG, ARW, CR2 and NEF on a GPU without float
+  targets, open as the engine's finished picture and are edited as an
+  ordinary photo; when that cannot be read either, the Edit view says
+  why, in the engine's sentence ("This photo could not be opened", then
+  for example "This Nikon RAW is lossless compressed, which is not
+  supported yet: only uncompressed NEF files open"). That is what a
+  Canon sRAW or mRAW, a compressed NEF (lossless or lossy), a High
+  Efficiency NEF and a Medium or Small NEF show. 16-bit
   PNG at full depth; JPEG and WebP through the browser. Editing starts on
   a *working image* sized to the view (at most 4096 px on its long edge;
   a RAW file binned by a whole factor, so one less than twice that size
@@ -514,14 +525,17 @@ the newer version made.
   chosen (the file's own tone curve and local tone map at the file's own
   exposure), then Standard (the app's curve, at an exposure matched to
   the photo's embedded preview), Neutral and Monochrome; for any other
-  DNG or a Sony ARW, Standard, Neutral and Monochrome; for other photos,
+  DNG, a Sony ARW, a Canon CR2 or a Nikon NEF, Standard, Neutral and Monochrome; for other photos,
   Standard and Monochrome. Each profile brings its own exposure, to which
   the Exposure slider adds. Eleven Sony bodies have colour computed from measured
   sensor data (RX100 IV, A6400, A7C II, A7 III, A7 IV, A7R II, A7R III,
   A7R IV, A7S II, A7S III, A9), and three more have a colour matrix of
-  the engine's own (A6000, A6700, RX100 III). For any other body the
+  the engine's own (A6000, A6700, RX100 III); so do the Canon EOS 5D
+  Mark III and 5D Mark IV and the Nikon D850. For any other Sony body the
   colour is only approximate (the file carries part of the camera's colour, so it is
-  less saturated than the camera's JPEG): the decoder's sentence saying
+  less saturated than the camera's JPEG), and for any other Canon or
+  Nikon body more so (the file carries no colour matrix, so only its
+  white balance is applied): the decoder's sentence saying
   so sits in small text under the Profile menu, which a screen reader
   reads with the menu.
 - **Straighten**: Angle, and **Level** (draw along something that should
@@ -532,7 +546,8 @@ the newer version made.
   (daylight, day white, cool white), none on a RAF whose header does not
   hold them (one whose values are those of another is listed once); on a DNG or a Sony ARW with
   measured colour, the standard illuminants Daylight, Cloudy, Shade and
-  Tungsten through the file's own calibration; none on an ARW without);
+  Tungsten through the file's own calibration; none on an ARW without,
+  a CR2 or a NEF);
   and Custom, which the sliders set) and a **picker** (the pipette):
   while it is armed, "Click something neutral · Esc to cancel" shows on
   the photo, and a click sets Temperature and Tint to neutralise that
@@ -544,7 +559,8 @@ the newer version made.
   the camera's illuminant A and D65 whites in the file (none without
   them), a DNG's or ARW's measured, the colour temperature of
   the white both sliders make, exactly the file's as-shot Kelvin at As
-  shot. On an ARW without measured colour Temperature is relative. On
+  shot. On an ARW without measured colour, a CR2 and a NEF Temperature
+  is relative. On
   every RAW file the group waits,
   "Reading the camera's white balance…", until the photo is read. On
   other photos the sliders are relative. Each choice, pick or slider
@@ -558,7 +574,7 @@ the newer version made.
   a range of screen values. Highlights pulled down brings back detail
   in highlights the default rendering shows as white, a RAW file's
   clipped highlights included (the decoder rebuilds those from the
-  channels that did not clip). On a DNG or a Sony ARW a highlight clipped
+  channels that did not clip). On a DNG, a Sony ARW, a CR2 or a NEF a highlight clipped
   in every channel at the sensor renders neutral white, and grey when
   Exposure is pulled down, not tinted by the white balance. Auto measures
   the photo's light the same way.
