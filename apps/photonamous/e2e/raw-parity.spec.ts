@@ -44,8 +44,12 @@ import { previewCount, settledPreview, waitForPreview, waitForReady } from './ha
  * LOPSY_DNG_CAMERA_SAMPLES (a Leica M10-R, whose raw image is in the
  * file's first directory, and a Leica Q2, whose 8368 pixels are wider
  * than SwiftShader's 8192-pixel textures: the no-float way's baked decode
- * opens it reduced to the largest size the GPU can edit, full-size.ts). In
- * recipe 2 a DNG or ARW takes the first look after
+ * opens it reduced to the largest size the GPU can edit, full-size.ts),
+ * two Canon CR2s from LOPSY_CR2_SAMPLES (a 5D Mark III, which has a matrix
+ * of the engine's own, and a 7D, which has none and whose colour filter
+ * starts with green) and two Nikon NEFs from LOPSY_NEF_SAMPLES (a D850,
+ * which has a matrix and is 8256 pixels wide, and a 14-bit packed Z 6,
+ * which has none). In recipe 2 a DNG, ARW, CR2 or NEF takes the first look after
  * its camera's (Neutral, or a ProRAW's Standard).
  *
  * Needs LOPSY_RAF_SAMPLES (and the others for their files); each set is
@@ -58,7 +62,9 @@ const arwSamples = process.env.LOPSY_ARW_SAMPLES;
 const dngSamples = process.env.LOPSY_DNG_ADOBE_SAMPLES;
 const prorawSamples = process.env.LOPSY_DNG_SAMPLES;
 const cameraDngSamples = process.env.LOPSY_DNG_CAMERA_SAMPLES;
-/** The DNG and ARW samples fingerprinted: four Sony bodies (two with measured colour, two without), four Canon DNGs (a mosaic, a linear one and their lossy JPEG conversions), two ProRAW files and two Leica DNGs. */
+const cr2Samples = process.env.LOPSY_CR2_SAMPLES;
+const nefSamples = process.env.LOPSY_NEF_SAMPLES;
+/** The other RAW samples fingerprinted: four Sony bodies (two with measured colour, two without), four Canon DNGs (a mosaic, a linear one and their lossy JPEG conversions), two ProRAW files, two Leica DNGs, two Canon CR2s and two Nikon NEFs. */
 const OTHER_RAW: readonly { readonly dir: string | undefined; readonly name: string }[] = [
   { dir: arwSamples, name: 'ILCE-7M3_DSC0009.ARW' },
   { dir: arwSamples, name: 'ILCE-7M4_DSC06677_FullFrame-Raw-Compressed.ARW' },
@@ -72,6 +78,10 @@ const OTHER_RAW: readonly { readonly dir: string | undefined; readonly name: str
   { dir: prorawSamples, name: 'sample_dng_01.dng' },
   { dir: cameraDngSamples, name: 'Leica-M10-R-compressed.dng' },
   { dir: cameraDngSamples, name: 'Leica-Q2.dng' },
+  { dir: cr2Samples, name: 'EOS-5D-Mark-III_RAW.CR2' },
+  { dir: cr2Samples, name: 'EOS-7D_RAW.CR2' },
+  { dir: nefSamples, name: 'D850_14bit_uncompressed.NEF' },
+  { dir: nefSamples, name: 'Z6_14bit_uncompressed.NEF' },
 ];
 const isUpdate = process.env.LOPSY_RAW_PARITY_UPDATE === '1';
 const STORE = join(dirname(fileURLToPath(import.meta.url)), 'raw-parity');
@@ -243,7 +253,7 @@ const RECIPES: readonly { readonly name: string; readonly apply: (page: Page, st
 ];
 
 function storePath(name: string): string {
-  return join(STORE, `${name.replace(/\.(raf|dng|arw)$/i, '')}.txt`);
+  return join(STORE, `${name.replace(/\.(raf|dng|arw|cr2|nef)$/i, '')}.txt`);
 }
 
 /** Stored lines by `<key> <recipe>`: the header line, then the grid lines. */
@@ -338,14 +348,14 @@ test.describe('RAW parity: each RAF renders as recorded', () => {
   }
 });
 
-test.describe('RAW parity: each DNG and ARW renders as recorded', () => {
+test.describe('RAW parity: each DNG, ARW, CR2 and NEF renders as recorded', () => {
   test.skip(!isChromium, 'The fingerprints are recorded in Chromium; other browsers render on other GPU stacks');
   test.setTimeout(12 * 60_000);
 
   for (const { dir, name } of OTHER_RAW) {
     test(name, async ({ page }) => {
       const path = dir ? join(dir, name) : '';
-      test.skip(!dir || !existsSync(path), `needs ${name} (LOPSY_ARW_SAMPLES, LOPSY_DNG_ADOBE_SAMPLES, LOPSY_DNG_SAMPLES)`);
+      test.skip(!dir || !existsSync(path), `needs ${name} (LOPSY_ARW_SAMPLES, LOPSY_DNG_ADOBE_SAMPLES, LOPSY_DNG_SAMPLES, LOPSY_DNG_CAMERA_SAMPLES, LOPSY_CR2_SAMPLES, LOPSY_NEF_SAMPLES)`);
       // The RAW path, and the baked decode a GPU without float targets opens these formats with.
       await checkSample(page, name, path, ['', '?develop=no-float']);
     });
