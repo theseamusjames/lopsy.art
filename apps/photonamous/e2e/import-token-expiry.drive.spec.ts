@@ -142,7 +142,7 @@ test('an import whose token ran out waits for Reconnect, then finishes, nothing 
 
   // The strip's button is the click that opens Google's window.
   await nextToken(page, drive, 'token-2');
-  await strip.getByRole('button', { name: 'Reconnect to Google Drive' }).click();
+  await strip.getByRole('button', { name: 'Reconnect Google Drive' }).click();
   await expect(toast(page, /^Imported 4 photos/)).toBeVisible({ timeout: 60_000 });
   await page.getByRole('button', { name: /^All photos/ }).click();
   await expect(tiles(page)).toHaveCount(4);
