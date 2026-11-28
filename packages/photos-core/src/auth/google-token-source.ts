@@ -21,7 +21,12 @@
  * refresh of its own when under five minutes remain, which works only where
  * the browser lets that popup through, and throws 'auth' once the token has
  * run out; the UI then shows Reconnect, whose click calls
- * `requestInteractive`.
+ * `requestInteractive`, which always opens Google's window.
+ *
+ * No request waits on Google for ever: one whose window never answers is
+ * given up after a while (`SILENT_REQUEST_TIMEOUT_MS`), and a token that
+ * arrives later is still taken. `subscribe` tells work waiting for
+ * sign-in (an import) that a new token is here, however it came.
  */
 
 import { StorageError } from '../storage/errors';
@@ -42,6 +47,15 @@ export const GESTURE_REFRESH_AGE_MS = 45 * 60 * 1000;
  * window). Short, so one of the next clicks does it.
  */
 export const GESTURE_RETRY_MS = 15 * 1000;
+/**
+ * How long a request waits for Google's window to answer before it is given
+ * up. GIS reports a window that failed to open or was closed, but a window
+ * that never answers (lost to the browser, or to a blocker) would otherwise
+ * hold every request behind it: a silent one for good, so in the token's last
+ * five minutes every Drive call would wait on it. A late answer is still taken.
+ */
+export const SILENT_REQUEST_TIMEOUT_MS = 30 * 1000;
+export const INTERACTIVE_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
 /** Where builds that asked for the email kept it as a login hint. Never written now; removed when found. */
 export const LEGACY_LOGIN_HINT_KEY = 'photonamous.google-email';
 
@@ -89,6 +103,8 @@ export interface GoogleTokenSourceOptions {
   readonly expectedAccountId?: string;
   /** For the account check; default globalThis.fetch. */
   readonly fetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  /** How long Google's window may take to answer; default the constants above. */
+  readonly requestTimeoutMs?: { readonly silent: number; readonly interactive: number };
 }
 
 /** Thrown when Google granted a token for another account than `expectedAccountId`. */
@@ -132,19 +148,37 @@ function failureReason(type: string | undefined): SignInFailureReason {
  */
 type GestureRefresh = 'silent' | 'ask' | 'off';
 
+/** A request waiting for Google's answer. */
+interface Waiter {
+  readonly resolve: (token: string) => void;
+  readonly reject: (error: unknown) => void;
+  readonly onMismatch: 'drop-current' | 'keep-current';
+}
+
 export class GoogleTokenSource implements TokenSource {
   private token: Grant | null = null;
   private gestureRefresh: GestureRefresh = 'silent';
   private gestureNotBefore = 0;
   private client: TokenClient | null = null;
   private oauth2: Oauth2 | null = null;
-  private pending: { resolve: (grant: Grant) => void; reject: (error: unknown) => void } | null = null;
-  private inFlight: Promise<string> | null = null;
+  /** Requests waiting for Google, oldest first: an error answers the oldest, a token all of them. */
+  private waiters: Waiter[] = [];
+  private inFlight: { readonly promise: Promise<string>; readonly silent: boolean } | null = null;
+  private readonly listeners = new Set<() => void>();
   private readonly now: () => number;
 
   constructor(private readonly options: GoogleTokenSourceOptions) {
     this.now = options.now ?? Date.now;
     forgetLegacyLoginHint();
+  }
+
+  /**
+   * Called whenever a new token is taken, however it came (a click's
+   * renewal, Reconnect, a late answer), so work waiting for sign-in carries on.
+   */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
   }
 
   async getToken(): Promise<string> {
@@ -168,7 +202,7 @@ export class GoogleTokenSource implements TokenSource {
    * own account, reconnecting, is asked only what Google still needs.
    */
   requestInteractive(): Promise<string> {
-    return this.request(this.token === null && this.options.expectedAccountId === undefined ? 'consent' : '');
+    return this.request(this.token === null && this.options.expectedAccountId === undefined ? 'consent' : '', 'drop-current', true);
   }
 
   /**
@@ -216,25 +250,49 @@ export class GoogleTokenSource implements TokenSource {
 
   /**
    * `onMismatch` says what a grant for another account does to the token
-   * in use: a sign-in drops it, a renewal keeps it.
+   * in use: a sign-in drops it, a renewal keeps it. A request of the same
+   * kind as one in flight joins it; an interactive one opens Google's
+   * window even while a silent one waits, and `fresh` (Reconnect's click)
+   * opens it whatever is in flight, since an earlier window may never
+   * answer. A token from any of them answers all.
    */
-  private request(prompt: string, onMismatch: 'drop-current' | 'keep-current' = 'drop-current'): Promise<string> {
-    if (this.inFlight) return this.inFlight;
-    const flight = this.ensureClient()
-      .then(
-        (client) =>
-          new Promise<Grant>((resolve, reject) => {
-            this.pending = { resolve, reject };
-            client.requestAccessToken({ prompt });
-          }),
-      )
-      .then((grant) => this.accept(grant, onMismatch));
+  private request(prompt: string, onMismatch: 'drop-current' | 'keep-current' = 'drop-current', fresh = false): Promise<string> {
+    const silent = prompt === 'none';
+    const current = this.inFlight;
+    if (current && !fresh && (current.silent === silent || !current.silent)) return current.promise;
+    let resolve: (token: string) => void = () => {};
+    let reject: (error: unknown) => void = () => {};
+    const promise = new Promise<string>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    const waiter: Waiter = { resolve, reject, onMismatch };
+    const flight = { promise, silent };
     this.inFlight = flight;
+    this.waiters.push(waiter);
+    const limits = this.options.requestTimeoutMs ?? { silent: SILENT_REQUEST_TIMEOUT_MS, interactive: INTERACTIVE_REQUEST_TIMEOUT_MS };
+    const timer = setTimeout(
+      () => this.drop(waiter, new SignInFailure('Google sign-in did not answer', 'closed')),
+      silent ? limits.silent : limits.interactive,
+    );
     const clear = (): void => {
+      clearTimeout(timer);
       if (this.inFlight === flight) this.inFlight = null;
     };
-    flight.then(clear, clear);
-    return flight;
+    promise.then(clear, clear);
+    this.ensureClient().then(
+      (client) => client.requestAccessToken({ prompt }),
+      (error: unknown) => this.drop(waiter, error),
+    );
+    return promise;
+  }
+
+  /** Gives up one request, leaving any others waiting. */
+  private drop(waiter: Waiter, error: unknown): void {
+    const index = this.waiters.indexOf(waiter);
+    if (index < 0) return;
+    this.waiters.splice(index, 1);
+    waiter.reject(error);
   }
 
   private async ensureClient(): Promise<TokenClient> {
@@ -274,6 +332,13 @@ export class GoogleTokenSource implements TokenSource {
     // A new token starts over: its own renewal asks silently first.
     this.gestureRefresh = 'silent';
     this.gestureNotBefore = 0;
+    for (const listener of [...this.listeners]) {
+      try {
+        listener();
+      } catch (error) {
+        console.error('A listener of the Google token threw; carrying on:', error);
+      }
+    }
     return grant.value;
   }
 
@@ -294,11 +359,21 @@ export class GoogleTokenSource implements TokenSource {
   }
 
   private settle(error: StorageError | null, grant?: Grant): void {
-    const pending = this.pending;
-    this.pending = null;
-    if (!pending) return;
-    if (error || !grant) pending.reject(error ?? new StorageError('auth', 'Google returned no token'));
-    else pending.resolve(grant);
+    if (error || !grant) {
+      this.waiters.shift()?.reject(error ?? new StorageError('auth', 'Google returned no token'));
+      return;
+    }
+    // A token answers every request waiting; one that arrives after its request gave up is still taken.
+    const waiters = this.waiters.splice(0);
+    const onMismatch = waiters.some((w) => w.onMismatch === 'drop-current') ? 'drop-current' : 'keep-current';
+    void this.accept(grant, onMismatch).then(
+      (token) => {
+        for (const w of waiters) w.resolve(token);
+      },
+      (failure: unknown) => {
+        for (const w of waiters) w.reject(failure);
+      },
+    );
   }
 }
 

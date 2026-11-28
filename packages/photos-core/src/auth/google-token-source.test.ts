@@ -153,7 +153,7 @@ describe('GoogleTokenSource with an expected account', () => {
 describe('GoogleTokenSource renewing from a click', () => {
   const MINUTE = 60 * 1000;
 
-  type Answer = { readonly token: string } | { readonly error: string } | { readonly failure: string };
+  type Answer = { readonly token: string } | { readonly error: string } | { readonly failure: string } | { readonly never: true } | { readonly late: string };
 
   /**
    * A stand-in for google.accounts.oauth2 that answers each request with
@@ -170,6 +170,11 @@ describe('GoogleTokenSource renewing from a click', () => {
           requestAccessToken(overrides?: { prompt?: string }) {
             prompts.push(overrides?.prompt ?? '');
             const answer = answers.shift() ?? { failure: 'unknown' };
+            if ('never' in answer) return;
+            if ('late' in answer) {
+              setTimeout(() => config.callback({ access_token: answer.late, expires_in: 3600, scope: 'drive.file' }), 60);
+              return;
+            }
             setTimeout(() => {
               if ('token' in answer) config.callback({ access_token: answer.token, expires_in: 3600, scope: 'drive.file' });
               else if ('error' in answer) config.callback({ error: answer.error });
@@ -285,6 +290,50 @@ describe('GoogleTokenSource renewing from a click', () => {
     // Another account was signed in: no further windows from clicks.
     expect(await source.refreshOnGesture()).toBe(false);
     expect(gis.prompts).toEqual(['', 'none']);
+  });
+
+  const quick = { silent: 20, interactive: 20 };
+
+  it('gives up a window that never answers, so the token in use and later clicks still work', async () => {
+    const gis = installGis([{ token: 'first' }, { never: true }, { never: true }, { token: 'second' }]);
+    let clock = 0;
+    const source = new GoogleTokenSource({ clientId: 'c', now: () => clock, requestTimeoutMs: quick });
+    await source.requestInteractive();
+    clock = 46 * MINUTE;
+    expect(await source.refreshOnGesture()).toBe(false);
+    // In the token's last minutes getToken's own silent try is not held by it either.
+    clock = 57 * MINUTE;
+    expect(await source.getToken()).toBe('first');
+    // Google's window was not answered: the next click shows it properly.
+    expect(await source.refreshOnGesture()).toBe(true);
+    expect(gis.prompts).toEqual(['consent', 'none', 'none', '']);
+  });
+
+  it('takes a token that arrives after its request gave up, and says so', async () => {
+    installGis([{ token: 'first' }, { late: 'second' }]);
+    let clock = 0;
+    const source = new GoogleTokenSource({ clientId: 'c', now: () => clock, requestTimeoutMs: quick });
+    await source.requestInteractive();
+    let told = 0;
+    source.subscribe(() => told++);
+    clock = 46 * MINUTE;
+    expect(await source.refreshOnGesture()).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    expect(await source.getToken()).toBe('second');
+    expect(told).toBe(1);
+  });
+
+  it("opens Reconnect's window while a silent request waits, and answers both", async () => {
+    const gis = installGis([{ token: 'first' }, { never: true }, { token: 'second' }]);
+    let clock = 0;
+    const source = new GoogleTokenSource({ clientId: 'c', now: () => clock });
+    await source.requestInteractive();
+    clock = 57 * MINUTE;
+    const silent = source.getToken();
+    const reconnect = source.requestInteractive();
+    expect(await reconnect).toBe('second');
+    expect(await silent).toBe('second');
+    expect(gis.prompts).toEqual(['consent', 'none', '']);
   });
 
   it('makes one request for clicks that arrive together', async () => {
