@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { announceImport, type Announced, type ImportFacts } from './import-announcer';
 
-const NONE = { failed: 0, added: 0, skipped: 0, waiting: 0, paused: 0, needsSignIn: false };
+const NONE = { failed: 0, added: 0, skipped: 0, waiting: 0, paused: 0, stopped: 0, needsSignIn: false };
 
 const running = (settled: number, fraction: number, failed = 0): ImportFacts => ({
   ...NONE,

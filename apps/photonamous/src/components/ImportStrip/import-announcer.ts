@@ -52,6 +52,7 @@ function failures(n: number): string {
 /** How the import ended, or '' for a clean end, which the toast says. */
 function outcome(facts: ImportFacts): string {
   if (endedCleanly(facts)) return '';
+  if (facts.stopped > 0) return `Import stopped: ${plural(facts.added + facts.skipped, 'photo')} imported, ${facts.stopped.toLocaleString('en-US')} not`;
   if (facts.paused > 0) return `Import paused with ${plural(facts.paused, 'photo')} to go`;
   const added = `Import done: ${plural(facts.added, 'photo')} added`;
   if (facts.waiting > 0) return `${added}, ${facts.waiting.toLocaleString('en-US')} to try again`;

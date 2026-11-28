@@ -55,14 +55,15 @@ describe('waiting to retry', () => {
 });
 
 describe('how an import ends', () => {
-  const end = { finished: true, failed: 0, waiting: 0, paused: 0 };
+  const end = { finished: true, failed: 0, waiting: 0, paused: 0, stopped: 0 };
 
-  it('ends cleanly only when over with nothing failed, waiting or paused', () => {
+  it('ends cleanly only when over with nothing failed, waiting, paused or stopped', () => {
     expect(endedCleanly(end)).toBe(true);
     expect(endedCleanly({ ...end, finished: false })).toBe(false);
     expect(endedCleanly({ ...end, failed: 1 })).toBe(false);
     expect(endedCleanly({ ...end, waiting: 1 })).toBe(false);
     expect(endedCleanly({ ...end, paused: 1 })).toBe(false);
+    expect(endedCleanly({ ...end, stopped: 1 })).toBe(false);
   });
 
   it('heads the strip, and a clean end’s toast, with what happened', () => {

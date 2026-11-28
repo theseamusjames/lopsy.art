@@ -17,6 +17,10 @@ import { refreshInterruptedImport } from '../../import/interrupted-refresh';
 import { reconnect, useReconnecting } from '../../app/reconnect';
 import styles from './ImportStrip.module.css';
 
+/** Pause and Stop, told apart where they are pressed. */
+const PAUSE_WORDS = 'Pause: the photos not imported yet wait on this device, and Resume carries on, after a reload too';
+const STOP_WORDS = 'Stop: the photos not imported yet are left out; those imported stay';
+
 /** The imports whose refused files have been reported: once each, when it ends. */
 const reportedJobs = new WeakSet<ImportJob>();
 
@@ -99,6 +103,7 @@ export function ImportStrip() {
             skipped: stats.duplicates,
             waiting: stats.waiting.length,
             paused: stats.paused,
+            stopped: stats.stopped,
             needsSignIn: progress.needsSignIn === true,
           }
         : null,
@@ -135,7 +140,8 @@ export function ImportStrip() {
   if (!job || !progress || !stats || isClean) return voice;
 
   const left = progress.finished || needsSignIn ? null : estimateLeft(stats, now - started.current);
-  const paused = progress.finished && stats.paused > 0;
+  const stopped = progress.stopped === true;
+  const paused = progress.finished && stats.paused > 0 && !stopped;
   const waiting = stats.waiting.length;
 
   return (
@@ -143,7 +149,7 @@ export function ImportStrip() {
       {voice}
       <section className={styles.strip} aria-label="Import">
         <div className={styles.row}>
-          {progress.finished && !paused && waiting === 0 && <Check size={16} className={styles.ok} />}
+          {progress.finished && !paused && !stopped && waiting === 0 && <Check size={16} className={styles.ok} />}
           {needsSignIn && <LogIn size={16} className={styles.warn} aria-hidden />}
           <span className={styles.headline}>{headline}</span>
           {left && <span className={styles.muted}>{left}</span>}
@@ -159,7 +165,8 @@ export function ImportStrip() {
             </Button>
           )}
           <span className={styles.spacer} />
-          {paused ? (
+          {/* Two slots, the second always a Button where Stop is, so the button pressed keeps focus as it says "Stopping…", then Dismiss. */}
+          {stopped ? null : paused ? (
             <Button size="sm" variant="primary" onClick={resume}>
               Resume
             </Button>
@@ -167,26 +174,30 @@ export function ImportStrip() {
             <Button size="sm" variant="primary" onClick={resume}>
               Retry
             </Button>
-          ) : progress.finished ? (
-            <IconButton size="sm" label="Dismiss" icon={<X size={14} />} onClick={() => setImportJob(null)} />
-          ) : needsSignIn ? (
-            <>
-              <Button size="sm" variant="primary" aria-disabled={reconnecting} onClick={reconnect}>
-                Reconnect Google Drive
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => job.cancel()}>
-                Stop
-              </Button>
-            </>
+          ) : progress.finished ? null : needsSignIn ? (
+            <Button size="sm" variant="primary" aria-disabled={reconnecting} onClick={reconnect}>
+              Reconnect Google Drive
+            </Button>
           ) : (
-            <>
-              <Button size="sm" onClick={() => job.pause()}>
-                Pause
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => job.cancel()}>
-                Stop
-              </Button>
-            </>
+            <Button size="sm" onClick={() => job.pause()} title={PAUSE_WORDS}>
+              Pause
+            </Button>
+          )}
+          {stopped ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-disabled={!progress.finished}
+              onClick={progress.finished ? () => setImportJob(null) : undefined}
+            >
+              {progress.finished ? 'Dismiss' : 'Stopping…'}
+            </Button>
+          ) : !progress.finished || paused ? (
+            <Button size="sm" variant="ghost" onClick={() => job.cancel()} title={STOP_WORDS}>
+              Stop
+            </Button>
+          ) : waiting > 0 ? null : (
+            <IconButton size="sm" label="Dismiss" icon={<X size={14} />} onClick={() => setImportJob(null)} />
           )}
         </div>
         {!progress.finished && (

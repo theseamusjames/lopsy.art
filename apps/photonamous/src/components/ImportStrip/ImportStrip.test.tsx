@@ -109,6 +109,24 @@ describe('the import strip', () => {
     expect(politeWords()).toBe('Import continuing');
   });
 
+  it('Stop says at once that it is stopping, keeps focus on the button, then sums up, nothing failed', () => {
+    const files = [item('a', 'done'), item('b', 'uploading'), item('c', 'queued')];
+    const move = startImport({ finished: false, items: files });
+    const stopButton = [...(strip()?.querySelectorAll('button') ?? [])].find((b) => b.textContent === 'Stop');
+    expect(stopButton?.getAttribute('title')).toMatch(/^Stop: /);
+    stopButton?.focus();
+    move({ finished: false, stopped: true, items: [item('a', 'done'), item('b', 'stopped'), item('c', 'stopped')] });
+    expect(strip()?.textContent).toContain('Stopping the import…');
+    expect(document.activeElement?.textContent).toBe('Stopping…');
+    expect(document.activeElement?.getAttribute('aria-disabled')).toBe('true');
+    move({ finished: true, stopped: true, items: [item('a', 'done'), item('b', 'stopped'), item('c', 'stopped')] });
+    expect(strip()?.textContent).toContain('Import stopped: 1 of 3 photos imported, 2 not. Choose the same photos again to import the rest.');
+    expect(document.activeElement?.textContent).toBe('Dismiss');
+    expect(strip()?.textContent).not.toContain('could not be imported');
+    expect(politeWords()).toBe('Import stopped: 1 photo imported, 2 not');
+    expect(toasts()).toEqual([]);
+  });
+
   it('keeps the strip, and makes no toast, when something failed', () => {
     const move = startImport({ finished: false, items: [item('a', 'done'), item('b', 'queued')] });
     move({ finished: true, items: [item('a', 'done'), item('b', 'unsupported', 'Not a supported photo format')] });
