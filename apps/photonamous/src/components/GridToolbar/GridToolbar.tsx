@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { ClipboardCopy, ClipboardPaste, CopyPlus, Info, Layers, Paintbrush, RotateCcw, Trash2 } from 'lucide-react';
 import type { AssetId } from '@lopsy/photos-core/library/types';
 import { useUi } from '../../app/store';
-import { newVersion, openFocusedInLopsy, resetEdits, runCommand } from '../../app/commands';
+import { newVersion, openFocusedInLopsy, reportFocusedLopsyRefusal, resetEdits, runCommand } from '../../app/commands';
 import { useLopsyRefusal } from '../../app/hooks';
 import { PresetMenu } from '../PresetMenu/PresetMenu';
 import { itemAssets } from '../../library/items';
@@ -110,6 +110,7 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
                 hint: !single ? 'Select one photo first' : (lopsyRefusal ?? 'With layers, painting and text'),
                 icon: <Paintbrush size={14} />,
                 disabled: !single || lopsyRefusal !== null,
+                ...(single && lopsyRefusal !== null ? { onDisabledPress: reportFocusedLopsyRefusal } : {}),
                 run: openFocusedInLopsy,
               },
               {

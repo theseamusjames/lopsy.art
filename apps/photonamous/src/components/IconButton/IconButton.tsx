@@ -17,11 +17,25 @@ interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
    * a screen reader as well as a hover; a press does nothing.
    */
   unavailable?: string;
+  /** Called for a press while `unavailable`, which does nothing else: to report the refusal. */
+  onUnavailablePress?: () => void;
   size?: 'sm' | 'md';
   ref?: Ref<HTMLButtonElement>;
 }
 
-export function IconButton({ label, icon, active, pressed, unavailable, size = 'md', className, onClick, onKeyDown, ...rest }: IconButtonProps) {
+export function IconButton({
+  label,
+  icon,
+  active,
+  pressed,
+  unavailable,
+  onUnavailablePress,
+  size = 'md',
+  className,
+  onClick,
+  onKeyDown,
+  ...rest
+}: IconButtonProps) {
   const reasonId = useId();
   const isOn = active ?? pressed ?? false;
   const cls = [styles.button, styles[size], isOn ? styles.active : '', className].filter(Boolean).join(' ');
@@ -38,7 +52,7 @@ export function IconButton({ label, icon, active, pressed, unavailable, size = '
         keepPressKeys(e);
       }}
       {...rest}
-      onClick={isUnavailable ? undefined : onClick}
+      onClick={isUnavailable ? onUnavailablePress : onClick}
       aria-disabled={isUnavailable ? true : rest['aria-disabled']}
       aria-describedby={isUnavailable ? reasonId : rest['aria-describedby']}
     >

@@ -5,7 +5,7 @@
  * library, the export renderer and the toasts.
  */
 
-import type { AssetId, LibrarySession } from '@lopsy/photos-core/library/types';
+import type { Asset, AssetId, LibrarySession } from '@lopsy/photos-core/library/types';
 import { DEFAULT_EXPORT_SETTINGS } from '@lopsy/photos-core/export/types';
 import { createBrowserPreviewRenderer } from '@lopsy/photos-core/import/browser-preview-renderer';
 import { HandoffError } from '@lopsy/handoff/channel';
@@ -17,6 +17,8 @@ import { unguarded } from './guard-session';
 import { dismissToast, showErrorToast, showToast } from './toasts';
 import { editableLimit } from '../engine/full-size';
 import { textureLimit } from '../engine/texture-limit';
+import { lopsyRefusalFileError } from './file-error-events';
+import { track } from './track';
 
 const previewRenderer = createBrowserPreviewRenderer();
 
@@ -57,6 +59,19 @@ export function receiverMessage(state: ReceiverState): string | null {
   }
 }
 
+interface LopsyPhoto {
+  readonly kind: 'original' | 'document';
+  readonly width: number | null;
+  readonly height: number | null;
+}
+
+/** The longest side Lopsy can open on a GPU of `gpuTextureLimit` when `photo` is larger than it, else null (as `lopsyRefusal`). */
+export function lopsyRefusalLimit(photo: LopsyPhoto, gpuTextureLimit: number | null): number | null {
+  if (photo.kind === 'document' || gpuTextureLimit === null || !photo.width || !photo.height) return null;
+  const limit = editableLimit(gpuTextureLimit);
+  return Math.max(photo.width, photo.height) > limit ? limit : null;
+}
+
 /**
  * Why this photo cannot go to Lopsy on this device, or null when it can.
  * Lopsy keeps each layer as one texture on the same GPU, so a photo larger
@@ -65,19 +80,30 @@ export function receiverMessage(state: ReceiverState): string | null {
  * was reduced. An unknown size or limit is let through, and a Lopsy
  * document goes as its .lopsy (Lopsy says itself if it cannot open it).
  */
-export function lopsyRefusal(
-  photo: { readonly kind: 'original' | 'document'; readonly width: number | null; readonly height: number | null },
-  gpuTextureLimit: number | null,
-): string | null {
-  if (photo.kind === 'document' || gpuTextureLimit === null || !photo.width || !photo.height) return null;
-  const limit = editableLimit(gpuTextureLimit);
-  if (Math.max(photo.width, photo.height) <= limit) return null;
+export function lopsyRefusal(photo: LopsyPhoto, gpuTextureLimit: number | null): string | null {
+  const limit = lopsyRefusalLimit(photo, gpuTextureLimit);
+  if (limit === null) return null;
   return `This photo is ${photo.width} × ${photo.height} pixels, larger than Lopsy can open on this device (${limit} on a side).`;
 }
 
 /** `lopsyRefusal` on this page's GPU. */
-export function lopsyRefusalHere(photo: Parameters<typeof lopsyRefusal>[0]): string | null {
+export function lopsyRefusalHere(photo: LopsyPhoto): string | null {
   return lopsyRefusal(photo, textureLimit());
+}
+
+/** The photos whose refusal has been reported on this page: a press again is the same failure. */
+const reportedRefusals = new Set<AssetId>();
+
+/**
+ * Reports Edit in Lopsy refused for `asset` on this page's GPU (a press of
+ * the unavailable control, or `openInLopsy`'s refusal), once a photo.
+ * Nothing for a photo Lopsy can take.
+ */
+export function reportLopsyRefusal(asset: Asset): void {
+  const limit = lopsyRefusalLimit(asset, textureLimit());
+  if (limit === null || reportedRefusals.has(asset.id)) return;
+  reportedRefusals.add(asset.id);
+  track.error(lopsyRefusalFileError(limit, asset.format));
 }
 
 /** The full-size 16-bit PNG of a version, through the export renderer (the engine). */
@@ -108,6 +134,7 @@ export function openInLopsy(session: LibrarySession, assetId: AssetId, chosenVer
   const refusal = lopsyRefusalHere(asset);
   if (refusal !== null) {
     showErrorToast(refusal);
+    reportLopsyRefusal(asset);
     return;
   }
   const versionId = chosenVersion ?? asset.primaryVersionId;

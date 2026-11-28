@@ -4,7 +4,7 @@ import { CircleCheck, ClipboardCopy, ClipboardPaste, CopyPlus, Download, Maximiz
 import { parseItem, type ItemId } from '../../library/items';
 import { useAsset, useLopsyRefusal } from '../../app/hooks';
 import { useUi } from '../../app/store';
-import { askDeleteTargets, newVersion, openEdit, openFocusedInLopsy, runCommand, selectVersion } from '../../app/commands';
+import { askDeleteTargets, newVersion, openEdit, openFocusedInLopsy, reportFocusedLopsyRefusal, runCommand, selectVersion } from '../../app/commands';
 import { useMenuKeys } from '@lopsy/ui/a11y/use-menu-keys';
 import styles from './TileMenu.module.css';
 import { isDevelopable } from '../../library/develop-source';
@@ -42,7 +42,7 @@ export function TileMenu({ x, y, orderedIds, onClose }: TileMenuProps) {
   const lopsyRefusal = single ? refusal : null;
 
   /** A command; `hint`, shown under the label, says why it is off when that is not plain from the menu. */
-  const item = (label: string, icon: React.ReactNode, run: () => void, disabled = false, hint: string | null = null) => (
+  const item = (label: string, icon: React.ReactNode, run: () => void, disabled = false, hint: string | null = null, onDisabledPress?: () => void) => (
     <button
       type="button"
       role="menuitem"
@@ -50,7 +50,10 @@ export function TileMenu({ x, y, orderedIds, onClose }: TileMenuProps) {
       className={styles.item}
       aria-disabled={disabled || undefined}
       onClick={() => {
-        if (disabled) return;
+        if (disabled) {
+          onDisabledPress?.();
+          return;
+        }
         onClose();
         run();
       }}
@@ -82,7 +85,14 @@ export function TileMenu({ x, y, orderedIds, onClose }: TileMenuProps) {
       {item('New version', <CopyPlus size={14} />, newVersion, !single)}
       {focusedVersion &&
         item('Make this the selected version', <CircleCheck size={14} />, () => selectVersion(focusedVersion.assetId, focusedVersion.versionId), !single)}
-      {item('Edit in Lopsy', <Paintbrush size={14} />, openFocusedInLopsy, !single || lopsyRefusal !== null, lopsyRefusal)}
+      {item(
+        'Edit in Lopsy',
+        <Paintbrush size={14} />,
+        openFocusedInLopsy,
+        !single || lopsyRefusal !== null,
+        lopsyRefusal,
+        lopsyRefusal !== null ? reportFocusedLopsyRefusal : undefined,
+      )}
       <hr className={styles.rule} />
       {item('Copy edits…', <ClipboardCopy size={14} />, () => runCommand('copy-edits', orderedIds), !single)}
       {item(copied ? `Paste edits from ${copied.sourceName}` : 'Paste edits', <ClipboardPaste size={14} />, () => runCommand('paste-edits', orderedIds), !copied)}

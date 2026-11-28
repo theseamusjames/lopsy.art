@@ -11,7 +11,12 @@ import type { ImportJob } from '@lopsy/photos-core/import/types';
 import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
 import { announceImport, type Announced, type ImportFacts } from './import-announcer';
+import { importFileErrors } from '../../app/file-error-events';
+import { track } from '../../app/track';
 import styles from './ImportStrip.module.css';
+
+/** The imports whose refused files have been reported: once each, when it ends. */
+const reportedJobs = new WeakSet<ImportJob>();
 
 /**
  * The progress strip while an import runs. An import that ends cleanly
@@ -48,6 +53,12 @@ export function ImportStrip() {
   };
 
   const stats = useMemo(() => (progress ? importStats(progress) : null), [progress]);
+  // The files the import refused (it lists them under "could not be imported"), reported once it ends, one event per reason.
+  useEffect(() => {
+    if (!job || !progress?.finished || reportedJobs.has(job)) return;
+    reportedJobs.add(job);
+    for (const error of importFileErrors(progress.items)) track.error(error);
+  }, [job, progress]);
   const view = useLibraryView();
   // The JPEG half of a RAW+JPEG pair is a file but not a photo of its own: count photos as the grid does.
   const pairHalves = useMemo(

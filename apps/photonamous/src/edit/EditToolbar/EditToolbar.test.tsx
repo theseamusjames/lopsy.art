@@ -57,4 +57,13 @@ describe('EditToolbar actions', () => {
     act(() => button.click());
     expect(onClick).not.toHaveBeenCalled();
   });
+
+  it('when unavailable, tell onUnavailablePress of a press, and not onClick', () => {
+    const onClick = vi.fn();
+    const onUnavailablePress = vi.fn();
+    const button = mountAction(lopsy({ unavailable: REASON, onUnavailablePress }, onClick));
+    act(() => button.click());
+    expect(onUnavailablePress).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+  });
 });

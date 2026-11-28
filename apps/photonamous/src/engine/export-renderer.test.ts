@@ -4,7 +4,7 @@ import { DEFAULT_RECIPE, type Recipe } from '@lopsy/photos-core/library/recipe';
 import { DEFAULT_EXPORT_SETTINGS } from '@lopsy/photos-core/export/types';
 import { harnessAsset, harnessVersion } from '../edit/EditHarness/harness-asset';
 import type { DevelopEngine, ExportOptions } from './develop-engine';
-import { createEngineExportRenderer } from './export-renderer';
+import { createEngineExportRenderer, type ReducedExport } from './export-renderer';
 import { DEFAULT_EXTRAS, withExtras } from '../library/export-size';
 
 interface FakeEngine {
@@ -82,7 +82,7 @@ describe('createEngineExportRenderer', () => {
     vi.useRealTimers();
   });
 
-  function renderer(own: FakeEngine['own'] = null, onNote?: (note: string) => void) {
+  function renderer(own: FakeEngine['own'] = null, onNote?: (note: string, reduced: ReducedExport) => void) {
     return createEngineExportRenderer({
       loadOriginal: loadOriginal as unknown as (asset: typeof assetA, signal: AbortSignal) => Promise<Blob>,
       idleMs: 1000,
@@ -97,16 +97,16 @@ describe('createEngineExportRenderer', () => {
   }
 
   it('sizes a photo made in tiles from its own size, and says the held image’s size for an export that is not', async () => {
-    const notes: string[] = [];
+    const notes: unknown[] = [];
     // Held at 4000 × 3000; its own size 8000 × 6000.
-    const r = renderer({ width: 8000, height: 6000 }, (note) => notes.push(note));
+    const r = renderer({ width: 8000, height: 6000 }, (note, reduced) => notes.push([note, reduced]));
     const signal = new AbortController().signal;
     const version = harnessVersion(assetA, warm);
     await r.render(assetA, version, DEFAULT_EXPORT_SETTINGS, signal);
     const original = fakes[0]?.exports.at(-1);
     expect(original).toMatchObject({ format: 'jpeg', size: { width: 8000, height: 6000 }, reducedSize: null, signal });
-    original?.onReduced?.('made smaller');
-    expect(notes).toEqual(['made smaller']);
+    original?.onReduced?.('made smaller', 'failed');
+    expect(notes).toEqual([['made smaller', { format: assetA.format, cause: 'failed' }]]);
     const long = { ...DEFAULT_EXTRAS, size: { mode: 'long' as const, px: 5000 } };
     await r.render(assetA, version, withExtras(DEFAULT_EXPORT_SETTINGS, long) as typeof DEFAULT_EXPORT_SETTINGS, signal);
     expect(fakes[0]?.exports.at(-1)).toMatchObject({ size: { width: 5000, height: 3750 }, reducedSize: null });

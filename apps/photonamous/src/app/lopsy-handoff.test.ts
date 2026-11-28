@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { LibrarySession } from '@lopsy/photos-core/library/types';
 import { HandoffError } from '@lopsy/handoff/channel';
-import { handoffFailureMessage, isReceivePage, lopsyRefusal, openInLopsy, receiverMessage, savedMessage } from './lopsy-handoff';
+import { recordingTracker } from '@lopsy/tracking/tracker';
+import { handoffFailureMessage, isReceivePage, lopsyRefusal, openInLopsy, receiverMessage, reportLopsyRefusal, savedMessage } from './lopsy-handoff';
+import { setTracker } from './track';
 import { editInLopsy } from '../handoff/send-to-lopsy';
 import { showErrorToast } from './toasts';
 
@@ -63,5 +65,31 @@ describe('Lopsy handoff words', () => {
     openInLopsy(session, 'a1');
     expect(editInLopsy).not.toHaveBeenCalled();
     expect(showErrorToast).toHaveBeenCalledWith('This photo is 17504 × 3440 pixels, larger than Lopsy can open on this device (16382 on a side).');
+  });
+});
+
+describe('Edit in Lopsy refused', () => {
+  it('reports a refusal once a photo, with the limit and the format, from the handoff or a press of the unavailable control', () => {
+    const tracker = recordingTracker();
+    const restore = setTracker(tracker);
+    try {
+      const asset = { id: 'tracked-1', kind: 'original', width: 17504, height: 3440, primaryVersionId: 'v1', format: 'raf', fileName: 'Ada Lovelace.RAF' };
+      const session = { getView: () => ({ assets: new Map([['tracked-1', asset]]) }) } as unknown as LibrarySession;
+      openInLopsy(session, 'tracked-1');
+      reportLopsyRefusal(asset as unknown as Parameters<typeof reportLopsyRefusal>[0]);
+      openInLopsy(session, 'tracked-1');
+      expect(tracker.calls).toEqual([
+        {
+          event: 'file_error',
+          properties: { app: 'photonamous', kind: 'too-large', reason: 'Edit in Lopsy: photo long edge exceeded 16382', format: 'raf', count: 1, limit: 16382 },
+        },
+      ]);
+      expect(JSON.stringify(tracker.calls)).not.toMatch(/Ada|17504/);
+
+      reportLopsyRefusal({ ...asset, id: 'fits', width: 6000, height: 4000 } as unknown as Parameters<typeof reportLopsyRefusal>[0]);
+      expect(tracker.calls).toHaveLength(1);
+    } finally {
+      restore();
+    }
   });
 });

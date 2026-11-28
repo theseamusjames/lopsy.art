@@ -51,4 +51,13 @@ describe('IconButton', () => {
     act(() => button.click());
     expect(onClick).not.toHaveBeenCalled();
   });
+
+  it('when unavailable, tells onUnavailablePress of a press, and not onClick', () => {
+    const onClick = vi.fn();
+    const onUnavailablePress = vi.fn();
+    const button = mount(<IconButton label="Edit in Lopsy" icon={null} unavailable={REASON} onClick={onClick} onUnavailablePress={onUnavailablePress} />);
+    act(() => button.click());
+    expect(onUnavailablePress).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+  });
 });

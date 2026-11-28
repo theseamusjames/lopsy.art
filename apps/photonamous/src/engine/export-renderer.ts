@@ -6,7 +6,7 @@
  */
 
 import { colorSpacesFor, isAlwaysFullSize, isHdrFormat, type ExportRenderer, type ExportSettings } from '@lopsy/photos-core/export/types';
-import type { Asset, Version } from '@lopsy/photos-core/library/types';
+import type { Asset, ImageFormat, Version } from '@lopsy/photos-core/library/types';
 import type { DevelopEngine } from './develop-engine';
 import { buildExportExif } from '@lopsy/photos-core/export/exif-writer';
 import { extrasOf, outputSize } from '../library/export-size';
@@ -25,7 +25,13 @@ export interface EngineExportRendererOptions {
    * be made at its own size in tiles, was made at the held size instead
    * (`ExportOptions.onReduced`): a sentence for the person.
    */
-  readonly onNote?: (note: string) => void;
+  readonly onNote?: (note: string, reduced: ReducedExport) => void;
+}
+
+/** An export made at the held size: the photo's format, and why (`ExportOptions.onReduced`). */
+export interface ReducedExport {
+  readonly format: ImageFormat;
+  readonly cause: 'settings' | 'failed';
 }
 
 export class ExportAbortedError extends Error {
@@ -163,7 +169,8 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
       // What the engine is asked for without tiles: a size only where it is not the held image's own.
       const reduced = sized(image);
       const reducedSize = reduced && (reduced.width !== image.width || reduced.height !== image.height) ? reduced : null;
-      return { signal, onReduced: (note: string) => options.onNote?.(note), reducedSize };
+      const onReduced = (note: string, cause: 'settings' | 'failed') => options.onNote?.(note, { format: asset.format, cause });
+      return { signal, onReduced, reducedSize };
     };
     if (isHdrFormat(settings.format)) {
       if (!e.canExportHdr()) throw new Error('HDR files need a GPU that renders in floating point, and this one does not. Choose JPEG or PNG.');
