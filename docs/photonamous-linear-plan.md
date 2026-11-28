@@ -1864,3 +1864,138 @@ commits:
   them (decision 86), and in the module the assembled pictures (8 bytes
   a pixel for the 16-bit files, 16 for HDR, 4 more for the gain map's
   SDR picture) and the RAW plane.
+
+## 11. Canon and Nikon
+
+Two more makers' files on the RAW interface of section 9: Canon's CR2,
+and Nikon's NEF, uncompressed and compressed. Each decoder was written
+apart from the other and then brought together with the app's side, a
+review of the new parsers and camera matrices for four bodies. Decisions
+are numbered on from section 10's (106 is the guard that replaced
+decision 96).
+
+### Done
+
+- **Canon CR2** (`engine/core/src/cr2/`): full-size RAW of Bayer bodies,
+  12 and 14 bit, one slice or several, frames of two or four components
+  (a frame row holding two sensor rows), and the first frame of a
+  dual-pixel file. The lossless JPEG is the DNG reader's (`dng::ljpeg`),
+  its samples placed into Canon's vertical slices.
+- **Canon CR3** (`engine/core/src/cr3/`): the container is read (model,
+  orientation, size, crop, RAW or C-RAW); the sensor data is not decoded
+  and every file is refused with a sentence (decision 109).
+- **Nikon NEF** (`engine/core/src/nef/`): uncompressed in every layout
+  the samples have (16-bit words in either byte order, 12 and 14 bits
+  packed high or low bit first), and compressed, lossless and lossy, 12
+  and 14 bit (`nef/compressed.rs`).
+- **The app:** `.cr2` and `.nef` import, show the camera's embedded JPEG
+  on their tile, are labelled "RAW (Canon)" and "RAW (Nikon)", and open
+  on the RAW path as an ARW does.
+- **Camera matrices** for the Canon EOS 5D Mark III and 5D Mark IV and
+  the Nikon D850 and Z 9 (decision 113).
+- **A review of the new parsers,** and its fixes (decision 115).
+
+### Decided
+
+107. **A new format is written from the file itself and public
+    standards** (TIFF 6, Exif, ITU-T T.81, ISO/IEC 14496-12), checked on
+    real files against the camera's own embedded JPEG. No code and no
+    table of another raw decoder is used, with the one exception of
+    decision 108. Constants a file carries (Huffman tables in a JPEG
+    stream, levels and white balance in a maker note) are the file's.
+108. **Nikon's compressed NEF uses Nikon's published code tables.** The
+    compressed data is a bare bitstream whose Huffman tables the camera
+    never writes into the file. The owner decided (27 November 2026)
+    that these are Nikon's values and may be taken from any source. The
+    six tables and the layout of the bitstream were taken from dcraw
+    (whose header frees all but its Foveon code for any use), and one
+    fact about the newest lossy form (its codes span a quarter of the
+    range) from LibRaw; the decoder is this codebase's own.
+    `nef/compressed.rs` says so. The decision covers Nikon's compressed
+    data and nothing else.
+109. **Canon CR3's codec is not decoded.** The only exact public
+    description of its bitstream is other decoders' code, which decision
+    107 excludes, and Canon holds a patent on the method. A CR3 has no
+    format id: `raw::sniff` answers none, and `prepare` refuses it by
+    its container, saying whether it is RAW or C-RAW.
+110. **A CR2's levels and colour filter are measured, not looked up.**
+    Black is measured per 2 × 2 position on the masked border, white is
+    the pile of clipped samples in the top half of the range (the top of
+    the bit depth without one). The colour filter's layout comes from a
+    table of the bodies our samples established (the 7D starts on green;
+    the others on red); an unknown body is measured, black removed, and
+    needs a clear margin, or takes the common layout and says so in the
+    debug log.
+111. **Nikon's white balance comes from the maker note's tag in the
+    clear** (0x000C). The enciphered block newer bodies also write is
+    not read. A file without the tag (the D70) is refused.
+112. **A NEF without a crop tag is cropped where the camera's JPEG is:**
+    the window is placed where the full-size preview lines up with the
+    mosaic's green, searched over a bounded set of offsets. Centring it
+    put a D7000's picture 24 columns off. This moved the D3's crop by a
+    column, and its two uncompressed hashes with it.
+113. **Camera colour for four bodies comes from matrices of our own**
+    (`camera_colour::canon`, `camera_colour::nikon`), derived internally
+    from publicly available sources and keyed by the exact `Model` each
+    decoder looks up. Every other Canon and Nikon body opens with its
+    white balance alone and the "colour is approximate" note, as a Sony
+    body without data does. No matrix from any outside table.
+114. **What import cannot tell apart imports, and says why on opening.**
+    An sRAW or mRAW, a Medium or Small NEF and a High Efficiency NEF
+    import with their preview; opening one shows the engine's sentence.
+    A CR3 and an NRW are refused at import with the sheet's general
+    line, as Sony's SR2 and SRF are: the app does not show the engine's
+    reason there.
+115. **The new parsers were reviewed as untrusted input,** by a reader
+    who had not written them, and what it found was fixed with a test
+    each: one TIFF IFD parse now copies at most the file's size of
+    values (a 310 KB file could ask for a gigabyte; this was in the
+    shared reader every format uses); a NEF's strips may not overlap;
+    the baked decodes of NEF and ARW allocate fallibly; a CR2's preview
+    is scaled by its long side, its offsets are checked for overflow,
+    its white-balance gains for range and its two frame readings for
+    agreement; a NEF's colour pattern must be a Bayer one; the preview
+    the NEF crop search decodes, and the search itself, are bounded.
+116. **A camera is named once in its details:** a model that starts with
+    its maker's first word is shown as it is ("NIKON D850").
+117. **The engine wasm's size budget was re-based** for the three
+    decoders (+3.8 % raw), in its own commit.
+
+### Verified
+
+- Engine tests: 958 pass, in debug and in release with every sample
+  folder. Every hash from before this section holds; new ones are
+  recorded for 7 CR2 and 15 NEF samples (all CC0, raw.pixls.us).
+- Against each camera's embedded JPEG, on every sample that opens: the
+  size is the JPEG's, the pictures line up within a pixel, neutral
+  surfaces are neutral, tone ranks the same, and slice, strip and row
+  edges are no rougher than their insides (`cr2_decode.rs`,
+  `nef_decode.rs` print the numbers). Damaged and cut files are refused
+  or decoded, never a panic.
+- Colour on ordinary photos against the camera's preview, with white
+  balance alone and with the body's matrix: chroma goes from 0.60 to
+  1.01 (5D Mark III), 0.48 to 0.95 (5D Mark IV) and 0.49 to 0.90 (D850).
+  There is no CC0 photo from a Z 9 to check its matrix on.
+- `e2e/raw-parity.spec.ts`: 25 fingerprints, the 20 from before
+  untouched; two CR2s and three NEFs (one compressed, in portrait) are
+  new, and WebGPU and WebGL agree on them bit for bit.
+- The app's import specs (`import-cr2`, `import-nef`) and Lopsy's DNG
+  and RAF imports (which share the TIFF reader) on both renderers.
+
+### Not done
+
+- **Canon CR3** (every Canon body since 2018), sRAW and mRAW, the second
+  frame of a dual-pixel file, and Canon's lens corrections.
+- **Nikon:** High Efficiency RAW (a licensed codec), Medium and Small
+  RAW, NRW from compacts, a lossy file whose tables change part way down
+  (no sample has one), the D70's whole-curve form (its white balance is
+  not in the clear), lens corrections, Picture Controls.
+- **A NEF's white level** is the top of its range on uncompressed files;
+  a body whose clip is lower would keep clipped highlights below white.
+- **The compressed NEF decoder** would shift by 64 on a table symbol
+  whose shift equals its size; no table in use has such a symbol.
+- **Colour for every other body:** white balance only, with the note.
+- **The reason a CR3, NRW, SR2 or SRF is refused** never reaches the
+  import sheet.
+- **A portrait CR2** has no sample, so its preview and orientation path
+  is untested.

@@ -8,11 +8,14 @@
 //! - DNG (`LOPSY_DNG_SAMPLES`, `LOPSY_DNG_ADOBE_SAMPLES`, and
 //!   `LOPSY_DNG_CAMERA_SAMPLES`: any folder of DNGs a camera wrote, such
 //!   as Leica's) and ARW
-//!   (`LOPSY_ARW_SAMPLES`): bands through the dispatch are bit-identical to
+//!   (`LOPSY_ARW_SAMPLES`) and Canon CR2 (`LOPSY_CR2_SAMPLES`): bands
+//!   through the dispatch are bit-identical to
 //!   the whole frame, the binned view works, and the lossy DNGs are refused
 //!   with "DNG cannot open as RAW:".
 //! - Every format: the oriented size of the linear path equals the baked
 //!   decode's, and `sniff` names the format.
+//! - CR2 and NEF (`LOPSY_CR2_SAMPLES`, `LOPSY_NEF_SAMPLES`): only the
+//!   bodies with a matrix in `camera_colour` open without the colour note.
 //!
 //! Folders not set are noted and skipped. Full-size files: `--release`.
 
@@ -108,10 +111,15 @@ fn dng_and_arw_through_the_interface() {
         all.extend(files(var, "dng").into_iter().map(|p| (p, RawFormatId::Dng)));
     }
     all.extend(files("LOPSY_ARW_SAMPLES", "arw").into_iter().map(|p| (p, RawFormatId::Arw)));
+    all.extend(files("LOPSY_CR2_SAMPLES", "cr2").into_iter().map(|p| (p, RawFormatId::Cr2)));
     for (path, format) in all {
         let name = path.file_name().unwrap().to_string_lossy().to_string();
         let data = std::fs::read(&path).unwrap();
         assert_eq!(raw::sniff(&data), Some(format), "{name}");
+        // Canon's reduced-size raws are refused (`tests/cr2_decode.rs`).
+        if format == RawFormatId::Cr2 && raw::prepare(&data).err().as_deref() == Some(lopsy_core::cr2::SRAW_REFUSAL) {
+            continue;
+        }
         let t0 = std::time::Instant::now();
         let prep = raw::prepare(&data).unwrap_or_else(|e| panic!("{name}: {e}"));
         let prepare_ms = t0.elapsed().as_millis();
@@ -122,6 +130,10 @@ fn dng_and_arw_through_the_interface() {
             RawFormatId::Dng => {
                 let b = lopsy_core::dng::read_dng(&data).unwrap();
                 (b.width, b.height)
+            }
+            RawFormatId::Cr2 => {
+                let b = lopsy_core::cr2::read_cr2(&data).unwrap();
+                (b.image.width, b.image.height)
             }
             _ => {
                 let b = lopsy_core::arw::read_arw(&data).unwrap();
@@ -150,6 +162,7 @@ fn not_a_raw_is_named_as_such() {
 enum Bayer {
     Dng(lopsy_core::dng::linear::DngRenderParams),
     Arw(lopsy_core::arw::linear::ArwRenderParams),
+    Cr2(lopsy_core::cr2::linear::Cr2RenderParams),
 }
 
 impl lopsy_core::dng::linear::PlaneParams for Bayer {
@@ -157,12 +170,14 @@ impl lopsy_core::dng::linear::PlaneParams for Bayer {
         match self {
             Bayer::Dng(p) => p.layout(),
             Bayer::Arw(p) => p.layout(),
+            Bayer::Cr2(p) => p.layout(),
         }
     }
     fn highlight_chroma(&self) -> Option<&lopsy_core::raf::highlights::ChromaGrid> {
         match self {
             Bayer::Dng(p) => p.highlight_chroma.as_ref(),
             Bayer::Arw(p) => p.highlight_chroma.as_ref(),
+            Bayer::Cr2(p) => p.highlight_chroma.as_ref(),
         }
     }
 }
@@ -177,6 +192,7 @@ fn reconstruction_holds_highlight_hue() {
     use lopsy_core::dng::linear::{render_binned_linear, PlaneParams};
     let mut all: Vec<PathBuf> = files("LOPSY_DNG_ADOBE_SAMPLES", "dng");
     all.extend(files("LOPSY_ARW_SAMPLES", "arw"));
+    all.extend(files("LOPSY_CR2_SAMPLES", "cr2"));
     for path in all {
         let name = path.file_name().unwrap().to_string_lossy().to_string();
         let data = std::fs::read(&path).unwrap();
@@ -184,7 +200,8 @@ fn reconstruction_holds_highlight_hue() {
         let params = match &prep.prepared {
             raw::Prepared::Dng(p) => Bayer::Dng(p.params.clone()),
             raw::Prepared::Arw(p) => Bayer::Arw(p.params.clone()),
-            raw::Prepared::Raf(_) => continue,
+            raw::Prepared::Cr2(p) => Bayer::Cr2(p.params.clone()),
+            raw::Prepared::Raf(_) | raw::Prepared::Nef(_) => continue,
         };
         let layout = params.layout();
         let Some(grid) = params.highlight_chroma() else {
@@ -235,11 +252,13 @@ fn the_format_answers_finished_bands_as_its_descriptions_do() {
     assert!(raw::renders_finished_bands(RawFormatId::Raf));
     assert!(!raw::renders_finished_bands(RawFormatId::Dng));
     assert!(!raw::renders_finished_bands(RawFormatId::Arw));
+    assert!(!raw::renders_finished_bands(RawFormatId::Cr2));
     let mut paths = files("LOPSY_RAF_SAMPLES", "raf");
     paths.extend(files("LOPSY_DNG_SAMPLES", "dng"));
     paths.extend(files("LOPSY_DNG_ADOBE_SAMPLES", "dng"));
     paths.extend(files("LOPSY_DNG_CAMERA_SAMPLES", "dng"));
     paths.extend(files("LOPSY_ARW_SAMPLES", "arw"));
+    paths.extend(files("LOPSY_CR2_SAMPLES", "cr2"));
     let mut seen = 0;
     for path in paths {
         let data = std::fs::read(&path).unwrap();
@@ -249,4 +268,25 @@ fn the_format_answers_finished_bands_as_its_descriptions_do() {
         seen += 1;
     }
     println!("{seen} files: finished bands as their format says");
+}
+
+/// The bodies with a matrix of the engine's own (`camera_colour::canon`
+/// and `nikon`) open with no colour note; every other CR2 and NEF that
+/// opens says its colour is approximate.
+#[test]
+fn only_canon_and_nikon_bodies_with_a_matrix_open_without_the_colour_note() {
+    const WITH_MATRIX: [&str; 4] = ["Canon EOS 5D Mark III", "Canon EOS 5D Mark IV", "NIKON D850", "NIKON Z 9"];
+    let mut paths = files("LOPSY_CR2_SAMPLES", "cr2");
+    paths.extend(files("LOPSY_NEF_SAMPLES", "nef"));
+    let mut seen = 0;
+    for path in paths {
+        let Ok(prep) = raw::prepare(&std::fs::read(&path).unwrap()) else { continue };
+        let d = &prep.description;
+        let has_matrix = WITH_MATRIX.contains(&d.camera_model.as_str());
+        assert_eq!(d.color_note.is_none(), has_matrix, "{}: {} {:?}", path.display(), d.camera_model, d.color_note);
+        seen += usize::from(has_matrix);
+    }
+    if std::env::var_os("LOPSY_CR2_SAMPLES").is_some() && std::env::var_os("LOPSY_NEF_SAMPLES").is_some() {
+        assert!(seen >= 3, "only {seen} files from the bodies with a matrix");
+    }
 }

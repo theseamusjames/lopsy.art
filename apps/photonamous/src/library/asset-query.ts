@@ -62,7 +62,7 @@ export function sortDirectionLabel(sort: SortOrder): string {
   return `${sort.descending ? down : up} (click to reverse)`;
 }
 
-const RAW_FORMATS = new Set(['raf', 'dng', 'arw']);
+const RAW_FORMATS = new Set(['raf', 'dng', 'arw', 'cr2', 'nef']);
 
 export function isRaw(asset: Asset): boolean {
   return RAW_FORMATS.has(asset.format);

@@ -59,6 +59,8 @@ fn full(prep: &PreparedRaw) -> Option<(u32, u32, Vec<f32>)> {
     let px = match &prep.prepared {
         Prepared::Dng(p) => lopsy_core::dng::linear::render_linear_band(&p.plane, &p.params, RafBand { y0: 0, y1: p.params.height, src_y0: 0, src_y1: p.params.height }),
         Prepared::Arw(p) => lopsy_core::dng::linear::render_linear_band(&p.plane, &p.params, RafBand { y0: 0, y1: p.params.height, src_y0: 0, src_y1: p.params.height }),
+        Prepared::Cr2(p) => lopsy_core::dng::linear::render_linear_band(&p.plane, &p.params, RafBand { y0: 0, y1: p.params.height, src_y0: 0, src_y1: p.params.height }),
+        Prepared::Nef(p) => lopsy_core::dng::linear::render_linear_band(&p.plane, &p.params, RafBand { y0: 0, y1: p.params.height, src_y0: 0, src_y1: p.params.height }),
         Prepared::Raf(_) => return None,
     }
     .ok()?;

@@ -384,6 +384,8 @@ fn matched_median_with(data: &[u8], prep: &PreparedRaw, preview: &lopsy_core::ar
     let view = match &prep.prepared {
         Prepared::Arw(p) => lopsy_core::arw::exposure::preview_sized_view(&p.plane, &p.params, preview),
         Prepared::Dng(p) => lopsy_core::arw::exposure::preview_sized_view(&p.plane, &p.params, preview),
+        Prepared::Cr2(p) => lopsy_core::arw::exposure::preview_sized_view(&p.plane, &p.params, preview),
+        Prepared::Nef(p) => lopsy_core::arw::exposure::preview_sized_view(&p.plane, &p.params, preview),
         Prepared::Raf(_) => None,
     };
     let (w, h, rgba) = view.unwrap_or_else(|| panic!("a view of {} bytes", data.len()));

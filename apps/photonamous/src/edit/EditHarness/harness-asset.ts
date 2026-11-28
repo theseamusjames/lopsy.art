@@ -7,6 +7,8 @@ const BY_EXTENSION: Readonly<Record<string, ImageFormat>> = {
   raf: 'raf',
   dng: 'dng',
   arw: 'arw',
+  cr2: 'cr2',
+  nef: 'nef',
   jpg: 'jpeg',
   jpeg: 'jpeg',
   png: 'png',
@@ -20,6 +22,8 @@ const BY_MIME: Readonly<Record<string, ImageFormat>> = {
   'image/x-fuji-raf': 'raf',
   'image/x-adobe-dng': 'dng',
   'image/x-sony-arw': 'arw',
+  'image/x-canon-cr2': 'cr2',
+  'image/x-nikon-nef': 'nef',
 };
 
 export function formatOf(fileName: string, mimeType: string): ImageFormat | null {

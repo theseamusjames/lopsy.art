@@ -11,6 +11,8 @@ describe('photo facts', () => {
   it('avoids repeating the make', () => {
     expect(formatCamera({ make: 'Canon', model: 'Canon EOS R5' })).toBe('Canon EOS R5');
     expect(formatCamera({ make: 'FUJIFILM', model: 'X-T5' })).toBe('Fujifilm X-T5');
+    // Nikon's make is the company's name, and its model starts with the brand.
+    expect(formatCamera({ make: 'NIKON CORPORATION', model: 'NIKON D850' })).toBe('NIKON D850');
   });
 
   it('writes exposure and size', () => {

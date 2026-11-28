@@ -39,6 +39,29 @@ describe('summarizeImport', () => {
   });
 });
 
+describe('Canon and Nikon RAW', () => {
+  it('counts a Canon CR2 and a Nikon NEF as photos, each the RAW half of a pair', () => {
+    const s = summarizeImport([
+      { name: 'IMG_0001.CR2', size: 25_000_000 },
+      { name: 'IMG_0001.JPG', size: 7_000_000 },
+      { name: 'DSC_0002.NEF', size: 90_000_000 },
+      { name: 'DSC_0002.jpg', size: 9_000_000 },
+    ]);
+    expect(s.photoCount).toBe(4);
+    expect(s.skippedNames).toEqual([]);
+    expect(s.pairCount).toBe(2);
+  });
+
+  it('leaves out a CR3 and a COOLPIX NRW, which the app does not read', () => {
+    const s = summarizeImport([
+      { name: 'IMG_0003.CR3', size: 30_000_000 },
+      { name: 'DSCN0004.NRW', size: 30_000_000 },
+    ]);
+    expect(s.photoCount).toBe(0);
+    expect(s.skippedNames).toEqual(['IMG_0003.CR3', 'DSCN0004.NRW']);
+  });
+});
+
 describe('formatting', () => {
   it('formats sizes', () => {
     expect(formatBytes(512)).toBe('512 B');

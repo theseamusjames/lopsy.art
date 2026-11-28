@@ -7,6 +7,8 @@ export const MIME_TYPES: Readonly<Record<ImageFormat, string>> = {
   raf: 'image/x-fuji-raf',
   dng: 'image/x-adobe-dng',
   arw: 'image/x-sony-arw',
+  cr2: 'image/x-canon-cr2',
+  nef: 'image/x-nikon-nef',
   jpeg: 'image/jpeg',
   png: 'image/png',
   webp: 'image/webp',
@@ -44,6 +46,32 @@ function isSonyRaw(tiff: TiffFile, ifd0: TiffIfd): boolean {
   return findCfaImageIfd(tiff) !== null;
 }
 
+/**
+ * A Canon CR2: a little-endian TIFF header followed by "CR" and the major
+ * version 2 (bytes 8 to 10). A CR3 is not a TIFF (an ISO media file with
+ * the brand "crx "), and its codec is not decoded, so it is not one. A
+ * reduced-size sRAW or mRAW is one: the engine says why it cannot open it
+ * when it is opened.
+ */
+function isCanonCr2(bytes: Uint8Array): boolean {
+  return bytes.length >= 16 && startsWith(bytes, 'II*\0') && bytes[8] === 0x43 && bytes[9] === 0x52 && bytes[10] === 2;
+}
+
+/**
+ * A Nikon RAW (NEF): a TIFF that is not a DNG (checked first) whose IFD0
+ * Make starts with NIKON, holding a full-resolution CFA image (so a TIFF
+ * Nikon software writes, which holds RGB, is not one). The NRW of a
+ * COOLPIX compact (IFD0 Model starting COOLPIX) looks the same but is not
+ * one: the engine does not decode it. A compressed NEF is one: import
+ * cannot tell it from an uncompressed one, and the engine says why it
+ * cannot open it when it is opened.
+ */
+function isNikonRaw(tiff: TiffFile, ifd0: TiffIfd): boolean {
+  if (!(getString(tiff, ifd0, TiffTag.Make)?.toUpperCase().startsWith('NIKON') ?? false)) return false;
+  if (getString(tiff, ifd0, TiffTag.Model)?.toUpperCase().startsWith('COOLPIX') ?? false) return false;
+  return findCfaImageIfd(tiff) !== null;
+}
+
 /** Identifies a file from its magic bytes; null for anything import does not support. */
 export function detectFormat(bytes: Uint8Array): ImageFormat | null {
   if (startsWith(bytes, RAF_MAGIC)) return 'raf';
@@ -51,10 +79,12 @@ export function detectFormat(bytes: Uint8Array): ImageFormat | null {
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'jpeg';
   if (isPng(bytes)) return 'png';
   if (isWebp(bytes)) return 'webp';
+  if (isCanonCr2(bytes)) return 'cr2';
   const tiff = openTiff(bytes);
   if (tiff) {
     const ifd0 = readIfd(tiff, tiff.firstIfd);
     if (ifd0?.entries.has(TiffTag.DngVersion)) return 'dng';
+    if (ifd0 && isNikonRaw(tiff, ifd0)) return 'nef';
     if (ifd0 && isSonyRaw(tiff, ifd0)) return 'arw';
   }
   return null;

@@ -24,8 +24,10 @@
 //! the `dispatch!` matches below (the compiler lists every one).
 
 pub mod arw;
+pub mod cr2;
 pub mod dng;
 pub mod look;
+pub mod nef;
 pub mod raf;
 pub mod scaled;
 pub mod white_balance;
@@ -56,6 +58,8 @@ pub enum RawFormatId {
     Raf,
     Dng,
     Arw,
+    Cr2,
+    Nef,
 }
 
 impl RawFormatId {
@@ -64,6 +68,8 @@ impl RawFormatId {
             RawFormatId::Raf => "raf",
             RawFormatId::Dng => "dng",
             RawFormatId::Arw => "arw",
+            RawFormatId::Cr2 => "cr2",
+            RawFormatId::Nef => "nef",
         }
     }
 
@@ -72,6 +78,8 @@ impl RawFormatId {
             "raf" => Ok(RawFormatId::Raf),
             "dng" => Ok(RawFormatId::Dng),
             "arw" => Ok(RawFormatId::Arw),
+            "cr2" => Ok(RawFormatId::Cr2),
+            "nef" => Ok(RawFormatId::Nef),
             other => Err(format!("'{other}' is not a RAW format this engine reads")),
         }
     }
@@ -85,10 +93,16 @@ pub fn sniff(data: &[u8]) -> Option<RawFormatId> {
     if data.starts_with(b"FUJIFILMCCD-RAW") {
         return Some(RawFormatId::Raf);
     }
+    if crate::cr2::is_canon_cr2(data) {
+        return Some(RawFormatId::Cr2);
+    }
     let reader = crate::dng::tiff::TiffReader::new(data).ok()?;
     let ifd0 = reader.read_ifd(0).ok()?;
     if ifd0.iter().any(|e| e.tag == 0xC612) {
         return Some(RawFormatId::Dng);
+    }
+    if crate::nef::is_nikon_raw(data) {
+        return Some(RawFormatId::Nef);
     }
     crate::arw::is_sony_raw(data).then_some(RawFormatId::Arw)
 }
@@ -296,6 +310,14 @@ macro_rules! dispatch {
                 type $F = arw::Arw;
                 $body
             }
+            RawFormatId::Cr2 => {
+                type $F = cr2::Cr2;
+                $body
+            }
+            RawFormatId::Nef => {
+                type $F = nef::Nef;
+                $body
+            }
         }
     };
 }
@@ -305,6 +327,8 @@ pub enum Prepared {
     Raf(RawPlane<<raf::Raf as RawFormat>::Params>),
     Dng(RawPlane<<dng::Dng as RawFormat>::Params>),
     Arw(RawPlane<<arw::Arw as RawFormat>::Params>),
+    Cr2(RawPlane<<cr2::Cr2 as RawFormat>::Params>),
+    Nef(RawPlane<<nef::Nef as RawFormat>::Params>),
 }
 
 /// What [`prepare`] gives: the file prepared, its description and its
@@ -322,6 +346,8 @@ impl PreparedRaw {
             Prepared::Raf(p) => &p.plane,
             Prepared::Dng(p) => &p.plane,
             Prepared::Arw(p) => &p.plane,
+            Prepared::Cr2(p) => &p.plane,
+            Prepared::Nef(p) => &p.plane,
         }
     }
 
@@ -330,6 +356,8 @@ impl PreparedRaw {
             Prepared::Raf(p) => std::mem::take(&mut p.plane),
             Prepared::Dng(p) => std::mem::take(&mut p.plane),
             Prepared::Arw(p) => std::mem::take(&mut p.plane),
+            Prepared::Cr2(p) => std::mem::take(&mut p.plane),
+            Prepared::Nef(p) => std::mem::take(&mut p.plane),
         }
     }
 
@@ -338,6 +366,8 @@ impl PreparedRaw {
             Prepared::Raf(p) => &p.debug_log,
             Prepared::Dng(p) => &p.debug_log,
             Prepared::Arw(p) => &p.debug_log,
+            Prepared::Cr2(p) => &p.debug_log,
+            Prepared::Nef(p) => &p.debug_log,
         }
     }
 
@@ -347,6 +377,8 @@ impl PreparedRaw {
             Prepared::Raf(p) => raf::Raf::render_binned_linear(&p.plane, &p.params, min_long_edge),
             Prepared::Dng(p) => dng::Dng::render_binned_linear(&p.plane, &p.params, min_long_edge),
             Prepared::Arw(p) => arw::Arw::render_binned_linear(&p.plane, &p.params, min_long_edge),
+            Prepared::Cr2(p) => cr2::Cr2::render_binned_linear(&p.plane, &p.params, min_long_edge),
+            Prepared::Nef(p) => nef::Nef::render_binned_linear(&p.plane, &p.params, min_long_edge),
         }
     }
 }
@@ -368,10 +400,17 @@ pub fn prepare(data: &[u8]) -> Result<PreparedRaw, String> {
 /// [`prepare`] with an opening look other than today's (`look`), for
 /// comparing the Standard candidates.
 pub fn prepare_with(data: &[u8], look: &OpeningLook) -> Result<PreparedRaw, String> {
+    // A Canon CR3's container is read, but not its codec: refused with
+    // why (`cr3`).
+    if crate::cr3::is_canon_cr3(data) {
+        return Err(crate::cr3::refusal(data));
+    }
     match sniff(data).ok_or("This file is not a RAW format this app reads")? {
         RawFormatId::Raf => finish::<raf::Raf>(data, look, Prepared::Raf),
         RawFormatId::Dng => finish::<dng::Dng>(data, look, Prepared::Dng),
         RawFormatId::Arw => finish::<arw::Arw>(data, look, Prepared::Arw),
+        RawFormatId::Cr2 => finish::<cr2::Cr2>(data, look, Prepared::Cr2),
+        RawFormatId::Nef => finish::<nef::Nef>(data, look, Prepared::Nef),
     }
 }
 
