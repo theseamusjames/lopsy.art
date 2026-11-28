@@ -37,11 +37,13 @@ export function ImportStrip() {
     setShowFailures(false);
   }, [job]);
 
+  // One clock for the whole run: restarted on every progress change, a busy import's would never tick.
+  const running = progress !== null && !progress.finished;
   useEffect(() => {
-    if (!progress || progress.finished) return;
+    if (!running) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
-  }, [progress]);
+  }, [running]);
 
   const resume = () => {
     const session = useUi.getState().connection?.session;
