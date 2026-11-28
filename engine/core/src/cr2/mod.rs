@@ -369,7 +369,7 @@ pub fn read_info(data: &[u8]) -> Result<Cr2Info, String> {
 /// `width × height` values.
 pub fn read_mosaic(data: &[u8], info: &Cr2Info) -> Result<Vec<u16>, String> {
     let (o, n) = info.strip;
-    lossless::decode(&data[o..o + n], info.width as usize, info.height as usize, &info.slices)
+    lossless::decode(&data[o..o + n], &info.frame, info.width as usize, info.height as usize, &info.slices)
 }
 
 /// The JPEGs a CR2 embeds as (offset, length), inside the file: IFD0's

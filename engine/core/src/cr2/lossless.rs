@@ -17,7 +17,7 @@
 //! line up with the camera's JPEG, and slice edges are no rougher than
 //! their insides (`tests/cr2_decode.rs`).
 
-use crate::dng::ljpeg::decode_lossless_jpeg;
+use crate::dng::ljpeg::decode_lossless_jpeg_framed;
 
 /// The widths of the slices, left to right, for a sensor `width` columns
 /// wide: from the slice tag's (count, width, last width), or one slice of
@@ -66,8 +66,15 @@ pub fn unslice(stream: Vec<u16>, width: usize, height: usize, slices: &[u32]) ->
 }
 
 /// Decode the raw strip to the sensor mosaic, `width` × `height` values.
-pub fn decode(strip: &[u8], width: usize, height: usize, slices: &[u32]) -> Result<Vec<u16>, String> {
-    let stream = decode_lossless_jpeg(strip).map_err(|e| format!("This Canon RAW's data is damaged ({e})"))?;
+/// `frame` is the header `cr2::frame_header` read, which the checks
+/// before decoding were made on: the decoder walks the stream's markers
+/// its own way (restart markers and the end of image differ), so a stream
+/// whose two readings disagree on the depth or the size is refused.
+pub fn decode(strip: &[u8], frame: &super::FrameHeader, width: usize, height: usize, slices: &[u32]) -> Result<Vec<u16>, String> {
+    let (stream, used) = decode_lossless_jpeg_framed(strip).map_err(|e| format!("This Canon RAW's data is damaged ({e})"))?;
+    if used.precision != frame.precision || used.width != u32::from(frame.width) || used.height != u32::from(frame.height) || usize::from(used.components) != frame.sampling.len() {
+        return Err("This Canon RAW's sensor data is damaged: it holds two different descriptions of its frame".into());
+    }
     unslice(stream, width, height, slices)
 }
 
@@ -105,5 +112,37 @@ mod tests {
         let at = stream.as_ptr();
         let out = unslice(stream, 5, 2, &[5]).unwrap();
         assert_eq!(out.as_ptr(), at);
+    }
+
+    /// A made-up stream (not a camera's) with two frame headers: a restart
+    /// marker whose two bytes after it the decoder takes for a length,
+    /// skipping the first header, which the header reader takes byte by
+    /// byte. The same number of samples, a different depth and shape.
+    #[test]
+    fn a_stream_read_two_ways_is_refused() {
+        let first = [0xFF, 0xC3, 0, 11, 12, 0, 2, 0, 2, 1, 1, 0x11, 0];
+        let second = [0xFF, 0xC3, 0, 11, 14, 0, 4, 0, 1, 1, 1, 0x11, 0];
+        let mut dht = vec![0xFF, 0xC4, 0, 20, 0x00, 1];
+        dht.extend_from_slice(&[0; 15]);
+        dht.push(0);
+        let sos = [0xFF, 0xDA, 0, 8, 1, 1, 0x00, 1, 0, 0];
+        let mut s = vec![0xFF, 0xD8, 0xFF, 0xD0, 0, 15];
+        s.extend_from_slice(&first);
+        s.extend_from_slice(&second);
+        s.extend_from_slice(&dht);
+        s.extend_from_slice(&sos);
+        s.push(0);
+        let frame = super::super::frame_header(&s).unwrap();
+        assert_eq!((frame.precision, frame.width, frame.height), (12, 2, 2));
+        let e = decode(&s, &frame, 2, 2, &[2]).err().expect("refused");
+        assert!(e.contains("two different"), "{e}");
+        // The same stream with one header decodes.
+        let mut one = vec![0xFF, 0xD8];
+        one.extend_from_slice(&second);
+        one.extend_from_slice(&dht);
+        one.extend_from_slice(&sos);
+        one.push(0);
+        let frame = super::super::frame_header(&one).unwrap();
+        assert_eq!(decode(&one, &frame, 1, 4, &[1]).unwrap().len(), 4);
     }
 }
