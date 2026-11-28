@@ -21,6 +21,7 @@ import type {
   VersionId,
 } from '../../library/types';
 import type { FileId, StorageAdapter } from '../../storage/types';
+import { notifyAll } from '../../listeners';
 
 function unused(name: string): never {
   throw new Error(`FakeLibrarySession.${name} is not implemented`);
@@ -69,7 +70,8 @@ export class FakeLibrarySession implements LibrarySession {
 
   private update(assets: ReadonlyMap<AssetId, Asset>, versions: ReadonlyMap<VersionId, Version>) {
     this.view = { ...this.view, assets, versions };
-    for (const l of this.listeners) l();
+    // As the real session does: a listener's throw is its own.
+    notifyAll(this.listeners, 'the library');
   }
 
   getView(): LibraryView {

@@ -19,6 +19,7 @@ import {
   type LibraryLockHandle,
 } from './lock';
 import { isStorageError } from '../storage/errors';
+import { notifyAll } from '../listeners';
 import { EMPTY_BOOKKEEPING, type LocalStore, type SyncBookkeeping } from './local-store';
 import { MergeStore, type RecipeWrite } from './merge-store';
 import { exportSettingsFromJson, exportSettingsProblem, type ExportSettings } from '../export/types';
@@ -1062,7 +1063,7 @@ class Session implements PhotosLibrarySession {
   }
 
   private notify(): void {
-    for (const listener of this.listeners) listener();
+    notifyAll(this.listeners, 'the library');
   }
 }
 

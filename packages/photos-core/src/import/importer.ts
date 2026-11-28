@@ -14,6 +14,8 @@ import { DEFAULT_RECIPE, PIPELINE_VERSION, recipeFromPaths, recipeHash, recipeTo
 import type { Recipe } from '../library/recipe';
 import type { AlbumId, AssetId, LibrarySession, LibraryView, NewAsset, VersionId } from '../library/types';
 import { isStorageError } from '../storage/errors';
+import { notifyAll } from '../listeners';
+import { shownMessage } from '../shown-message';
 import type { FileId, StoredFile } from '../storage/types';
 import { defaultImportLocks, importLockName } from './claim-locks';
 import type { ImportLocks } from './claim-locks';
@@ -199,9 +201,9 @@ class Stopped extends Error {
 /** An upload failure worth trying again, that is not a StorageError. */
 class RetryableUpload extends Error {}
 
+/** What a person is shown of an error (shown-message.ts). */
 function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message;
-  return String(error);
+  return shownMessage(error, 'Import');
 }
 
 interface JobSetup {
@@ -516,7 +518,7 @@ function runJob(setup: JobSetup): ImportJob {
       clearTimeout(progressTimer);
       progressTimer = null;
     }
-    for (const listener of [...listeners]) listener();
+    notifyAll(listeners, 'an import');
   };
 
   const patch = (index: number, change: Partial<ImportItem>, immediate = true) => {

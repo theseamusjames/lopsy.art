@@ -12,6 +12,8 @@ import { DEFAULT_RECIPE, PIPELINE_VERSION, recipeHash } from '../library/recipe'
 import type { Recipe } from '../library/recipe';
 import type { AlbumId, AssetId, LibrarySession, LibraryView, NewAsset, VersionId } from '../library/types';
 import { isStorageError } from '../storage/errors';
+import { notifyAll } from '../listeners';
+import { shownMessage } from '../shown-message';
 import type { FileId, StoredFile } from '../storage/types';
 import { ensureFolderPath, originalsFolderSegments } from './folders';
 import type { FolderCache } from './folders';
@@ -80,9 +82,9 @@ class Stopped extends Error {
   }
 }
 
+/** What a person is shown of an error (shown-message.ts). */
 function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message;
-  return String(error);
+  return shownMessage(error, 'Import');
 }
 
 /** Adopts files already in storage (picked from Drive) into the library. */
@@ -124,7 +126,7 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
       clearTimeout(progressTimer);
       progressTimer = null;
     }
-    for (const listener of [...listeners]) listener();
+    notifyAll(listeners, 'an import from storage');
   };
   const patch = (index: number, change: Partial<ImportItem>, immediate = true) => {
     const current = items[index];

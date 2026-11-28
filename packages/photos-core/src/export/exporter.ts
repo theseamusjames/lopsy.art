@@ -13,6 +13,8 @@ import { ensureFolderPath } from '../import/folders';
 import type { FolderCache } from '../import/folders';
 import type { AssetId, LibrarySession, VersionId } from '../library/types';
 import { isStorageError } from '../storage/errors';
+import { notifyAll } from '../listeners';
+import { shownMessage } from '../shown-message';
 import type { FileId } from '../storage/types';
 import { applyExportMetadata } from './exif-writer';
 import { exportFileName, sanitizeFileName } from './file-names';
@@ -49,9 +51,9 @@ class Cancelled extends Error {
   }
 }
 
+/** What a person is shown of an error (shown-message.ts). */
 function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message;
-  return String(error);
+  return shownMessage(error, 'Export');
 }
 
 function localDay(date: Date): string {
@@ -82,7 +84,7 @@ export function startExport(selection: readonly ExportSelection[], ctx: ExportCo
   let finished = false;
 
   const notify = () => {
-    for (const listener of [...listeners]) listener();
+    notifyAll(listeners, 'an export');
   };
   const patch = (index: number, change: Partial<ExportItem>) => {
     const current = items[index];
