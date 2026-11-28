@@ -66,9 +66,10 @@
 //!   is enciphered on these bodies and is not read.
 //! - **Crop**: tag 0x0045 (left, top, width, height), which is the size of
 //!   the camera's full-size JPEG on every sample that has it. Without it
-//!   (D200, D3, whose mosaics carry a few columns of no picture at each
-//!   side), the size of the largest whole-picture JPEG in the file,
-//!   centred; without that, the whole mosaic.
+//!   (D200, D3, D7000, whose mosaics carry a few columns of no picture),
+//!   the size of the largest whole-picture JPEG in the file, placed where
+//!   that JPEG is in the mosaic once it is decoded ([`crop`]); without
+//!   one, the whole mosaic.
 //! - **Orientation**: IFD0's `Orientation`.
 //! - **Image size**: tag 0x003E is 1 on every full-size sample and 3 on
 //!   the one Medium raw, whose mosaic is smaller than the sensor's; any
@@ -98,6 +99,7 @@
 //! or used.
 
 pub mod compressed;
+pub mod crop;
 pub mod exposure;
 pub mod linear;
 pub mod makernote;

@@ -77,8 +77,9 @@ pub struct NefPrepared {
 /// Decode a NEF to linear camera RGB for the develop chain. An error is a
 /// sentence a person can read (an unsupported variant or a damaged file).
 pub fn prepare_nef(data: &[u8]) -> Result<NefPrepared, String> {
-    let stored = read_info(data)?;
+    let mut stored = read_info(data)?;
     let mosaic = read_mosaic(data, &stored)?;
+    super::crop::place_by_preview(data, &mut stored, &mosaic);
     let c = stored.crop;
     let (top, left, w, h) = (c.top as usize, c.left as usize, c.width as usize, c.height as usize);
     // The pattern and the black levels from the crop's top-left.
