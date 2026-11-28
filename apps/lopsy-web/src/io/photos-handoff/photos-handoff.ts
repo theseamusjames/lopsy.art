@@ -125,7 +125,13 @@ export async function openPhotosHandoffFromQuery(): Promise<void> {
       ...(document.camera ? { camera: document.camera } : {}),
     });
   } catch (err) {
-    const attempt = { kind: received?.kind === 'lopsy' ? ('project' as const) : ('image' as const), name: received?.name ?? null };
+    const isProject = received?.kind === 'lopsy';
+    const attempt = {
+      kind: isProject ? ('project' as const) : ('image' as const),
+      name: received?.name ?? null,
+      format: received === null ? ('other' as const) : isProject ? ('lopsy' as const) : ('png' as const),
+      isHandoff: true,
+    };
     reportOpenFailure(err, attempt, `Couldn't receive the photo from Photonamous: ${describeError(err)}`);
   } finally {
     useUIStore.getState().closeModalOfKind('loading');

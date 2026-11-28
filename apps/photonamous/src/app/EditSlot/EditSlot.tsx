@@ -14,7 +14,7 @@ import { EditView } from '../../edit/EditView/EditView';
 import { EditNotice } from '../../edit/EditNotice/EditNotice';
 import { getBackend } from '../backend-registry';
 import { useLibraryView, useSession } from '../hooks';
-import { lopsyRefusalHere, openInLopsy } from '../lopsy-handoff';
+import { lopsyRefusalHere, openInLopsy, reportLopsyRefusal } from '../lopsy-handoff';
 import { showErrorToast, showToast } from '../toasts';
 import { formatBytes } from '../../import/import-summary';
 import styles from './EditSlot.module.css';
@@ -198,6 +198,7 @@ export function EditSlot({ assetId, versionId, onClose }: EditSlotProps) {
         isUnderAppHeader
         onEditInLopsy={() => openInLopsy(session, assetId, versionId)}
         editInLopsyUnavailable={lopsyRefusalHere(asset)}
+        onEditInLopsyRefused={() => reportLopsyRefusal(asset)}
         onPreviewRendered={onPreviewRendered}
         storedPreviewUrl={storedPreviewUrl}
         history={history}

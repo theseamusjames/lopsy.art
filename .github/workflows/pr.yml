@@ -227,6 +227,9 @@ jobs:
       - run: npm run typecheck -w @lopsy/handoff
       - run: npm run lint -w @lopsy/handoff
       - run: npm run test -w @lopsy/handoff
+      - run: npm run typecheck -w @lopsy/tracking
+      - run: npm run lint -w @lopsy/tracking
+      - run: npm run test -w @lopsy/tracking
 
   test:
     name: Unit tests (Vitest)

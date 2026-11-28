@@ -313,8 +313,8 @@ once, in this order:
    local storage only. They are public identifiers, so they are variables,
    not secrets.
 
-   **Usage statistics are not in the app or in this deploy.** As on
-   lopsy.art, Cloudflare adds them: Zaraz runs the Google tag at the edge
+   **Usage statistics are not in this deploy.** As on lopsy.art,
+   Cloudflare adds them: Zaraz runs the Google tag at the edge
    and Web Analytics adds its beacon, both set up in the Cloudflare
    dashboard for the photonamous.com zone. The page's
    Content-Security-Policy (`apps/photonamous/public/_headers`) allows the
@@ -325,6 +325,15 @@ once, in this order:
    and addresses, and a photo library's page has file names and captions
    on it); Google signals and ads personalisation off; no Google Ads
    account linked.
+
+   Photonamous' only analytics call is `zaraz.track('file_error', …)`
+   when a file is refused or cannot be opened (`packages/tracking/README.md`
+   lists its parameters: `app`, `kind`, `reason`, `format`, `count`,
+   `limit`). Lopsy sends the same event, and its guestbook `guestbook`. A
+   custom event reaches Google Analytics only through a Zaraz trigger on
+   its event name and a Google Analytics action that sends it with its
+   parameters; to report on a parameter, register it in Google Analytics
+   as a custom dimension (`count` and `limit` as metrics).
 
    Three more variables are optional, each with a default:
 

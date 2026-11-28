@@ -5,14 +5,14 @@
  */
 import { useEditorStore } from '../app/editor-store';
 import { seedBitmapFromBlob } from '../engine/bitmap-cache';
-import { describeError, notifyError } from '../app/notifications-store';
+import { describeError } from '../app/notifications-store';
 import { importPsdFile } from './psd';
 import { importDngFile } from './dng';
 import { importRafFile } from './raf';
 import { loadProjectOrThrow } from './project-load';
 import { assertFitsDocument, type TooLargeKind } from './image-too-large';
 import { getDocumentSizeLimit } from '../engine-wasm/gpu-limits';
-import { showIfTooLarge } from '../app/report-open-failure';
+import { showIfTooLarge, toastOpenFailure } from '../app/report-open-failure';
 
 /**
  * Mixing `image/*` with bare extensions causes Chrome on macOS to
@@ -166,10 +166,11 @@ export function openFile(file: File): Promise<void> {
   return route.open(file).then(
     () => undefined,
     (err: unknown) => {
-      if (showIfTooLarge(err, { kind: route.kind, name: file.name })) return;
+      const attempt = { kind: route.kind, name: file.name };
+      if (showIfTooLarge(err, attempt)) return;
       const message = route.failure(err, file);
       if (message === null) throw err;
-      notifyError(message);
+      toastOpenFailure(err, attempt, message);
     },
   );
 }

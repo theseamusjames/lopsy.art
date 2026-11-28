@@ -40,6 +40,7 @@ import { decodeAndUploadDng, initWasm } from '../engine-wasm/wasm-bridge';
 import { resetTrackedState } from '../engine-wasm/engine-sync';
 import { pixelDataManager } from '../engine/pixel-data-manager';
 import { notifyError } from '../app/notifications-store';
+import { track } from '../app/track';
 import { getDocumentSizeLimit } from '../engine-wasm/gpu-limits';
 import { assertFitsDocument } from './image-too-large';
 import { dngSize } from './image-header-size';
@@ -96,6 +97,7 @@ async function importDngFileInner(data: Uint8Array, name: string): Promise<void>
 
   if (meta.width === 0 || meta.height === 0) {
     notifyError('DNG decode returned empty image');
+    track.error({ kind: 'raw-refused', reason: 'RAW file decoded to an empty image', format: 'dng' });
     return;
   }
 

@@ -6,6 +6,8 @@ import type { ImportItem, ImportJob, ImportProgress } from '@lopsy/photos-core/i
 import { FakeSession } from '../../app/fake/fake-session';
 import { useUi } from '../../app/store';
 import { useToasts } from '../../app/toasts';
+import { recordingTracker } from '@lopsy/tracking/tracker';
+import { setTracker } from '../../app/track';
 import { ImportStrip } from './ImportStrip';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -98,6 +100,36 @@ describe('the import strip', () => {
     expect(strip()?.textContent).toContain('1 photo could not be imported');
     expect(useUi.getState().importJob).not.toBeNull();
     expect(politeWords()).toBe('Import done: 1 photo added');
+  });
+
+  it('reports the files the import refused once it ends, one event per reason with the count, and never their names', () => {
+    const tracker = recordingTracker();
+    const restore = setTracker(tracker);
+    try {
+      const move = startImport({ finished: false, items: [item('Ada one', 'queued'), item('Ada two', 'queued'), item('Ada three', 'queued')] });
+      move({ finished: false, items: [item('Ada one', 'unsupported', 'Not a supported photo format'), item('Ada two', 'queued'), item('Ada three', 'queued')] });
+      expect(tracker.calls).toEqual([]);
+      const end = {
+        finished: true,
+        items: [
+          item('Ada one', 'unsupported', 'Not a supported photo format'),
+          item('Ada two', 'unsupported', 'Not a supported photo format'),
+          item('Ada three', 'duplicate'),
+        ],
+      };
+      move(end);
+      move({ ...end });
+      act(() => root?.render(<ImportStrip />));
+      expect(tracker.calls).toEqual([
+        {
+          event: 'file_error',
+          properties: { app: 'photonamous', kind: 'decode-failed', reason: 'Not a supported photo format', format: 'jpeg', count: 2 },
+        },
+      ]);
+      expect(JSON.stringify(tracker.calls)).not.toContain('Ada');
+    } finally {
+      restore();
+    }
   });
 
   it('keeps the strip for photos waiting to try again, and for a pause', () => {

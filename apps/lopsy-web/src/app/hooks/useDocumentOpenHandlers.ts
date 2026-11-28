@@ -9,6 +9,7 @@ import { importRafFile } from '../../io/raf';
 import { loadProject } from '../../io/project-load';
 import { describeError, notifyError } from '../notifications-store';
 import { reportOpenFailure } from '../report-open-failure';
+import { formatFromMime } from '@lopsy/tracking/file-error';
 
 /** What to do with a user-supplied file based on its name. Pure: no IO.
  *  Drives both the file-picker handlers below and the drag-and-drop path. */
@@ -134,7 +135,9 @@ export function useDocumentOpenHandlers(): DocumentOpenHandlers {
     (blob: Blob) => {
       pasteOrOpenBlob(blob, 'Copied File')
         .then(() => closeModal())
-        .catch((err) => reportOpenFailure(err, { kind: 'paste', name: null }, `Failed to paste image: ${describeError(err)}`));
+        .catch((err) =>
+          reportOpenFailure(err, { kind: 'paste', name: null, format: formatFromMime(blob.type) }, `Failed to paste image: ${describeError(err)}`),
+        );
     },
     [closeModal],
   );

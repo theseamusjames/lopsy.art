@@ -5,7 +5,7 @@
 
 import type { AssetId, ColorLabel, LibraryHistory, LibrarySession, Rating, VersionId } from '@lopsy/photos-core/library/types';
 import { getBackend } from './backend-registry';
-import { openInLopsy } from './lopsy-handoff';
+import { openInLopsy, reportLopsyRefusal } from './lopsy-handoff';
 import { isDevelopable } from '../library/develop-source';
 import { itemAssets, itemForVersion, itemVersionId, nextVersionName, parseItem, versionsByAsset, type ItemId } from '../library/items';
 import type { CommandId } from '../shortcuts/registry';
@@ -179,6 +179,13 @@ export function pasteEdits(): void {
 export function openFocusedInLopsy(): void {
   const target = currentVersions()[0];
   if (target !== undefined) openInLopsy(session(), target.assetId, target.versionId);
+}
+
+/** A press of Edit in Lopsy while it is unavailable for the photo the one-photo commands act on: reports the refusal. */
+export function reportFocusedLopsyRefusal(): void {
+  const target = currentVersions()[0];
+  const asset = target === undefined ? undefined : session().getView().assets.get(target.assetId);
+  if (asset) reportLopsyRefusal(asset);
 }
 
 /**

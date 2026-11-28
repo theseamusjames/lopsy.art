@@ -85,6 +85,9 @@ import { CoalescedReads } from './coalesced-reads';
 import styles from './EditView.module.css';
 import { NO_INSETS } from '../../engine/viewport';
 import { fullSizeNoteText } from '../../engine/full-size';
+import { fullSizeFileError } from '../../app/file-error-events';
+import { track } from '../../app/track';
+import { developSource } from '../../library/develop-source';
 
 export interface EditViewProps {
   readonly asset: Asset;
@@ -108,6 +111,8 @@ export interface EditViewProps {
   readonly onEditInLopsy?: (renderPng16: () => Promise<ArrayBuffer>) => void;
   /** Why Edit in Lopsy cannot take this photo (the app's `lopsyRefusal`): the button is then shown as unavailable, with this as its tooltip. */
   readonly editInLopsyUnavailable?: string | null;
+  /** A press of Edit in Lopsy while it is unavailable: the app reports the refusal. */
+  readonly onEditInLopsyRefused?: () => void;
   /** The version's history, oldest first (`LibrarySession.history`). Shows the History list. */
   readonly history?: readonly HistoryStep[];
   /** The photo's versions. Shows the Versions list. */
@@ -188,6 +193,7 @@ export function EditView({
   onExport,
   onEditInLopsy,
   editInLopsyUnavailable = null,
+  onEditInLopsyRefused,
   history,
   versions,
   onSelectVersion,
@@ -894,7 +900,7 @@ export function EditView({
           // Unavailable for this photo: focusable from the start, so the reason can be read while the photo loads.
           isDisabled: !isReady && !editInLopsyUnavailable,
           isBusy,
-          ...(editInLopsyUnavailable ? { unavailable: editInLopsyUnavailable } : {}),
+          ...(editInLopsyUnavailable ? { unavailable: editInLopsyUnavailable, ...(onEditInLopsyRefused ? { onUnavailablePress: onEditInLopsyRefused } : {}) } : {}),
           onClick: handleEditInLopsy,
         },
       ]
@@ -948,6 +954,19 @@ export function EditView({
     if (sizeNoteText && saidSizeNote.current !== sizeNoteText) announce(sizeNoteText);
     saidSizeNote.current = sizeNoteText;
   }, [sizeNoteText, announce]);
+
+  // Why a photo is shown below its own size is reported once for each photo opened here, when it is first known.
+  const reportedSizeNotes = useRef(new Set<string>());
+  const sizeNoteKind = fullSizeNote?.kind ?? null;
+  const sizeNoteLimit = fullSizeNote?.limit ?? null;
+  const developFormat = developSource(asset).format;
+  useEffect(() => {
+    if (sizeNoteKind === null || sizeNoteLimit === null) return;
+    const key = `${asset.id}|${asset.sha256}|${sizeNoteKind}`;
+    if (reportedSizeNotes.current.has(key)) return;
+    reportedSizeNotes.current.add(key);
+    track.error(fullSizeFileError(sizeNoteKind, sizeNoteLimit, developFormat));
+  }, [sizeNoteKind, sizeNoteLimit, asset.id, asset.sha256, developFormat]);
 
   // The detail's first load for a photo is said; later ones, on each pan, show the badge only.
   const saidDetailFor = useRef<string | null>(null);

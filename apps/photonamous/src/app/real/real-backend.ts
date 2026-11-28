@@ -73,6 +73,8 @@ import { showErrorToast, showToast } from '../toasts';
 import { downloadBlob } from '../download';
 import { loadKeepOriginals, saveKeepOriginals } from '../device-settings';
 import { developSource } from '../../library/develop-source';
+import { reducedExportFileError } from '../file-error-events';
+import { track } from '../track';
 
 /** What a session needs beyond the LibrarySession itself. */
 interface SessionExtras {
@@ -170,7 +172,10 @@ export class RealBackend implements PhotosBackend {
         return this.loadOriginal(session, asset, { signal });
       },
       // A photo meant for tiles made at the held size instead: said once the Export dialog, which shows the result, has closed.
-      onNote: (note) => afterDialog('export', () => showToast(note, 12_000)),
+      onNote: (note, reduced) => {
+        afterDialog('export', () => showToast(note, 12_000));
+        track.error(reducedExportFileError(reduced.cause, reduced.format));
+      },
     });
     return this.engineRenderer;
   }

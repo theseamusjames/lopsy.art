@@ -1,5 +1,6 @@
 import { defineCommand } from '../registry';
 import { GUESTBOOK_OP } from '../lopsy-api';
+import { track } from '../../app/track';
 
 /** The custom event an entry arrives as in Google Analytics, each field given as a parameter of its own name. */
 export const GUESTBOOK_EVENT = 'guestbook';
@@ -16,16 +17,6 @@ export interface GuestbookEntry {
 
 export const GUESTBOOK_FIELDS = ['name', 'region', 'model', 'message'] as const satisfies readonly (keyof GuestbookEntry)[];
 
-declare global {
-  interface Window {
-    /**
-     * Cloudflare Zaraz, which runs the Google tag at the edge in production, so the page has no
-     * gtag of its own. Absent in development, in tests and where a blocker removes it.
-     */
-    zaraz?: { track(eventName: string, properties?: Record<string, unknown>): unknown };
-  }
-}
-
 /** The fields the entry gives, as the event's parameters: one left out or empty is not sent. */
 export function entryParameters(entry: GuestbookEntry): Record<string, string> {
   const parameters: Record<string, string> = {};
@@ -38,15 +29,7 @@ export function entryParameters(entry: GuestbookEntry): Record<string, string> {
 
 /** Sends the entry as a 'guestbook' event. False when the page has no analytics to carry it. */
 export function signGuestbook(entry: GuestbookEntry): boolean {
-  const zaraz = window.zaraz;
-  if (!zaraz) return false;
-  try {
-    // track is async: an entry that fails on its way is lost quietly, as any analytics event is.
-    void Promise.resolve(zaraz.track(GUESTBOOK_EVENT, entryParameters(entry))).catch(() => undefined);
-    return true;
-  } catch {
-    return false;
-  }
+  return track.event(GUESTBOOK_EVENT, entryParameters(entry));
 }
 
 function fieldSpec(description: string) {

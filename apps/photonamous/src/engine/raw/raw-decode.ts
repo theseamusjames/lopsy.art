@@ -46,6 +46,14 @@ export class RawPrepareError extends Error {
   }
 }
 
+/** The engine's baked decode (`decodeAndUploadRawBaked`) refused the file: its message is the engine's sentence. */
+export class RawRefusedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RawRefusedError';
+  }
+}
+
 interface CompiledEngine {
   readonly module: WebAssembly.Module;
   readonly renderer: 'webgl' | 'wgpu';

@@ -26,6 +26,8 @@ export interface EditToolbarAction {
    * description, and a press does nothing.
    */
   readonly unavailable?: string;
+  /** Called for a press while `unavailable`, which does nothing else: to report the refusal. */
+  readonly onUnavailablePress?: () => void;
   readonly onClick: () => void;
 }
 
@@ -80,7 +82,7 @@ function ActionButton({ action }: { readonly action: EditToolbarAction }) {
       disabled={action.isDisabled}
       aria-disabled={action.isBusy || isUnavailable || undefined}
       aria-describedby={isUnavailable ? reasonId : undefined}
-      onClick={isUnavailable ? undefined : action.onClick}
+      onClick={isUnavailable ? action.onUnavailablePress : action.onClick}
     >
       {action.icon}
       {isUnavailable && (

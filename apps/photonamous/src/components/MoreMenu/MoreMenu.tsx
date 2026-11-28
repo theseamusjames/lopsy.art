@@ -11,6 +11,8 @@ export interface MoreMenuItem {
   /** Shown under the label. */
   readonly hint?: string;
   readonly disabled?: boolean;
+  /** Called for a press while `disabled`, which does nothing else: to report a refusal. */
+  readonly onDisabledPress?: () => void;
   /** A toggle: shown with a tick when on. */
   readonly checked?: boolean;
   readonly run: () => void;
@@ -56,7 +58,10 @@ export function MoreMenu({ items }: MoreMenuProps) {
               tabIndex={-1}
               className={styles.item}
               onClick={() => {
-                if (item.disabled) return;
+                if (item.disabled) {
+                  item.onDisabledPress?.();
+                  return;
+                }
                 close();
                 item.run();
               }}
