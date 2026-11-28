@@ -48,8 +48,8 @@ import { previewCount, settledPreview, waitForPreview, waitForReady } from './ha
  * two Canon CR2s from LOPSY_CR2_SAMPLES (a 5D Mark III, which has a matrix
  * of the engine's own, and a 7D, which has none and whose colour filter
  * starts with green) and two Nikon NEFs from LOPSY_NEF_SAMPLES (a D850,
- * which has a matrix and is 8256 pixels wide, and a 14-bit packed Z 6,
- * which has none). In recipe 2 a DNG, ARW, CR2 or NEF takes the first look after
+ * which has a matrix and is 8256 pixels wide, a 14-bit packed Z 6,
+ * which has none, and a portrait Z 30 in Nikon's lossless compression). In recipe 2 a DNG, ARW, CR2 or NEF takes the first look after
  * its camera's (Neutral, or a ProRAW's Standard).
  *
  * Needs LOPSY_RAF_SAMPLES (and the others for their files); each set is
@@ -64,7 +64,7 @@ const prorawSamples = process.env.LOPSY_DNG_SAMPLES;
 const cameraDngSamples = process.env.LOPSY_DNG_CAMERA_SAMPLES;
 const cr2Samples = process.env.LOPSY_CR2_SAMPLES;
 const nefSamples = process.env.LOPSY_NEF_SAMPLES;
-/** The other RAW samples fingerprinted: four Sony bodies (two with measured colour, two without), four Canon DNGs (a mosaic, a linear one and their lossy JPEG conversions), two ProRAW files, two Leica DNGs, two Canon CR2s and two Nikon NEFs. */
+/** The other RAW samples fingerprinted: four Sony bodies (two with measured colour, two without), four Canon DNGs (a mosaic, a linear one and their lossy JPEG conversions), two ProRAW files, two Leica DNGs, two Canon CR2s and three Nikon NEFs. */
 const OTHER_RAW: readonly { readonly dir: string | undefined; readonly name: string }[] = [
   { dir: arwSamples, name: 'ILCE-7M3_DSC0009.ARW' },
   { dir: arwSamples, name: 'ILCE-7M4_DSC06677_FullFrame-Raw-Compressed.ARW' },
@@ -82,6 +82,7 @@ const OTHER_RAW: readonly { readonly dir: string | undefined; readonly name: str
   { dir: cr2Samples, name: 'EOS-7D_RAW.CR2' },
   { dir: nefSamples, name: 'D850_14bit_uncompressed.NEF' },
   { dir: nefSamples, name: 'Z6_14bit_uncompressed.NEF' },
+  { dir: nefSamples, name: 'Z30_14bit_lossless.NEF' },
 ];
 const isUpdate = process.env.LOPSY_RAW_PARITY_UPDATE === '1';
 const STORE = join(dirname(fileURLToPath(import.meta.url)), 'raw-parity');
