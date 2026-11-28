@@ -91,14 +91,13 @@ export function ImportStrip() {
   const isClean = facts !== null && endedCleanly(facts);
   const headline = progress && stats ? importHeadline(progress, stats, pairHalves) : null;
   // The strip changes every second; a screen reader hears the start, each quarter and the end (import-announcer).
+  // Worked out while rendering, not in an effect: an effect setting it after every progress render would leave
+  // each of those commits with a render to do, and a fast import's run of notifications would pass React's
+  // nested-update limit (error 185, thrown from the import's own listener call).
   const [said, setSaid] = useState<{ job: ImportJob; announced: Announced } | null>(null);
-  useEffect(() => {
-    if (!job || !facts) return setSaid(null);
-    setSaid((before) => {
-      const announced = announceImport(before?.job === job ? before.announced : null, facts);
-      return before?.job === job && before.announced === announced ? before : { job, announced };
-    });
-  }, [job, facts]);
+  const before = said !== null && said.job === job ? said.announced : null;
+  const announced = job && facts ? announceImport(before, facts) : null;
+  if (announced !== (said?.announced ?? null)) setSaid(job && announced ? { job, announced } : null);
   // A clean end needs no row of its own: its outcome becomes a toast (which says it to a screen reader) and the strip goes.
   useEffect(() => {
     if (!job || !isClean || headline === null) return;
