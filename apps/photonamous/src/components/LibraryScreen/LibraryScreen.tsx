@@ -37,6 +37,8 @@ export function LibraryScreen() {
   const connected = useUi((s) => s.connection !== null);
   const orderedIds = useOrderedIds();
   const mode = useUi((s) => s.mode);
+  // Single and Compare take the grid's place; Full screen covers the whole screen.
+  const isViewOpen = mode === 'single' || mode === 'compare';
   const infoOpen = useUi((s) => s.infoOpen);
   const dialog = useUi((s) => s.dialog);
   const collection = useUi((s) => s.collection);
@@ -155,12 +157,13 @@ export function LibraryScreen() {
         <Sidebar />
         <main className={styles.main}>
           {libraryEmpty && <h1 className={styles.visuallyHidden}>{title}</h1>}
-          {mode === 'compare' ? (
-            <CompareView orderedIds={orderedIds} />
-          ) : mode === 'single' ? (
-            <SingleView orderedIds={orderedIds} />
-          ) : (
-            <>
+          <div className={styles.views}>
+            {/*
+              The grid stays while Single or Compare is over it, hidden: its
+              scroll, its rows and its focused photo are where they were when
+              the view closes, and it follows the photo the view moves to.
+            */}
+            <div className={styles.grid} data-covered={isViewOpen}>
               {!libraryEmpty && <GridToolbar orderedIds={orderedIds} />}
               {!libraryEmpty && <FilterBar />}
               {orderedIds.length === 0 ? (
@@ -169,8 +172,13 @@ export function LibraryScreen() {
                 <PhotoGrid orderedIds={orderedIds} />
               )}
               {orderedIds.length > 0 && <ViewBar orderedIds={orderedIds} />}
-            </>
-          )}
+            </div>
+            {isViewOpen && (
+              <div className={styles.view}>
+                {mode === 'compare' ? <CompareView orderedIds={orderedIds} /> : <SingleView orderedIds={orderedIds} />}
+              </div>
+            )}
+          </div>
           <ImportStrip />
         </main>
         {infoOpen && <InfoPanel />}

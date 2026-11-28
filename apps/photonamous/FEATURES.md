@@ -169,7 +169,11 @@ is `docs/photonamous-spec.md`; running and setup are in
   sends its `.lopsy`, and Edit edits its flattened render here. Below the
   photo, a bar with its versions and, at the right end, **Drop / Bring
   back**; then the Lopsy documents made from it.
-  Space or Escape goes back to the grid. In a narrow window the bars wrap
+  Space or Escape goes back to the grid. The grid comes back where it
+  was, scrolled as it was with the photo's tile focused; moved on to
+  another photo meanwhile, it shows that one's tile, focused, scrolling
+  only if it was out of view (Two up and Four up, and the Edit view, come
+  back the same way). In a narrow window the bars wrap
   rather than overlap: the edit buttons go under the labels and stars, and
   Drop under the versions.
 - **Versions in Single view**: the **Selected** box, drawn like the

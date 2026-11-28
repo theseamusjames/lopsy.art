@@ -163,7 +163,7 @@ test('landmarks, one h1 per view, and a page title that names the view', async (
   test.setTimeout(180_000);
   await openLibraryWithPhotos(page);
   await expect(page).toHaveTitle('All photos – Photonamous');
-  await expect(page.locator('h1')).toHaveCount(1);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
 
   // Landmarks and headings let keyboard and screen reader users move past the header and sidebar (2.4.1).
   await page.reload();
@@ -176,10 +176,10 @@ test('landmarks, one h1 per view, and a page title that names the view', async (
   expect(await focusedRole(page)).toBe('gridcell');
   const first = await focusedTitle(page);
 
-  // Single view: its photo is the h1 and the title; the photo zooms from the keyboard.
+  // Single view: its photo is the h1 and the title (the grid's, hidden under it, is not read); the photo zooms from the keyboard.
   await page.keyboard.press(' ');
   await expect(page).toHaveTitle(`${first} – Photonamous`);
-  await expect(page.locator('h1')).toHaveCount(1);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
   const zoom = page.getByRole('button', { name: `Look closer at ${first}` });
   await zoom.focus();
   await page.keyboard.press('Enter');
@@ -209,7 +209,7 @@ test('landmarks, one h1 per view, and a page title that names the view', async (
   // Another collection names the page after it.
   await page.getByRole('navigation', { name: 'Library' }).getByRole('button', { name: /^Dropped/ }).click();
   await expect(page).toHaveTitle('Dropped – Photonamous');
-  await expect(page.locator('h1')).toHaveCount(1);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
 });
 
 test('a dialog leaves the library behind it out of reach, and focus comes back after', async ({ page }) => {
