@@ -4,8 +4,9 @@ import { useEditorStore } from '../../app/editor-store';
 import type { DocumentColorMode } from '../../types';
 import { pasteOrOpenBlob } from '../../app/paste-or-open';
 import { importPsdFile } from '../../io/psd';
-import { describeError, notifyError } from '../../app/notifications-store';
-import { showIfTooLarge, type OpenAttempt } from '../../app/report-open-failure';
+import { describeError } from '../../app/notifications-store';
+import { formatFromMime } from '@lopsy/tracking/file-error';
+import { showIfTooLarge, toastOpenFailure, type OpenAttempt } from '../../app/report-open-failure';
 import { confirmShapeSize } from '../../tools/shape/shape-interaction';
 import { confirmMarqueeRegion } from '../../tools/marquee/marquee-strategy';
 import { defaultMarqueeCorners } from '../../tools/marquee/marquee-region';
@@ -66,7 +67,7 @@ export function ModalHost() {
   const reportFailure = useCallback(
     (err: unknown, attempt: OpenAttempt, toast: string) => {
       if (showIfTooLarge(err, attempt)) closeModal();
-      else notifyError(toast);
+      else toastOpenFailure(err, attempt, toast);
     },
     [closeModal],
   );
@@ -93,7 +94,9 @@ export function ModalHost() {
     (blob: Blob) => {
       pasteOrOpenBlob(blob, 'Copied File', true)
         .then(() => closeModal())
-        .catch((err) => reportFailure(err, { kind: 'paste', name: null }, `Failed to paste image: ${describeError(err)}`));
+        .catch((err) =>
+          reportFailure(err, { kind: 'paste', name: null, format: formatFromMime(blob.type) }, `Failed to paste image: ${describeError(err)}`),
+        );
     },
     [closeModal, reportFailure],
   );

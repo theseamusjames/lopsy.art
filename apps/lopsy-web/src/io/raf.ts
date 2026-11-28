@@ -14,6 +14,7 @@ import { initWasm, uploadLayerPixelsF32Rect } from '../engine-wasm/wasm-bridge';
 import { resetTrackedState } from '../engine-wasm/engine-sync';
 import { pixelDataManager } from '../engine/pixel-data-manager';
 import { notifyError } from '../app/notifications-store';
+import { track } from '../app/track';
 import { decodeRafInWorkers } from './raf-decode';
 import { getDocumentSizeLimit } from '../engine-wasm/gpu-limits';
 import { assertFitsDocument } from './image-too-large';
@@ -57,6 +58,7 @@ async function importRafFileInner(data: Uint8Array, name: string): Promise<void>
 
   if (meta.width === 0 || meta.height === 0) {
     notifyError('RAF decode returned empty image');
+    track.error({ kind: 'raw-refused', reason: 'RAW file decoded to an empty image', format: 'raf' });
     return;
   }
 
