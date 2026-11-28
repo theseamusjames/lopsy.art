@@ -23,6 +23,10 @@
 //!   whose maker note has no compression data: 12-bit (D500, Z 6) and
 //!   14-bit (D6, Z 6).
 //!
+//! And Nikon's compressed mosaics ([`compressed`]), lossless (12-bit D3,
+//! 14-bit Z 6 and Z 30) and lossy (12-bit D7000, D850 and Z 7II, 14-bit
+//! D3).
+//!
 //! Each was checked on a real file from raw.pixls.us (CC0) against the
 //! camera's own full-size JPEG embedded in the file: the size, crop and
 //! orientation line up at no shift, there is no cast on neutral surfaces,
@@ -31,19 +35,16 @@
 //! and each was chosen as the one under which neighbouring pixels of one
 //! colour differ least (any other reading of those files is noise).
 //!
-//! Refused, each with a sentence a person can read: Nikon's compressed
-//! NEFs, lossless and lossy (their entropy code is not in the file: see
-//! below), High Efficiency raws (a third-party codec), Medium and Small
-//! raws, the NRW files of COOLPIX compacts, any packing or depth not in
-//! the list above, and files whose maker note does not carry the values
-//! below.
+//! Refused, each with a sentence a person can read: High Efficiency raws
+//! (a third-party codec), Medium and Small raws, the NRW files of COOLPIX
+//! compacts, any packing or depth not in the list above, the compressed
+//! forms `compressed` lists as refused, and files whose maker note does
+//! not carry the values below (the D70's white balance is not in the
+//! clear).
 //!
-//! **Compressed NEFs.** The maker note's tag 0x0096 holds what a compressed
-//! file carries of its compression: a version and, for the lossy forms, a
-//! curve. The code the differences are entropy-coded with is not in the
-//! file, and the only public sources of it are other raw decoders' code,
-//! which this project does not use. Until there is a clean source, those
-//! files are refused.
+//! **Compressed NEFs** carry their curve and starting values (tag 0x0096)
+//! but not their Huffman tables, which are Nikon's constants: `compressed`
+//! says where the values were taken from.
 //!
 //! ## Calibration, from Nikon's maker note
 //!
@@ -58,7 +59,7 @@
 //!   themselves: their darkest samples reach 0, and black is 0.
 //! - **White level**: the top of the stored range, `2^bits − 1`, where
 //!   clipped highlights pile up on every sample that has them (D3, D850,
-//!   Z 6, 12- and 14-bit).
+//!   Z 6, 12- and 14-bit); for a lossy compressed file, the curve's top.
 //! - **As-shot white balance**: tag 0x000C, four rationals: the red and
 //!   blue multipliers, then two for green (1 on every body but the P950's
 //!   NRW). It is stored in the clear; Nikon's fuller colour block (0x0097)
@@ -96,6 +97,7 @@
 //! the real files show; no code or table of another raw decoder was read
 //! or used.
 
+pub mod compressed;
 pub mod exposure;
 pub mod linear;
 pub mod makernote;
@@ -160,6 +162,9 @@ pub enum NefLayout {
     /// `bits` a pixel packed into rows of `row_bytes`, high bit first
     /// (`msb_first`) or low bit first.
     Packed { bits: u8, row_bytes: u32, msb_first: bool },
+    /// Nikon's compression (`compressed`): lossless, or lossy through the
+    /// file's curve.
+    Compressed { lossless: bool },
 }
 
 /// The crop Nikon intends, in the stored mosaic.
@@ -207,6 +212,8 @@ pub struct NefInfo {
     pub camera_model: String,
     pub sources: NefSources,
     pub debug_log: Vec<String>,
+    /// What the maker note says of a compressed mosaic.
+    pub compressed: Option<compressed::NefCompression>,
 }
 
 impl NefInfo {
@@ -376,17 +383,22 @@ pub fn read_info(data: &[u8]) -> Result<NefInfo, String> {
     if parts[0].starts_with(&[0xFF, 0x10]) {
         return Err("This Nikon RAW is a High Efficiency RAW, which uses a licensed third-party codec and is not supported".into());
     }
-    if maker.iter().any(|e| e.tag == TAG_NIKON_COMPRESSION_DATA) {
-        let lossless = maker.iter().find(|e| e.tag == TAG_NIKON_COMPRESSION_DATA).and_then(|e| e.raw_bytes.first().copied()) == Some(0x46);
-        return Err(format!(
-            "This Nikon RAW is {}compressed, which is not supported yet: only uncompressed NEF files open",
-            if lossless { "lossless " } else { "lossy " }
-        ));
-    }
+    // Nikon's compressed data when the maker note describes it
+    // (`compressed`), else one of the uncompressed layouts.
+    let compressed = match maker.iter().find(|e| e.tag == TAG_NIKON_COMPRESSION_DATA) {
+        Some(e) => {
+            let little_endian = exif.iter().find(|n| n.tag == TAG_MAKER_NOTE).is_some_and(|n| makernote::is_little_endian(&n.raw_bytes));
+            Some(compressed::NefCompression::read(&e.raw_bytes, little_endian, bits)?)
+        }
+        None => None,
+    };
     let total: u64 = parts.iter().map(|p| p.len() as u64).sum();
-    let layout = layout_for(total, width, height, bits, big_endian, compression).ok_or_else(|| {
-        format!("This Nikon RAW stores its {bits}-bit sensor data in a way that is not supported yet (compression {compression}, {total} bytes for {width}×{height})")
-    })?;
+    let layout = match &compressed {
+        Some(c) => NefLayout::Compressed { lossless: c.lossless },
+        None => layout_for(total, width, height, bits, big_endian, compression).ok_or_else(|| {
+            format!("This Nikon RAW stores its {bits}-bit sensor data in a way that is not supported yet (compression {compression}, {total} bytes for {width}×{height})")
+        })?,
+    };
 
     let cfa = {
         let dim = u32s(&raw_ifd, TagId::CfaRepeatPatternDim as u16);
@@ -397,7 +409,7 @@ pub fn read_info(data: &[u8]) -> Result<NefInfo, String> {
         }
     };
 
-    let white = (1u32 << bits) - 1;
+    let white = compressed.as_ref().map_or((1u32 << bits) - 1, |c| c.white);
     let mut sources = NefSources::default();
     let black: [f64; 4] = match makernote::u16s(&maker, TAG_NIKON_BLACK_LEVEL).as_deref() {
         Some([a, b, c, d]) => {
@@ -478,6 +490,7 @@ pub fn read_info(data: &[u8]) -> Result<NefInfo, String> {
         camera_model,
         sources,
         debug_log,
+        compressed,
     })
 }
 
@@ -496,7 +509,10 @@ pub fn read_mosaic(data: &[u8], info: &NefInfo) -> Result<Vec<u16>, String> {
         }
         &buf
     };
-    unpack::unpack(bytes, info.width as usize, info.height as usize, info.layout)
+    match &info.compressed {
+        Some(c) => compressed::decode(bytes, info.width as usize, info.height as usize, info.bits, c),
+        None => unpack::unpack(bytes, info.width as usize, info.height as usize, info.layout),
+    }
 }
 
 /// [`read_nef`]'s result: the baked image, and where its colour came from.

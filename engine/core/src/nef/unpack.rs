@@ -15,6 +15,7 @@ pub fn unpack(bytes: &[u8], width: usize, height: usize, layout: NefLayout) -> R
     let (row_bytes, bits) = match layout {
         NefLayout::Words { .. } => (width.checked_mul(2).ok_or("the mosaic's size overflows")?, 16usize),
         NefLayout::Packed { bits, row_bytes, .. } => (row_bytes as usize, usize::from(bits)),
+        NefLayout::Compressed { .. } => return Err("compressed data is decoded by `nef::compressed`, not unpacked".into()),
     };
     if !(1..=16).contains(&bits) || width.checked_mul(bits).is_none_or(|b| b.div_ceil(8) > row_bytes) {
         return Err(format!("rows of {row_bytes} bytes cannot hold {width} pixels of {bits} bits"));
@@ -28,6 +29,7 @@ pub fn unpack(bytes: &[u8], width: usize, height: usize, layout: NefLayout) -> R
         match layout {
             NefLayout::Words { big_endian: true } => out.extend(row.chunks_exact(2).map(|b| u16::from_be_bytes([b[0], b[1]]))),
             NefLayout::Words { big_endian: false } => out.extend(row.chunks_exact(2).map(|b| u16::from_le_bytes([b[0], b[1]]))),
+            NefLayout::Compressed { .. } => {}
             NefLayout::Packed { msb_first, .. } => {
                 let mask = (1u32 << bits) - 1;
                 let (mut acc, mut held, mut next) = (0u32, 0usize, 0usize);

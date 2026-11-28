@@ -24,6 +24,13 @@ pub fn read(maker_note: &[u8]) -> Option<Vec<IfdEntry>> {
     reader.read_ifd(0).ok().filter(|e| !e.is_empty())
 }
 
+/// Whether the maker note's own TIFF is little-endian ("II"): the byte
+/// order of the values in its UNDEFINED entries (tag 0x0096's predictors
+/// and curve).
+pub fn is_little_endian(maker_note: &[u8]) -> bool {
+    maker_note.get(TIFF_START..TIFF_START + 2) == Some(b"II")
+}
+
 /// A SHORT entry's values.
 pub fn u16s(entries: &[IfdEntry], tag: u16) -> Option<Vec<u16>> {
     entries.iter().find(|e| e.tag == tag).and_then(|e| e.as_u16_vec())
