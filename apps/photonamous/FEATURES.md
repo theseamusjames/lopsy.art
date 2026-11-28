@@ -484,7 +484,16 @@ the newer version made.
   screen). On the
   right, two icon buttons: **Before** (or
   hold `\`) and **Split** (before and after side by side, with a divider
-  to drag), each blue while it is on, as Crop is in the top bar.
+  to drag; before on the left, labelled under the divider), each blue
+  while it is on, as Crop is in the top bar. Double-clicking the divider
+  (or Enter on it) swaps the sides, before on the right, and again swaps
+  them back; the divider stays where it is, and a double-click never
+  moves it (the pointer must move more than 4 px sideways before a
+  press drags). The labels, the divider's reading and description
+  follow, and the swap is said aloud. Like the divider's place, the
+  swap is the view's alone: no history step, not saved with the photo,
+  kept while Split is off and from photo to photo in the filmstrip, and
+  back to before on the left when the Edit view closes.
 - **Pixel readout**: the rendered colour under the pointer (R G B,
   0–255): the photo's, never the clipping warning's or a mask's red
   painted over it.
@@ -1005,7 +1014,7 @@ best-practice rules at each step; the `a11y-*.spec.ts` and
     Add point adds one in the widest gap.
   - With the photo focused, the arrow keys move a zoomed photo and + and
     − zoom. The before/after divider takes the arrow, Page, Home and End
-    keys.
+    keys, and Enter swaps its sides (its tooltip says so).
   - The zoom level under the photo is a text field named Zoom: Enter
     takes what was typed and keeps the field, Up and Down step to the
     next 10 %, and Escape drops what was typed without leaving the

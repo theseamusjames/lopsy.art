@@ -142,11 +142,22 @@ export function splitAfterKey(at: number, key: string, isLarge: boolean): number
   }
 }
 
-/** What the split divider reads out: how much of the photo shows before and after. */
-export function splitValueText(at: number): string {
-  const before = Math.round(Math.min(1, Math.max(0, at)) * 100);
-  return `${before} % before, ${100 - before} % after`;
+/**
+ * What the split divider reads out: how much of the photo shows on each
+ * side, left first (before, unless the sides are swapped).
+ */
+export function splitValueText(at: number, isSwapped = false): string {
+  const left = Math.round(Math.min(1, Math.max(0, at)) * 100);
+  return isSwapped ? `${left} % after, ${100 - left} % before` : `${left} % before, ${100 - left} % after`;
 }
+
+/** Which picture is on which side of the split divider, as said to a screen reader. */
+export function splitSidesText(isSwapped: boolean): string {
+  return isSwapped ? 'After on the left, before on the right' : 'Before on the left, after on the right';
+}
+
+/** The key that swaps the split's sides while its divider has focus, as a double-click does. */
+export const SPLIT_SWAP_KEY = 'Enter';
 
 /** How far an arrow key moves the focused photo, in CSS pixels, and with Shift. */
 export const PAN_STEP = 40;
