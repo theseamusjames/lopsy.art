@@ -143,31 +143,6 @@ describe('resumable imports', () => {
     expect(await staging.list()).toEqual([]);
   });
 
-  it('fails resumed items whose staged copy is gone or that never reached staging', async () => {
-    const { session, queueStore, staging } = await setup();
-    await queueStore.saveJob({
-      id: 'old',
-      libraryId: session.libraryId,
-      createdAt: DAY.toISOString(),
-      options: { skipDuplicates: true, rawPlusJpeg: 'both', concurrency: 2 },
-      recipe: null,
-      keywords: null,
-      albumId: null,
-      items: [
-        { index: 0, fileName: 'gone.jpg', byteSize: 10, lastModified: 0, plannedAssetId: 'a0', sha256: 'f'.repeat(64), state: 'staged', assetId: null, error: null, staged: true, pairedWith: null, folderSegments: null, destinationName: null },
-        { index: 1, fileName: 'early.jpg', byteSize: 10, lastModified: 0, plannedAssetId: 'a1', sha256: null, state: 'reading', assetId: null, error: null, staged: false, pairedWith: null, folderSegments: null, destinationName: null },
-        { index: 2, fileName: 'fine.jpg', byteSize: 10, lastModified: 0, plannedAssetId: 'a2', sha256: null, state: 'done', assetId: 'a2', error: null, staged: false, pairedWith: null, folderSegments: null, destinationName: null },
-      ],
-    });
-    const job = await resumeImports({ session, previewRenderer: renderer, queueStore, staging });
-    const result = await job?.finished;
-    expect(result?.items.map((i) => [i.fileName, i.state, i.error])).toEqual([
-      ['gone.jpg', 'failed', 'Its staged copy on this device is gone; import the file again'],
-      ['early.jpg', 'failed', 'Interrupted before it was staged on this device; import the file again'],
-    ]);
-    expect(queueStore.jobs.size).toBe(0);
-  });
-
   it('stages each file, passes the resume key and cleans staging up on every outcome', async () => {
     const { adapter, session, queueStore, staging, ctx } = await setup();
     const put = vi.spyOn(staging, 'put');

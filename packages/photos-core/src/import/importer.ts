@@ -30,6 +30,7 @@ import { inspectImage } from './inspect';
 import { isRawJpegPair, pairCandidatesByName } from './pairs';
 import type { PairableFile } from './pairs';
 import type { ImportItemRecord, ImportJobRecord, ImportQueueStore } from './queue-store';
+import { InterruptedIndex, type InterruptedMatch } from './interrupted';
 import type { StagingStore } from './staging';
 import { applySidecarFile, applySidecarToExisting, isSidecarName, matchSidecars } from '../xmp/sidecars';
 import type {
@@ -174,6 +175,10 @@ interface Work extends WorkSpec {
   /** Resolves when the item has left the prepare stage, either way. */
   readonly preparedSignal: Deferred<void>;
   /** The staging key this item wrote, to delete when it is finished with. */
+  /** The interrupted import's record of this file, when it was chosen again; updated once it is in the library. */
+  interruptedMatch: InterruptedMatch | null;
+  /** The library's RAW this JPEG pairs with, from the interrupted import's record. */
+  pairHint: AssetId | null;
   stagedKey: string | null;
   /** The staging key of this item's sidecar, deleted with the photo's copy. */
   sidecarKey: string | null;
@@ -236,6 +241,8 @@ interface JobSetup {
   readonly saved: Promise<void>;
   /** The job's lock, released when it ends. */
   readonly claim: Promise<(() => void) | null>;
+  /** What a reload left of earlier imports, for files chosen again (interrupted.ts); null when there is none. */
+  readonly interrupted: Promise<InterruptedIndex | null>;
 }
 
 /** The recipe a preset gives a new version, or null when there is no such preset. */
@@ -249,7 +256,7 @@ function warn(what: string) {
   return (error: unknown) => console.warn(`Import: ${what}:`, error);
 }
 
-function jobRecord(setup: Omit<JobSetup, 'saved' | 'claim'>, items: readonly ImportItemRecord[]): ImportJobRecord {
+function jobRecord(setup: Omit<JobSetup, 'saved' | 'claim' | 'interrupted'>, items: readonly ImportItemRecord[]): ImportJobRecord {
   return {
     id: setup.jobId,
     libraryId: setup.session.libraryId,
@@ -336,7 +343,19 @@ export function startImport(files: readonly File[], ctx: ImportContext): ImportJ
   const saved = store
     ? claim.then(() => store.saveJob(jobRecord(base, specs.map(newItemRecord)))).catch(warn('saving the queue'))
     : Promise.resolve();
-  return runJob({ ...base, saved, claim });
+  const interrupted = store
+    ? store.listJobs(base.session.libraryId).then(
+        (records) => {
+          const index = new InterruptedIndex(records);
+          return index.size > 0 ? index : null;
+        },
+        (error: unknown) => {
+          warn('reading interrupted imports')(error);
+          return null;
+        },
+      )
+    : Promise.resolve(null);
+  return runJob({ ...base, saved, claim, interrupted });
 }
 
 /**
@@ -346,8 +365,10 @@ export function startImport(files: readonly File[], ctx: ImportContext): ImportJ
  * claiming, are left alone; where the locks do not span tabs, so is a job
  * whose heartbeat is younger than the lease. The claim itself is one
  * atomic swap in the queue. Items that never reached staging, or whose
- * staged copy is gone, fail with the reason. Null when nothing is
- * unfinished.
+ * staged copy is gone, cannot go on: they are not failed one by one but
+ * kept, with the rest of their job, in one interrupted record
+ * (interrupted.ts), for the person to choose them again. Null when
+ * nothing can go on.
  */
 export async function resumeImports(ctx: ResumeContext): Promise<ImportJob | null> {
   const locks = ctx.locks ?? defaultImportLocks();
@@ -368,7 +389,7 @@ async function tryResume(ctx: ResumeContext, locks: ImportLocks): Promise<Import
     return Number.isFinite(age) && age < leaseMs;
   };
   const candidates = (await queueStore.listJobs(session.libraryId))
-    .filter((record) => !held(record))
+    .filter((record) => record.interrupted !== true && !held(record))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const releases: (() => void)[] = [];
   try {
@@ -398,25 +419,33 @@ async function claimRecords(
   let recipe: Recipe | null = null;
   let keywords: readonly string[] | null = null;
   let albumId: AlbumId | null = null;
+  // Every file of these jobs, for the interrupted record when some of them cannot go on.
+  const everything: ImportItemRecord[] = [];
+  let lost = 0;
   for (const record of records) {
     for (const item of record.items) {
-      if (TERMINAL.has(item.state)) continue;
+      if (TERMINAL.has(item.state)) {
+        everything.push({ ...item, index: everything.length });
+        continue;
+      }
       options ??= record.options;
       recipe ??= record.recipe;
       keywords ??= record.keywords;
       albumId ??= record.albumId;
       let content: Blob | null = null;
       let sidecar: Blob | null = null;
-      let resumeError: string | null = null;
       const stagingKey = item.stagingKey ?? item.sha256;
-      if (item.sha256 === null || stagingKey === null || !item.staged) {
-        resumeError = 'Interrupted before it was staged on this device; import the file again';
-      } else {
+      if (item.sha256 !== null && stagingKey !== null && item.staged) {
         content = ctx.staging ? await ctx.staging.get(stagingKey).catch(() => null) : null;
-        if (!content) resumeError = 'Its staged copy on this device is gone; import the file again';
-        else if (item.sidecarStaged && ctx.staging) {
+        if (content && item.sidecarStaged && ctx.staging) {
           sidecar = await ctx.staging.get(sidecarStagingKey(stagingKey)).catch(() => null);
         }
+      }
+      // Never staged, or its copy is gone: the page held only the File, so only choosing it again can finish it.
+      everything.push({ ...item, index: everything.length, needsFile: content === null });
+      if (content === null) {
+        lost++;
+        continue;
       }
       specs.push({
         content,
@@ -434,16 +463,36 @@ async function claimRecords(
                 folderSegments: item.folderSegments,
                 destinationName: item.destinationName,
               },
-        resumeError,
+        resumeError: null,
         sidecar,
         skipReason: null,
       });
     }
   }
+  // One summary for what a reload left: saved first, so a resume that loses its claim below can drop it again.
+  const first = records[0];
+  const interrupted: ImportJobRecord | null =
+    lost > 0 && first
+      ? {
+          id: crypto.randomUUID(),
+          libraryId: session.libraryId,
+          createdAt: first.createdAt,
+          options: first.options,
+          recipe: first.recipe,
+          keywords: first.keywords,
+          albumId: first.albumId,
+          items: everything,
+          owner: null,
+          heartbeatAt: null,
+          interrupted: true,
+        }
+      : null;
   if (specs.length === 0) {
+    if (interrupted) await queueStore.saveJob(interrupted);
     for (const record of records) await queueStore.deleteJob(record.id);
     return null;
   }
+  if (interrupted) await queueStore.saveJob(interrupted);
   const base = {
     jobId: crypto.randomUUID(),
     session,
@@ -461,16 +510,18 @@ async function claimRecords(
     specs,
   };
   const release = await locks.tryAcquire(importLockName(base.jobId));
-  const claimed = await queueStore.claimJobs(jobRecord(base, specs.map(newItemRecord)), records).catch((error: unknown) => {
+  const claimed = await queueStore.claimJobs(jobRecord(base, specs.map(newItemRecord)), records).catch(async (error: unknown) => {
     release?.();
+    if (interrupted) await queueStore.deleteJob(interrupted.id).catch(warn('dropping an interrupted record'));
     throw error;
   });
   if (!claimed) {
     // Another resume claimed one of them between the listing and the lock, or its owner renewed it.
     release?.();
+    if (interrupted) await queueStore.deleteJob(interrupted.id).catch(warn('dropping an interrupted record'));
     return 'conflict';
   }
-  return runJob({ ...base, saved: Promise.resolve(), claim: Promise.resolve(release) });
+  return runJob({ ...base, saved: Promise.resolve(), claim: Promise.resolve(release), interrupted: Promise.resolve(null) });
 }
 
 function runJob(setup: JobSetup): ImportJob {
@@ -500,11 +551,24 @@ function runJob(setup: JobSetup): ImportJob {
     destinationName: spec.settled?.destinationName ?? null,
     attempts: 0,
     signInWaits: 0,
+    interruptedMatch: null,
+    pairHint: null,
   }));
   const worksByAssetId = new Map(works.map((w) => [w.assetId, w]));
 
   // Persistence, in order, after the job record is saved.
   let persisted: Promise<void> = setup.saved;
+  // A file chosen again for an interrupted import: its record learns where it is in the library, so the summary counts it.
+  for (const work of works) {
+    void work.outcome.promise.then((assetId) => {
+      const match = work.interruptedMatch;
+      const store = queueStore;
+      if (assetId === null || !match || !store) return;
+      persisted = persisted
+        .then(() => store.updateItem(match.recordId, match.item.index, { assetId, needsFile: false }))
+        .catch(warn('updating an interrupted import'));
+    });
+  }
   const persist = (index: number, patch: Partial<ImportItemRecord>) => {
     const store = queueStore;
     if (!store) return;
@@ -760,6 +824,19 @@ function runJob(setup: JobSetup): ImportJob {
       await endEarly(work, 'done', { assetId: existingOwn.id, error: null }, existingOwn.id);
       return null;
     }
+    if (work.settled === null) {
+      // Chosen again after a reload interrupted its import: what the library has is not read again.
+      const found = await setup.interrupted;
+      const match = found?.take({ name: work.fileName, size: work.byteSize, lastModified: work.lastModified }, session.getView()) ?? null;
+      if (match?.existing) {
+        const asset = session.getView().assets.get(match.existing);
+        if (asset) work.read.resolve({ id: String(index), name: work.fileName, format: asset.format, capturedAt: asset.capturedAt });
+        await endEarly(work, 'duplicate', { assetId: match.existing }, match.existing);
+        return null;
+      }
+      work.interruptedMatch = match;
+      work.pairHint = match?.pairedWith ?? null;
+    }
     patch(index, { state: 'reading', error: null });
 
     if (work.byteSize > MAX_ORIGINAL_BYTES) {
@@ -802,7 +879,7 @@ function runJob(setup: JobSetup): ImportJob {
       batchBySha.set(sha, work);
     }
 
-    let pairCandidate: AssetId | null = work.settled?.pairedWith ?? null;
+    let pairCandidate: AssetId | null = work.settled?.pairedWith ?? work.pairHint;
     const rawIndex = pairOf.get(String(index));
     const rawWork = rawIndex === undefined ? undefined : works[Number(rawIndex)];
     if (!work.settled && rawWork && metadata.format === 'jpeg') {
