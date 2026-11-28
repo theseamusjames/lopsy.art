@@ -36,7 +36,13 @@ engine/
       arw/            # Sony ARW decode (lossy, uncompressed, lossless; the SR2 block) onto
                       # the DNG decode's plane, renders and baked finish; measured colour for
                       # the bodies with data, camera_colour's matrix or Sony's (approximate) otherwise
-      raw/            # One RAW interface over raf/, dng/ and arw/: sniff, prepare and describe,
+      cr2/            # Canon CR2 decode (lossless JPEG in slices; levels and colour filter measured
+                      # from the sensor data) onto the DNG decode's plane, renders and baked finish
+      cr3/            # Canon CR3: the container read (boxes, metadata, tracks); its codec is not
+                      # decoded, so the RAW interface refuses a CR3 with a sentence
+      nef/            # Nikon NEF decode (uncompressed, and compressed lossless and lossy) onto the DNG decode's
+                      # plane, renders and baked finish; camera_colour's matrix or white balance only
+      raw/            # One RAW interface over raf/, dng/, arw/, cr2/ and nef/: sniff, prepare and describe,
                       # bands, binned view, white balance in recipe units (the raw… exports);
                       # scaled.rs: the frame reduced band by band, for a GPU whose textures are smaller;
                       # window.rs: the bands for one window of the frame at its own size (tiles)
@@ -200,7 +206,17 @@ JS API, and the deviations from `docs/photonamous-spec.md` 6.10. Rules:
   `camera_colour` when it has one, otherwise Sony's `ColorMatrix` from
   the file's SR2 block, which is only part of the camera's colour, so
   the decode says its colour is approximate. The tests on real ARWs read
-  `LOPSY_ARW_SAMPLES` (`core/tests/arw_decode.rs`, `--release`).
+  `LOPSY_ARW_SAMPLES` (`core/tests/arw_decode.rs`, `--release`). A Canon
+  CR2 or Nikon NEF carries no matrix: one from a body in `camera_colour`
+  (`canon`, `nikon`, by IFD0's exact `Model`) takes that matrix, any
+  other its white balance alone, and its decode says its colour is
+  approximate; Kelvin and presets are absent. Their tests read
+  `LOPSY_CR2_SAMPLES`, `LOPSY_CR3_SAMPLES` and `LOPSY_NEF_SAMPLES`
+  (`core/tests/cr2_*.rs`, `cr3_container.rs`, `nef_*.rs`, `--release`).
+  The RAW interface refuses with a sentence a CR3 (its codec is not
+  decoded), a Canon sRAW or mRAW, a High Efficiency, Medium or Small NEF,
+  a NEF whose white balance is not in the clear (the D70's) and a COOLPIX
+  NRW.
 - Develop shaders compile lazily through `ShaderPrograms::<name>()`, never
   in `compile_all`.
 - **Tiles.** A document can be one rectangle of a larger picture

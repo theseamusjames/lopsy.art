@@ -46,7 +46,7 @@ import {
   type ControlDef,
   type GroupDef,
 } from '../edit-controls';
-import { EDIT_SHORTCUTS, isFieldKey, neighbourId, shortcutFor, stageKeyAction } from '../edit-keys';
+import { EDIT_SHORTCUTS, isFieldKey, neighbourId, shortcutFor, splitSidesText, stageKeyAction } from '../edit-keys';
 import { Modal } from '../../components/Modal/Modal';
 import type { PhotoInfo } from '../../engine/develop-engine';
 import type { DevelopProfile } from '../../engine/profiles';
@@ -731,6 +731,13 @@ export function EditView({
 
   const [isSplit, setIsSplit] = useState(false);
   const [splitAt, setSplitAt] = useState(0.5);
+  // Before right of the divider: view state, as splitAt is, never part of the edit.
+  const [isSplitSwapped, setIsSplitSwapped] = useState(false);
+  const handleSplitSwap = () => {
+    const next = !isSplitSwapped;
+    setIsSplitSwapped(next);
+    announce(splitSidesText(next));
+  };
   const isSplitShown = isSplit && canEdit && !isCropping;
   const wbDocSize = isPickingWb ? engine?.imageSize() ?? null : null;
   const wbPickBox = boxOf(wbDocSize);
@@ -1158,7 +1165,9 @@ export function EditView({
                 R {pixel.readout[0]} G {pixel.readout[1]} B {pixel.readout[2]}
               </span>
             )}
-            {splitBox && <SplitView imageBox={splitBox} beforeSrc={beforeSrc} at={splitAt} onChange={setSplitAt} />}
+            {splitBox && (
+              <SplitView imageBox={splitBox} beforeSrc={beforeSrc} at={splitAt} onChange={setSplitAt} isSwapped={isSplitSwapped} onSwap={handleSplitSwap} />
+            )}
             {cropDraft && cropBox && (
               <CropTool
                 imageBox={cropBox.box}

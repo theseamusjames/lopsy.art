@@ -126,8 +126,18 @@ const MARGIN = 0.03;
 // encodeExportAssembly, assembledGainMap, clearExportAssembly) and
 // rawPlanWindowBands took it past the margin. The wasm stays inside it
 // (+1.39 % raw, +1.38 % gzip) and keeps its budget.
+//
+// The wasm was re-based for Canon and Nikon RAW, to what a local release
+// build measures with them in (5,335,626 B raw, 2,192,272 B gzip; +3.75 %
+// and +3.08 % over the old budget): the CR2 decoder (lossless JPEG in
+// slices, levels and colour filter measured from the data, Canon's colour
+// data), the CR3 container reader that refuses its codec with a sentence,
+// the uncompressed NEF decoder (five packings, Nikon's maker note), the
+// matrices for three of those bodies, and the parsers' hardening that
+// followed review. They add no exports: the RAW interface takes them, so
+// the glue stays inside its margin and keeps its budget.
 const BUDGET = {
-  'lopsy_wasm_bg.wasm': { raw: 5_142_743, gzip: 2_126_718 },
+  'lopsy_wasm_bg.wasm': { raw: 5_335_626, gzip: 2_192_272 },
   'lopsy_wasm.js': { raw: 306_199, gzip: 39_552 },
 };
 

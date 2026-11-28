@@ -7,6 +7,13 @@ describe('formatOf', () => {
     expect(formatOf('DSCF0001.RAF', '')).toBe('raf');
     expect(formatOf('DSC06677.ARW', '')).toBe('arw');
     expect(formatOf('blob', 'image/x-sony-arw')).toBe('arw');
+    expect(formatOf('IMG_0001.CR2', '')).toBe('cr2');
+    expect(formatOf('blob', 'image/x-canon-cr2')).toBe('cr2');
+    expect(formatOf('DSC_0001.NEF', '')).toBe('nef');
+    expect(formatOf('blob', 'image/x-nikon-nef')).toBe('nef');
+    // Not formats the Edit view opens: a CR3 and a COOLPIX NRW are refused by the engine.
+    expect(formatOf('IMG_0001.CR3', 'image/x-canon-cr3')).toBeNull();
+    expect(formatOf('DSCN0001.NRW', '')).toBeNull();
     expect(formatOf('photo.JPG', 'image/jpeg')).toBe('jpeg');
     expect(formatOf('blob', 'image/webp')).toBe('webp');
     expect(formatOf('notes.txt', 'text/plain')).toBeNull();

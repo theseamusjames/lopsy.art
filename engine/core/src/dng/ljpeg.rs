@@ -6,6 +6,25 @@ pub fn decode_lossless_jpeg(data: &[u8]) -> Result<Vec<u16>, String> {
     decoder.decode()
 }
 
+/// The frame a stream was decoded with: what its `SOF3` said.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LjpegFrame {
+    pub precision: u8,
+    pub width: u32,
+    pub height: u32,
+    pub components: u8,
+}
+
+/// [`decode_lossless_jpeg`], with the frame the samples were decoded
+/// with, for a caller that read the frame header itself to check the two
+/// agree.
+pub fn decode_lossless_jpeg_framed(data: &[u8]) -> Result<(Vec<u16>, LjpegFrame), String> {
+    let mut decoder = LjpegDecoder::new(data);
+    let samples = decoder.decode()?;
+    let frame = LjpegFrame { precision: decoder.precision, width: decoder.width, height: decoder.height, components: decoder.components };
+    Ok((samples, frame))
+}
+
 struct HuffTable {
     /// min_code[i] = minimum Huffman code of length i+1
     min_code: [i32; 17],

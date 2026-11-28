@@ -79,6 +79,50 @@ describe('detectFormat', () => {
   });
 });
 
+describe('Canon and Nikon RAW, by their bytes', () => {
+  const ascii = (s: string) => [...s].map((c) => c.charCodeAt(0));
+  /** A TIFF header with Canon's "CR" and major version after it, as a CR2 starts. */
+  function cr2Header(version: number, littleEndian = true): Uint8Array {
+    const tiff = buildTiff({ entries: [{ tag: 0x010f, ascii: 'Canon' }, { tag: 0x0110, ascii: 'Canon EOS 5D Mark III' }] }, littleEndian);
+    const out = new Uint8Array(tiff.length + 8);
+    out.set(tiff.subarray(0, 8), 0);
+    out.set([0x43, 0x52, version, 0, 0, 0, 0, 0], 8);
+    out.set(tiff.subarray(8), 16);
+    // The first IFD moved 8 bytes on.
+    new DataView(out.buffer).setUint32(4, new DataView(tiff.buffer).getUint32(4, littleEndian) + 8, littleEndian);
+    return out;
+  }
+
+  it('takes a little-endian TIFF with CR and version 2 after its header for a CR2', () => {
+    expect(detectFormat(cr2Header(2))).toBe('cr2');
+    // Anything else in that place, or a big-endian header, is not one.
+    expect(detectFormat(cr2Header(3))).toBeNull();
+    expect(detectFormat(cr2Header(2, false))).toBeNull();
+  });
+
+  it('does not take a CR3 (an ISO media file with the brand "crx ") for a photo it reads', () => {
+    const cr3 = new Uint8Array(64);
+    cr3.set([0, 0, 0, 24, ...ascii('ftypcrx '), 0, 0, 0, 1, ...ascii('crx isom')], 0);
+    expect(detectFormat(cr3)).toBeNull();
+  });
+
+  const nikon: EntrySpec = { tag: 0x010f, ascii: 'NIKON CORPORATION' };
+  const cfa: EntrySpec[] = [{ tag: 0x0100, type: 4, values: [10] }, { tag: 0x0101, type: 4, values: [10] }, { tag: 0x0106, type: 3, values: [32803] }];
+
+  it('takes a Nikon-made TIFF that holds raw (CFA) data and is not a DNG for a NEF', () => {
+    expect(detectFormat(buildTiff({ entries: [nikon, { tag: 0x0110, ascii: 'NIKON D850' }, ...cfa] }))).toBe('nef');
+    expect(detectFormat(buildTiff({ entries: [nikon, { tag: 0x0110, ascii: 'NIKON D3' }, ...cfa] }, false))).toBe('nef');
+    // An RGB TIFF that names Nikon (as Nikon's own software writes) is not one, and a DNG stays a DNG.
+    const rgb: EntrySpec[] = [{ tag: 0x0100, type: 4, values: [10] }, { tag: 0x0101, type: 4, values: [10] }, { tag: 0x0106, type: 3, values: [2] }];
+    expect(detectFormat(buildTiff({ entries: [nikon, ...rgb] }))).toBeNull();
+    expect(detectFormat(buildTiff({ entries: [nikon, { tag: 0xc612, type: 1, values: [1, 4, 0, 0] }, ...cfa] }))).toBe('dng');
+  });
+
+  it("does not take a COOLPIX compact's NRW for a NEF: the engine does not decode one", () => {
+    expect(detectFormat(buildTiff({ entries: [nikon, { tag: 0x0110, ascii: 'COOLPIX P950' }, ...cfa] }))).toBeNull();
+  });
+});
+
 describe('formatting', () => {
   it('writes shutter speeds for people', () => {
     expect(formatExposureTime(1, 250)).toBe('1/250');

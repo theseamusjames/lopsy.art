@@ -105,7 +105,7 @@ export function ImportSheet() {
       }
     >
       {summary.photoCount === 0 ? (
-        <p>None of these files are photos this app can read (RAF, DNG, ARW, JPEG, PNG or WebP).</p>
+        <p>None of these files are photos this app can read (RAF, DNG, ARW, CR2, NEF, JPEG, PNG or WebP).</p>
       ) : (
         <div className={styles.body}>
           <p className={styles.big}>

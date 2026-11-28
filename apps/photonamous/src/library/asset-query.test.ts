@@ -123,9 +123,9 @@ describe('RAW+JPEG pairs', () => {
     expect(pairPartners(makeView([raw, { ...jpeg, deleted: true }]).assets).size).toBe(0);
   });
 
-  it('takes RAF, DNG and ARW for RAW, and hides the JPEG paired with one', () => {
-    const formats = ['raf', 'dng', 'arw', 'jpeg', 'png'] as const;
-    expect(formats.map((format) => isRaw(makeAsset('a', { format })))).toEqual([true, true, true, false, false]);
+  it('takes RAF, DNG, ARW, CR2 and NEF for RAW, and hides the JPEG paired with one', () => {
+    const formats = ['raf', 'dng', 'arw', 'cr2', 'nef', 'jpeg', 'png'] as const;
+    expect(formats.map((format) => isRaw(makeAsset('a', { format })))).toEqual([true, true, true, true, true, false, false]);
     const arw = makeAsset('s', { format: 'arw' });
     const jpeg = makeAsset('j', { format: 'jpeg', pairedWith: 's' });
     expect(isHiddenPairHalf(jpeg, makeView([arw, jpeg]).assets)).toBe(true);

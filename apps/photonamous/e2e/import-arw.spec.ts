@@ -87,6 +87,6 @@ test("Sony's older SR2 and SRF files are not photos the sheet offers to import",
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('menuitem', { name: /Choose photos/ }).click();
   await (await chooser).setFiles(older.map((f) => join(samples ?? '', f)));
-  await expect(page.getByText('None of these files are photos this app can read (RAF, DNG, ARW, JPEG, PNG or WebP).')).toBeVisible();
+  await expect(page.getByText('None of these files are photos this app can read (RAF, DNG, ARW, CR2, NEF, JPEG, PNG or WebP).')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Import 0 photos' })).toBeDisabled();
 });
