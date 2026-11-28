@@ -50,7 +50,10 @@ pub fn canon(model: &str) -> Option<CamToSrgb> {
 
 /// Nikon bodies, by the exact `Model` string of IFD0. A NEF from any
 /// other is developed with its white balance alone (`nef`).
-const NIKON: &[(&str, CamToSrgb)] = &[("NIKON D850", [1.6649, -0.6285, -0.0364, -0.1058, 1.4930, -0.3872, 0.0448, -0.5161, 1.4713])];
+const NIKON: &[(&str, CamToSrgb)] = &[
+    ("NIKON D850", [1.6649, -0.6285, -0.0364, -0.1058, 1.4930, -0.3872, 0.0448, -0.5161, 1.4713]),
+    ("NIKON Z 9", [1.7699, -0.6932, -0.0767, -0.1128, 1.4871, -0.3743, 0.0152, -0.3915, 1.3763]),
+];
 
 /// The matrix of a Nikon body, or `None` for one with none here.
 pub fn nikon(model: &str) -> Option<CamToSrgb> {
@@ -126,8 +129,8 @@ mod tests {
         assert_eq!(sony("ILCE-6000 "), None);
         // Canon and Nikon by the Model their decoders look up, and only those bodies.
         assert!(canon("Canon EOS 5D Mark III").is_some() && canon("Canon EOS 5D Mark IV").is_some());
-        assert!(nikon("NIKON D850").is_some());
-        for other in ["Canon EOS 7D", "Canon EOS 5D Mark II", "EOS 5D Mark III", "NIKON D850 "] {
+        assert!(nikon("NIKON D850").is_some() && nikon("NIKON Z 9").is_some());
+        for other in ["Canon EOS 7D", "Canon EOS 5D Mark II", "EOS 5D Mark III", "NIKON D850 ", "NIKON Z 8", "NIKON Z9"] {
             assert_eq!(canon(other).or(nikon(other)), None, "{other}");
         }
         assert_eq!(nikon("NIKON Z 6"), None);

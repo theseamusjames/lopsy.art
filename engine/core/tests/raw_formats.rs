@@ -275,7 +275,7 @@ fn the_format_answers_finished_bands_as_its_descriptions_do() {
 /// opens says its colour is approximate.
 #[test]
 fn only_canon_and_nikon_bodies_with_a_matrix_open_without_the_colour_note() {
-    const WITH_MATRIX: [&str; 3] = ["Canon EOS 5D Mark III", "Canon EOS 5D Mark IV", "NIKON D850"];
+    const WITH_MATRIX: [&str; 4] = ["Canon EOS 5D Mark III", "Canon EOS 5D Mark IV", "NIKON D850", "NIKON Z 9"];
     let mut paths = files("LOPSY_CR2_SAMPLES", "cr2");
     paths.extend(files("LOPSY_NEF_SAMPLES", "nef"));
     let mut seen = 0;
