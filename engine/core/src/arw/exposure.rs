@@ -67,7 +67,7 @@ const FALLBACK_LONG_EDGE: u32 = 256;
 const DECODE_LONG_EDGE: u16 = 800;
 /// The largest JPEG preview read, in bytes, and its decode buffer.
 const MAX_PREVIEW_BYTES: usize = 32 << 20;
-const MAX_DECODE_BYTES: usize = 64 << 20;
+pub(crate) const MAX_DECODE_BYTES: usize = 64 << 20;
 
 /// The embedded preview's luminance: encoded Y of each pixel.
 pub struct Preview {

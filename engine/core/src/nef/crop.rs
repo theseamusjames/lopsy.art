@@ -13,14 +13,24 @@
 
 use super::{exposure, Crop, NefInfo};
 
-/// The largest preview decoded at full size for this, in pixels.
-const MAX_PREVIEW_PIXELS: u64 = 32_000_000;
+use crate::arw::exposure::{preview_header_fits, MAX_DECODE_BYTES};
+
 /// The correlation below which the match is not trusted.
 const MIN_CORRELATION: f64 = 0.8;
 
+/// Whether a full-size RGB preview of `width` × `height` may be decoded.
+/// The JPEG decoder fills a plane per component before it checks its own
+/// limit, so the size is bounded before decoding: by the decode buffer the
+/// other preview decodes are held to (`arw::exposure`, 64 MB, about
+/// 22 MP at three bytes a pixel), and by the RAW limits.
+fn decodable(width: u32, height: u32) -> bool {
+    let (Ok(w), Ok(h)) = (u16::try_from(width), u16::try_from(height)) else { return false };
+    u64::from(width) * u64::from(height) * 3 <= MAX_DECODE_BYTES as u64 && preview_header_fits(w, h, 3, false, width.max(height))
+}
+
 /// The camera's full-size JPEG of the crop's size, decoded: 8-bit RGB.
 fn full_size_preview(data: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
-    if u64::from(width) * u64::from(height) > MAX_PREVIEW_PIXELS {
+    if !decodable(width, height) {
         return None;
     }
     for (o, n) in exposure::jpeg_ranges(data) {
@@ -32,6 +42,7 @@ fn full_size_preview(data: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
         if (u32::from(info.width), u32::from(info.height)) != (width, height) || info.pixel_format != jpeg_decoder::PixelFormat::RGB24 || info.coding_process == jpeg_decoder::CodingProcess::DctProgressive {
             continue;
         }
+        dec.set_max_decoding_buffer_size(MAX_DECODE_BYTES);
         let px = dec.decode().ok()?;
         return (px.len() == width as usize * height as usize * 3).then_some(px);
     }
@@ -96,5 +107,23 @@ pub fn place_by_preview(data: &[u8], info: &mut NefInfo, mosaic: &[u16]) {
         info.crop.top = best.2 as u32;
         info.sources.crop = format!("the {width}×{height} preview, placed where it matches (correlation {:.3})", best.0);
         info.debug_log.push(format!("[NEF] crop {:?} from {}", info.crop, info.sources.crop));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_full_size_preview_is_decoded_only_within_the_preview_buffer() {
+        // The samples that take this path: D200, D3, D7000.
+        for (w, h) in [(3872, 2592), (4256, 2832), (4928, 3264)] {
+            assert!(decodable(w, h), "{w} × {h}");
+        }
+        // A header claiming more (up to the old 32 MP cap) is not decoded:
+        // its planes alone would be about 90 MB before any check.
+        for (w, h) in [(6000, 4000), (6532, 4898), (8192, 3000), (0, 100), (70_000, 10)] {
+            assert!(!decodable(w, h), "{w} × {h}");
+        }
     }
 }
