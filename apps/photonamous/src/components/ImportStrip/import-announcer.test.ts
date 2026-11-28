@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { announceImport, type Announced, type ImportFacts } from './import-announcer';
 
-const NONE = { failed: 0, added: 0, skipped: 0, waiting: 0, paused: 0 };
+const NONE = { failed: 0, added: 0, skipped: 0, waiting: 0, paused: 0, needsSignIn: false };
 
 const running = (settled: number, fraction: number, failed = 0): ImportFacts => ({
   ...NONE,
@@ -74,6 +74,16 @@ describe('announceImport', () => {
   it('keeps quiet when the bytes go back a little', () => {
     expect(said([running(0, 0), running(40, 0.3), running(41, 0.24), running(42, 0.31)]).polite).toEqual([
       'Import started: 120 photos',
+      'Import 25 % done: 40 of 120 photos',
+    ]);
+  });
+
+  it('says a wait for sign-in once, and once that it is over', () => {
+    const waiting = (settled: number): ImportFacts => ({ ...running(settled, settled / 120), needsSignIn: true });
+    expect(said([running(0, 0), running(20, 0.17), waiting(20), waiting(20), waiting(20), running(21, 0.18), running(40, 0.34)]).polite).toEqual([
+      'Import started: 120 photos',
+      'Import paused: reconnect to Google Drive to continue',
+      'Import continuing',
       'Import 25 % done: 40 of 120 photos',
     ]);
   });

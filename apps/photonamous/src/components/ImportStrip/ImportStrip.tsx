@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, TriangleAlert, X } from 'lucide-react';
+import { Check, LogIn, TriangleAlert, X } from 'lucide-react';
 import { useImportProgress, useLibraryView } from '../../app/hooks';
 import { isHiddenPairHalf } from '../../library/asset-query';
 import { useUi } from '../../app/store';
 import { getBackend } from '../../app/backend-registry';
 import { showToast } from '../../app/toasts';
-import { endedCleanly, estimateLeft, importHeadline, importStats } from '../../import/import-progress';
+import { endedCleanly, estimateLeft, importHeadline, importStats, signInHeadline } from '../../import/import-progress';
 import { plural } from '../../import/import-summary';
 import type { ImportJob } from '@lopsy/photos-core/import/types';
 import { Button } from '../Button/Button';
@@ -54,6 +54,22 @@ export function ImportStrip() {
       .catch((error: unknown) => console.warn('The import could not be resumed', error));
   };
 
+  // Waiting for sign-in: this click is the gesture that opens Google's window (reauthorize asks at once).
+  // The job hears of the new token itself and carries on; nothing is picked again.
+  const [reconnecting, setReconnecting] = useState(false);
+  const reconnect = () => {
+    const session = useUi.getState().connection?.session;
+    if (!session) return;
+    setReconnecting(true);
+    getBackend()
+      .reauthorize(session)
+      .catch((error: unknown) => {
+        console.warn('Google Drive was not reconnected', error);
+        showToast(`${error instanceof Error ? error.message : String(error)} The import waits until you reconnect.`, 12_000);
+      })
+      .finally(() => setReconnecting(false));
+  };
+
   const stats = useMemo(() => (progress ? importStats(progress) : null), [progress]);
   // The files the import refused (it lists them under "could not be imported"), reported once it ends, one event per reason.
   useEffect(() => {
@@ -86,12 +102,14 @@ export function ImportStrip() {
             skipped: stats.duplicates,
             waiting: stats.waiting.length,
             paused: stats.paused,
+            needsSignIn: progress.needsSignIn === true,
           }
         : null,
     [progress, stats, pairHalves],
   );
   const isClean = facts !== null && endedCleanly(facts);
-  const headline = progress && stats ? importHeadline(progress, stats, pairHalves) : null;
+  const needsSignIn = progress?.needsSignIn === true && !progress.finished;
+  const headline = progress && stats ? (needsSignIn ? signInHeadline(stats) : importHeadline(progress, stats, pairHalves)) : null;
   // The strip changes every second; a screen reader hears the start, each quarter and the end (import-announcer).
   // Worked out while rendering, not in an effect: an effect setting it after every progress render would leave
   // each of those commits with a render to do, and a fast import's run of notifications would pass React's
@@ -119,7 +137,7 @@ export function ImportStrip() {
 
   if (!job || !progress || !stats || isClean) return voice;
 
-  const left = progress.finished ? null : estimateLeft(stats, now - started.current);
+  const left = progress.finished || needsSignIn ? null : estimateLeft(stats, now - started.current);
   const paused = progress.finished && stats.paused > 0;
   const waiting = stats.waiting.length;
 
@@ -129,6 +147,7 @@ export function ImportStrip() {
       <section className={styles.strip} aria-label="Import">
         <div className={styles.row}>
           {progress.finished && !paused && waiting === 0 && <Check size={16} className={styles.ok} />}
+          {needsSignIn && <LogIn size={16} className={styles.warn} aria-hidden />}
           <span className={styles.headline}>{headline}</span>
           {left && <span className={styles.muted}>{left}</span>}
           {waiting > 0 && (
@@ -153,6 +172,15 @@ export function ImportStrip() {
             </Button>
           ) : progress.finished ? (
             <IconButton size="sm" label="Dismiss" icon={<X size={14} />} onClick={() => setImportJob(null)} />
+          ) : needsSignIn ? (
+            <>
+              <Button size="sm" variant="primary" disabled={reconnecting} onClick={reconnect}>
+                Reconnect to Google Drive
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => job.cancel()}>
+                Stop
+              </Button>
+            </>
           ) : (
             <>
               <Button size="sm" onClick={() => job.pause()}>

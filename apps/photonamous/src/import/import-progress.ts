@@ -108,6 +108,12 @@ export function importHeadline(progress: ImportProgress, stats: ImportStats, pai
   return `Importing ${stats.settled.toLocaleString()} of ${plural(stats.total, 'photo')} · ${formatBytes(stats.totalBytes - stats.sentBytes)} left`;
 }
 
+/** The headline while the import waits for the person to reconnect (ImportProgress.needsSignIn). */
+export function signInHeadline(stats: ImportStats): string {
+  const left = stats.total - stats.settled;
+  return `Reconnect to Google Drive to continue · ${left.toLocaleString('en-US')} of ${plural(stats.total, 'photo')} left`;
+}
+
 /** "About 3 minutes left", from bytes sent so far over the time taken. */
 export function estimateLeft(stats: ImportStats, elapsedMs: number): string | null {
   if (stats.sentBytes <= 0 || elapsedMs < 2000) return null;

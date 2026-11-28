@@ -23,6 +23,8 @@ export interface ImportFacts extends ImportEnd {
   readonly added: number;
   /** Files skipped as already in the library. */
   readonly skipped: number;
+  /** The import waits for the person to reconnect to the storage (ImportProgress.needsSignIn). */
+  readonly needsSignIn: boolean;
 }
 
 export interface Announced {
@@ -30,9 +32,14 @@ export interface Announced {
   readonly quarter: number;
   readonly finished: boolean;
   readonly failed: number;
+  /** Whether the wait for sign-in has been said. */
+  readonly signIn: boolean;
   readonly polite: string;
   readonly alert: string;
 }
+
+export const SIGN_IN_ANNOUNCEMENT = 'Import paused: reconnect to Google Drive to continue';
+export const SIGN_IN_OVER_ANNOUNCEMENT = 'Import continuing';
 
 function quarterOf(fraction: number): number {
   return Math.max(0, Math.min(4, Math.floor(fraction * 4)));
@@ -51,13 +58,27 @@ function outcome(facts: ImportFacts): string {
   return facts.skipped > 0 ? `${added}, ${facts.skipped.toLocaleString('en-US')} skipped as already in the library` : added;
 }
 
-/** What to say now, given what was said before for this import (null: it just started). */
+/**
+ * What to say now, given what was said before for this import (null: it
+ * just started). The same object when there is nothing new to say. A wait
+ * for sign-in is said once when it starts, and its end once.
+ */
 export function announceImport(before: Announced | null, facts: ImportFacts): Announced {
+  const next = announceProgress(before, facts);
+  const waiting = facts.needsSignIn && !facts.finished;
+  const said = before?.signIn ?? false;
+  if (waiting && !said) return { ...next, signIn: true, polite: SIGN_IN_ANNOUNCEMENT };
+  if (!waiting && said) return { ...next, signIn: false, polite: next === before ? SIGN_IN_OVER_ANNOUNCEMENT : next.polite };
+  return next;
+}
+
+function announceProgress(before: Announced | null, facts: ImportFacts): Announced {
   const quarter = facts.finished ? 4 : quarterOf(facts.fraction);
   if (before === null) {
     return {
       quarter,
       finished: facts.finished,
+      signIn: false,
       failed: facts.failed,
       polite: facts.finished ? outcome(facts) : `Import started: ${plural(facts.total, 'photo')}`,
       alert: facts.failed > 0 ? failures(facts.failed) : '',
@@ -68,6 +89,7 @@ export function announceImport(before: Announced | null, facts: ImportFacts): An
     return {
       quarter,
       finished: true,
+      signIn: before.signIn,
       failed: facts.failed,
       polite: outcome(facts),
       alert: facts.failed > before.failed ? failures(facts.failed) : before.alert,
@@ -78,6 +100,7 @@ export function announceImport(before: Announced | null, facts: ImportFacts): An
   return {
     quarter: Math.max(quarter, before.quarter),
     finished: false,
+    signIn: before.signIn,
     failed: firstFailure ? facts.failed : before.failed,
     polite:
       quarter > before.quarter

@@ -92,6 +92,23 @@ describe('the import strip', () => {
     expect(politeWords()).toBe('');
   });
 
+  it('waits for sign-in with one Reconnect button, nothing failed, said once', () => {
+    const files = [item('a', 'done'), item('b', 'staged'), item('c', 'queued')];
+    const move = startImport({ finished: false, items: files });
+    move({ finished: false, needsSignIn: true, items: files });
+    expect(strip()?.textContent).toContain('Reconnect to Google Drive to continue · 2 of 3 photos left');
+    const button = [...(strip()?.querySelectorAll('button') ?? [])].find((b) => b.textContent === 'Reconnect to Google Drive');
+    expect(button).toBeDefined();
+    expect(strip()?.textContent).not.toContain('could not be imported');
+    expect(strip()?.textContent).not.toContain('Pause');
+    expect(politeWords()).toBe('Import paused: reconnect to Google Drive to continue');
+    expect(toasts()).toEqual([]);
+    // The token came (Reconnect, or the header's): the strip is progress again.
+    move({ finished: false, needsSignIn: false, items: [item('a', 'done'), item('b', 'done'), item('c', 'queued')] });
+    expect(strip()?.textContent).toContain('Importing 2 of 3 photos');
+    expect(politeWords()).toBe('Import continuing');
+  });
+
   it('keeps the strip, and makes no toast, when something failed', () => {
     const move = startImport({ finished: false, items: [item('a', 'done'), item('b', 'queued')] });
     move({ finished: true, items: [item('a', 'done'), item('b', 'unsupported', 'Not a supported photo format')] });

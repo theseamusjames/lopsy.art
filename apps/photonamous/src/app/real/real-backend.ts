@@ -322,7 +322,14 @@ export class RealBackend implements PhotosBackend {
     const extras = this.extras.get(session);
     const tokenSource = extras?.tokenSource;
     if (extras && tokenSource) {
-      const token = await tokenSource.requestInteractive();
+      let token: string;
+      try {
+        token = await tokenSource.requestInteractive();
+      } catch (error) {
+        if (error instanceof AccountMismatchError || !isStorageError(error) || error.code !== 'auth') throw error;
+        // Google's own words ("Popup window closed") say little: say what did not happen.
+        throw new Error('Google Drive was not reconnected: Google’s window closed before you signed in.', { cause: error });
+      }
       // The popup lets the user pick any account; only the library's own may write to it.
       const accountId = await fetchDriveAccountId(token);
       try {
@@ -343,6 +350,8 @@ export class RealBackend implements PhotosBackend {
       options,
       ...(extras?.queue ? { queueStore: extras.queue } : {}),
       ...(extras?.staging ? { staging: extras.staging } : {}),
+      // A job refused for sign-in waits, and carries on when the token source has a new token (Reconnect).
+      ...(extras?.tokenSource ? { authorization: extras.tokenSource } : {}),
     });
   }
 
@@ -354,6 +363,7 @@ export class RealBackend implements PhotosBackend {
       previewRenderer: this.previewRenderer,
       queueStore: extras.queue,
       ...(extras.staging ? { staging: extras.staging } : {}),
+      ...(extras.tokenSource ? { authorization: extras.tokenSource } : {}),
     });
   }
 
